@@ -1,0 +1,153 @@
+{
+  "head": "d4fb89e8944f7d85089111a8e5151c50e31082c7",
+  "base": "0c156694e87dac240afe74a77b338ad7987e67ed",
+  "validationManifestSha256": "054033219e80da0cdd4cbbfb31ee1bd0f12e30cc5725dfcbb57d9b5fd1c7923e",
+  "sourceHashes": {
+    "changes/2978-grok-model-cache.md": "96aa10cc44df93dbcaecdf0329677cb1196f96952273cdc7021d33aab7e32e1a",
+    "changes/2978-grok-model-cache.zh-TW.md": "3c70b73c5955a4c98fb466890bb41c71919e6189bf8ca10c666713c096767065",
+    "src/backend/grok-model-cache.ts": "d2cdd640e23514b806d09eece51dcd547c6a85f85ceaada171cdfaf11d34bc23",
+    "src/fleet-manager.ts": "4bb019a922b5c4ba0f50f26bd67862b5cf230d4c10bddda0c88d0c700eba0185",
+    "src/web-api.ts": "30791674e930f466ddba7764ae9cada075b6e934e4e16994f03cc929bfc17491",
+    "tests/grok-model-cache.test.ts": "f13fa1ec795f692989d436a424e1321ce69fa4293d105d942996856d4ffd4376",
+    "tests/model-catalog-route-2072.test.ts": "556daefb7f88f562f10e6533805774fe1b15fb7f72c0a5f869eedd48df155bc2",
+    "tests/profile-model-catalogs-2072.test.ts": "7f0524a1803493342ede34e169462f50fcc0074e5015c6cba50f395971fd2769"
+  },
+  "cases": [
+    {
+      "name": "after-read-cap",
+      "file": "src/backend/grok-model-cache.ts",
+      "suite": "tests/grok-model-cache.test.ts",
+      "match": "bounds bytes even",
+      "expectedFailures": 1,
+      "sourceSha256": "d2cdd640e23514b806d09eece51dcd547c6a85f85ceaada171cdfaf11d34bc23",
+      "mutatedSha256": "299e8939d8e2985008b95cf478d7896c1cf7c9223413c9acfcf495b6b718b826",
+      "syntax": {
+        "command": [
+          "node",
+          "--experimental-strip-types",
+          "--check",
+          "src/backend/grok-model-cache.ts"
+        ],
+        "exitCode": 0,
+        "durationSeconds": 0.035
+      },
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/grok-model-cache.test.ts",
+        "-t",
+        "bounds bytes even",
+        "--exclude",
+        ".artifacts/**",
+        "--maxWorkers=1",
+        "--reporter=json",
+        "--outputFile=<checkout>/.artifacts/grok-model-cache-fix/pr-reversal-after-read-cap.report.json"
+      ],
+      "exitCode": 1,
+      "durationSeconds": 0.718,
+      "failedTests": [
+        {
+          "name": "offline Grok model-cache choices bounds bytes even if a valid JSON file grows after fstat and still closes it",
+          "messages": [
+            "AssertionError: expected [ { id: 'grok-small', \u2026(1) } ] to deeply equal []\n    at <isolated-snapshot>/tests/grok-model-cache.test.ts:111:41\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:2956:64"
+          ]
+        }
+      ],
+      "protectedAssertionsFailed": true,
+      "sourceRestored": true
+    },
+    {
+      "name": "route-cli-cache",
+      "file": "src/web-api.ts",
+      "suite": "tests/model-catalog-route-2072.test.ts",
+      "match": "serves the actual cache projection",
+      "expectedFailures": 2,
+      "sourceSha256": "30791674e930f466ddba7764ae9cada075b6e934e4e16994f03cc929bfc17491",
+      "mutatedSha256": "3b4c36eb839d71b2a246c76c5f42d8c58aaeef2ab5937eaff2d57951f4858930",
+      "syntax": {
+        "command": [
+          "node",
+          "--experimental-strip-types",
+          "--check",
+          "src/web-api.ts"
+        ],
+        "exitCode": 0,
+        "durationSeconds": 0.034
+      },
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/model-catalog-route-2072.test.ts",
+        "-t",
+        "serves the actual cache projection",
+        "--exclude",
+        ".artifacts/**",
+        "--maxWorkers=1",
+        "--reporter=json",
+        "--outputFile=<checkout>/.artifacts/grok-model-cache-fix/pr-reversal-route-cli-cache.report.json"
+      ],
+      "exitCode": 1,
+      "durationSeconds": 2.272,
+      "failedTests": [
+        {
+          "name": "GET /ui/models reads Grok's own offline model cache serves the actual cache projection before AgEnD's fallback on GET without exposing credential fields",
+          "messages": [
+            "AssertionError: expected { backend: 'grok', \u2026(1) } to deeply equal { backend: 'grok', \u2026(2) }\n    at <isolated-snapshot>/tests/model-catalog-route-2072.test.ts:95:29\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+          ]
+        },
+        {
+          "name": "GET /ui/models reads Grok's own offline model cache serves the actual cache projection before AgEnD's fallback on GET&refresh=1 without exposing credential fields",
+          "messages": [
+            "AssertionError: expected { backend: 'grok', \u2026(1) } to deeply equal { backend: 'grok', \u2026(2) }\n    at <isolated-snapshot>/tests/model-catalog-route-2072.test.ts:95:29\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+          ]
+        }
+      ],
+      "protectedAssertionsFailed": true,
+      "sourceRestored": true
+    }
+  ],
+  "distBefore": {
+    "dist/backend/grok-model-cache.js": "f09c946ff8e9f2b3da75a9a75c5d8bf1686999e5da71a2ac6b6584cddac72de5",
+    "dist/web-api.js": "5c74f63730fa27abaa93f104f49cb6025abae8d531a5a3b8a0144fa619e49d54"
+  },
+  "compile": {
+    "command": [
+      "npm",
+      "run",
+      "typecheck"
+    ],
+    "exitCode": 0,
+    "durationSeconds": 2.488
+  },
+  "allSourcesRestored": true,
+  "snapshotMatchesValidation": true,
+  "distAfter": {
+    "dist/backend/grok-model-cache.js": "f09c946ff8e9f2b3da75a9a75c5d8bf1686999e5da71a2ac6b6584cddac72de5",
+    "dist/web-api.js": "5c74f63730fa27abaa93f104f49cb6025abae8d531a5a3b8a0144fa619e49d54"
+  },
+  "distUnmodified": true,
+  "positive": {
+    "command": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "tests/grok-model-cache.test.ts",
+      "tests/model-catalog-route-2072.test.ts",
+      "--exclude",
+      ".artifacts/**",
+      "--maxWorkers=2",
+      "--reporter=json",
+      "--outputFile=<checkout>/.artifacts/grok-model-cache-fix/pr-reversal-positive.report.json"
+    ],
+    "exitCode": 0,
+    "durationSeconds": 2.423,
+    "numPassedTests": 24,
+    "numFailedTests": 0,
+    "testFiles": 2
+  },
+  "status": "passed",
+  "submittedHead": "7078204eb038f36b475037e1da2d1e023a25bc43",
+  "submissionDifference": "Only the two changelog files were renamed to PR 2986; all submitted code/test content matches the tested archive after CRLF/LF conversion. Both hashes appear in validation.json."
+}

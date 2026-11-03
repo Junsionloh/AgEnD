@@ -1,0 +1,15 @@
+{
+  "image": "grok-models.jpg",
+  "sha256": "062212f4584ca491fb14d7ac60997e9e61909cc2a0b4901a7351695f78ed721a",
+  "kind": "Unedited real browser screenshot; not generated",
+  "runtime": "Local WSL installation, AgEnD 2.3.5-alpha with settings UI preview from PR 2978 and the Grok cache reader/catalog changes applied",
+  "observedModels": [
+    "grok-4.7",
+    "grok-4.7-build-fast",
+    "grok-4.6",
+    "grok-4.5"
+  ],
+  "sourceLabel": "Local CLI model cache",
+  "selection": "Grok 4.7 selected for the screenshot, then cancelled; original Agent model setting retained",
+  "scope": "Manual smoke evidence of behavior, not a pixel-identical screenshot of the standalone PR base. No CLI prompt or provider call used to read the list."
+}

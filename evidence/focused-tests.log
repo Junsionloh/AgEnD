@@ -1,0 +1,17 @@
+
+ RUN  v4.1.12 <isolated-snapshot>
+
+ ✓ tests/settings-model-dropdowns-2072.test.ts (8 tests) 697ms
+ ✓ tests/model-source-ui.test.ts (9 tests) 281ms
+ ✓ tests/native-model-catalog.test.ts (20 tests) 274ms
+ ✓ tests/model-catalog-route-2072.test.ts (12 tests) 132ms
+ ✓ tests/grok-model-cache.test.ts (12 tests) 21ms
+ ✓ tests/backend/model-list-parsers.test.ts (18 tests) 10ms
+ ✓ tests/profile-model-catalogs-2072.test.ts (13 tests) 5269ms
+     ✓ reads Grok's CLI-owned catalog without probing and keeps Windows catalogs separate  5176ms
+
+ Test Files  7 passed (7)
+      Tests  92 passed (92)
+   Start at  18:12:11
+   Duration  5.56s (transform 5.39s, setup 326ms, import 1.91s, tests 6.68s, environment 1ms)
+

@@ -1,0 +1,130 @@
+{
+  "submittedHead": "7078204eb038f36b475037e1da2d1e023a25bc43",
+  "testedHead": "d4fb89e8944f7d85089111a8e5151c50e31082c7",
+  "base": "0c156694e87dac240afe74a77b338ad7987e67ed",
+  "scope": "8 files, Grok cache reader and catalog wiring/tests, paired changelog only",
+  "files": {
+    "changes/2986-grok-model-cache.md": {
+      "submittedGitBlobSha256": "e01208fd59878566e6c98e95ba16ba596a4c2e7961b9fd5492dcc7f7b354abf6",
+      "testedArchiveSha256": "96aa10cc44df93dbcaecdf0329677cb1196f96952273cdc7021d33aab7e32e1a",
+      "testedPath": "changes/2978-grok-model-cache.md",
+      "contentEquivalentAfterLineEndingConversion": true
+    },
+    "changes/2986-grok-model-cache.zh-TW.md": {
+      "submittedGitBlobSha256": "516d2a63abe22d6ea1549afc1c92062a270cb0bcc8fb41cd75cf7a2f9d683efb",
+      "testedArchiveSha256": "3c70b73c5955a4c98fb466890bb41c71919e6189bf8ca10c666713c096767065",
+      "testedPath": "changes/2978-grok-model-cache.zh-TW.md",
+      "contentEquivalentAfterLineEndingConversion": true
+    },
+    "src/backend/grok-model-cache.ts": {
+      "submittedGitBlobSha256": "fa681bc7be60c74be29b8d65ceb79cf665be4edee9e03dea8d3b9ffe63e71a79",
+      "testedArchiveSha256": "d2cdd640e23514b806d09eece51dcd547c6a85f85ceaada171cdfaf11d34bc23",
+      "testedPath": "src/backend/grok-model-cache.ts",
+      "contentEquivalentAfterLineEndingConversion": true
+    },
+    "src/fleet-manager.ts": {
+      "submittedGitBlobSha256": "3ef4ca2b20c2b49f91c13fc43cd90e2d4c2bcac99e023c82430692a0454a6cb1",
+      "testedArchiveSha256": "4bb019a922b5c4ba0f50f26bd67862b5cf230d4c10bddda0c88d0c700eba0185",
+      "testedPath": "src/fleet-manager.ts",
+      "contentEquivalentAfterLineEndingConversion": true
+    },
+    "src/web-api.ts": {
+      "submittedGitBlobSha256": "3b9b35e56405c6de1639353dcc1820aa60717f9b99a862b8bd08e764f730dabb",
+      "testedArchiveSha256": "30791674e930f466ddba7764ae9cada075b6e934e4e16994f03cc929bfc17491",
+      "testedPath": "src/web-api.ts",
+      "contentEquivalentAfterLineEndingConversion": true
+    },
+    "tests/grok-model-cache.test.ts": {
+      "submittedGitBlobSha256": "66f30ca9d1861da5a27f3401b364615c2176b176c8f8735e6f5d9a624e5f89ee",
+      "testedArchiveSha256": "f13fa1ec795f692989d436a424e1321ce69fa4293d105d942996856d4ffd4376",
+      "testedPath": "tests/grok-model-cache.test.ts",
+      "contentEquivalentAfterLineEndingConversion": true
+    },
+    "tests/model-catalog-route-2072.test.ts": {
+      "submittedGitBlobSha256": "3ba24a8bd88e59c7f281fe5f8b2f5b53da419e85175aa24962a611697ab45ebf",
+      "testedArchiveSha256": "556daefb7f88f562f10e6533805774fe1b15fb7f72c0a5f869eedd48df155bc2",
+      "testedPath": "tests/model-catalog-route-2072.test.ts",
+      "contentEquivalentAfterLineEndingConversion": true
+    },
+    "tests/profile-model-catalogs-2072.test.ts": {
+      "submittedGitBlobSha256": "6e24a9be98f8f612388ee34d92a86d7887e739f09a1c60690543b3e18ebe6c00",
+      "testedArchiveSha256": "7f0524a1803493342ede34e169462f50fcc0074e5015c6cba50f395971fd2769",
+      "testedPath": "tests/profile-model-catalogs-2072.test.ts",
+      "contentEquivalentAfterLineEndingConversion": true
+    }
+  },
+  "metadataOnlyRename": [
+    "R100\tchanges/2978-grok-model-cache.md\tchanges/2986-grok-model-cache.md",
+    "R100\tchanges/2978-grok-model-cache.zh-TW.md\tchanges/2986-grok-model-cache.zh-TW.md"
+  ],
+  "environment": "Fresh isolated Linux/WSL source archive; Windows git archive emitted CRLF text, verified against LF git blobs with only newline conversion; Node 22.17.0; locked dependencies reused only after byte-for-byte lockfile comparison; private test data and inert Fleet boundaries",
+  "steps": [
+    {
+      "label": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "typecheck-tests",
+      "command": [
+        "npm",
+        "run",
+        "typecheck:tests"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "changelog",
+      "command": [
+        "node",
+        "scripts/changelog-assemble.mjs",
+        "--check"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "focused-tests",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/grok-model-cache.test.ts",
+        "tests/model-catalog-route-2072.test.ts",
+        "tests/profile-model-catalogs-2072.test.ts",
+        "tests/native-model-catalog.test.ts",
+        "tests/settings-model-dropdowns-2072.test.ts",
+        "tests/model-source-ui.test.ts",
+        "tests/backend/model-list-parsers.test.ts",
+        "--exclude",
+        ".artifacts/**",
+        "--maxWorkers=2"
+      ],
+      "exitCode": 0
+    }
+  ],
+  "focusedResult": {
+    "testFiles": 7,
+    "passed": 92,
+    "failed": 0,
+    "skipped": 0
+  },
+  "finalChecks": {
+    "changelogAssemble": "39 fragments OK",
+    "changelogGuard": "OK with exact base and submitted head",
+    "gitDiffCheck": "passed"
+  },
+  "limits": "Full unit/integration suites left to CI. No native Windows or macOS execution claim. Cache data comes from Grok; reading it does not refresh provider availability."
+}
