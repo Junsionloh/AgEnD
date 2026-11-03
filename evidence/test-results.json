@@ -1,0 +1,173 @@
+{
+  "head": "0fb74c93761e9c115402a62808f8f607dd0767ae",
+  "summary": {
+    "files": 23,
+    "passed": 346,
+    "failed": 0,
+    "pending": 0,
+    "failures": []
+  },
+  "files": [
+    {
+      "file": "tests/auth-per-profile-1699.test.ts",
+      "status": "passed",
+      "tests": 14,
+      "passed": 14,
+      "pending": 0
+    },
+    {
+      "file": "tests/backend-availability-2072.test.ts",
+      "status": "passed",
+      "tests": 19,
+      "passed": 19,
+      "pending": 0
+    },
+    {
+      "file": "tests/backend-probe-worker.test.ts",
+      "status": "passed",
+      "tests": 5,
+      "passed": 5,
+      "pending": 0
+    },
+    {
+      "file": "tests/classic-credential-profile-1220.test.ts",
+      "status": "passed",
+      "tests": 44,
+      "passed": 44,
+      "pending": 0
+    },
+    {
+      "file": "tests/codex-refresh-model-catalog.test.ts",
+      "status": "passed",
+      "tests": 4,
+      "passed": 4,
+      "pending": 0
+    },
+    {
+      "file": "tests/credential-profile-general.test.ts",
+      "status": "passed",
+      "tests": 31,
+      "passed": 31,
+      "pending": 0
+    },
+    {
+      "file": "tests/credential-profile.test.ts",
+      "status": "passed",
+      "tests": 17,
+      "passed": 17,
+      "pending": 0
+    },
+    {
+      "file": "tests/grok-model-cache.test.ts",
+      "status": "passed",
+      "tests": 17,
+      "passed": 17,
+      "pending": 0
+    },
+    {
+      "file": "tests/model-catalog-route-2072.test.ts",
+      "status": "passed",
+      "tests": 20,
+      "passed": 20,
+      "pending": 0
+    },
+    {
+      "file": "tests/model-menu-refresh.test.ts",
+      "status": "passed",
+      "tests": 6,
+      "passed": 6,
+      "pending": 0
+    },
+    {
+      "file": "tests/model-menu-two-tier.test.ts",
+      "status": "passed",
+      "tests": 4,
+      "passed": 4,
+      "pending": 0
+    },
+    {
+      "file": "tests/model-persist-runtime.test.ts",
+      "status": "passed",
+      "tests": 2,
+      "passed": 2,
+      "pending": 0
+    },
+    {
+      "file": "tests/model-resolve.test.ts",
+      "status": "passed",
+      "tests": 8,
+      "passed": 8,
+      "pending": 0
+    },
+    {
+      "file": "tests/model-source-ui.test.ts",
+      "status": "passed",
+      "tests": 9,
+      "passed": 9,
+      "pending": 0
+    },
+    {
+      "file": "tests/model-stale-refresh.test.ts",
+      "status": "passed",
+      "tests": 18,
+      "passed": 18,
+      "pending": 0
+    },
+    {
+      "file": "tests/muse-model-catalog-1796.test.ts",
+      "status": "passed",
+      "tests": 5,
+      "passed": 5,
+      "pending": 0
+    },
+    {
+      "file": "tests/native-model-catalog.test.ts",
+      "status": "passed",
+      "tests": 20,
+      "passed": 20,
+      "pending": 0
+    },
+    {
+      "file": "tests/own-model-switch-1690.test.ts",
+      "status": "passed",
+      "tests": 26,
+      "passed": 26,
+      "pending": 0
+    },
+    {
+      "file": "tests/profile-model-catalogs-2072.test.ts",
+      "status": "passed",
+      "tests": 23,
+      "passed": 23,
+      "pending": 0
+    },
+    {
+      "file": "tests/runtime-model-picker.test.ts",
+      "status": "passed",
+      "tests": 5,
+      "passed": 5,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-model-dropdowns-2072.test.ts",
+      "status": "passed",
+      "tests": 8,
+      "passed": 8,
+      "pending": 0
+    },
+    {
+      "file": "tests/switch-drops-model-1808.test.ts",
+      "status": "passed",
+      "tests": 23,
+      "passed": 23,
+      "pending": 0
+    },
+    {
+      "file": "tests/backend/model-list-parsers.test.ts",
+      "status": "passed",
+      "tests": 18,
+      "passed": 18,
+      "pending": 0
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "head": "0fb74c93761e9c115402a62808f8f607dd0767ae",
+  "base": "0c156694e87dac240afe74a77b338ad7987e67ed",
+  "reviewedParent": "7078204eb038f36b475037e1da2d1e023a25bc43",
+  "files": {
+    "changes/2986-grok-model-cache.md": "0fb3d1fd1194c1af2258f138fa3eb93c3c8592ed58b60cd33d99c07950dca9ce",
+    "changes/2986-grok-model-cache.zh-TW.md": "bc77fe9976fe4edae1ac8c54fd4c7497b4892ad41a4006eea89dfd4ec3f940be",
+    "src/backend/grok-model-cache.ts": "0f89de10c84732c9fa4c20b910d2877c6861b654e52894c93b2f48a7c638a314",
+    "src/fleet-manager.ts": "8f3c7be275c2d1a0813daa943ed526745ebff778e1d15b6ee5e809c8cbac971c",
+    "src/web-api.ts": "be1fa3f556a1923a08a763aaeb07ad0ad4cd01870a579957a8be990265fbcbc4",
+    "tests/grok-model-cache.test.ts": "5efbe6ce566a542227510e703396e2bfb752715c550c4930eeee414279fa1c68",
+    "tests/model-catalog-route-2072.test.ts": "85c3b3049ef77dab364b5ecaa89804d8282055a2d181ea96bfec97c7803acc60",
+    "tests/profile-model-catalogs-2072.test.ts": "a9580ef485f1d54b85f6bb590d6771ef5b946da909636d3cfe9ee1473ff8ea9e"
+  },
+  "allSubmittedFilesMatchTestedSources": true,
+  "dependencyInstall": [
+    {
+      "label": "npm-ci-offline",
+      "command": [
+        "npm",
+        "ci",
+        "--offline",
+        "--no-audit",
+        "--no-fund"
+      ],
+      "exitCode": 0
+    }
+  ],
+  "steps": [
+    {
+      "label": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "typecheck-tests",
+      "command": [
+        "npm",
+        "run",
+        "typecheck:tests"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "changelog",
+      "command": [
+        "node",
+        "scripts/changelog-assemble.mjs",
+        "--check"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "focused-tests",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/grok-model-cache.test.ts",
+        "tests/model-catalog-route-2072.test.ts",
+        "tests/profile-model-catalogs-2072.test.ts",
+        "tests/native-model-catalog.test.ts",
+        "tests/settings-model-dropdowns-2072.test.ts",
+        "tests/model-source-ui.test.ts",
+        "tests/backend/model-list-parsers.test.ts",
+        "tests/backend-availability-2072.test.ts",
+        "tests/auth-per-profile-1699.test.ts",
+        "tests/credential-profile.test.ts",
+        "tests/credential-profile-general.test.ts",
+        "tests/classic-credential-profile-1220.test.ts",
+        "tests/backend-probe-worker.test.ts",
+        "tests/model-menu-two-tier.test.ts",
+        "tests/model-menu-refresh.test.ts",
+        "tests/model-stale-refresh.test.ts",
+        "tests/model-persist-runtime.test.ts",
+        "tests/model-resolve.test.ts",
+        "tests/own-model-switch-1690.test.ts",
+        "tests/switch-drops-model-1808.test.ts",
+        "tests/runtime-model-picker.test.ts",
+        "tests/codex-refresh-model-catalog.test.ts",
+        "tests/muse-model-catalog-1796.test.ts",
+        "--exclude",
+        ".artifacts/**",
+        "--maxWorkers=2",
+        "--reporter=json",
+        "--outputFile=<checkout>/.artifacts/grok-model-cache-review/focused-tests.report.json"
+      ],
+      "exitCode": 0
+    }
+  ],
+  "result": {
+    "files": 23,
+    "passed": 346,
+    "failed": 0,
+    "pending": 0,
+    "failures": []
+  },
+  "sourceReversalCases": 12,
+  "nativeWindowsReader": {
+    "testFiles": 1,
+    "passed": 16,
+    "failed": 0,
+    "pending": 1,
+    "scope": "Supplementary reader-only run before the final commit; reader and test sources remained unchanged. POSIX final-symlink case intentionally skipped on Windows; Linux final run exercises all 17.",
+    "sourceHashes": {
+      "src/backend/grok-model-cache.ts": "0f89de10c84732c9fa4c20b910d2877c6861b654e52894c93b2f48a7c638a314",
+      "tests/grok-model-cache.test.ts": "5efbe6ce566a542227510e703396e2bfb752715c550c4930eeee414279fa1c68"
+    }
+  },
+  "environment": "Fresh private Linux/WSL snapshot from exact Git archive bytes, Node 22.17.0, fresh locked dependencies installed offline. Private test files, FakeProbeWorker and inert operational/provider boundaries. No production fleet or real Grok credential cache used.",
+  "finalChecks": {
+    "changelogGuard": "Passed with exact base and submitted head",
+    "gitDiffCheck": "Passed"
+  },
+  "limits": "Full suite left to CI. Only the newly added Grok cache file I/O is converted to async; existing AgEnD catalog reads retain their prior behavior. JSON parsing is bounded to 1 MiB. No real FIFO creation, physical cross-machine execution or native CLI login tested.",
+  "earlierAttempts": "An initial helper attempt stopped before Vitest because yesterday's temporary dependency snapshot no longer existed. Reader reversal reporter verification normalized ANSI color codes to inspect the intended sync-I/O assertion; product sources were not changed by that reporting correction."
+}

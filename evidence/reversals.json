@@ -1,0 +1,860 @@
+{
+  "head": "0fb74c93761e9c115402a62808f8f607dd0767ae",
+  "sourceHashes": {
+    "changes/2986-grok-model-cache.md": "0fb3d1fd1194c1af2258f138fa3eb93c3c8592ed58b60cd33d99c07950dca9ce",
+    "changes/2986-grok-model-cache.zh-TW.md": "bc77fe9976fe4edae1ac8c54fd4c7497b4892ad41a4006eea89dfd4ec3f940be",
+    "src/backend/grok-model-cache.ts": "0f89de10c84732c9fa4c20b910d2877c6861b654e52894c93b2f48a7c638a314",
+    "src/fleet-manager.ts": "8f3c7be275c2d1a0813daa943ed526745ebff778e1d15b6ee5e809c8cbac971c",
+    "src/web-api.ts": "be1fa3f556a1923a08a763aaeb07ad0ad4cd01870a579957a8be990265fbcbc4",
+    "tests/grok-model-cache.test.ts": "5efbe6ce566a542227510e703396e2bfb752715c550c4930eeee414279fa1c68",
+    "tests/model-catalog-route-2072.test.ts": "85c3b3049ef77dab364b5ecaa89804d8282055a2d181ea96bfec97c7803acc60",
+    "tests/profile-model-catalogs-2072.test.ts": "a9580ef485f1d54b85f6bb590d6771ef5b946da909636d3cfe9ee1473ff8ea9e"
+  },
+  "cases": 12,
+  "groups": [
+    {
+      "parent": "7078204eb038f36b475037e1da2d1e023a25bc43",
+      "base": "0c156694e87dac240afe74a77b338ad7987e67ed",
+      "sourceHashes": {
+        "changes/2986-grok-model-cache.md": "0fb3d1fd1194c1af2258f138fa3eb93c3c8592ed58b60cd33d99c07950dca9ce",
+        "changes/2986-grok-model-cache.zh-TW.md": "bc77fe9976fe4edae1ac8c54fd4c7497b4892ad41a4006eea89dfd4ec3f940be",
+        "src/backend/grok-model-cache.ts": "0f89de10c84732c9fa4c20b910d2877c6861b654e52894c93b2f48a7c638a314",
+        "src/fleet-manager.ts": "8f3c7be275c2d1a0813daa943ed526745ebff778e1d15b6ee5e809c8cbac971c",
+        "src/web-api.ts": "be1fa3f556a1923a08a763aaeb07ad0ad4cd01870a579957a8be990265fbcbc4",
+        "tests/grok-model-cache.test.ts": "5efbe6ce566a542227510e703396e2bfb752715c550c4930eeee414279fa1c68",
+        "tests/model-catalog-route-2072.test.ts": "85c3b3049ef77dab364b5ecaa89804d8282055a2d181ea96bfec97c7803acc60",
+        "tests/profile-model-catalogs-2072.test.ts": "a9580ef485f1d54b85f6bb590d6771ef5b946da909636d3cfe9ee1473ff8ea9e"
+      },
+      "manifestEightSourcesMatch": true,
+      "cases": [
+        {
+          "name": "after-read-cap",
+          "file": "src/backend/grok-model-cache.ts",
+          "suite": "tests/grok-model-cache.test.ts",
+          "match": "bounds bytes even",
+          "sourceSha256": "0f89de10c84732c9fa4c20b910d2877c6861b654e52894c93b2f48a7c638a314",
+          "mutatedSha256": "7712e48986080d57dd28ef1cd11f1dca00d1e6ad0ece94eaeec42e5e0f22e351",
+          "syntax": {
+            "command": [
+              "node",
+              "--experimental-strip-types",
+              "--check",
+              "src/backend/grok-model-cache.ts"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.034
+          },
+          "typecheck": {
+            "command": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 4.828
+          },
+          "command": [
+            "node",
+            "node_modules/vitest/vitest.mjs",
+            "run",
+            "tests/grok-model-cache.test.ts",
+            "-t",
+            "bounds bytes even",
+            "--exclude",
+            ".artifacts/**",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-reader-after-read-cap.report.json"
+          ],
+          "exitCode": 1,
+          "durationSeconds": 1.425,
+          "failedTests": [
+            {
+              "name": "offline Grok model-cache choices bounds bytes even if a valid JSON file grows after fstat and still closes it",
+              "messages": [
+                "AssertionError: expected [ { id: 'grok-small', \u2026(1) } ] to deeply equal []\n    at <isolated-snapshot>/tests/grok-model-cache.test.ts:155:47\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        },
+        {
+          "name": "nofollow",
+          "file": "src/backend/grok-model-cache.ts",
+          "suite": "tests/grok-model-cache.test.ts",
+          "match": "refuses a symlink",
+          "sourceSha256": "0f89de10c84732c9fa4c20b910d2877c6861b654e52894c93b2f48a7c638a314",
+          "mutatedSha256": "48fd028f0c6ec29aa5fc0297315b2d702b271617fff3e258f50a60dcaa82c381",
+          "syntax": {
+            "command": [
+              "node",
+              "--experimental-strip-types",
+              "--check",
+              "src/backend/grok-model-cache.ts"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.036
+          },
+          "typecheck": {
+            "command": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 5.33
+          },
+          "command": [
+            "node",
+            "node_modules/vitest/vitest.mjs",
+            "run",
+            "tests/grok-model-cache.test.ts",
+            "-t",
+            "refuses a symlink",
+            "--exclude",
+            ".artifacts/**",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-reader-nofollow.report.json"
+          ],
+          "exitCode": 1,
+          "durationSeconds": 1.277,
+          "failedTests": [
+            {
+              "name": "offline Grok model-cache choices refuses a symlink at the final cache component before reading",
+              "messages": [
+                "AssertionError: expected [ { \u2026(2) } ] to deeply equal []\n    at <isolated-snapshot>/tests/grok-model-cache.test.ts:137:47\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        },
+        {
+          "name": "exact-cap",
+          "file": "src/backend/grok-model-cache.ts",
+          "suite": "tests/grok-model-cache.test.ts",
+          "match": "allows an exact-cap",
+          "sourceSha256": "0f89de10c84732c9fa4c20b910d2877c6861b654e52894c93b2f48a7c638a314",
+          "mutatedSha256": "c9ea181fc5340f6710a7513322fa9934d363cb72eb4cef07c71eb49491a1f1b6",
+          "syntax": {
+            "command": [
+              "node",
+              "--experimental-strip-types",
+              "--check",
+              "src/backend/grok-model-cache.ts"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.035
+          },
+          "typecheck": {
+            "command": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 4.105
+          },
+          "command": [
+            "node",
+            "node_modules/vitest/vitest.mjs",
+            "run",
+            "tests/grok-model-cache.test.ts",
+            "-t",
+            "allows an exact-cap",
+            "--exclude",
+            ".artifacts/**",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-reader-exact-cap.report.json"
+          ],
+          "exitCode": 1,
+          "durationSeconds": 0.97,
+          "failedTests": [
+            {
+              "name": "offline Grok model-cache choices allows an exact-cap regular cache, including partial asynchronous reads",
+              "messages": [
+                "AssertionError: expected [] to deeply equal [ { id: 'grok-at-cap', \u2026(1) } ]\n    at <isolated-snapshot>/tests/grok-model-cache.test.ts:146:47\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        },
+        {
+          "name": "sync-open",
+          "file": "src/backend/grok-model-cache.ts",
+          "suite": "tests/grok-model-cache.test.ts",
+          "match": "uses the map key",
+          "sourceSha256": "0f89de10c84732c9fa4c20b910d2877c6861b654e52894c93b2f48a7c638a314",
+          "mutatedSha256": "4f3e33fe9af5289c082198c3f2bdf8d6cfc3a7daf25536fad85808af23e9ce25",
+          "syntax": {
+            "command": [
+              "node",
+              "--experimental-strip-types",
+              "--check",
+              "src/backend/grok-model-cache.ts"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.034
+          },
+          "typecheck": {
+            "command": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 5.007
+          },
+          "command": [
+            "node",
+            "node_modules/vitest/vitest.mjs",
+            "run",
+            "tests/grok-model-cache.test.ts",
+            "-t",
+            "uses the map key",
+            "--exclude",
+            ".artifacts/**",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-reader-sync-open.report.json"
+          ],
+          "exitCode": 1,
+          "durationSeconds": 0.983,
+          "failedTests": [
+            {
+              "name": "offline Grok model-cache choices uses the map key and whitelisted display fields without leaking credentials from the same cache",
+              "messages": [
+                "AssertionError: expected 1 to be +0 // Object.is equality\n    at <isolated-snapshot>/tests/grok-model-cache.test.ts:85:26\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "sourceRestored": true,
+          "syncIoTrapAssertionVerified": true,
+          "protectedAssertionsFailed": true
+        }
+      ],
+      "allSourcesRestored": true,
+      "originalSnapshotMatchesValidation": true,
+      "distUnmodified": true,
+      "initialEvidenceAttempt": "All four source mutations parsed/typechecked and failed the intended assertions. The final sync-call evidence self-check initially searched the colorized raw reporter text; normalizing ANSI confirms the exact expect(io.syncCalls).toBe(0) assertion. No product sources changed and no mutation rerun was needed.",
+      "positive": {
+        "command": [
+          "node",
+          "node_modules/vitest/vitest.mjs",
+          "run",
+          "tests/grok-model-cache.test.ts",
+          "--exclude",
+          ".artifacts/**",
+          "--maxWorkers=1",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-reader-positive.report.json"
+        ],
+        "exitCode": 0,
+        "durationSeconds": 0.771,
+        "testFiles": 1,
+        "passed": 17,
+        "failed": 0,
+        "pending": 0
+      },
+      "status": "passed",
+      "submittedHead": "0fb74c93761e9c115402a62808f8f607dd0767ae"
+    },
+    {
+      "parent": "7078204eb038f36b475037e1da2d1e023a25bc43",
+      "base": "0c156694e87dac240afe74a77b338ad7987e67ed",
+      "sourceHashes": {
+        "changes/2986-grok-model-cache.md": "0fb3d1fd1194c1af2258f138fa3eb93c3c8592ed58b60cd33d99c07950dca9ce",
+        "changes/2986-grok-model-cache.zh-TW.md": "bc77fe9976fe4edae1ac8c54fd4c7497b4892ad41a4006eea89dfd4ec3f940be",
+        "src/backend/grok-model-cache.ts": "0f89de10c84732c9fa4c20b910d2877c6861b654e52894c93b2f48a7c638a314",
+        "src/fleet-manager.ts": "8f3c7be275c2d1a0813daa943ed526745ebff778e1d15b6ee5e809c8cbac971c",
+        "src/web-api.ts": "be1fa3f556a1923a08a763aaeb07ad0ad4cd01870a579957a8be990265fbcbc4",
+        "tests/grok-model-cache.test.ts": "5efbe6ce566a542227510e703396e2bfb752715c550c4930eeee414279fa1c68",
+        "tests/model-catalog-route-2072.test.ts": "85c3b3049ef77dab364b5ecaa89804d8282055a2d181ea96bfec97c7803acc60",
+        "tests/profile-model-catalogs-2072.test.ts": "a9580ef485f1d54b85f6bb590d6771ef5b946da909636d3cfe9ee1473ff8ea9e"
+      },
+      "allEightSourceHashesMatch": true,
+      "cases": [
+        {
+          "name": "account-precedence",
+          "match": "keeps an existing account catalog",
+          "expected": 2,
+          "file": "src/web-api.ts",
+          "suite": "tests/model-catalog-route-2072.test.ts",
+          "sourceSha256": "be1fa3f556a1923a08a763aaeb07ad0ad4cd01870a579957a8be990265fbcbc4",
+          "mutatedSha256": "ca47d7384d83bd30f43af5d7a22b2b5c27ce942cacf79c69ac38e8607cd435ec",
+          "syntax": {
+            "command": [
+              "node",
+              "--experimental-strip-types",
+              "--check",
+              "src/web-api.ts"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.13
+          },
+          "typecheck": {
+            "command": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 2.971
+          },
+          "test": {
+            "command": [
+              "node",
+              "node_modules/vitest/vitest.mjs",
+              "run",
+              "tests/model-catalog-route-2072.test.ts",
+              "-t",
+              "keeps an existing account catalog",
+              "--exclude",
+              ".artifacts/**",
+              "--maxWorkers=1",
+              "--reporter=default",
+              "--reporter=json",
+              "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-route-account-precedence.report.json"
+            ],
+            "exitCode": 1,
+            "durationSeconds": 3.28
+          },
+          "failedTests": [
+            {
+              "name": "GET /ui/models reads Grok's own offline model cache keeps an existing account catalog on GET without reading the host CLI cache",
+              "messages": [
+                "AssertionError: expected { backend: 'grok', \u2026(2) } to deeply equal { backend: 'grok', \u2026(1) }\n    at <isolated-snapshot>/tests/model-catalog-route-2072.test.ts:131:29\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            },
+            {
+              "name": "GET /ui/models reads Grok's own offline model cache keeps an existing account catalog on GET&refresh=1 without reading the host CLI cache",
+              "messages": [
+                "AssertionError: expected { backend: 'grok', \u2026(2) } to deeply equal { backend: 'grok', \u2026(1) }\n    at <isolated-snapshot>/tests/model-catalog-route-2072.test.ts:131:29\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        },
+        {
+          "name": "premature-answer",
+          "match": "waits for asynchronous file choices",
+          "expected": 1,
+          "file": "src/web-api.ts",
+          "suite": "tests/model-catalog-route-2072.test.ts",
+          "sourceSha256": "be1fa3f556a1923a08a763aaeb07ad0ad4cd01870a579957a8be990265fbcbc4",
+          "mutatedSha256": "f0634b2d26acd5f36d17d957c42dc5bcfd00e8639e9e27d79e4e3a4f7e0bd2d5",
+          "syntax": {
+            "command": [
+              "node",
+              "--experimental-strip-types",
+              "--check",
+              "src/web-api.ts"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.028
+          },
+          "typecheck": {
+            "command": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 3.646
+          },
+          "test": {
+            "command": [
+              "node",
+              "node_modules/vitest/vitest.mjs",
+              "run",
+              "tests/model-catalog-route-2072.test.ts",
+              "-t",
+              "waits for asynchronous file choices",
+              "--exclude",
+              ".artifacts/**",
+              "--maxWorkers=1",
+              "--reporter=default",
+              "--reporter=json",
+              "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-route-premature-answer.report.json"
+            ],
+            "exitCode": 1,
+            "durationSeconds": 2.959
+          },
+          "failedTests": [
+            {
+              "name": "GET /ui/models reads Grok's own offline model cache waits for asynchronous file choices while an unrelated cached request can finish",
+              "messages": [
+                "AssertionError: expected \"vi.fn()\" to not be called at all, but actually been called 1 times\u001b[90m\n\nReceived:\n\n\u001b[1m  1st vi.fn() call:\n\n\u001b[22m    Array [\n      200,\n    ]\n\u001b[39m\u001b[90m\n\nNumber of calls: \u001b[1m1\u001b[22m\n\u001b[39m\n    at Proxy.<anonymous> (file://<isolated-snapshot>/node_modules/@vitest/expect/dist/index.js:1467:10)\n    at Proxy.<anonymous> (file://<isolated-snapshot>/node_modules/@vitest/expect/dist/index.js:1156:15)\n    at Proxy.methodWrapper (file://<isolated-snapshot>/node_modules/chai/index.js:1737:25)\n    at <isolated-snapshot>/tests/model-catalog-route-2072.test.ts:189:40\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        },
+        {
+          "name": "late-authorization",
+          "match": "authorization is revoked",
+          "expected": 1,
+          "file": "src/web-api.ts",
+          "suite": "tests/model-catalog-route-2072.test.ts",
+          "sourceSha256": "be1fa3f556a1923a08a763aaeb07ad0ad4cd01870a579957a8be990265fbcbc4",
+          "mutatedSha256": "baba08d8e9d96f9cfbc0b7c219ee1b903113e4de16a8d8f09c13f5e81552d84b",
+          "syntax": {
+            "command": [
+              "node",
+              "--experimental-strip-types",
+              "--check",
+              "src/web-api.ts"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.028
+          },
+          "typecheck": {
+            "command": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 4.516
+          },
+          "test": {
+            "command": [
+              "node",
+              "node_modules/vitest/vitest.mjs",
+              "run",
+              "tests/model-catalog-route-2072.test.ts",
+              "-t",
+              "authorization is revoked",
+              "--exclude",
+              ".artifacts/**",
+              "--maxWorkers=1",
+              "--reporter=default",
+              "--reporter=json",
+              "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-route-late-authorization.report.json"
+            ],
+            "exitCode": 1,
+            "durationSeconds": 5.619
+          },
+          "failedTests": [
+            {
+              "name": "GET /ui/models reads Grok's own offline model cache does not return choices if authorization is revoked while a read is pending",
+              "messages": [
+                "AssertionError: expected 200 to be 401 // Object.is equality\n    at <isolated-snapshot>/tests/model-catalog-route-2072.test.ts:222:31\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        },
+        {
+          "name": "closed-response",
+          "match": "does not write a late async result",
+          "expected": 2,
+          "file": "src/web-api.ts",
+          "suite": "tests/model-catalog-route-2072.test.ts",
+          "sourceSha256": "be1fa3f556a1923a08a763aaeb07ad0ad4cd01870a579957a8be990265fbcbc4",
+          "mutatedSha256": "740a968251a23b125b43d20b54ded42baf0bccd24f8ec76ecc71f2c5579c64a3",
+          "syntax": {
+            "command": [
+              "node",
+              "--experimental-strip-types",
+              "--check",
+              "src/web-api.ts"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.037
+          },
+          "typecheck": {
+            "command": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 4.55
+          },
+          "test": {
+            "command": [
+              "node",
+              "node_modules/vitest/vitest.mjs",
+              "run",
+              "tests/model-catalog-route-2072.test.ts",
+              "-t",
+              "does not write a late async result",
+              "--exclude",
+              ".artifacts/**",
+              "--maxWorkers=1",
+              "--reporter=default",
+              "--reporter=json",
+              "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-route-closed-response.report.json"
+            ],
+            "exitCode": 1,
+            "durationSeconds": 4.12
+          },
+          "failedTests": [
+            {
+              "name": "GET /ui/models reads Grok's own offline model cache does not write a late async result to a response marked destroyed",
+              "messages": [
+                "AssertionError: expected \"vi.fn()\" to not be called at all, but actually been called 1 times\u001b[90m\n\nReceived:\n\n\u001b[1m  1st vi.fn() call:\n\n\u001b[22m    Array [\n      200,\n    ]\n\u001b[39m\u001b[90m\n\nNumber of calls: \u001b[1m1\u001b[22m\n\u001b[39m\n    at Proxy.<anonymous> (file://<isolated-snapshot>/node_modules/@vitest/expect/dist/index.js:1467:10)\n    at Proxy.<anonymous> (file://<isolated-snapshot>/node_modules/@vitest/expect/dist/index.js:1156:15)\n    at Proxy.methodWrapper (file://<isolated-snapshot>/node_modules/chai/index.js:1737:25)\n    at <isolated-snapshot>/tests/model-catalog-route-2072.test.ts:233:40\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            },
+            {
+              "name": "GET /ui/models reads Grok's own offline model cache does not write a late async result to a response marked writableEnded",
+              "messages": [
+                "AssertionError: expected \"vi.fn()\" to not be called at all, but actually been called 1 times\u001b[90m\n\nReceived:\n\n\u001b[1m  1st vi.fn() call:\n\n\u001b[22m    Array [\n      200,\n    ]\n\u001b[39m\u001b[90m\n\nNumber of calls: \u001b[1m1\u001b[22m\n\u001b[39m\n    at Proxy.<anonymous> (file://<isolated-snapshot>/node_modules/@vitest/expect/dist/index.js:1467:10)\n    at Proxy.<anonymous> (file://<isolated-snapshot>/node_modules/@vitest/expect/dist/index.js:1156:15)\n    at Proxy.methodWrapper (file://<isolated-snapshot>/node_modules/chai/index.js:1737:25)\n    at <isolated-snapshot>/tests/model-catalog-route-2072.test.ts:233:40\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        },
+        {
+          "name": "windows-priority",
+          "match": "keeps a Windows machine's inventory",
+          "expected": 1,
+          "file": "src/web-api.ts",
+          "suite": "tests/model-catalog-route-2072.test.ts",
+          "sourceSha256": "be1fa3f556a1923a08a763aaeb07ad0ad4cd01870a579957a8be990265fbcbc4",
+          "mutatedSha256": "48c5f5f9da1b7c1130c4fa84e60f4a70b13f1b2af5c53abc32f32fee707b9012",
+          "syntax": {
+            "command": [
+              "node",
+              "--experimental-strip-types",
+              "--check",
+              "src/web-api.ts"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.024
+          },
+          "typecheck": {
+            "command": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 5.222
+          },
+          "test": {
+            "command": [
+              "node",
+              "node_modules/vitest/vitest.mjs",
+              "run",
+              "tests/model-catalog-route-2072.test.ts",
+              "-t",
+              "keeps a Windows machine's inventory",
+              "--exclude",
+              ".artifacts/**",
+              "--maxWorkers=1",
+              "--reporter=default",
+              "--reporter=json",
+              "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-route-windows-priority.report.json"
+            ],
+            "exitCode": 1,
+            "durationSeconds": 2.798
+          },
+          "failedTests": [
+            {
+              "name": "GET /ui/models keeps a Windows machine's inventory ahead of either host catalog",
+              "messages": [
+                "AssertionError: expected { backend: 'grok', \u2026(1) } to deeply equal { backend: 'grok', \u2026(4) }\n    at <isolated-snapshot>/tests/model-catalog-route-2072.test.ts:96:31\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        }
+      ],
+      "positive": {
+        "command": [
+          "node",
+          "node_modules/vitest/vitest.mjs",
+          "run",
+          "tests/model-catalog-route-2072.test.ts",
+          "--exclude",
+          ".artifacts/**",
+          "--maxWorkers=1",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-route-positive.report.json"
+        ],
+        "exitCode": 0,
+        "durationSeconds": 2.636,
+        "testFiles": 1,
+        "passed": 20,
+        "failed": 0,
+        "pending": 0
+      },
+      "status": "passed",
+      "allSourcesRestored": true,
+      "originalSnapshotUntouched": true,
+      "submittedHead": "0fb74c93761e9c115402a62808f8f607dd0767ae"
+    },
+    {
+      "parent": "7078204eb038f36b475037e1da2d1e023a25bc43",
+      "base": "0c156694e87dac240afe74a77b338ad7987e67ed",
+      "sourceHashes": {
+        "changes/2986-grok-model-cache.md": "0fb3d1fd1194c1af2258f138fa3eb93c3c8592ed58b60cd33d99c07950dca9ce",
+        "changes/2986-grok-model-cache.zh-TW.md": "bc77fe9976fe4edae1ac8c54fd4c7497b4892ad41a4006eea89dfd4ec3f940be",
+        "src/backend/grok-model-cache.ts": "0f89de10c84732c9fa4c20b910d2877c6861b654e52894c93b2f48a7c638a314",
+        "src/fleet-manager.ts": "8f3c7be275c2d1a0813daa943ed526745ebff778e1d15b6ee5e809c8cbac971c",
+        "src/web-api.ts": "be1fa3f556a1923a08a763aaeb07ad0ad4cd01870a579957a8be990265fbcbc4",
+        "tests/grok-model-cache.test.ts": "5efbe6ce566a542227510e703396e2bfb752715c550c4930eeee414279fa1c68",
+        "tests/model-catalog-route-2072.test.ts": "85c3b3049ef77dab364b5ecaa89804d8282055a2d181ea96bfec97c7803acc60",
+        "tests/profile-model-catalogs-2072.test.ts": "a9580ef485f1d54b85f6bb590d6771ef5b946da909636d3cfe9ee1473ff8ea9e"
+      },
+      "allEightSourceHashesMatch": true,
+      "cases": [
+        {
+          "name": "raw-profile-scope",
+          "file": "src/fleet-manager.ts",
+          "sourceSha256": "8f3c7be275c2d1a0813daa943ed526745ebff778e1d15b6ee5e809c8cbac971c",
+          "mutatedSha256": "d467108d8f86aa18802a9360ee0ace3dc8ff70f5764e57b8ad39e4209810e57a",
+          "suite": "tests/profile-model-catalogs-2072.test.ts",
+          "match": "never fills named|respects Classic room",
+          "syntax": {
+            "command": [
+              "node",
+              "--experimental-strip-types",
+              "--check",
+              "src/fleet-manager.ts"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.028
+          },
+          "typecheck": {
+            "command": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 3.343
+          },
+          "test": {
+            "command": [
+              "node",
+              "node_modules/vitest/vitest.mjs",
+              "run",
+              "tests/profile-model-catalogs-2072.test.ts",
+              "-t",
+              "never fills named|respects Classic room",
+              "--exclude",
+              ".artifacts/**",
+              "--maxWorkers=1",
+              "--reporter=default",
+              "--reporter=json",
+              "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-profile-raw-profile-scope.report.json"
+            ],
+            "exitCode": 1,
+            "durationSeconds": 8.675
+          },
+          "failedTests": [
+            {
+              "name": "a credential profile has its own catalog never fills named, invalid or inherited Grok profiles with the host account's cache",
+              "messages": [
+                "AssertionError: \"work\": expected [ { \u2026(2) } ] to deeply equal []\n    at <isolated-snapshot>/tests/profile-model-catalogs-2072.test.ts:82:81\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            },
+            {
+              "name": "a credential profile has its own catalog respects Classic room overrides, inherited profiles and the running room's own config",
+              "messages": [
+                "AssertionError: expected [ { \u2026(2) } ] to deeply equal []\n    at <isolated-snapshot>/tests/profile-model-catalogs-2072.test.ts:98:57\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        },
+        {
+          "name": "scope-after-await",
+          "file": "src/fleet-manager.ts",
+          "sourceSha256": "8f3c7be275c2d1a0813daa943ed526745ebff778e1d15b6ee5e809c8cbac971c",
+          "mutatedSha256": "4f89afef5a7a0e17747ceb78e4d01ca56140cb10e324e1e9463e85b22cb300f5",
+          "suite": "tests/profile-model-catalogs-2072.test.ts",
+          "match": "discards a held host-cache read",
+          "syntax": {
+            "command": [
+              "node",
+              "--experimental-strip-types",
+              "--check",
+              "src/fleet-manager.ts"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.066
+          },
+          "typecheck": {
+            "command": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 4.605
+          },
+          "test": {
+            "command": [
+              "node",
+              "node_modules/vitest/vitest.mjs",
+              "run",
+              "tests/profile-model-catalogs-2072.test.ts",
+              "-t",
+              "discards a held host-cache read",
+              "--exclude",
+              ".artifacts/**",
+              "--maxWorkers=1",
+              "--reporter=default",
+              "--reporter=json",
+              "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-profile-scope-after-await.report.json"
+            ],
+            "exitCode": 1,
+            "durationSeconds": 10.355
+          },
+          "failedTests": [
+            {
+              "name": "a credential profile has its own catalog discards a held host-cache read after the profile scope changes",
+              "messages": [
+                "AssertionError: expected [ { \u2026(2) } ] to deeply equal []\n    at <isolated-snapshot>/tests/profile-model-catalogs-2072.test.ts:135:29\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            },
+            {
+              "name": "a credential profile has its own catalog discards a held host-cache read after the runtime scope changes",
+              "messages": [
+                "AssertionError: expected [ { \u2026(2) } ] to deeply equal []\n    at <isolated-snapshot>/tests/profile-model-catalogs-2072.test.ts:135:29\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            },
+            {
+              "name": "a credential profile has its own catalog discards a held host-cache read after the config scope changes",
+              "messages": [
+                "AssertionError: expected [ { \u2026(2) } ] to deeply equal []\n    at <isolated-snapshot>/tests/profile-model-catalogs-2072.test.ts:135:29\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            },
+            {
+              "name": "a credential profile has its own catalog discards a held host-cache read after the removed scope changes",
+              "messages": [
+                "AssertionError: expected [ { \u2026(2) } ] to deeply equal []\n    at <isolated-snapshot>/tests/profile-model-catalogs-2072.test.ts:135:29\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            },
+            {
+              "name": "a credential profile has its own catalog discards a held host-cache read after the home scope changes",
+              "messages": [
+                "AssertionError: expected [ { \u2026(2) } ] to deeply equal []\n    at <isolated-snapshot>/tests/profile-model-catalogs-2072.test.ts:135:29\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            },
+            {
+              "name": "a credential profile has its own catalog discards a held host-cache read after the classic-profile scope changes",
+              "messages": [
+                "AssertionError: expected [ { \u2026(2) } ] to deeply equal []\n    at <isolated-snapshot>/tests/profile-model-catalogs-2072.test.ts:135:29\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            },
+            {
+              "name": "a credential profile has its own catalog discards a held host-cache read after the classic-owner scope changes",
+              "messages": [
+                "AssertionError: expected [ { \u2026(2) } ] to deeply equal []\n    at <isolated-snapshot>/tests/profile-model-catalogs-2072.test.ts:135:29\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            },
+            {
+              "name": "a credential profile has its own catalog discards a held host-cache read after the daemon-owner scope changes",
+              "messages": [
+                "AssertionError: expected [ { \u2026(2) } ] to deeply equal []\n    at <isolated-snapshot>/tests/profile-model-catalogs-2072.test.ts:135:29\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        },
+        {
+          "name": "unknown-instance",
+          "file": "src/fleet-manager.ts",
+          "sourceSha256": "8f3c7be275c2d1a0813daa943ed526745ebff778e1d15b6ee5e809c8cbac971c",
+          "mutatedSha256": "bca9d57941627299120d2e36640c4bbdcfee13b52c59ca4b05ef398bdb57044d",
+          "suite": "tests/profile-model-catalogs-2072.test.ts",
+          "match": "reads Grok's CLI-owned catalog without probing",
+          "syntax": {
+            "command": [
+              "node",
+              "--experimental-strip-types",
+              "--check",
+              "src/fleet-manager.ts"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.097
+          },
+          "typecheck": {
+            "command": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 4.983
+          },
+          "test": {
+            "command": [
+              "node",
+              "node_modules/vitest/vitest.mjs",
+              "run",
+              "tests/profile-model-catalogs-2072.test.ts",
+              "-t",
+              "reads Grok's CLI-owned catalog without probing",
+              "--exclude",
+              ".artifacts/**",
+              "--maxWorkers=1",
+              "--reporter=default",
+              "--reporter=json",
+              "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-profile-unknown-instance.report.json"
+            ],
+            "exitCode": 1,
+            "durationSeconds": 5.806
+          },
+          "failedTests": [
+            {
+              "name": "a credential profile has its own catalog reads Grok's CLI-owned catalog without probing and keeps Windows catalogs separate",
+              "messages": [
+                "AssertionError: expected [ { \u2026(2) } ] to deeply equal []\n    at <isolated-snapshot>/tests/profile-model-catalogs-2072.test.ts:69:60\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        }
+      ],
+      "positive": {
+        "command": [
+          "node",
+          "node_modules/vitest/vitest.mjs",
+          "run",
+          "tests/profile-model-catalogs-2072.test.ts",
+          "--exclude",
+          ".artifacts/**",
+          "--maxWorkers=1",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=<checkout>/.artifacts/grok-model-cache-review/reversal-profile-positive.report.json"
+        ],
+        "exitCode": 0,
+        "durationSeconds": 5.719,
+        "files": 1,
+        "passed": 23,
+        "failed": 0,
+        "pending": 0
+      },
+      "status": "passed",
+      "allSourcesRestored": true,
+      "originalSnapshotUnmodified": true,
+      "originalDistUnmodified": true,
+      "submittedHead": "0fb74c93761e9c115402a62808f8f607dd0767ae"
+    }
+  ]
+}
