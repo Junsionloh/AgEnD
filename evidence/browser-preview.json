@@ -1,0 +1,26 @@
+{
+  "head": "5712d9f17a6a8397321456296397ee627433c91d",
+  "kind": "Unedited real browser screenshots of the native application, not generated images or mockups",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "language": "zh-TW",
+  "theme": "light",
+  "environment": "Private scratch-home preview with synthetic Agents; child-process/tmux/lifecycle actions disabled and writes denied except isolated auth/preferences fixtures",
+  "sourceBinding": "All 47 submitted changed-file hashes match both the final validation tree and the preview tree. The initial preview tree had CRLF terminal test fixtures, which the UI preview never reads.",
+  "observed": [
+    "Search zzz: 沒有符合「zzz」的 Agent。",
+    "Look hint: 套用到所有設定頁；窄視窗會自動配合可用空間。"
+  ],
+  "previews": [
+    {
+      "file": "agents-empty.jpg",
+      "sha256": "350a0b07576bfc66967fed81a2a7449bfdc8d13d008ad208df743206921693c2"
+    },
+    {
+      "file": "look-hint.jpg",
+      "sha256": "bde70c1a766816efa6cfb4d0408b44353d15b6a7bc74cf365121260c43f07295"
+    }
+  ]
+}

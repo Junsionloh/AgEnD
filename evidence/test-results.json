@@ -1,0 +1,1345 @@
+{
+  "head": "5712d9f17a6a8397321456296397ee627433c91d",
+  "summary": {
+    "files": 166,
+    "passed": 3312,
+    "failed": 0,
+    "pending": 0,
+    "failures": []
+  },
+  "selection": {
+    "method": "Union of prior 31 focused files, all 5 reviewer files, tests whose static/literal dynamic import closure reaches changed UI sources, and tests naming a changed UI asset. Full suite remains for CI.",
+    "tests": [
+      "tests/attachment-previews-1589.test.ts",
+      "tests/chat-card-compact-2217.test.ts",
+      "tests/chat-emoji-1630.test.ts",
+      "tests/chat-image-lightbox.test.ts",
+      "tests/chat-switch-jitter-2184.test.ts",
+      "tests/classic-web-echo-ui-2054.test.ts",
+      "tests/cli-picker.test.ts",
+      "tests/factual-ui-1854.test.ts",
+      "tests/filter-collapse-1700.test.ts",
+      "tests/first-run-1519.test.ts",
+      "tests/fixed-template-highlights-2478.test.ts",
+      "tests/fleet-docs-link-1844.test.ts",
+      "tests/fleet-host-memory-1685-ui.test.ts",
+      "tests/fleet-overview-1675.test.ts",
+      "tests/guests-look-2348.test.ts",
+      "tests/hot-cold-parity.test.ts",
+      "tests/i18n-ui-literals-2390.test.ts",
+      "tests/i18n-web-2390.test.ts",
+      "tests/image-zoom-2333.test.ts",
+      "tests/memory-hogs-2015.test.ts",
+      "tests/model-source-ui.test.ts",
+      "tests/native-mcp-ui.test.ts",
+      "tests/nav-team-groups-2172.test.ts",
+      "tests/nav-trim-2183.test.ts",
+      "tests/office-look-2715-2716.test.ts",
+      "tests/office-share-page-2636.test.ts",
+      "tests/page-share-ui-2911.test.ts",
+      "tests/page-themes-2196.test.ts",
+      "tests/preview-banner-ack-1568.test.ts",
+      "tests/preview-cdn-panel-2911.test.ts",
+      "tests/preview-errors-chip-2911.test.ts",
+      "tests/preview-optin-ux-1554.test.ts",
+      "tests/preview-panel-one-click-1704.test.ts",
+      "tests/preview-panel-pages-2911.test.ts",
+      "tests/preview-panel-versions-2911.test.ts",
+      "tests/preview-panel-widths-2911.test.ts",
+      "tests/preview-pick-2911.test.ts",
+      "tests/preview-reply-about-2911.test.ts",
+      "tests/provider-marks-s24.test.ts",
+      "tests/public-link-wording-2904.test.ts",
+      "tests/quiet-chat-1854.test.ts",
+      "tests/runtime-machines-ui.test.ts",
+      "tests/runtime-model-picker.test.ts",
+      "tests/runtime-switches-ui-m2255.test.ts",
+      "tests/schedules-1724.test.ts",
+      "tests/search-ui-2293.test.ts",
+      "tests/settings-access-tabs-ui.test.ts",
+      "tests/settings-agent-filters.test.ts",
+      "tests/settings-appearance-1629.test.ts",
+      "tests/settings-apply-job.test.ts",
+      "tests/settings-connection-row.test.ts",
+      "tests/settings-connection-secrets.test.ts",
+      "tests/settings-cross-instance-visibility-1302.test.ts",
+      "tests/settings-delete-agent-2168.test.ts",
+      "tests/settings-guests-2348.test.ts",
+      "tests/settings-layout-ui.test.ts",
+      "tests/settings-locale-auto-1310.test.ts",
+      "tests/settings-model-dropdowns-2072.test.ts",
+      "tests/settings-panel-inventory.test.ts",
+      "tests/settings-pending-card-2868.test.ts",
+      "tests/settings-quickstart-wizard.test.ts",
+      "tests/settings-redesign.test.ts",
+      "tests/settings-removed-backend-1280.test.ts",
+      "tests/settings-restart-feedback.test.ts",
+      "tests/settings-self-restart.test.ts",
+      "tests/settings-shortcuts-ui.test.ts",
+      "tests/settings-web-authority-1939.test.ts",
+      "tests/settings-web-section-1620.test.ts",
+      "tests/sidebar-avatar-1630.test.ts",
+      "tests/sidebar-instance-identity.test.ts",
+      "tests/sidebar-names-1722.test.ts",
+      "tests/sidebar-reply-time-2179.test.ts",
+      "tests/status-emojis-picker-1005.test.ts",
+      "tests/structured-signin-ui-2599.test.ts",
+      "tests/task-board-looks-2299.test.ts",
+      "tests/task-board-project-lead-ui-2355.test.ts",
+      "tests/task-board-waiting-2080.test.ts",
+      "tests/team-edit-1689.test.ts",
+      "tests/unified-runtime-ui.test.ts",
+      "tests/usage-chart-label-overlap-2201.test.ts",
+      "tests/usage-ticket-expiry-1244.test.ts",
+      "tests/view-auth.test.ts",
+      "tests/view-dim-1582.test.ts",
+      "tests/view-responsive.test.ts",
+      "tests/view-sidebar-filter-999.test.ts",
+      "tests/view-sidebar-scrollbar.test.ts",
+      "tests/view-ui-improvements.test.ts",
+      "tests/view-usage-readability.test.ts",
+      "tests/web-app-fences-1408.test.ts",
+      "tests/web-app-icon-card-2308.test.ts",
+      "tests/web-app-modules-1408.test.ts",
+      "tests/web-app-panels-1408.test.ts",
+      "tests/web-app-retry-1408.test.ts",
+      "tests/web-appearance-copy-2056.test.ts",
+      "tests/web-backend-signin-2233.test.ts",
+      "tests/web-cache-1468.test.ts",
+      "tests/web-chat-1307.test.ts",
+      "tests/web-chat-c1.test.ts",
+      "tests/web-chat-c2.test.ts",
+      "tests/web-chat-c3.test.ts",
+      "tests/web-chat-commands-1269.test.ts",
+      "tests/web-chat-kept-reads-2053.test.ts",
+      "tests/web-chat-scroll-end.test.ts",
+      "tests/web-composer-2478.test.ts",
+      "tests/web-cross-instance-1672.test.ts",
+      "tests/web-csp-1268.test.ts",
+      "tests/web-csp-1300.test.ts",
+      "tests/web-details-n2.test.ts",
+      "tests/web-echo-settings-1320.test.ts",
+      "tests/web-favorites-1664.test.ts",
+      "tests/web-footer-1603-1604.test.ts",
+      "tests/web-guest-shell-1920.test.ts",
+      "tests/web-header-n3.test.ts",
+      "tests/web-identity-color-1958.test.ts",
+      "tests/web-identity-color-page-1958.test.ts",
+      "tests/web-input-zoom-1611.test.ts",
+      "tests/web-instance-nav-n1.test.ts",
+      "tests/web-keyboard-2478.test.ts",
+      "tests/web-left-bar-2330.test.ts",
+      "tests/web-log-tab-1218.test.ts",
+      "tests/web-long-idle-m2260.test.ts",
+      "tests/web-md-table-1812.test.ts",
+      "tests/web-mods-1629.test.ts",
+      "tests/web-needs-1408.test.ts",
+      "tests/web-new-agent-2074.test.ts",
+      "tests/web-office-canvas-2540.test.ts",
+      "tests/web-office-cozy-2631.test.ts",
+      "tests/web-office-dialog-2585.test.ts",
+      "tests/web-office-overview-2554.test.ts",
+      "tests/web-office-phone-stage-2689.test.ts",
+      "tests/web-office-skin-ui-2513.test.ts",
+      "tests/web-only-notices-panel-2910.test.ts",
+      "tests/web-org-1389.test.ts",
+      "tests/web-org-canvas-1918.test.ts",
+      "tests/web-org-canvas-phone-1918.test.ts",
+      "tests/web-org-office.test.ts",
+      "tests/web-org-traffic-1918.test.ts",
+      "tests/web-org-workflow-1918.test.ts",
+      "tests/web-page-scroll-alpha2.test.ts",
+      "tests/web-prefs-client-1665.test.ts",
+      "tests/web-preview-attachment-1306.test.ts",
+      "tests/web-preview-card-1306.test.ts",
+      "tests/web-preview-panel-1481.test.ts",
+      "tests/web-reconnect-1580-ui.test.ts",
+      "tests/web-settings-1408.test.ts",
+      "tests/web-settings-content-width.test.ts",
+      "tests/web-settings-in-effect-2347.test.ts",
+      "tests/web-settings-regroup-2347.test.ts",
+      "tests/web-settings-restart-2347.test.ts",
+      "tests/web-settings-search-2347.test.ts",
+      "tests/web-settings-you-2347.test.ts",
+      "tests/web-settings-you-panel-2347.test.ts",
+      "tests/web-shell.test.ts",
+      "tests/web-side-panel-2585.test.ts",
+      "tests/web-spellcheck-attr-1700.test.ts",
+      "tests/web-startup-2398.test.ts",
+      "tests/web-text-undo-2342.test.ts",
+      "tests/web-theme-1629.test.ts",
+      "tests/web-tokens-1408.test.ts",
+      "tests/web-ui-tour-1366.test.ts",
+      "tests/web-usage-page-2122.test.ts",
+      "tests/web-usage-rail-1673.test.ts",
+      "tests/web-user-bubble-1773.test.ts",
+      "tests/web-view-1408.test.ts",
+      "tests/web-view-only-1408.test.ts",
+      "tests/windows-agent-ui.test.ts"
+    ]
+  },
+  "files": [
+    {
+      "file": "tests/attachment-previews-1589.test.ts",
+      "status": "passed",
+      "tests": 32,
+      "passed": 32,
+      "pending": 0
+    },
+    {
+      "file": "tests/chat-card-compact-2217.test.ts",
+      "status": "passed",
+      "tests": 7,
+      "passed": 7,
+      "pending": 0
+    },
+    {
+      "file": "tests/chat-emoji-1630.test.ts",
+      "status": "passed",
+      "tests": 6,
+      "passed": 6,
+      "pending": 0
+    },
+    {
+      "file": "tests/chat-image-lightbox.test.ts",
+      "status": "passed",
+      "tests": 17,
+      "passed": 17,
+      "pending": 0
+    },
+    {
+      "file": "tests/chat-switch-jitter-2184.test.ts",
+      "status": "passed",
+      "tests": 10,
+      "passed": 10,
+      "pending": 0
+    },
+    {
+      "file": "tests/classic-web-echo-ui-2054.test.ts",
+      "status": "passed",
+      "tests": 4,
+      "passed": 4,
+      "pending": 0
+    },
+    {
+      "file": "tests/cli-picker.test.ts",
+      "status": "passed",
+      "tests": 6,
+      "passed": 6,
+      "pending": 0
+    },
+    {
+      "file": "tests/factual-ui-1854.test.ts",
+      "status": "passed",
+      "tests": 11,
+      "passed": 11,
+      "pending": 0
+    },
+    {
+      "file": "tests/filter-collapse-1700.test.ts",
+      "status": "passed",
+      "tests": 8,
+      "passed": 8,
+      "pending": 0
+    },
+    {
+      "file": "tests/first-run-1519.test.ts",
+      "status": "passed",
+      "tests": 31,
+      "passed": 31,
+      "pending": 0
+    },
+    {
+      "file": "tests/fixed-template-highlights-2478.test.ts",
+      "status": "passed",
+      "tests": 10,
+      "passed": 10,
+      "pending": 0
+    },
+    {
+      "file": "tests/fleet-docs-link-1844.test.ts",
+      "status": "passed",
+      "tests": 8,
+      "passed": 8,
+      "pending": 0
+    },
+    {
+      "file": "tests/fleet-host-memory-1685-ui.test.ts",
+      "status": "passed",
+      "tests": 4,
+      "passed": 4,
+      "pending": 0
+    },
+    {
+      "file": "tests/fleet-overview-1675.test.ts",
+      "status": "passed",
+      "tests": 9,
+      "passed": 9,
+      "pending": 0
+    },
+    {
+      "file": "tests/guests-look-2348.test.ts",
+      "status": "passed",
+      "tests": 5,
+      "passed": 5,
+      "pending": 0
+    },
+    {
+      "file": "tests/hot-cold-parity.test.ts",
+      "status": "passed",
+      "tests": 22,
+      "passed": 22,
+      "pending": 0
+    },
+    {
+      "file": "tests/i18n-ui-literals-2390.test.ts",
+      "status": "passed",
+      "tests": 5,
+      "passed": 5,
+      "pending": 0
+    },
+    {
+      "file": "tests/i18n-web-2390.test.ts",
+      "status": "passed",
+      "tests": 8,
+      "passed": 8,
+      "pending": 0
+    },
+    {
+      "file": "tests/image-zoom-2333.test.ts",
+      "status": "passed",
+      "tests": 28,
+      "passed": 28,
+      "pending": 0
+    },
+    {
+      "file": "tests/memory-hogs-2015.test.ts",
+      "status": "passed",
+      "tests": 15,
+      "passed": 15,
+      "pending": 0
+    },
+    {
+      "file": "tests/model-source-ui.test.ts",
+      "status": "passed",
+      "tests": 9,
+      "passed": 9,
+      "pending": 0
+    },
+    {
+      "file": "tests/native-mcp-ui.test.ts",
+      "status": "passed",
+      "tests": 6,
+      "passed": 6,
+      "pending": 0
+    },
+    {
+      "file": "tests/nav-team-groups-2172.test.ts",
+      "status": "passed",
+      "tests": 6,
+      "passed": 6,
+      "pending": 0
+    },
+    {
+      "file": "tests/nav-trim-2183.test.ts",
+      "status": "passed",
+      "tests": 11,
+      "passed": 11,
+      "pending": 0
+    },
+    {
+      "file": "tests/office-look-2715-2716.test.ts",
+      "status": "passed",
+      "tests": 16,
+      "passed": 16,
+      "pending": 0
+    },
+    {
+      "file": "tests/office-share-page-2636.test.ts",
+      "status": "passed",
+      "tests": 7,
+      "passed": 7,
+      "pending": 0
+    },
+    {
+      "file": "tests/page-share-ui-2911.test.ts",
+      "status": "passed",
+      "tests": 8,
+      "passed": 8,
+      "pending": 0
+    },
+    {
+      "file": "tests/page-themes-2196.test.ts",
+      "status": "passed",
+      "tests": 24,
+      "passed": 24,
+      "pending": 0
+    },
+    {
+      "file": "tests/preview-banner-ack-1568.test.ts",
+      "status": "passed",
+      "tests": 18,
+      "passed": 18,
+      "pending": 0
+    },
+    {
+      "file": "tests/preview-cdn-panel-2911.test.ts",
+      "status": "passed",
+      "tests": 4,
+      "passed": 4,
+      "pending": 0
+    },
+    {
+      "file": "tests/preview-errors-chip-2911.test.ts",
+      "status": "passed",
+      "tests": 10,
+      "passed": 10,
+      "pending": 0
+    },
+    {
+      "file": "tests/preview-optin-ux-1554.test.ts",
+      "status": "passed",
+      "tests": 14,
+      "passed": 14,
+      "pending": 0
+    },
+    {
+      "file": "tests/preview-panel-one-click-1704.test.ts",
+      "status": "passed",
+      "tests": 38,
+      "passed": 38,
+      "pending": 0
+    },
+    {
+      "file": "tests/preview-panel-pages-2911.test.ts",
+      "status": "passed",
+      "tests": 9,
+      "passed": 9,
+      "pending": 0
+    },
+    {
+      "file": "tests/preview-panel-versions-2911.test.ts",
+      "status": "passed",
+      "tests": 22,
+      "passed": 22,
+      "pending": 0
+    },
+    {
+      "file": "tests/preview-panel-widths-2911.test.ts",
+      "status": "passed",
+      "tests": 9,
+      "passed": 9,
+      "pending": 0
+    },
+    {
+      "file": "tests/preview-pick-2911.test.ts",
+      "status": "passed",
+      "tests": 11,
+      "passed": 11,
+      "pending": 0
+    },
+    {
+      "file": "tests/preview-reply-about-2911.test.ts",
+      "status": "passed",
+      "tests": 8,
+      "passed": 8,
+      "pending": 0
+    },
+    {
+      "file": "tests/provider-marks-s24.test.ts",
+      "status": "passed",
+      "tests": 8,
+      "passed": 8,
+      "pending": 0
+    },
+    {
+      "file": "tests/public-link-wording-2904.test.ts",
+      "status": "passed",
+      "tests": 6,
+      "passed": 6,
+      "pending": 0
+    },
+    {
+      "file": "tests/quiet-chat-1854.test.ts",
+      "status": "passed",
+      "tests": 6,
+      "passed": 6,
+      "pending": 0
+    },
+    {
+      "file": "tests/runtime-machines-ui.test.ts",
+      "status": "passed",
+      "tests": 10,
+      "passed": 10,
+      "pending": 0
+    },
+    {
+      "file": "tests/runtime-model-picker.test.ts",
+      "status": "passed",
+      "tests": 5,
+      "passed": 5,
+      "pending": 0
+    },
+    {
+      "file": "tests/runtime-switches-ui-m2255.test.ts",
+      "status": "passed",
+      "tests": 11,
+      "passed": 11,
+      "pending": 0
+    },
+    {
+      "file": "tests/schedules-1724.test.ts",
+      "status": "passed",
+      "tests": 19,
+      "passed": 19,
+      "pending": 0
+    },
+    {
+      "file": "tests/search-ui-2293.test.ts",
+      "status": "passed",
+      "tests": 27,
+      "passed": 27,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-access-tabs-ui.test.ts",
+      "status": "passed",
+      "tests": 6,
+      "passed": 6,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-agent-filters.test.ts",
+      "status": "passed",
+      "tests": 5,
+      "passed": 5,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-appearance-1629.test.ts",
+      "status": "passed",
+      "tests": 3,
+      "passed": 3,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-apply-job.test.ts",
+      "status": "passed",
+      "tests": 37,
+      "passed": 37,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-connection-row.test.ts",
+      "status": "passed",
+      "tests": 5,
+      "passed": 5,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-connection-secrets.test.ts",
+      "status": "passed",
+      "tests": 13,
+      "passed": 13,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-cross-instance-visibility-1302.test.ts",
+      "status": "passed",
+      "tests": 7,
+      "passed": 7,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-delete-agent-2168.test.ts",
+      "status": "passed",
+      "tests": 8,
+      "passed": 8,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-guests-2348.test.ts",
+      "status": "passed",
+      "tests": 29,
+      "passed": 29,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-layout-ui.test.ts",
+      "status": "passed",
+      "tests": 4,
+      "passed": 4,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-locale-auto-1310.test.ts",
+      "status": "passed",
+      "tests": 9,
+      "passed": 9,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-model-dropdowns-2072.test.ts",
+      "status": "passed",
+      "tests": 8,
+      "passed": 8,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-panel-inventory.test.ts",
+      "status": "passed",
+      "tests": 26,
+      "passed": 26,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-pending-card-2868.test.ts",
+      "status": "passed",
+      "tests": 8,
+      "passed": 8,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-quickstart-wizard.test.ts",
+      "status": "passed",
+      "tests": 72,
+      "passed": 72,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-redesign.test.ts",
+      "status": "passed",
+      "tests": 14,
+      "passed": 14,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-removed-backend-1280.test.ts",
+      "status": "passed",
+      "tests": 4,
+      "passed": 4,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-restart-feedback.test.ts",
+      "status": "passed",
+      "tests": 17,
+      "passed": 17,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-self-restart.test.ts",
+      "status": "passed",
+      "tests": 36,
+      "passed": 36,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-shortcuts-ui.test.ts",
+      "status": "passed",
+      "tests": 3,
+      "passed": 3,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-web-authority-1939.test.ts",
+      "status": "passed",
+      "tests": 16,
+      "passed": 16,
+      "pending": 0
+    },
+    {
+      "file": "tests/settings-web-section-1620.test.ts",
+      "status": "passed",
+      "tests": 42,
+      "passed": 42,
+      "pending": 0
+    },
+    {
+      "file": "tests/sidebar-avatar-1630.test.ts",
+      "status": "passed",
+      "tests": 10,
+      "passed": 10,
+      "pending": 0
+    },
+    {
+      "file": "tests/sidebar-instance-identity.test.ts",
+      "status": "passed",
+      "tests": 19,
+      "passed": 19,
+      "pending": 0
+    },
+    {
+      "file": "tests/sidebar-names-1722.test.ts",
+      "status": "passed",
+      "tests": 20,
+      "passed": 20,
+      "pending": 0
+    },
+    {
+      "file": "tests/sidebar-reply-time-2179.test.ts",
+      "status": "passed",
+      "tests": 15,
+      "passed": 15,
+      "pending": 0
+    },
+    {
+      "file": "tests/status-emojis-picker-1005.test.ts",
+      "status": "passed",
+      "tests": 26,
+      "passed": 26,
+      "pending": 0
+    },
+    {
+      "file": "tests/structured-signin-ui-2599.test.ts",
+      "status": "passed",
+      "tests": 3,
+      "passed": 3,
+      "pending": 0
+    },
+    {
+      "file": "tests/task-board-looks-2299.test.ts",
+      "status": "passed",
+      "tests": 6,
+      "passed": 6,
+      "pending": 0
+    },
+    {
+      "file": "tests/task-board-project-lead-ui-2355.test.ts",
+      "status": "passed",
+      "tests": 1,
+      "passed": 1,
+      "pending": 0
+    },
+    {
+      "file": "tests/task-board-waiting-2080.test.ts",
+      "status": "passed",
+      "tests": 15,
+      "passed": 15,
+      "pending": 0
+    },
+    {
+      "file": "tests/team-edit-1689.test.ts",
+      "status": "passed",
+      "tests": 20,
+      "passed": 20,
+      "pending": 0
+    },
+    {
+      "file": "tests/unified-runtime-ui.test.ts",
+      "status": "passed",
+      "tests": 11,
+      "passed": 11,
+      "pending": 0
+    },
+    {
+      "file": "tests/usage-chart-label-overlap-2201.test.ts",
+      "status": "passed",
+      "tests": 12,
+      "passed": 12,
+      "pending": 0
+    },
+    {
+      "file": "tests/usage-ticket-expiry-1244.test.ts",
+      "status": "passed",
+      "tests": 22,
+      "passed": 22,
+      "pending": 0
+    },
+    {
+      "file": "tests/view-auth.test.ts",
+      "status": "passed",
+      "tests": 23,
+      "passed": 23,
+      "pending": 0
+    },
+    {
+      "file": "tests/view-dim-1582.test.ts",
+      "status": "passed",
+      "tests": 10,
+      "passed": 10,
+      "pending": 0
+    },
+    {
+      "file": "tests/view-responsive.test.ts",
+      "status": "passed",
+      "tests": 16,
+      "passed": 16,
+      "pending": 0
+    },
+    {
+      "file": "tests/view-sidebar-filter-999.test.ts",
+      "status": "passed",
+      "tests": 14,
+      "passed": 14,
+      "pending": 0
+    },
+    {
+      "file": "tests/view-sidebar-scrollbar.test.ts",
+      "status": "passed",
+      "tests": 4,
+      "passed": 4,
+      "pending": 0
+    },
+    {
+      "file": "tests/view-ui-improvements.test.ts",
+      "status": "passed",
+      "tests": 19,
+      "passed": 19,
+      "pending": 0
+    },
+    {
+      "file": "tests/view-usage-readability.test.ts",
+      "status": "passed",
+      "tests": 5,
+      "passed": 5,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-app-fences-1408.test.ts",
+      "status": "passed",
+      "tests": 31,
+      "passed": 31,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-app-icon-card-2308.test.ts",
+      "status": "passed",
+      "tests": 4,
+      "passed": 4,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-app-modules-1408.test.ts",
+      "status": "passed",
+      "tests": 38,
+      "passed": 38,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-app-panels-1408.test.ts",
+      "status": "passed",
+      "tests": 12,
+      "passed": 12,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-app-retry-1408.test.ts",
+      "status": "passed",
+      "tests": 7,
+      "passed": 7,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-appearance-copy-2056.test.ts",
+      "status": "passed",
+      "tests": 6,
+      "passed": 6,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-backend-signin-2233.test.ts",
+      "status": "passed",
+      "tests": 18,
+      "passed": 18,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-cache-1468.test.ts",
+      "status": "passed",
+      "tests": 16,
+      "passed": 16,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-chat-1307.test.ts",
+      "status": "passed",
+      "tests": 22,
+      "passed": 22,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-chat-c1.test.ts",
+      "status": "passed",
+      "tests": 191,
+      "passed": 191,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-chat-c2.test.ts",
+      "status": "passed",
+      "tests": 89,
+      "passed": 89,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-chat-c3.test.ts",
+      "status": "passed",
+      "tests": 52,
+      "passed": 52,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-chat-commands-1269.test.ts",
+      "status": "passed",
+      "tests": 37,
+      "passed": 37,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-chat-kept-reads-2053.test.ts",
+      "status": "passed",
+      "tests": 5,
+      "passed": 5,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-chat-scroll-end.test.ts",
+      "status": "passed",
+      "tests": 21,
+      "passed": 21,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-composer-2478.test.ts",
+      "status": "passed",
+      "tests": 9,
+      "passed": 9,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-cross-instance-1672.test.ts",
+      "status": "passed",
+      "tests": 25,
+      "passed": 25,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-csp-1268.test.ts",
+      "status": "passed",
+      "tests": 279,
+      "passed": 279,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-csp-1300.test.ts",
+      "status": "passed",
+      "tests": 16,
+      "passed": 16,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-details-n2.test.ts",
+      "status": "passed",
+      "tests": 24,
+      "passed": 24,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-echo-settings-1320.test.ts",
+      "status": "passed",
+      "tests": 17,
+      "passed": 17,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-favorites-1664.test.ts",
+      "status": "passed",
+      "tests": 23,
+      "passed": 23,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-footer-1603-1604.test.ts",
+      "status": "passed",
+      "tests": 8,
+      "passed": 8,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-guest-shell-1920.test.ts",
+      "status": "passed",
+      "tests": 11,
+      "passed": 11,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-header-n3.test.ts",
+      "status": "passed",
+      "tests": 30,
+      "passed": 30,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-identity-color-1958.test.ts",
+      "status": "passed",
+      "tests": 26,
+      "passed": 26,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-identity-color-page-1958.test.ts",
+      "status": "passed",
+      "tests": 16,
+      "passed": 16,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-input-zoom-1611.test.ts",
+      "status": "passed",
+      "tests": 5,
+      "passed": 5,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-instance-nav-n1.test.ts",
+      "status": "passed",
+      "tests": 23,
+      "passed": 23,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-keyboard-2478.test.ts",
+      "status": "passed",
+      "tests": 15,
+      "passed": 15,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-left-bar-2330.test.ts",
+      "status": "passed",
+      "tests": 15,
+      "passed": 15,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-log-tab-1218.test.ts",
+      "status": "passed",
+      "tests": 20,
+      "passed": 20,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-long-idle-m2260.test.ts",
+      "status": "passed",
+      "tests": 15,
+      "passed": 15,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-md-table-1812.test.ts",
+      "status": "passed",
+      "tests": 11,
+      "passed": 11,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-mods-1629.test.ts",
+      "status": "passed",
+      "tests": 73,
+      "passed": 73,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-needs-1408.test.ts",
+      "status": "passed",
+      "tests": 26,
+      "passed": 26,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-new-agent-2074.test.ts",
+      "status": "passed",
+      "tests": 6,
+      "passed": 6,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-office-canvas-2540.test.ts",
+      "status": "passed",
+      "tests": 41,
+      "passed": 41,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-office-cozy-2631.test.ts",
+      "status": "passed",
+      "tests": 17,
+      "passed": 17,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-office-dialog-2585.test.ts",
+      "status": "passed",
+      "tests": 1,
+      "passed": 1,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-office-overview-2554.test.ts",
+      "status": "passed",
+      "tests": 27,
+      "passed": 27,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-office-phone-stage-2689.test.ts",
+      "status": "passed",
+      "tests": 4,
+      "passed": 4,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-office-skin-ui-2513.test.ts",
+      "status": "passed",
+      "tests": 30,
+      "passed": 30,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-only-notices-panel-2910.test.ts",
+      "status": "passed",
+      "tests": 1,
+      "passed": 1,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-org-1389.test.ts",
+      "status": "passed",
+      "tests": 19,
+      "passed": 19,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-org-canvas-1918.test.ts",
+      "status": "passed",
+      "tests": 26,
+      "passed": 26,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-org-canvas-phone-1918.test.ts",
+      "status": "passed",
+      "tests": 1,
+      "passed": 1,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-org-office.test.ts",
+      "status": "passed",
+      "tests": 85,
+      "passed": 85,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-org-traffic-1918.test.ts",
+      "status": "passed",
+      "tests": 24,
+      "passed": 24,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-org-workflow-1918.test.ts",
+      "status": "passed",
+      "tests": 22,
+      "passed": 22,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-page-scroll-alpha2.test.ts",
+      "status": "passed",
+      "tests": 3,
+      "passed": 3,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-prefs-client-1665.test.ts",
+      "status": "passed",
+      "tests": 33,
+      "passed": 33,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-preview-attachment-1306.test.ts",
+      "status": "passed",
+      "tests": 20,
+      "passed": 20,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-preview-card-1306.test.ts",
+      "status": "passed",
+      "tests": 44,
+      "passed": 44,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-preview-panel-1481.test.ts",
+      "status": "passed",
+      "tests": 21,
+      "passed": 21,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-reconnect-1580-ui.test.ts",
+      "status": "passed",
+      "tests": 2,
+      "passed": 2,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-settings-1408.test.ts",
+      "status": "passed",
+      "tests": 86,
+      "passed": 86,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-settings-content-width.test.ts",
+      "status": "passed",
+      "tests": 4,
+      "passed": 4,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-settings-in-effect-2347.test.ts",
+      "status": "passed",
+      "tests": 14,
+      "passed": 14,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-settings-regroup-2347.test.ts",
+      "status": "passed",
+      "tests": 23,
+      "passed": 23,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-settings-restart-2347.test.ts",
+      "status": "passed",
+      "tests": 9,
+      "passed": 9,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-settings-search-2347.test.ts",
+      "status": "passed",
+      "tests": 23,
+      "passed": 23,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-settings-you-2347.test.ts",
+      "status": "passed",
+      "tests": 10,
+      "passed": 10,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-settings-you-panel-2347.test.ts",
+      "status": "passed",
+      "tests": 10,
+      "passed": 10,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-shell.test.ts",
+      "status": "passed",
+      "tests": 17,
+      "passed": 17,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-side-panel-2585.test.ts",
+      "status": "passed",
+      "tests": 11,
+      "passed": 11,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-spellcheck-attr-1700.test.ts",
+      "status": "passed",
+      "tests": 4,
+      "passed": 4,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-startup-2398.test.ts",
+      "status": "passed",
+      "tests": 2,
+      "passed": 2,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-text-undo-2342.test.ts",
+      "status": "passed",
+      "tests": 35,
+      "passed": 35,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-theme-1629.test.ts",
+      "status": "passed",
+      "tests": 48,
+      "passed": 48,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-tokens-1408.test.ts",
+      "status": "passed",
+      "tests": 12,
+      "passed": 12,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-ui-tour-1366.test.ts",
+      "status": "passed",
+      "tests": 25,
+      "passed": 25,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-usage-page-2122.test.ts",
+      "status": "passed",
+      "tests": 26,
+      "passed": 26,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-usage-rail-1673.test.ts",
+      "status": "passed",
+      "tests": 19,
+      "passed": 19,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-user-bubble-1773.test.ts",
+      "status": "passed",
+      "tests": 3,
+      "passed": 3,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-view-1408.test.ts",
+      "status": "passed",
+      "tests": 29,
+      "passed": 29,
+      "pending": 0
+    },
+    {
+      "file": "tests/web-view-only-1408.test.ts",
+      "status": "passed",
+      "tests": 1,
+      "passed": 1,
+      "pending": 0
+    },
+    {
+      "file": "tests/windows-agent-ui.test.ts",
+      "status": "passed",
+      "tests": 27,
+      "passed": 27,
+      "pending": 0
+    }
+  ]
+}

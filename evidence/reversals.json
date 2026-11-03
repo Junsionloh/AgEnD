@@ -1,0 +1,447 @@
+{
+  "head": "5712d9f17a6a8397321456296397ee627433c91d",
+  "groups": [
+    {
+      "parent": "d0ba9824895a54791fc8433b700b4b74af275e2e",
+      "base": "4c8a747dcdcd9b082fa6d088e8e9ad05b11746d9",
+      "sourceHashes": {
+        "src/ui/panel-settings.js": "80af4361be2643b518d07fccdc188f8f28e1f232e60fd8179940d8aa4f68472d",
+        "src/ui/settings-agent-filters.js": "49fc1dec03d23e5792d7acce64dce919d718ee2bcc72dec2792820ba6b8b8f0a",
+        "src/ui/settings-appearance.js": "ad84ee21b78704a627f63ce2ca1b995fd141a3bff546657e299da198b25a4176",
+        "tests/i18n-ui-literals-2390.test.ts": "dd37d553747f162d97ee8d96d8d4afc85cbd3b2ef04c84ed7091f4a8768da5b0",
+        "tests/settings-agent-filters.test.ts": "025b5c9fd84aef64b0a62fa0ad532cb388c1e74166f6b92748db70e8e5812b72",
+        "tests/web-appearance-copy-2056.test.ts": "e13d6664785391edf4114839562ae9f9a63a76c853491b986e8f30b515ebb34d",
+        "tests/web-footer-1603-1604.test.ts": "b308eb789272d263db86e22664c9423c0c64cde42f67c15a4fe1826e9ec97272",
+        "tests/web-ui-tour-1366.test.ts": "693620623db6c661c439e3e361633f0db38c8691fccdb15d05e1688da83a5cbd"
+      },
+      "allEightSourceHashesMatch": true,
+      "initialEvidenceAttempt": "WSL mutation correctly failed one assertion, but JSON-only reporter abbreviated its diff as Array(1); changed only reporting to include the default diff output. All sources were restored before this run.",
+      "cases": [
+        {
+          "name": "wsl-literal",
+          "file": "src/ui/settings-agent-filters.js",
+          "suite": "tests/i18n-ui-literals-2390.test.ts",
+          "match": "no English written in place",
+          "sourceSha256": "49fc1dec03d23e5792d7acce64dce919d718ee2bcc72dec2792820ba6b8b8f0a",
+          "mutatedSha256": "2bb2aa07f3cd8b1f45e62a23d03dcfaf099abe4cf1db357b4b8e9a92485cb4d2",
+          "parseCommand": [
+            "node",
+            "--check",
+            "src/ui/settings-agent-filters.js"
+          ],
+          "parseExitCode": 0,
+          "testCommand": [
+            "node",
+            "node_modules/vitest/vitest.mjs",
+            "run",
+            "tests/i18n-ui-literals-2390.test.ts",
+            "-t",
+            "no English written in place",
+            "--exclude",
+            ".artifacts/**",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=<checkout>/.artifacts/settings-ui-pr-review/reversal-i18n-search-wsl-literal.report.json"
+          ],
+          "testExitCode": 1,
+          "failedTests": [
+            {
+              "name": "#2390 the web UI's words go through the locale layer no English written in place in src/ui (allowlist: names, examples, units)",
+              "messages": [
+                "AssertionError: expected [ Array(1) ] to deeply equal []\n    at <isolated-snapshot>/tests/i18n-ui-literals-2390.test.ts:124:57\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:2956:64"
+              ]
+            }
+          ],
+          "protectedAssertionFailed": true,
+          "specificDiffVerified": [
+            "settings-agent-filters.js",
+            "WSL / Linux"
+          ],
+          "sourceRestored": true
+        },
+        {
+          "name": "search-term",
+          "file": "src/ui/panel-settings.js",
+          "suite": "tests/settings-agent-filters.test.ts",
+          "match": "shows an empty intersection",
+          "sourceSha256": "80af4361be2643b518d07fccdc188f8f28e1f232e60fd8179940d8aa4f68472d",
+          "mutatedSha256": "45a34b13dcb5685a1c6aec5fac48957ee76f9a1ddd70e414687de448f744c414",
+          "parseCommand": [
+            "node",
+            "--check",
+            "src/ui/panel-settings.js"
+          ],
+          "parseExitCode": 0,
+          "testCommand": [
+            "node",
+            "node_modules/vitest/vitest.mjs",
+            "run",
+            "tests/settings-agent-filters.test.ts",
+            "-t",
+            "shows an empty intersection",
+            "--exclude",
+            ".artifacts/**",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=<checkout>/.artifacts/settings-ui-pr-review/reversal-i18n-search-search-term.report.json"
+          ],
+          "testExitCode": 1,
+          "failedTests": [
+            {
+              "name": "Agent list view filters shows an empty intersection and clears search and both filters without creating a draft",
+              "messages": [
+                "AssertionError: expected 'No matching Agents' to be 'No agents match \"shared\".' // Object.is equality\n    at <isolated-snapshot>/tests/settings-agent-filters.test.ts:89:62\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionFailed": true,
+          "specificDiffVerified": [
+            "No matching Agents",
+            "No agents match",
+            "shared"
+          ],
+          "sourceRestored": true
+        }
+      ],
+      "positive": {
+        "command": [
+          "node",
+          "node_modules/vitest/vitest.mjs",
+          "run",
+          "tests/i18n-ui-literals-2390.test.ts",
+          "tests/settings-agent-filters.test.ts",
+          "--exclude",
+          ".artifacts/**",
+          "--maxWorkers=1",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=<checkout>/.artifacts/settings-ui-pr-review/reversal-i18n-search-positive.report.json"
+        ],
+        "exitCode": 0,
+        "passed": 10,
+        "failed": 0,
+        "testFiles": 2
+      },
+      "status": "passed",
+      "restoredSourceHashes": {
+        "src/ui/panel-settings.js": "80af4361be2643b518d07fccdc188f8f28e1f232e60fd8179940d8aa4f68472d",
+        "src/ui/settings-agent-filters.js": "49fc1dec03d23e5792d7acce64dce919d718ee2bcc72dec2792820ba6b8b8f0a",
+        "src/ui/settings-appearance.js": "ad84ee21b78704a627f63ce2ca1b995fd141a3bff546657e299da198b25a4176",
+        "tests/i18n-ui-literals-2390.test.ts": "dd37d553747f162d97ee8d96d8d4afc85cbd3b2ef04c84ed7091f4a8768da5b0",
+        "tests/settings-agent-filters.test.ts": "025b5c9fd84aef64b0a62fa0ad532cb388c1e74166f6b92748db70e8e5812b72",
+        "tests/web-appearance-copy-2056.test.ts": "e13d6664785391edf4114839562ae9f9a63a76c853491b986e8f30b515ebb34d",
+        "tests/web-footer-1603-1604.test.ts": "b308eb789272d263db86e22664c9423c0c64cde42f67c15a4fe1826e9ec97272",
+        "tests/web-ui-tour-1366.test.ts": "693620623db6c661c439e3e361633f0db38c8691fccdb15d05e1688da83a5cbd"
+      },
+      "allSourcesRestored": true,
+      "originalSnapshotUnmodified": true,
+      "submittedHead": "5712d9f17a6a8397321456296397ee627433c91d"
+    },
+    {
+      "parent": "d0ba9824895a54791fc8433b700b4b74af275e2e",
+      "base": "4c8a747dcdcd9b082fa6d088e8e9ad05b11746d9",
+      "sourceHashes": {
+        "src/ui/panel-settings.js": "80af4361be2643b518d07fccdc188f8f28e1f232e60fd8179940d8aa4f68472d",
+        "src/ui/settings-agent-filters.js": "49fc1dec03d23e5792d7acce64dce919d718ee2bcc72dec2792820ba6b8b8f0a",
+        "src/ui/settings-appearance.js": "ad84ee21b78704a627f63ce2ca1b995fd141a3bff546657e299da198b25a4176",
+        "tests/i18n-ui-literals-2390.test.ts": "dd37d553747f162d97ee8d96d8d4afc85cbd3b2ef04c84ed7091f4a8768da5b0",
+        "tests/settings-agent-filters.test.ts": "025b5c9fd84aef64b0a62fa0ad532cb388c1e74166f6b92748db70e8e5812b72",
+        "tests/web-appearance-copy-2056.test.ts": "e13d6664785391edf4114839562ae9f9a63a76c853491b986e8f30b515ebb34d",
+        "tests/web-footer-1603-1604.test.ts": "b308eb789272d263db86e22664c9423c0c64cde42f67c15a4fe1826e9ec97272",
+        "tests/web-ui-tour-1366.test.ts": "693620623db6c661c439e3e361633f0db38c8691fccdb15d05e1688da83a5cbd"
+      },
+      "snapshotMatchesValidation": true,
+      "cases": [
+        {
+          "name": "card-ownership",
+          "file": "src/ui/settings-appearance.js",
+          "suite": "tests/web-appearance-copy-2056.test.ts",
+          "match": "plain Look groups",
+          "sourceSha256": "ad84ee21b78704a627f63ce2ca1b995fd141a3bff546657e299da198b25a4176",
+          "mutatedSha256": "1200500959ebe14b5dc45540fee541aff0f572214a4b9e912378fe72c0bc8b93",
+          "syntax": {
+            "command": [
+              "node",
+              "--check",
+              "src/ui/settings-appearance.js"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.023
+          },
+          "test": {
+            "command": [
+              "node",
+              "node_modules/vitest/vitest.mjs",
+              "run",
+              "tests/web-appearance-copy-2056.test.ts",
+              "-t",
+              "plain Look groups",
+              "--exclude",
+              ".artifacts/**",
+              "--maxWorkers=1",
+              "--reporter=json",
+              "--outputFile=<checkout>/.artifacts/settings-ui-pr-review/reversal-appearance-card-ownership.report.json"
+            ],
+            "exitCode": 1,
+            "durationSeconds": 1.101
+          },
+          "failedTests": [
+            {
+              "name": "Settings \u2192 Web appearance in plain words plain Look groups and advanced disclosures each own their cards, in both languages; host-wide cards stay in Web dashboard (#2347)",
+              "messages": [
+                "AssertionError: expected [ { \u2026(2) }, \u2026(6) ] to deeply equal [ { \u2026(2) }, \u2026(6) ]\n    at <isolated-snapshot>/tests/web-appearance-copy-2056.test.ts:72:44\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionFailed": true,
+          "sourceRestored": true
+        },
+        {
+          "name": "hint-budget",
+          "file": "src/ui/settings-appearance.js",
+          "suite": "tests/web-appearance-copy-2056.test.ts",
+          "match": "no hint on the page runs long",
+          "sourceSha256": "ad84ee21b78704a627f63ce2ca1b995fd141a3bff546657e299da198b25a4176",
+          "mutatedSha256": "89979ddfa6a46251742c8d2f7809a7c9826cdfd518fca6b5960ab66d9770dd4c",
+          "syntax": {
+            "command": [
+              "node",
+              "--check",
+              "src/ui/settings-appearance.js"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.022
+          },
+          "test": {
+            "command": [
+              "node",
+              "node_modules/vitest/vitest.mjs",
+              "run",
+              "tests/web-appearance-copy-2056.test.ts",
+              "-t",
+              "no hint on the page runs long",
+              "--exclude",
+              ".artifacts/**",
+              "--maxWorkers=1",
+              "--reporter=json",
+              "--outputFile=<checkout>/.artifacts/settings-ui-pr-review/reversal-appearance-hint-budget.report.json"
+            ],
+            "exitCode": 1,
+            "durationSeconds": 1.047
+          },
+          "failedTests": [
+            {
+              "name": "Settings \u2192 Web appearance in plain words no hint on the page runs long (was up to 306 characters in English, 150 in Chinese), for an admin or not",
+              "messages": [
+                "AssertionError: en: Sets the maximum content width on every Settings page. Narrow windows fit the available space; fields and help columns keep their readable sizes.: expected 145 to be less than or equal to 70\n    at <isolated-snapshot>/tests/web-appearance-copy-2056.test.ts:128:73\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionFailed": true,
+          "sourceRestored": true
+        }
+      ],
+      "positive": {
+        "command": [
+          "node",
+          "node_modules/vitest/vitest.mjs",
+          "run",
+          "tests/web-appearance-copy-2056.test.ts",
+          "--exclude",
+          ".artifacts/**",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=<checkout>/.artifacts/settings-ui-pr-review/reversal-appearance-positive.report.json"
+        ],
+        "exitCode": 0,
+        "durationSeconds": 2.284,
+        "numPassedTests": 6,
+        "numFailedTests": 0,
+        "testFiles": 1
+      },
+      "allSourcesRestored": true,
+      "sourceSnapshotUntouched": true,
+      "status": "passed",
+      "submittedHead": "5712d9f17a6a8397321456296397ee627433c91d"
+    },
+    {
+      "parent": "d0ba9824895a54791fc8433b700b4b74af275e2e",
+      "base": "4c8a747dcdcd9b082fa6d088e8e9ad05b11746d9",
+      "sourceHashes": {
+        "src/ui/panel-settings.js": "80af4361be2643b518d07fccdc188f8f28e1f232e60fd8179940d8aa4f68472d",
+        "src/ui/settings-agent-filters.js": "49fc1dec03d23e5792d7acce64dce919d718ee2bcc72dec2792820ba6b8b8f0a",
+        "src/ui/settings-appearance.js": "ad84ee21b78704a627f63ce2ca1b995fd141a3bff546657e299da198b25a4176",
+        "tests/i18n-ui-literals-2390.test.ts": "dd37d553747f162d97ee8d96d8d4afc85cbd3b2ef04c84ed7091f4a8768da5b0",
+        "tests/settings-agent-filters.test.ts": "025b5c9fd84aef64b0a62fa0ad532cb388c1e74166f6b92748db70e8e5812b72",
+        "tests/web-appearance-copy-2056.test.ts": "e13d6664785391edf4114839562ae9f9a63a76c853491b986e8f30b515ebb34d",
+        "tests/web-footer-1603-1604.test.ts": "b308eb789272d263db86e22664c9423c0c64cde42f67c15a4fe1826e9ec97272",
+        "tests/web-ui-tour-1366.test.ts": "693620623db6c661c439e3e361633f0db38c8691fccdb15d05e1688da83a5cbd"
+      },
+      "manifestEightSourcesMatch": true,
+      "cases": [
+        {
+          "name": "theme-application",
+          "file": "src/ui/settings-appearance.js",
+          "suite": "tests/web-footer-1603-1604.test.ts",
+          "match": "Preferences' language, HTML previews and tour, and Look's theme",
+          "expectedFailures": 1,
+          "sourceSha256": "ad84ee21b78704a627f63ce2ca1b995fd141a3bff546657e299da198b25a4176",
+          "mutatedSha256": "3466986e1f5498b2e6f00e4cbc49d23058b6193f21b76b3d171829cb03a6000a",
+          "syntax": {
+            "command": [
+              "node",
+              "--check",
+              "src/ui/settings-appearance.js"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.021
+          },
+          "test": {
+            "command": [
+              "node",
+              "node_modules/vitest/vitest.mjs",
+              "run",
+              "tests/web-footer-1603-1604.test.ts",
+              "-t",
+              "Preferences' language, HTML previews and tour, and Look's theme",
+              "--exclude",
+              ".artifacts/**",
+              "--maxWorkers=1",
+              "--reporter=json",
+              "--outputFile=<checkout>/.artifacts/settings-ui-pr-review/reversal-preferences-theme-application.report.json"
+            ],
+            "exitCode": 1,
+            "durationSeconds": 2.267
+          },
+          "failedTests": [
+            {
+              "name": "#1604: Settings \u2192 Preferences and Look Preferences' language, HTML previews and tour, and Look's theme \u2014 shown without waiting for the configuration",
+              "messages": [
+                "AssertionError: expected [] to deeply equal [ 'light' ]\n    at <isolated-snapshot>/tests/web-footer-1603-1604.test.ts:127:20\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        },
+        {
+          "name": "public-account-scope",
+          "file": "src/ui/panel-settings.js",
+          "suite": "tests/web-footer-1603-1604.test.ts",
+          "match": "#1665: personal details",
+          "expectedFailures": 1,
+          "sourceSha256": "80af4361be2643b518d07fccdc188f8f28e1f232e60fd8179940d8aa4f68472d",
+          "mutatedSha256": "d8699fa98d2a7b9dd5e9eae885eff9d1f4b9637ecdd4a522e9fbc917d7f7b412",
+          "syntax": {
+            "command": [
+              "node",
+              "--check",
+              "src/ui/panel-settings.js"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.028
+          },
+          "test": {
+            "command": [
+              "node",
+              "node_modules/vitest/vitest.mjs",
+              "run",
+              "tests/web-footer-1603-1604.test.ts",
+              "-t",
+              "#1665: personal details",
+              "--exclude",
+              ".artifacts/**",
+              "--maxWorkers=1",
+              "--reporter=json",
+              "--outputFile=<checkout>/.artifacts/settings-ui-pr-review/reversal-preferences-public-account-scope.report.json"
+            ],
+            "exitCode": 1,
+            "durationSeconds": 2.512
+          },
+          "failedTests": [
+            {
+              "name": "#1604: Settings \u2192 Preferences and Look #1665: personal details, account content and local guidance keep their owners; public preferences and Look say changes stay here",
+              "messages": [
+                "AssertionError: true: expected [ 'Your account', \u2026(1) ] to deeply equal [ 'Your account', \u2026(1) ]\n    at <isolated-snapshot>/tests/web-footer-1603-1604.test.ts:148:84\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        },
+        {
+          "name": "tour-replay-label",
+          "file": "src/ui/panel-settings.js",
+          "suite": "tests/web-ui-tour-1366.test.ts",
+          "match": "Settings \u2192 Preferences' Replay tour button",
+          "expectedFailures": 1,
+          "sourceSha256": "80af4361be2643b518d07fccdc188f8f28e1f232e60fd8179940d8aa4f68472d",
+          "mutatedSha256": "aa36f8a5b7f7b1582acb62d9e81cde92f4676ea2141430d0f2b14098da034f46",
+          "syntax": {
+            "command": [
+              "node",
+              "--check",
+              "src/ui/panel-settings.js"
+            ],
+            "exitCode": 0,
+            "durationSeconds": 0.032
+          },
+          "test": {
+            "command": [
+              "node",
+              "node_modules/vitest/vitest.mjs",
+              "run",
+              "tests/web-ui-tour-1366.test.ts",
+              "-t",
+              "Settings \u2192 Preferences' Replay tour button",
+              "--exclude",
+              ".artifacts/**",
+              "--maxWorkers=1",
+              "--reporter=json",
+              "--outputFile=<checkout>/.artifacts/settings-ui-pr-review/reversal-preferences-tour-replay-label.report.json"
+            ],
+            "exitCode": 1,
+            "durationSeconds": 2.629
+          },
+          "failedTests": [
+            {
+              "name": "the chat tour (#1366, #1854) Settings \u2192 Preferences' Replay tour button does the same, on the remembered agent's chat: the drawer closes first and the card opens (#1366, #1604, #1854)",
+              "messages": [
+                "AssertionError: expected 'Chat tour' to be 'Replay tour' // Object.is equality\n    at <isolated-snapshot>/tests/web-ui-tour-1366.test.ts:200:29\n    at async file://<isolated-snapshot>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+              ]
+            }
+          ],
+          "protectedAssertionsFailed": true,
+          "sourceRestored": true
+        }
+      ],
+      "positive": {
+        "command": [
+          "node",
+          "node_modules/vitest/vitest.mjs",
+          "run",
+          "tests/web-footer-1603-1604.test.ts",
+          "tests/web-ui-tour-1366.test.ts",
+          "--exclude",
+          ".artifacts/**",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=<checkout>/.artifacts/settings-ui-pr-review/reversal-preferences-positive.report.json"
+        ],
+        "exitCode": 0,
+        "durationSeconds": 9.9,
+        "testFiles": 2,
+        "passed": 33,
+        "failed": 0
+      },
+      "status": "passed",
+      "allSourcesRestored": true,
+      "privateSnapshotMatchesValidation": true,
+      "originalSnapshotMatchesValidation": true,
+      "submittedHead": "5712d9f17a6a8397321456296397ee627433c91d"
+    }
+  ],
+  "sourceBinding": "All eight changed sources match the final submitted git blobs; reversals were run on private copies before the terminal-fixture export correction. Code/test sources are identical."
+}

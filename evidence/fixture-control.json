@@ -1,0 +1,117 @@
+{
+  "results": [
+    {
+      "label": "crlf",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/view-dim-1582.test.ts",
+        "--exclude",
+        ".artifacts/**",
+        "--maxWorkers=1"
+      ],
+      "exitCode": 1
+    },
+    {
+      "label": "git-bytes",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/view-dim-1582.test.ts",
+        "--exclude",
+        ".artifacts/**",
+        "--maxWorkers=1"
+      ],
+      "exitCode": 0
+    }
+  ],
+  "fixtures": [
+    {
+      "file": "tests/fixtures/claude-2.1.296-sgr/README.md",
+      "beforeSha256": "cdace41d2a62dfb734eab96daa6c49872f9efbc24b41cae46bf0564377715a00",
+      "afterSha256": "cdace41d2a62dfb734eab96daa6c49872f9efbc24b41cae46bf0564377715a00",
+      "oldCRLF": 0,
+      "newCRLF": 0
+    },
+    {
+      "file": "tests/fixtures/claude-2.1.296-sgr/enter-on-suggestion.ansi.txt",
+      "beforeSha256": "cd547b73f35a0dba1173ad0edbd5484a1228a8865042d52bfa82afe13671634f",
+      "afterSha256": "ae63381245e120e12a30cfffccb724915f3808bbefcb715aabc330329174428e",
+      "oldCRLF": 50,
+      "newCRLF": 0
+    },
+    {
+      "file": "tests/fixtures/claude-2.1.296-sgr/enter-on-suggestion.pane.txt",
+      "beforeSha256": "dcbb8f2702203e4e8816c01b6bd665f8535e96af3314d5d030f8db59866b1671",
+      "afterSha256": "2ed320e98ea12e833556f7dc586c49b7ed991e5b0a21f87f3d4d23e37f080c54",
+      "oldCRLF": 50,
+      "newCRLF": 0
+    },
+    {
+      "file": "tests/fixtures/claude-2.1.296-sgr/pasted-over-suggestion.ansi.txt",
+      "beforeSha256": "c3bffb38d776bd08ecd2b3690987c10121d32de104cae80d39c83758428e6e04",
+      "afterSha256": "6981baf99f272cfa5ff01f063c4d500347472984e8aa70fa4457808be87b55fa",
+      "oldCRLF": 50,
+      "newCRLF": 0
+    },
+    {
+      "file": "tests/fixtures/claude-2.1.296-sgr/pasted-over-suggestion.pane.txt",
+      "beforeSha256": "f6fc33d2157173f167983324b7019f34fbcce9c98249ca13e6550fd3d2979df6",
+      "afterSha256": "d870741329fef34038bff82dec7f72493c39b9b4bf965b2ebbf54be6e152bb92",
+      "oldCRLF": 50,
+      "newCRLF": 0
+    },
+    {
+      "file": "tests/fixtures/claude-2.1.296-sgr/placeholder.ansi.txt",
+      "beforeSha256": "1d265cb1c2212389ffe1cdfe55c50220c55e267ccd2bf83e71c89b1c9f764010",
+      "afterSha256": "1a446dcdfd3a74fe98de7e2fc4fafb213f5bc7500d3a72ac7e91709bda43c36a",
+      "oldCRLF": 50,
+      "newCRLF": 0
+    },
+    {
+      "file": "tests/fixtures/claude-2.1.296-sgr/placeholder.pane.txt",
+      "beforeSha256": "352a964c0ecf818f0570b56a5c1ae64719e1b3af1cad0e3ca81b3dbabf8fdbfd",
+      "afterSha256": "36b22d48b3aac3cb923ba038c3503fcc82e956dc1e9e1321c2be140c804d7117",
+      "oldCRLF": 50,
+      "newCRLF": 0
+    },
+    {
+      "file": "tests/fixtures/claude-2.1.296-sgr/suggestion.ansi.txt",
+      "beforeSha256": "cd547b73f35a0dba1173ad0edbd5484a1228a8865042d52bfa82afe13671634f",
+      "afterSha256": "ae63381245e120e12a30cfffccb724915f3808bbefcb715aabc330329174428e",
+      "oldCRLF": 50,
+      "newCRLF": 0
+    },
+    {
+      "file": "tests/fixtures/claude-2.1.296-sgr/suggestion.output.log",
+      "beforeSha256": "7d02095d86a27f4d4226fdaf2a3c7a4ca280cd76df6d29143e09a4319f252aea",
+      "afterSha256": "7d02095d86a27f4d4226fdaf2a3c7a4ca280cd76df6d29143e09a4319f252aea",
+      "oldCRLF": 0,
+      "newCRLF": 0
+    },
+    {
+      "file": "tests/fixtures/claude-2.1.296-sgr/suggestion.pane.txt",
+      "beforeSha256": "dcbb8f2702203e4e8816c01b6bd665f8535e96af3314d5d030f8db59866b1671",
+      "afterSha256": "2ed320e98ea12e833556f7dc586c49b7ed991e5b0a21f87f3d4d23e37f080c54",
+      "oldCRLF": 50,
+      "newCRLF": 0
+    },
+    {
+      "file": "tests/fixtures/claude-2.1.296-sgr/typed.ansi.txt",
+      "beforeSha256": "90f1ce0d78dbd63b13cb43b2e4ffe8c2d1cb74db469ecce9cd1060e0f5b75236",
+      "afterSha256": "807b76a4ffaa14a614268e89559656371f05a73969a6fc0162785429fd392899",
+      "oldCRLF": 50,
+      "newCRLF": 0
+    },
+    {
+      "file": "tests/fixtures/claude-2.1.296-sgr/typed.pane.txt",
+      "beforeSha256": "1ed2cef87e06e7b246326ad0055f8bf0f26f9d61acc5f519a47099ea0ac84ce1",
+      "afterSha256": "961b0aaa7fd8a3eb11f71d9622a5d20c8bca6422ecbac5ff1cf05f87dda675f4",
+      "oldCRLF": 50,
+      "newCRLF": 0
+    }
+  ],
+  "sourceFilesUnchanged": true
+}

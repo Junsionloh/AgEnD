@@ -1,0 +1,40 @@
+{
+  "head": "d0ba9824895a54791fc8433b700b4b74af275e2e",
+  "testFiles": 5,
+  "passed": 50,
+  "failed": 8,
+  "failures": [
+    {
+      "file": "i18n-ui-literals-2390.test.ts",
+      "name": "#2390 the web UI's words go through the locale layer no English written in place in src/ui (allowlist: names, examples, units)"
+    },
+    {
+      "file": "i18n-ui-literals-2390.test.ts",
+      "name": "#2390 the web UI's words go through the locale layer the allowlist is still needed: every entry is wording the scan finds"
+    },
+    {
+      "file": "settings-redesign.test.ts",
+      "name": "Settings P0 redesign shell localizes the settings' validation, confirmation and empty-state text (zh-TW)"
+    },
+    {
+      "file": "web-appearance-copy-2056.test.ts",
+      "name": "Settings \u2192 Web appearance in plain words four plain headings in Look, each over its cards, in both languages; the host-wide cards in Web dashboard (#2347)"
+    },
+    {
+      "file": "web-appearance-copy-2056.test.ts",
+      "name": "Settings \u2192 Web appearance in plain words no hint on the page runs long (was up to 306 characters in English, 150 in Chinese), for an admin or not"
+    },
+    {
+      "file": "web-footer-1603-1604.test.ts",
+      "name": "#1604: Settings \u2192 This device theme, language, HTML previews (through the app's confirm) and the tour \u2014 shown without waiting for the configuration"
+    },
+    {
+      "file": "web-footer-1603-1604.test.ts",
+      "name": "#1604: Settings \u2192 This device #1665: two cards \u2014 what is synced across devices (saying so), and what stays on this one; the public link says its changes stay here"
+    },
+    {
+      "file": "web-ui-tour-1366.test.ts",
+      "name": "the chat tour (#1366, #1854) Settings \u2192 This device's Chat tour button does the same, on the remembered agent's chat: the drawer closes first and the card opens (#1366, #1604, #1854)"
+    }
+  ]
+}
