@@ -1,0 +1,107 @@
+{
+  "head": "d0ba9824895a54791fc8433b700b4b74af275e2e",
+  "fixture": "Native AgEnD web server with synthetic data and inert CLI/lifecycle boundaries",
+  "screenshots": "Unedited real browser captures",
+  "desktopViewport": [
+    1920,
+    1080
+  ],
+  "mobileViewport": [
+    390,
+    844
+  ],
+  "observations": [
+    {
+      "page": "agents",
+      "dialogs": 0,
+      "heading": "Agent",
+      "height": 1080,
+      "overflow": false,
+      "width": 1920
+    },
+    {
+      "page": "preferences",
+      "dialogs": 0,
+      "heading": "偏好",
+      "height": 1080,
+      "overflow": false,
+      "width": 1920
+    },
+    {
+      "page": "look",
+      "dialogs": 0,
+      "heading": "外觀",
+      "height": 1080,
+      "overflow": false,
+      "width": 1920
+    },
+    {
+      "page": "runtimes",
+      "dialogs": 0,
+      "heading": "Runtime整個 Fleet",
+      "height": 1080,
+      "overflow": false,
+      "width": 1920
+    },
+    {
+      "page": "agent-defaults",
+      "dialogs": 0,
+      "heading": "Agent 預設值",
+      "height": 1080,
+      "overflow": false,
+      "width": 1920
+    },
+    {
+      "page": "chat",
+      "dialogs": 0,
+      "heading": "聊天與連線",
+      "height": 1080,
+      "overflow": false,
+      "width": 1920
+    },
+    {
+      "page": "web-dashboard",
+      "dialogs": 0,
+      "heading": "網頁儀表板",
+      "height": 1080,
+      "overflow": false,
+      "width": 1920
+    },
+    {
+      "page": "access",
+      "dialogs": 0,
+      "heading": "存取與安全",
+      "height": 1080,
+      "overflow": false,
+      "width": 1920
+    },
+    {
+      "page": "advanced",
+      "dialogs": 0,
+      "heading": "進階",
+      "height": 1080,
+      "overflow": false,
+      "width": 1920
+    },
+    {
+      "page": "mobile-agents",
+      "height": 844,
+      "overflow": false,
+      "width": 390
+    },
+    {
+      "page": "mobile-look",
+      "height": 844,
+      "overflow": false,
+      "width": 390
+    },
+    {
+      "page": "mobile-agent-defaults",
+      "height": 844,
+      "overflow": false,
+      "width": 390
+    }
+  ],
+  "consoleErrors": [],
+  "authenticatedProvider": false
+}

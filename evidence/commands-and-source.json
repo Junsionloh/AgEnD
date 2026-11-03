@@ -1,0 +1,131 @@
+{
+  "changedFileHashes": {
+    "changes/2936-agent-defaults-layout.md": "501117f2fa5ef7789423b06f899f1e2fb1a69a07c4be4b1d176aac965f1e3386",
+    "changes/2936-agent-defaults-layout.zh-TW.md": "45f1b02651f1126aceb46b9e79d0ac65aa01f2cbf898b54edf221835ce4b0cc2",
+    "changes/2936-backend-signin-dialog.md": "7f50252ed314c97cc4e1fb6f038ed3b7bef45abf5b2a7e5c99ae0db8b741aee5",
+    "changes/2936-backend-signin-dialog.zh-TW.md": "94a1f17c5fc0511b688eb31ff7d5105d7135f4e9e1f0b6e6125762ad2e3380fc",
+    "changes/2936-settings-deep-links.md": "90eb0e7e0035cc536f5d90a16f04d96d227ccc5dce8ff5620991ce7d054a85fb",
+    "changes/2936-settings-deep-links.zh-TW.md": "b8e991600a2d691aa72e78720caf77393f1746c4770febefd4d4ab49328046dc",
+    "changes/2936-settings-layout.md": "b027227678856f9ed434f8b5e66eee08540326914f3f9f9d0aade6a7a27905b0",
+    "changes/2936-settings-layout.zh-TW.md": "56b6fc7a7a0d0c780d8e508c04ac451cba462b1a46216bcddf6f3b95cdc3b95d",
+    "changes/2936-settings-tools.md": "e5ab762ed643a092ccce01e6c493c222e60f36e332902dda394580945f1e4eeb",
+    "changes/2936-settings-tools.zh-TW.md": "ec36cf835936f9135e1e549fae18be0bb06042096a53f5d07c357d55d97a1fd2",
+    "changes/2936-settings-width-consistency.md": "6b4b78d1b862a7aa72dabc078e5cfe1e665a43de850a42778770e33b35dea50d",
+    "changes/2936-settings-width-consistency.zh-TW.md": "a84b10f0cf98df5820e774ea2527beb3ebb53b1696a2f25c69f839aab0ae960b",
+    "docs/web-dashboard.md": "0c1c40beff592d5ab17ca7d2792cfc812762da8781f1b973c8ef10aa38ab70d4",
+    "docs/web-dashboard.zh-TW.md": "be1bb7ce3d8faceb5376a838a3e39e21f7d87dc351850db00f941d51cbd348e5",
+    "src/ui/backend-signin.js": "afaf37ab4b78be2afb5d91a7aca859428349c15b7e0e73c28bd180123f3f52a5",
+    "src/ui/native-instance-settings.js": "50ebcb4e72ecc1cc327d5eb598b577f20922f4cb95762402ca2089c986dc79ee",
+    "src/ui/panel-runtimes.js": "f3afe41dec81a3d2d5c7bdbfd9fc117382b0b05283aaf85b2dc8f95ea55ffdeb",
+    "src/ui/panel-settings.js": "c3b966f8c134ffedcb7a65e89cbb694453debad408d8f80015e93d4b36544f5d",
+    "src/ui/settings-agent-filters.js": "b758f0c5896568ecce3878105618ae5804e287b6f4019fc4818d0d2d94bb4ab5",
+    "src/ui/settings-appearance.js": "c7117f63919b441063bc7e4b7650793bac87278c6966be81e71d4a4d8052fe8c",
+    "src/ui/settings-dialogs.js": "da05bcdf47561219dac243a020339398088623cd9b8d73d1e51d6d7700918abd",
+    "src/ui/settings-guests.js": "b7ad10e736f89809b1ed8957bb0dea7b4cbae475adf8b8922f629fe75609ce19",
+    "src/ui/settings-layout.js": "7771a56299f90648759aef99eb9ce1f058f9a2d56136101fb0a73038b60b3f24",
+    "src/ui/settings-registry.js": "774e6c5f6a91ce4d6b0db92d322ed161e947508621221f0121a65d0d20bd0aa0",
+    "src/ui/settings-shortcuts.js": "c6c18ee3d3734eb48066d7ac8f9fe5fdd67aca4d26bbb527e3ecaab0e30d2103",
+    "src/ui/settings-strings.js": "e55d0066a6ee7f2a10a5452ab7f975233d2441c1d74ba1e77ab20eff7cd8bfbe",
+    "src/ui/settings-web-authority.js": "4a029c7bdc301a9ac737114329249ae88564a4799a9d1235e118b5bee4889c12",
+    "src/ui/shared/app-shell.js": "4668cf0933bc21464b7048ec0daf35a4285aa8e15a404a10a30935120f200e5a",
+    "src/ui/shared/app.css": "12fbff73481397ed5d3ea912746c00958ee6278845e5dac4879ff256b0002f5d",
+    "src/ui/shared/tokens.css": "0dd6c6e9665402a62a2f5f3c37ce323900024835f856de88518f28c4091df64b",
+    "src/ui/shared/ui-menu.js": "51ec39fec7ed1d7e7318f92c595964f06935c71b08493b0b349e4e97593e130a",
+    "tests/runtime-switches-ui-m2255.test.ts": "003cfefecf7c0a9b8b762c1905bc9d4bd0b55572c587e740f6cdaadb1adbabcf",
+    "tests/settings-access-tabs-ui.test.ts": "f0245a82d58c9515de391239d0f17e9062c0e2cd9c11b36dfd41bcc15ac62610",
+    "tests/settings-agent-filters.test.ts": "0ab3363ba7dbe5de758ee39be91c49accaf4454b945975ba247b5a12487b90b5",
+    "tests/settings-guests-2348.test.ts": "533b52af96946d69d7bb7542b1a60aaf23a3279c79b9a14c9638ea62170ae96a",
+    "tests/settings-layout-ui.test.ts": "f9498d22f6416651d64e28de2917d5133c676bec5fad0f8d821a36869ccc2f90",
+    "tests/settings-shortcuts-ui.test.ts": "d8f5e4ccc884584ca6c542644861831653cd4fb41d268717f9b3829f73d10db5",
+    "tests/web-backend-signin-2233.test.ts": "2dbb9ec8c9cae2ceb543fd547ce69344c509582716cbb7f2d94a604dbc789881",
+    "tests/web-settings-1408.test.ts": "179e60ead9409545af63d5d1ffd58975c04e2d5b7ea3751e4aac99efa1c2abe6",
+    "tests/web-settings-content-width.test.ts": "27c0e5c49eb2d0006d5ccdb98f580944c530163fb53cd0973225cc7299be3d2c",
+    "tests/web-settings-regroup-2347.test.ts": "b3a3bf9b6ddee0232149afbab294ddcb5e921af37b530f77149f307527d27c5e",
+    "tests/web-settings-search-2347.test.ts": "6ccf82bd6f7e7b4ed4ae846362cd10336d1814357b596ad6592788da4db54e38",
+    "tests/web-settings-you-panel-2347.test.ts": "e7d31c5048d5de10605eddb5d8d268ac9df55a633bd2b20eafe2f0d1831bb38e"
+  },
+  "steps": [
+    {
+      "label": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "typecheck-tests",
+      "command": [
+        "npm",
+        "run",
+        "typecheck:tests"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "changelog",
+      "command": [
+        "node",
+        "scripts/changelog-assemble.mjs",
+        "--check"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "focused-tests",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/settings-layout-ui.test.ts",
+        "tests/settings-access-tabs-ui.test.ts",
+        "tests/settings-agent-filters.test.ts",
+        "tests/settings-shortcuts-ui.test.ts",
+        "tests/web-settings-content-width.test.ts",
+        "tests/web-settings-1408.test.ts",
+        "tests/web-settings-regroup-2347.test.ts",
+        "tests/web-settings-you-panel-2347.test.ts",
+        "tests/web-settings-search-2347.test.ts",
+        "tests/settings-appearance-1629.test.ts",
+        "tests/settings-web-section-1620.test.ts",
+        "tests/settings-web-authority-1939.test.ts",
+        "tests/settings-guests-2348.test.ts",
+        "tests/settings-connection-row.test.ts",
+        "tests/settings-model-dropdowns-2072.test.ts",
+        "tests/settings-connection-secrets.test.ts",
+        "tests/web-settings-in-effect-2347.test.ts",
+        "tests/web-settings-restart-2347.test.ts",
+        "tests/web-settings-you-2347.test.ts",
+        "tests/runtime-machines-ui.test.ts",
+        "tests/runtime-switches-ui-m2255.test.ts",
+        "tests/windows-agent-ui.test.ts",
+        "tests/web-input-zoom-1611.test.ts",
+        "tests/web-csp-1300.test.ts",
+        "tests/web-app-modules-1408.test.ts",
+        "tests/web-prefs-client-1665.test.ts",
+        "tests/search-ui-2293.test.ts",
+        "tests/web-keyboard-2478.test.ts",
+        "tests/web-backend-signin-2233.test.ts",
+        "tests/structured-signin-ui-2599.test.ts",
+        "tests/web-long-idle-m2260.test.ts",
+        "--exclude",
+        ".artifacts/**",
+        "--maxWorkers=2"
+      ],
+      "exitCode": 0
+    }
+  ],
+  "head": "d0ba9824895a54791fc8433b700b4b74af275e2e",
+  "lineEndingNormalization": "CRLF to LF for text-only assertions",
+  "base": "4c8a747dcdcd9b082fa6d088e8e9ad05b11746d9"
+}

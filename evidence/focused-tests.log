@@ -1,0 +1,104 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.12 [39m[90m/tmp/agend-settings-ui-pr-gdnwvx_k[39m
+
+ [32m✓[39m tests/settings-access-tabs-ui.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 2103[2mms[22m[39m
+ [32m✓[39m tests/settings-connection-row.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 453[2mms[22m[39m
+     [33m[2m✓[22m[39m a connection's row: its facts come before one cluster, and that cluster holds the Settings button, token and connection state [33m 443[2mms[22m[39m
+ [32m✓[39m tests/web-app-modules-1408.test.ts [2m([22m[2m38 tests[22m[2m)[22m[33m 849[2mms[22m[39m
+ [32m✓[39m tests/web-settings-search-2347.test.ts [2m([22m[2m23 tests[22m[2m)[22m[33m 9909[2mms[22m[39m
+     [33m[2m✓[22m[39m every field with an id in a section has an entry, and every entry's element is drawn in its section [33m 1684[2mms[22m[39m
+     [33m[2m✓[22m[39m the moved prefs.theme entry opens Look and reveals its field [33m 1094[2mms[22m[39m
+     [33m[2m✓[22m[39m the moved device.motion entry opens Look and reveals its field [33m 1090[2mms[22m[39m
+     [33m[2m✓[22m[39m the moved device.css-off entry opens Look and reveals its field [33m 1088[2mms[22m[39m
+     [33m[2m✓[22m[39m nothing found says so; Esc clears; "/" anywhere in Settings focuses the box [33m 1074[2mms[22m[39m
+     [33m[2m✓[22m[39m the configuration read answers after 2400 ms: the field is still focused and flashed [33m 2443[2mms[22m[39m
+     [33m[2m✓[22m[39m #2383 review: the message search failing (search off: 404) leaves the settings shown, and Enter opens one [33m 456[2mms[22m[39m
+     [33m[2m✓[22m[39m #2383 review: the message search failing (a dropped connection) leaves the settings shown, and Enter opens one [33m 423[2mms[22m[39m
+ [32m✓[39m tests/web-prefs-client-1665.test.ts [2m([22m[2m33 tests[22m[2m)[22m[33m 6557[2mms[22m[39m
+     [33m[2m✓[22m[39m P2-2 ①: a read answered while this page's write is still out does not undo it, nor does the write's own answer [33m 466[2mms[22m[39m
+     [33m[2m✓[22m[39m r2: another device's newer value, held back while this page's write was out, is shown once that write ends — even if its answer is older [33m 452[2mms[22m[39m
+     [33m[2m✓[22m[39m r2 controls: a write answered normally keeps this page's value; a key changed again while its write was out stays this page's [33m 1354[2mms[22m[39m
+     [33m[2m✓[22m[39m P2-2 ③: an older write's answer arriving last does not replace a newer view [33m 453[2mms[22m[39m
+     [33m[2m✓[22m[39m #1677 r1: this page's own change, still being sent, stays when another device's change to another key is taken [33m 455[2mms[22m[39m
+     [33m[2m✓[22m[39m a change is cached at once and sent to the host (a burst is one write) [33m 452[2mms[22m[39m
+     [33m[2m✓[22m[39m a change not sent yet is not undone by another device's revision arriving meanwhile [33m 452[2mms[22m[39m
+     [33m[2m✓[22m[39m refused by the host: the page reads the host's value back, rather than show a choice no other device sees [33m 454[2mms[22m[39m
+     [33m[2m✓[22m[39m the public link writes nothing to the host: no upload, no change sent (the browser keeps its own) [33m 453[2mms[22m[39m
+     [33m[2m✓[22m[39m the anonymous reader (no host values on the page): nothing is read or sent [33m 452[2mms[22m[39m
+     [33m[2m✓[22m[39m the sidebar: its filter, folds and drag order are sent as nav.*; another device's arrangement is taken at once [33m 456[2mms[22m[39m
+     [33m[2m✓[22m[39m every place a synced choice is made sends it: theme and language (Preferences), previews — the tour and the first-run card stay on the device [33m 529[2mms[22m[39m
+ [32m✓[39m tests/search-ui-2293.test.ts [2m([22m[2m27 tests[22m[2m)[22m[33m 6023[2mms[22m[39m
+     [33m[2m✓[22m[39m searches DEBOUNCE_MS after the last keystroke — one request for a burst of typing [33m 447[2mms[22m[39m
+     [33m[2m✓[22m[39m Ctrl+F in a chat: the filters open, narrowed to that agent; the chips narrow the request [33m 461[2mms[22m[39m
+     [33m[2m✓[22m[39m answers the server gives: unavailable, busy, still building, limited; nothing found [33m 705[2mms[22m[39m
+     [33m[2m✓[22m[39m an older query whose body arrives late never replaces a newer one either [33m 460[2mms[22m[39m
+     [33m[2m✓[22m[39m the kinds can't all be turned off: the last one on stays on [33m 475[2mms[22m[39m
+     [33m[2m✓[22m[39m an older query's late answer (an error) never replaces a newer one [33m 461[2mms[22m[39m
+     [33m[2m✓[22m[39m too many searches: the time to wait; one still finishing: asked once more, shortly [33m 869[2mms[22m[39m
+ [32m✓[39m tests/web-settings-you-panel-2347.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 3789[2mms[22m[39m
+     [33m[2m✓[22m[39m Look: the theme is shown at once, staged as one change, and saved by Save (no apply job) [33m 856[2mms[22m[39m
+     [33m[2m✓[22m[39m over the temporary public link the bar still saves this person's own choices (this browser only, as before) [33m 507[2mms[22m[39m
+     [33m[2m✓[22m[39m Discard puts the theme back and sends nothing [33m 509[2mms[22m[39m
+     [33m[2m✓[22m[39m Web appearance: colours off (synced) and following reduced motion (this device) are two unsaved changes; Discard puts both back [33m 557[2mms[22m[39m
+     [33m[2m✓[22m[39m Restore defaults (a confirmed action) saves at once, Settings open or not: nothing staged [33m 511[2mms[22m[39m
+     [33m[2m✓[22m[39m #2380 review: a reload or a closed tab (pagehide) puts back what was not saved — a device switch and a held theme [33m 508[2mms[22m[39m
+ [32m✓[39m tests/web-settings-1408.test.ts [2m([22m[2m86 tests[22m[2m)[22m[33m 30162[2mms[22m[39m
+     [33m[2m✓[22m[39m leaving with the first write in flight: one job, one key, progress goes on, nothing lands in the gone panel; back again finds it [33m 1128[2mms[22m[39m
+     [33m[2m✓[22m[39m leaving with the first write accepted: one job, one key, progress goes on, nothing lands in the gone panel; back again finds it [33m 1076[2mms[22m[39m
+     [33m[2m✓[22m[39m leaving with the POST in flight: one job, one key, progress goes on, nothing lands in the gone panel; back again finds it [33m 1101[2mms[22m[39m
+     [33m[2m✓[22m[39m leaving with the POST accepted (job running): one job, one key, progress goes on, nothing lands in the gone panel; back again finds it [33m 2077[2mms[22m[39m
+     [33m[2m✓[22m[39m coming back while the job runs: attached, Apply off, no second POST [33m 1075[2mms[22m[39m
+     [33m[2m✓[22m[39m a POST whose answer is lost is sent again with the same key, never as a second job [33m 4023[2mms[22m[39m
+     [33m[2m✓[22m[39m leaving while writes or the POST are still to come makes the browser ask; once the job exists it does not [33m 1010[2mms[22m[39m
+     [33m[2m✓[22m[39m after a Save that went through, the drafts go: the form shows what is saved, unmarked [33m 1051[2mms[22m[39m
+     [33m[2m✓[22m[39m #2367 review: edits made while a Save runs (this section's and another's) outlive it — it writes what it had [33m 1122[2mms[22m[39m
+     [33m[2m✓[22m[39m #2367 r2: an edit made while a Save runs that puts a field back to its old value is an edit too [33m 1076[2mms[22m[39m
+     [33m[2m✓[22m[39m 50 mounts leave nothing: no lease, no listener, no leave guard [33m 582[2mms[22m[39m
+     [33m[2m✓[22m[39m refused: the operation stops, the apply is never posted, and the change is staged again [33m 2057[2mms[22m[39m
+     [33m[2m✓[22m[39m Developer (#2347): Apply stages the edit in the Save bar — nothing written; Save writes it in order, then one apply [33m 1094[2mms[22m[39m
+     [33m[2m✓[22m[39m the wizard: the commit (a write an admin may confirm), then the ordinary apply — one, owned by the app — and the token only in the commit [33m 1062[2mms[22m[39m
+     [33m[2m✓[22m[39m 2. the wizard hands its commit and the apply to the app before the commit is sent; with another Apply running it sends nothing [33m 2102[2mms[22m[39m
+     [33m[2m✓[22m[39m 5. a write whose answer was lost goes back with its key, and the retry rejoins it; a refused one gets a new key [33m 2183[2mms[22m[39m
+     [33m[2m✓[22m[39m 6. an accepted answer that cannot be read is not 'done': the operation stops before the next write and the apply [33m 1109[2mms[22m[39m
+     [33m[2m✓[22m[39m 1. a 202 whose request id is empty is unknown, not done: nothing after it is written, and its key is kept [33m 1159[2mms[22m[39m
+ [32m✓[39m tests/web-settings-you-2347.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 2361[2mms[22m[39m
+     [33m[2m✓[22m[39m a held choice is shown (cached, in force here) and not sent; Save sends them all in one write [33m 472[2mms[22m[39m
+     [33m[2m✓[22m[39m Discard puts back the host's value on the page (theme.js too), and sends nothing [33m 459[2mms[22m[39m
+     [33m[2m✓[22m[39m a choice back to what it was is no change; the sidebar's own keys still save at once [33m 457[2mms[22m[39m
+     [33m[2m✓[22m[39m a confirmed action (withoutHold) saves at once, and what it set is held no more [33m 458[2mms[22m[39m
+     [33m[2m✓[22m[39m over the public link Save keeps the choice in this browser only, as before (no host write) [33m 458[2mms[22m[39m
+ [32m✓[39m tests/settings-web-section-1620.test.ts [2m([22m[2m42 tests[22m[2m)[22m[33m 2703[2mms[22m[39m
+     [33m[2m✓[22m[39m #2347: its parts are where each belongs — Access & security, Chat & connections (web echo), Web dashboard; none in Agent defaults [33m 463[2mms[22m[39m
+ [32m✓[39m tests/windows-agent-ui.test.ts [2m([22m[2m27 tests[22m[2m)[22m[33m 1683[2mms[22m[39m
+ [32m✓[39m tests/settings-guests-2348.test.ts [2m([22m[2m29 tests[22m[2m)[22m[33m 2010[2mms[22m[39m
+     [33m[2m✓[22m[39m lists the switches and everyone with access: their agents, and whether they are signed in [33m 315[2mms[22m[39m
+ [32m✓[39m tests/web-settings-restart-2347.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 1333[2mms[22m[39m
+     [33m[2m✓[22m[39m a Save that needs a restart: its own card or line offers it (no second line), and no restart is made for it [33m 1046[2mms[22m[39m
+ [32m✓[39m tests/settings-web-authority-1939.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 1274[2mms[22m[39m
+     [33m[2m✓[22m[39m shows what is in force: the switch on by default (§0.1), only-this-computer off, the hours; no session authorized yet [33m 329[2mms[22m[39m
+ [32m✓[39m tests/web-settings-content-width.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 1062[2mms[22m[39m
+     [33m[2m✓[22m[39m applies through the real Shell, saves immediately without dirty/POST, and restores on a fresh page [33m 875[2mms[22m[39m
+ [32m✓[39m tests/web-settings-in-effect-2347.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 1175[2mms[22m[39m
+     [33m[2m✓[22m[39m unset keys carry "default"; keys fleet.yaml sets do not [33m 611[2mms[22m[39m
+ [32m✓[39m tests/web-settings-regroup-2347.test.ts [2m([22m[2m23 tests[22m[2m)[22m[33m 861[2mms[22m[39m
+     [33m[2m✓[22m[39m offers Runtime under Settings, and keeps the old Windows CLI address as an alias [33m 313[2mms[22m[39m
+ [32m✓[39m tests/settings-agent-filters.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 520[2mms[22m[39m
+ [32m✓[39m tests/runtime-machines-ui.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 531[2mms[22m[39m
+ [32m✓[39m tests/runtime-switches-ui-m2255.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 539[2mms[22m[39m
+ [32m✓[39m tests/web-keyboard-2478.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 515[2mms[22m[39m
+ [32m✓[39m tests/web-backend-signin-2233.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 543[2mms[22m[39m
+ [32m✓[39m tests/settings-model-dropdowns-2072.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 225[2mms[22m[39m
+ [32m✓[39m tests/settings-appearance-1629.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 188[2mms[22m[39m
+ [32m✓[39m tests/web-long-idle-m2260.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 170[2mms[22m[39m
+ [32m✓[39m tests/settings-shortcuts-ui.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 146[2mms[22m[39m
+ [32m✓[39m tests/settings-layout-ui.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 102[2mms[22m[39m
+ [32m✓[39m tests/web-csp-1300.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 145[2mms[22m[39m
+ [32m✓[39m tests/web-input-zoom-1611.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m tests/structured-signin-ui-2599.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/settings-connection-secrets.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m31 passed[39m[22m[90m (31)[39m
+[2m      Tests [22m [1m[32m531 passed[39m[22m[90m (531)[39m
+[2m   Start at [22m 15:12:06
+[2m   Duration [22m 46.51s[2m (transform 6.36s, setup 1.02s, import 9.34s, tests 78.01s, environment 4ms)[22m
+

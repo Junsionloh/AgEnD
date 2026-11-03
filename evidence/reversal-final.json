@@ -1,0 +1,158 @@
+{
+  "head": "d0ba9824895a54791fc8433b700b4b74af275e2e",
+  "base": "4c8a747dcdcd9b082fa6d088e8e9ad05b11746d9",
+  "validationManifestSha256": "8a3b32e76105e98ef68db7f7b8681935a2d29477cee3465ddf75e12e831702ff",
+  "sourceEnvironment": "/tmp/agend-settings-ui-pr-gdnwvx_k",
+  "environment": "/tmp/agend-settings-reversal-d0ba982-w0vqejzn",
+  "sourceHashes": {
+    "src/ui/shared/app-shell.js": {
+      "workspaceSha256": "084082a9dcd72240bf4c254d11a01fdcc33c0cca9564032137384599acc0e5f4",
+      "normalizedSha256": "4668cf0933bc21464b7048ec0daf35a4285aa8e15a404a10a30935120f200e5a"
+    },
+    "tests/web-settings-content-width.test.ts": {
+      "workspaceSha256": "27c0e5c49eb2d0006d5ccdb98f580944c530163fb53cd0973225cc7299be3d2c",
+      "normalizedSha256": "27c0e5c49eb2d0006d5ccdb98f580944c530163fb53cd0973225cc7299be3d2c"
+    },
+    "src/ui/settings-agent-filters.js": {
+      "workspaceSha256": "b758f0c5896568ecce3878105618ae5804e287b6f4019fc4818d0d2d94bb4ab5",
+      "normalizedSha256": "b758f0c5896568ecce3878105618ae5804e287b6f4019fc4818d0d2d94bb4ab5"
+    },
+    "tests/settings-agent-filters.test.ts": {
+      "workspaceSha256": "0ab3363ba7dbe5de758ee39be91c49accaf4454b945975ba247b5a12487b90b5",
+      "normalizedSha256": "0ab3363ba7dbe5de758ee39be91c49accaf4454b945975ba247b5a12487b90b5"
+    },
+    "src/ui/settings-shortcuts.js": {
+      "workspaceSha256": "c6c18ee3d3734eb48066d7ac8f9fe5fdd67aca4d26bbb527e3ecaab0e30d2103",
+      "normalizedSha256": "c6c18ee3d3734eb48066d7ac8f9fe5fdd67aca4d26bbb527e3ecaab0e30d2103"
+    },
+    "tests/settings-shortcuts-ui.test.ts": {
+      "workspaceSha256": "d8f5e4ccc884584ca6c542644861831653cd4fb41d268717f9b3829f73d10db5",
+      "normalizedSha256": "d8f5e4ccc884584ca6c542644861831653cd4fb41d268717f9b3829f73d10db5"
+    },
+    "src/ui/panel-settings.js": {
+      "workspaceSha256": "b49962fd8285e0bcb5447ed5e38fc38e52d8d2895e8d587c61c958526680e9b6",
+      "normalizedSha256": "c3b966f8c134ffedcb7a65e89cbb694453debad408d8f80015e93d4b36544f5d"
+    },
+    "tests/settings-access-tabs-ui.test.ts": {
+      "workspaceSha256": "f0245a82d58c9515de391239d0f17e9062c0e2cd9c11b36dfd41bcc15ac62610",
+      "normalizedSha256": "f0245a82d58c9515de391239d0f17e9062c0e2cd9c11b36dfd41bcc15ac62610"
+    }
+  },
+  "cases": [
+    {
+      "name": "width",
+      "file": "src/ui/shared/app-shell.js",
+      "suite": "tests/web-settings-content-width.test.ts",
+      "test": "applies through the real Shell",
+      "sourceSha256": "4668cf0933bc21464b7048ec0daf35a4285aa8e15a404a10a30935120f200e5a",
+      "mutatedSha256": "42dba2a9c9270bdeb86a66c18d7601d9f07bd07068cc5b6a61d6561f1778bec1",
+      "syntaxExitCode": 0,
+      "exitCode": 1,
+      "durationSeconds": 2.067,
+      "assertionFailure": true,
+      "failedTests": [
+        "Settings content width belongs to this device applies through the real Shell, saves immediately without dirty/POST, and restores on a fresh page"
+      ],
+      "failureMessages": "AssertionError: expected [ undefined, 1200 ] to deeply equal [ '1200px', 1200 ]\n    at /tmp/agend-settings-reversal-d0ba982-w0vqejzn/tests/web-settings-content-width.test.ts:56:50\n    at async file:///tmp/agend-settings-ui-pr-gdnwvx_k/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20",
+      "sourceRestored": true
+    },
+    {
+      "name": "runtime-filter",
+      "file": "src/ui/settings-agent-filters.js",
+      "suite": "tests/settings-agent-filters.test.ts",
+      "test": "intersects the existing search with Runtime and status",
+      "sourceSha256": "b758f0c5896568ecce3878105618ae5804e287b6f4019fc4818d0d2d94bb4ab5",
+      "mutatedSha256": "802e28f9c2853a61c729688a6d3bb751bd3777dda62b47d54416e258a880d87c",
+      "syntaxExitCode": 0,
+      "exitCode": 1,
+      "durationSeconds": 1.964,
+      "assertionFailure": true,
+      "failedTests": [
+        "Agent list view filters intersects the existing search with Runtime and status, preserving team grouping and accurate result counts"
+      ],
+      "failureMessages": "AssertionError: expected [ 'shared-local', \u2026(2) ] to deeply equal [ Array(2) ]\n    at /tmp/agend-settings-reversal-d0ba982-w0vqejzn/tests/settings-agent-filters.test.ts:76:21\n    at async file:///tmp/agend-settings-ui-pr-gdnwvx_k/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20",
+      "sourceRestored": true
+    },
+    {
+      "name": "shortcut-entry",
+      "file": "src/ui/settings-shortcuts.js",
+      "suite": "tests/settings-shortcuts-ui.test.ts",
+      "test": "opens the shared shell dialog from the real preference button",
+      "sourceSha256": "c6c18ee3d3734eb48066d7ac8f9fe5fdd67aca4d26bbb527e3ecaab0e30d2103",
+      "mutatedSha256": "c93c8bb43f2ef0a21ec972ab7935290c480252bf68218eda0cf760b72b69e2ca",
+      "syntaxExitCode": 0,
+      "exitCode": 1,
+      "durationSeconds": 0.905,
+      "assertionFailure": true,
+      "failedTests": [
+        "Preferences keyboard-shortcut help opens the shared shell dialog from the real preference button, with the supported contexts and no requests"
+      ],
+      "failureMessages": "AssertionError: expected undefined to be true // Object.is equality\n    at /tmp/agend-settings-reversal-d0ba982-w0vqejzn/tests/settings-shortcuts-ui.test.ts:52:28\n    at async file:///tmp/agend-settings-ui-pr-gdnwvx_k/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20",
+      "sourceRestored": true
+    },
+    {
+      "name": "unknown-actions",
+      "file": "src/ui/panel-settings.js",
+      "suite": "tests/settings-agent-filters.test.ts",
+      "test": "distinguishes unreadable or future statuses",
+      "sourceSha256": "c3b966f8c134ffedcb7a65e89cbb694453debad408d8f80015e93d4b36544f5d",
+      "mutatedSha256": "8a38aa5e2b4c287da9aff3eb7c2fa484a52a0dee3efbe8921daa723591f8bcb9",
+      "syntaxExitCode": 0,
+      "exitCode": 1,
+      "durationSeconds": 1.975,
+      "assertionFailure": true,
+      "failedTests": [
+        "Agent list view filters distinguishes unreadable or future statuses from the genuinely stopped Agent"
+      ],
+      "failureMessages": "AssertionError: expected [ 'Settings', 'Start', '', \u2026(3) ] to not include 'Start'\n    at Proxy.<anonymous> (file:///tmp/agend-settings-ui-pr-gdnwvx_k/node_modules/@vitest/expect/dist/index.js:1319:15)\n    at Proxy.<anonymous> (file:///tmp/agend-settings-ui-pr-gdnwvx_k/node_modules/@vitest/expect/dist/index.js:1156:15)\n    at Proxy.methodWrapper (file:///tmp/agend-settings-ui-pr-gdnwvx_k/node_modules/chai/index.js:1737:25)\n    at /tmp/agend-settings-reversal-d0ba982-w0vqejzn/tests/settings-agent-filters.test.ts:116:12\n    at async file:///tmp/agend-settings-ui-pr-gdnwvx_k/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20",
+      "sourceRestored": true
+    },
+    {
+      "name": "hash-disclosure",
+      "file": "src/ui/panel-settings.js",
+      "suite": "tests/settings-access-tabs-ui.test.ts",
+      "test": "expands disclosures for a direct hash target",
+      "sourceSha256": "c3b966f8c134ffedcb7a65e89cbb694453debad408d8f80015e93d4b36544f5d",
+      "mutatedSha256": "cbf0fe8dc61438045bf6f7d478d69b7658ed8f94b7f93281faf89d0e67678bc5",
+      "syntaxExitCode": 0,
+      "exitCode": 1,
+      "durationSeconds": 2.013,
+      "assertionFailure": true,
+      "failedTests": [
+        "the real Settings forms across page tabs expands disclosures for a direct hash target while preserving the existing Access draft"
+      ],
+      "failureMessages": "AssertionError: a revealed tab must also reveal the field's disclosure: expected false to be true // Object.is equality\n    at /tmp/agend-settings-reversal-d0ba982-w0vqejzn/tests/settings-access-tabs-ui.test.ts:101:87\n    at async file:///tmp/agend-settings-ui-pr-gdnwvx_k/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20",
+      "sourceRestored": true
+    }
+  ],
+  "positive": {
+    "exitCode": 0,
+    "durationSeconds": 2.703,
+    "tests": [
+      {
+        "name": "the real Settings forms across page tabs expands disclosures for a direct hash target while preserving the existing Access draft",
+        "status": "passed"
+      },
+      {
+        "name": "Agent list view filters intersects the existing search with Runtime and status, preserving team grouping and accurate result counts",
+        "status": "passed"
+      },
+      {
+        "name": "Agent list view filters distinguishes unreadable or future statuses from the genuinely stopped Agent",
+        "status": "passed"
+      },
+      {
+        "name": "Preferences keyboard-shortcut help opens the shared shell dialog from the real preference button, with the supported contexts and no requests",
+        "status": "passed"
+      },
+      {
+        "name": "Settings content width belongs to this device applies through the real Shell, saves immediately without dirty/POST, and restores on a fresh page",
+        "status": "passed"
+      }
+    ]
+  },
+  "status": "passed",
+  "manifestFilesUnmodified": true,
+  "headEvidence": "Final validation manifest; Windows Git clean/HEAD confirmed by root. No WSL Git/index scan.",
+  "reportFinalization": "Vitest reports filtered tests as 'skipped'; finalizer excludes those records. All 5 selected positives had already passed with exitCode 0."
+}

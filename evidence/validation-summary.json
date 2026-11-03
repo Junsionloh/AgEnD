@@ -1,0 +1,32 @@
+{
+  "focusedPassed": 531,
+  "focusedSkipped": 0,
+  "typecheckTests": "passed",
+  "focusedFailed": 0,
+  "buildPostbuild": "passed",
+  "head": "d0ba9824895a54791fc8433b700b4b74af275e2e",
+  "base": "4c8a747dcdcd9b082fa6d088e8e9ad05b11746d9",
+  "focusedSuites": 31,
+  "typecheck": "passed",
+  "originalRun": "528 passed / 3 failed: one new test depended on the previous tab selection; corrected to explicitly select its starting tab. Two unchanged raw-source assertions required LF normalization in the isolated checkout. Final normalized-source run is green.",
+  "screenshots": {
+    "desktop-look.jpg": "f8a940cb1e0784f8d1471fb0fbf17ec608c76158ec4587919140ed42524e27ec",
+    "desktop-signin.jpg": "af570712165522ad41eeac6f18a23ff121bd4bc6bf74d375db90361614aeebe0",
+    "desktop-runtimes.jpg": "d959da1589fe37aabb4bcdb954cbb9d5fb63f848e0ad81b0f16a82935b605cc5",
+    "desktop-advanced.jpg": "2d63077a235fe001ecead212df51bd08e18efa990fa0e4e3159022437b3da4e7",
+    "desktop-access-sharing.jpg": "1ad30f5a60f75aa92a57199832ac348641a7a033386a68649ade258d024adfc3",
+    "desktop-preferences.jpg": "6ab525b4ca282c9a7874571886004bac0fa6b129564ac6c249cd959a2911979a",
+    "mobile-agent-defaults.jpg": "39cf7a69496787097c3685e9794c6423fcd6e9b9c9f5e7a91f3aae6aeec09dd4",
+    "desktop-agents.jpg": "1d41bb3f4c9602f4f69e2bd349544ff4d153418c33d7235fb04d3eee0b44c417",
+    "desktop-access.jpg": "3a5852f6030e767563d3b9e837538e996cd0479b341ed670a29dbcb6461c76a5",
+    "desktop-agent-defaults.jpg": "4175357d7110c211bb3bdc89a05b0e3c272297255d83491338a4b89a0a93ea1f",
+    "mobile-look.jpg": "ece9a4359afed451360e947eb2725c0518609dbb40dae178762c86d2aee5cda7",
+    "desktop-chat.jpg": "12da47ee56dc328fc23de96a76af92bdb6c10b7e87a5c8d90e8a2c8ba77f003b",
+    "desktop-web-dashboard.jpg": "3bd6a13ab61959f30d69f70ef1e7ee89f350d5699a30b4529f3415380ccb97b7",
+    "desktop-access-guests.jpg": "6ed57f60ea1f2efd49cd3f8ab3014c52c000c8bc2ac7e9c063feeed2ec7db89d",
+    "desktop-agent-accounts.jpg": "3cc2e215f72cd4055c7ce0f49ea8f224219a8ba0d7764a1ee89a30eb189cc25a",
+    "mobile-defaults-collaboration.jpg": "77682295de61e9b0d1cb9b39fc985d03bcdbc77fb1d56e8f8f926efdbb6ed419",
+    "mobile-agents.jpg": "f4c12c1f212c8927cae892dad80bdbd0cdc0312e00bf64f6543326bca16ebf93"
+  },
+  "changelog": "paired fragments and guard passed"
+}
