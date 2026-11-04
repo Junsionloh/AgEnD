@@ -59,6 +59,7 @@ import { ProviderMark } from "./provider-marks.js";
 import { CliProductMark, cliLabel } from "./cli-picker.js";
 import { SettingsPageHead, SettingsTabs, SettingsTabPanel, useSettingsTabs, revealSettingsTarget, layoutText } from "./settings-layout.js";
 import { AgentFilters, agentFilterText, agentRuntime, agentRuntimeOffline, agentStatus, filterAgentGroups } from "./settings-agent-filters.js";
+import { useRuntimeCatalog } from "./runtime-catalog.js";
 import { ShortcutsHelpRow } from "./settings-shortcuts.js";
 
 const tn = (k, ...v) => t(`settings.${k}`, ...v);
@@ -802,6 +803,9 @@ function Agents({ ctx, search, clearSearch, openDialog }) {
   const [busy, setBusy] = useState(() => new Map());     // name → the action under way
   const [runtime, setRuntime] = useState("");
   const [status, setStatus] = useState("");
+  // The computers' names come from the same list as the Runtime page (revoked ones included, so an Agent still bound to one can say so).
+  const catalog = useRuntimeCatalog(Object.values(insts).some((inst) => inst?.machine_id));
+  const machines = catalog.data ? new Map(catalog.data.machines.map((machine) => [machine.id, { name: machine.name, status: machine.status }])) : null;
   const chs = channelsOf(ctx.fleet);
   // #2172: the sidebar's grouping — an agent in a team under its team, else under its first tag.
   const teamsOf = (name) => Object.keys(ctx.fleet.teams || {}).filter((t) => Array.isArray(ctx.fleet.teams[t]?.members) && ctx.fleet.teams[t].members.includes(name));
@@ -813,7 +817,7 @@ function Agents({ ctx, search, clearSearch, openDialog }) {
     setBusy((b) => new Map(b).set(name, action));
     try { await work(); } finally { setBusy((b) => { const n = new Map(b); n.delete(name); return n; }); }
   };
-  const head = html`<${AgentFilters} instances=${insts} live=${ctx.live} runtime=${runtime} status=${status} active=${active}
+  const head = html`<${AgentFilters} instances=${insts} live=${ctx.live} machines=${machines} runtime=${runtime} status=${status} active=${active}
     matched=${groups.reduce((count, group) => count + group.names.length, 0)} total=${Object.keys(insts).length} onRuntime=${setRuntime} onStatus=${setStatus}
     onClear=${() => { setRuntime(""); setStatus(""); clearSearch(); }} />`;
   if (!Object.keys(insts).length) return html`${head}<${Empty} icon="bot" title=${tn("noAgents")} />`;
@@ -832,13 +836,13 @@ function Agents({ ctx, search, clearSearch, openDialog }) {
         const ch = agentChannelLabel(inst, chs);
         const working = busy.has(name), doing = busy.get(name);
         const label = (action, text) => (doing === action ? tn("working") : text);
-        const runtimeLabel = agentRuntime(inst, ctx.live[name]).label;
+        const runtimeTarget = agentRuntime(inst, ctx.live[name], machines);
         return html`<div key=${name} class="s-row s-agent-row">
           <div class="s-agent-identity"><span class="s-name" title=${name}>${shortName(name, inst)}</span>
             <div class="s-agent-context">${inst.runtime !== "windows" || ctx.live[name]?.capabilities?.effort === true ? html`<span class="tag">${tn("effortTag", sum.effort)}</span>` : null}
               ${ch ? html`<span class=${`tag${ch.includes("persona") ? " persona" : ""}`}>${ch}</span>` : null}</div>
           </div>
-          <div class="s-agent-runtime"><span class="tag">${runtimeLabel}</span></div>
+          <div class="s-agent-runtime"><span class=${`tag${runtimeTarget.gone ? " warn" : ""}`} title=${runtimeTarget.title || runtimeTarget.label}>${runtimeTarget.label}</span></div>
           <div class="s-agent-cli"><${CliProductMark} id=${sum.backend} size=${20} /><span><strong>${cliLabel(sum.backend)}</strong><span class="s-meta" title=${sum.model}>${sum.model}</span></span></div>
           <span class="s-agent-status"><span class=${dotClass(agentStatus(ctx.live[name]))} aria-hidden="true"></span><span>${agentFilterText(agentStatus(ctx.live[name]))}${agentRuntimeOffline(inst, ctx.live[name]) ? html`<small class="s-agent-runtime-state">${agentFilterText("offline")}</small>` : null}</span></span>
           <span class="s-actions">

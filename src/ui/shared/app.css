@@ -3274,7 +3274,7 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 .p-settings .s-agent-context { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 5px; }
 .p-settings .s-agent-context:empty { display: none; }
 .p-settings .s-agent-runtime { grid-column: 1 / -1; min-width: 0; }
-.p-settings .s-agent-runtime .tag { display: inline-block; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.p-settings .s-agent-runtime .tag { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .p-settings :is(.s-agent-cli, .s-classic-cli) { display: flex; align-items: center; gap: 9px; grid-column: 1 / -1; min-width: 0; }
 .p-settings :is(.s-agent-cli, .s-classic-cli) > svg { flex: none; }
 .p-settings :is(.s-agent-cli, .s-classic-cli) > span { min-width: 0; }
@@ -3882,6 +3882,9 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 .runtime-machine-facts { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 12px 20px; margin: 8px 0; }
 .runtime-machine-facts dt { color: var(--text-3); }
 .runtime-machine-facts dd { margin: 0; overflow-wrap: anywhere; }
+.runtime-machine.is-revoked { border-style: dashed; background: transparent; }
+.runtime-machine.is-revoked > header, .runtime-machine.is-revoked > .runtime-machine-actions { opacity: .72; }
+.p-settings .runtime-machine .runtime-revoked-note { margin: 16px 0 10px; font-size: var(--fs-xs); }
 .p-settings .runtime-empty-remotes { margin: 14px 0 0; }
 .p-settings .runtime-connect-guide { align-self: stretch; padding: 0 20px; background: var(--surface); }
 .runtime-connect-guide > summary { cursor: pointer; padding: 18px 0; color: var(--text-2); font-size: var(--fs-sm); }
