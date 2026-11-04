@@ -75,6 +75,10 @@ register("machines", {
   en: { policies:"Runtime policies", policySummary:"Windows CLIs, remote pairing and per-computer limits", diagnostics:"CLI diagnostics and test tasks", diagnosticsHint:"Use this PC's Windows CLI sign-ins and inspect one-off task results.", openDiagnostics:"View local Windows CLIs", hostRuntime:"WSL / Linux", operationsNote:"Connections, approvals and test tasks are confirmed in their own flows." },
   "zh-TW": { policies:"Runtime 政策", policySummary:"本機 Windows CLI、遠端配對與每台電腦的並行數", diagnostics:"CLI 診斷與測試", diagnosticsHint:"使用這台電腦的 Windows CLI 登入，查看診斷或一次性測試任務。", openDiagnostics:"查看本機 Windows CLI", hostRuntime:"WSL / Linux", operationsNote:"連接、核准與測試任務會在各自流程中確認。" },
 });
+register("machines", {
+  en: { diagnosticComputer:"Diagnostic computer", inspect:"Open CLI diagnostics", selectComputer:"Select a computer", targetUnavailable:"Selected Runtime is unavailable" },
+  "zh-TW": { diagnosticComputer:"診斷電腦", inspect:"查看 CLI 診斷", selectComputer:"選擇電腦", targetUnavailable:"所選 Runtime 無法使用" },
+});
 /** Only an origin composed of inert hostname/port characters is placed in a copyable shell command. */
 export function runtimeConnectCommand(server) {
   try {
@@ -86,7 +90,7 @@ export function runtimeConnectCommand(server) {
   } catch { return ""; }
 }
 export function machineTime(value) { const date=new Date(value); return value && Number.isFinite(date.getTime()) ? date.toLocaleString() : machineText("unknown"); }
-function MachineCard({ machine, busy, action }) {
+function MachineCard({ machine, busy, action, openDiagnostics }) {
   const [editing,setEditing] = useState(false), [name,setName] = useState(machine.name);
   const clis = (machine.inventory?.clis || []).filter(cli => cli.path);
   return html`<article class="runtime-machine" data-machine-id=${machine.id}>
@@ -97,7 +101,7 @@ function MachineCard({ machine, busy, action }) {
     <ul class="runtime-cli-list" aria-label=${machineText("cli")}>${clis.map(cli => html`<li key=${cli.id}><${CliProductMark} id=${cli.id} size=${22} /><span><strong>${cliLabel(cli.id)}</strong><small>${cli.version || "—"}</small></span><span class="note">${machineText(cli.authenticated === true ? "signedIn" : cli.authenticated === false ? "signedOut" : "authUnknown")} · ${machineText(cli.supports?.execution === false ? "detectionOnly" : "ready")}</span></li>`)}</ul>
     ${!clis.length ? html`<p class="note">${machineText("noClis")}</p>` : null}
     ${editing ? html`<form class="runtime-rename" onSubmit=${event => {event.preventDefault();if(name.trim())void action(machine,"rename",{name:name.trim()}).then(ok => {if(ok)setEditing(false);});}}><label><span>${machineText("name")}</span><input value=${name} maxLength=${100} onInput=${event => setName(event.target.value)} /></label><button class="btn btn-sm" type="submit" disabled=${busy || !name.trim()}>${machineText("save")}</button><button class="btn btn-ghost btn-sm" type="button" onClick=${() => setEditing(false)}>${machineText("cancel")}</button></form>` : null}
-    <div class="runtime-machine-actions">${machine.status === "pending" ? html`<button type="button" class="btn btn-primary btn-sm" disabled=${busy || !machine.pairingFingerprint} onClick=${() => action(machine,"approve",{fingerprint:machine.pairingFingerprint})}>${machineText("approve")}</button>` : null}${machine.status === "online" ? html`<button type="button" class="btn btn-sm" disabled=${busy} onClick=${() => action(machine,"refresh")}><${Icon} name="restart" size=${14} />${machineText("probe")}</button>` : null}${machine.status !== "revoked" ? html`<button type="button" class="btn btn-ghost btn-sm" disabled=${busy} onClick=${() => setEditing(true)}>${machineText("rename")}</button><button type="button" class="btn btn-ghost btn-sm danger" disabled=${busy} onClick=${() => action(machine,"revoke")}>${machineText("revoke")}</button>` : null}</div>
+    <div class="runtime-machine-actions">${["online","offline"].includes(machine.status) ? html`<button type="button" class="btn btn-sm" onClick=${() => openDiagnostics(machine.id)}>${machineText("inspect")}</button>` : null}${machine.status === "pending" ? html`<button type="button" class="btn btn-primary btn-sm" disabled=${busy || !machine.pairingFingerprint} onClick=${() => action(machine,"approve",{fingerprint:machine.pairingFingerprint})}>${machineText("approve")}</button>` : null}${machine.status === "online" ? html`<button type="button" class="btn btn-sm" disabled=${busy} onClick=${() => action(machine,"refresh")}><${Icon} name="restart" size=${14} />${machineText("probe")}</button>` : null}${machine.status !== "revoked" ? html`<button type="button" class="btn btn-ghost btn-sm" disabled=${busy} onClick=${() => setEditing(true)}>${machineText("rename")}</button><button type="button" class="btn btn-ghost btn-sm danger" disabled=${busy} onClick=${() => action(machine,"revoke")}>${machineText("revoke")}</button>` : null}</div>
   </article>`;
 }
 /** M-2255: the switches (fleet.yaml `runtimes`); `env` names the variable that overrides each. */
@@ -211,7 +215,9 @@ export function RuntimesPanel({navKey}) {
   const localInventory=useWindowsCliCatalog(windowsCli);
   const [pairing,setPairing]=useState(null), [busy,setBusy]=useState(""), [error,setError]=useState("");
   const [server,setServer]=useState(() => typeof location === "undefined" ? "" : location.origin);
-  const diagnostics=useRef(null);
+  const diagnostics=useRef(null), drafts=useRef(new Map());
+  const [diagnosticMachineId,setDiagnosticMachineId]=useState(null);
+  const openDiagnostics=id=>{setDiagnosticMachineId(id);if(diagnostics.current){diagnostics.current.open=true;diagnostics.current.scrollIntoView?.({block:"start"});}};
   useEffect(() => {
     if (!pairing) return;
     const remaining = new Date(pairing.expiresAt).getTime()-Date.now();
@@ -238,12 +244,24 @@ export function RuntimesPanel({navKey}) {
     finally{if(lease.current())setBusy("");}
   };
   const machines=state.data?.machines || [];
+  const diagnosticMachines=machines.filter(machine=>["online","offline"].includes(machine.status));
+  const targetId=diagnosticMachineId === null ? windowsCli ? "" : diagnosticMachines[0]?.id || "" : diagnosticMachineId;
+  const target=targetId ? machines.find(machine=>machine.id===targetId) : null;
+  const targetAvailable=targetId ? diagnosticMachines.some(machine=>machine.id===targetId) : windowsCli;
+  const targetLabel=targetId ? target?.name || machineText("targetUnavailable") : localInventory.data?.hostname || machineText("localWindows");
   const command=runtimeConnectCommand(server);
   const download=()=>html`<a class="btn btn-sm runtime-bundle-download" href="/ui/runtimes/download/windows" download><${Icon} name="download" size=${15} />${machineText("download")}</a>`;
-  const computers = html`<section class="runtime-computers"><h3>${machineText("computersTitle")}</h3>${windowsCli ? html`<${LocalWindowsRuntime} openDiagnostics=${() => {if (diagnostics.current) {diagnostics.current.open=true;diagnostics.current.scrollIntoView?.({block:"start"});}}} />` : null}
-    <section class="runtime-machines" aria-label=${machineText("machines")}>${machines.map(machine => html`<${MachineCard} key=${machine.id} machine=${machine} busy=${!!busy} action=${action} />`)}${state.data && !machines.length ? html`<p class="note">${machineText("empty")}</p>` : null}</section>
+  const computers = html`<section class="runtime-computers"><h3>${machineText("computersTitle")}</h3>${windowsCli ? html`<${LocalWindowsRuntime} openDiagnostics=${() => openDiagnostics("")} />` : null}
+    <section class="runtime-machines" aria-label=${machineText("machines")}>${machines.map(machine => html`<${MachineCard} key=${machine.id} machine=${machine} busy=${!!busy} action=${action} openDiagnostics=${openDiagnostics} />`)}${state.data && !machines.length ? html`<p class="note">${machineText("empty")}</p>` : null}</section>
     <article class="runtime-host-note"><${Icon} name="info" size=${18} /><span>${machineText("localHint")}</span></article></section>`;
-  const diagnosticsPanel = windowsCli ? html`<details ref=${diagnostics} class="runtime-local-diagnostics s-ui-disclosure"><summary><${Icon} name="view" size=${22} /><span><strong>${machineText("diagnostics")}</strong><small>${localInventory.data?.hostname || machineText("localWindows")}</small></span></summary><div class="s-disclosure-body"><${WindowsCliPanel} navKey=${`${navKey}:local`} embedded=${true} /></div></details>` : null;
+  const diagnosticsPanel = windowsCli || diagnosticMachines.length || diagnosticMachineId ? html`<details ref=${diagnostics} class="runtime-local-diagnostics s-ui-disclosure"><summary><${Icon} name="view" size=${22} /><span><strong>${machineText("diagnostics")}</strong><small>${targetLabel}</small></span></summary><div class="s-disclosure-body">
+    <label class="runtime-diagnostic-target"><span>${machineText("diagnosticComputer")}</span><select value=${targetId} onChange=${event=>setDiagnosticMachineId(event.target.value)}>
+      ${windowsCli ? html`<option value="">${machineText("nativeWindows")} · ${localInventory.data?.hostname || machineText("localWindows")}</option>` : null}
+      ${!targetAvailable ? html`<option value=${targetId} disabled>${targetLabel} · ${machineText("targetUnavailable")}</option>` : null}
+      ${diagnosticMachines.map(machine=>html`<option key=${machine.id} value=${machine.id}>${machine.name}${machine.hostname && machine.hostname!==machine.name ? ` · ${machine.hostname}` : ""} · ${machineText(machine.status)}</option>`)}
+    </select></label>
+    ${targetId || windowsCli ? html`<${WindowsCliPanel} key=${targetId || "local"} navKey=${`${navKey}:diagnostics:${targetId || "local"}`} embedded=${true} machineId=${targetId} machine=${target} drafts=${drafts.current} onInventoryChanged=${state.refresh} />` : html`<p role="status">${machineText("targetUnavailable")}</p>`}
+  </div></details>` : null;
   return html`<section class="runtime-settings">
     <header class="runtime-heading s-page-head"><div><h2>${machineText("title")}<span class="s-scope">${machineText("fleetScope")}</span></h2><p class="s-page-lead">${machineText("lead")}</p></div><div><button type="button" class="btn btn-primary btn-sm" disabled=${!!busy || state.data?.enabled !== true} onClick=${connect}><${Icon} name="plus" size=${15} />${machineText("connect")}</button>${state.data?.enabled === true && !pairing ? download() : null}<button type="button" class="btn btn-sm" disabled=${state.loading} onClick=${state.refresh}><${Icon} name="restart" size=${15} />${machineText("refresh")}</button></div></header>
     ${state.data?.enabled === false ? html`<p class="note">${machineText("disabled")}</p>` : null}

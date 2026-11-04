@@ -3802,3 +3802,7 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 @container runtime-main (min-width: 760px) {
   .p-settings .runtime-main .windows-cli-settings .windows-cli-workbench { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
 }
+
+.runtime-diagnostic-target{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.runtime-diagnostic-target>span{font-weight:600;flex:0 0 auto}
+.runtime-diagnostic-target>select{flex:1 1 280px;min-width:0;max-width:560px}

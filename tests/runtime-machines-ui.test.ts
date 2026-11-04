@@ -23,6 +23,8 @@ beforeAll(async()=>{
       return response(windowsInventory);
     }
     if(path==="/ui/windows-cli/tasks")return response({tasks:[]});
+    const diagnostic=/^\/ui\/runtimes\/machines\/([^/]+)\/(inventory|probe|tasks)$/.exec(path);
+    if(diagnostic){const target=machines.find(item=>item.id===diagnostic[1]);return response(diagnostic[2]==="tasks"?{tasks:[]}:{inventory:target?.inventory || null});}
     if(path==="/api/settings/runtimes")return response({switches:{windows_cli:{on:false,configured:false,environment:null},remote_runtime:{on:enabled,configured:enabled,environment:null}},max_agents_per_machine:{value:4,min:1,max:16,default:4},local_origin:"http://127.0.0.1:19280"});
     if(path==="/ui/runtimes/pairing")return response({pairingId:"test",code:"PAIR-TEST-CODE",expiresAt:Date.now()+60000});
     if(path===`/ui/runtimes/machines/${idB}/approve`){machines=machines.map(item=>item.id===idB?{...item,status:"online"}:item);return response({ok:true});}
@@ -66,6 +68,69 @@ describe("remote machine UI",()=>{
     expect(p.root.querySelector(".runtime-local-diagnostics summary small").textContent).toBe("REFRESHED-DESKTOP");
     expect(requests.filter(item=>item.body?.force===true)).toHaveLength(1);
   });
+  it("selects paired computers and keeps diagnostic drafts, models, paths and probes on their owner",async()=>{
+    app.appStore.set({windowsCli:true});machines=[machine(idA,"Desktop"),machine(idB,"Laptop")];
+    machines[0].inventory.clis[0].models=[{id:"model-a",label:"Model A"}];machines[1].inventory.clis[0].models=[{id:"model-b",label:"Model B"}];
+    await p.mount(h(Panel,{navKey:"diagnostic-selection"}));await settle(12);
+    const select=async(id:string)=>{const picker=p.root.querySelector(".runtime-diagnostic-target select");picker.value=id;fire(picker,"change");await settle(12);};
+    await select(idA);
+    expect(p.root.querySelector("#windows-cwd").value).toBe("C:\\Desktop");
+    expect(p.root.querySelector(".runtime-local-diagnostics .windows-cli-target-name").textContent).toBe("Desktop");
+    const prompt=p.root.querySelector("#windows-prompt");prompt.value="Desktop draft";fire(prompt,"input");
+    const model=p.root.querySelector("#windows-model");model.value="model-a";fire(model,"change");await settle();
+    const before=requests.length;p.root.querySelector(".windows-cli-probe").click();await settle(12);
+    expect(requests.slice(before).some(item=>item.path===`/ui/runtimes/machines/${idA}/probe`)).toBe(true);
+    expect(requests.slice(before).some(item=>item.path==="/ui/windows-cli/probe")).toBe(false);
+    await select(idB);
+    expect(p.root.querySelector("#windows-cwd").value).toBe("C:\\Laptop");expect(p.root.querySelector("#windows-prompt").value).toBe("");
+    expect(p.root.querySelector("#windows-model").textContent).toContain("Model B");expect(p.root.querySelector("#windows-model").textContent).not.toContain("Model A");
+    await select(idA);expect(p.root.querySelector("#windows-prompt").value).toBe("Desktop draft");expect(p.root.querySelector("#windows-model").value).toBe("model-a");
+  });
+  it("ignores a late inventory after switching computers and keeps a revoked selection unavailable",async()=>{
+    app.appStore.set({windowsCli:true});machines=[machine(idA,"Desktop"),machine(idB,"Laptop")];
+    const fixtureFetch=globalThis.fetch;let release!:(value:unknown)=>void;
+    globalThis.fetch=(async(path:any,options:any)=>path===`/ui/runtimes/machines/${idA}/inventory`?new Promise(resolve=>{release=resolve;}):fixtureFetch(path,options)) as any;
+    try{
+      await p.mount(h(Panel,{navKey:"held-computer-inventory"}));await settle(12);
+      const picker=()=>p.root.querySelector(".runtime-diagnostic-target select");
+      picker().value=idA;fire(picker(),"change");await settle(8);
+      picker().value=idB;fire(picker(),"change");await settle(12);
+      release(response({inventory:machine(idA,"Desktop").inventory}));await settle(12);
+      expect(p.root.querySelector("#windows-cwd").value).toBe("C:\\Laptop");
+      expect(p.root.querySelector(".runtime-local-diagnostics .windows-cli-target-name").textContent).toBe("Laptop");
+      machines=machines.map(item=>item.id===idB?{...item,status:"revoked"}:item);button("Refresh machines").click();await settle(12);
+      expect(picker().value).toBe(idB);expect(p.root.textContent).toContain("This Runtime is unavailable or no longer approved.");
+      expect(p.root.querySelector(".windows-cli-probe").disabled).toBe(true);
+      expect(requests.filter(item=>item.path==="/ui/windows-cli/probe")).toHaveLength(1);
+    }finally{globalThis.fetch=fixtureFetch;}
+  });
+  it("waits for the selected computer's history, submits once and blocks an unconfirmed outcome",async()=>{
+    machines=[machine(idA,"Desktop")];const fixtureFetch=globalThis.fetch,root=`/ui/runtimes/machines/${idA}/tasks`;
+    let release!:(value:unknown)=>void,first=true,task:any=null;const sent:any[]=[];
+    globalThis.fetch=(async(path:any,options:any={})=>{
+      if(path!==root)return fixtureFetch(path,options);
+      if(options.method==="POST") {const body=JSON.parse(options.body);sent.push(body);task={id:body.requestId,cli:body.cli,cwd:body.cwd,sandbox:body.sandbox,startedAt:1,status:"failed",output:"",outcomeConfirmed:false};return response({task},202);}
+      if(first){first=false;return new Promise(resolve=>{release=resolve;});}return response({tasks:task?[task]:[]});
+    }) as any;
+    try{
+      await p.mount(h(Panel,{navKey:"remote-diagnostic-submission"}));await settle(12);
+      const prompt=p.root.querySelector("#windows-prompt");prompt.value="Fixture analysis";fire(prompt,"input");await settle();
+      const submit=()=>p.root.querySelector(".windows-cli-composer button[type=submit]");expect(submit().disabled).toBe(true);
+      release(response({tasks:[]}));await settle(12);expect(submit().disabled).toBe(false);
+      const form=p.root.querySelector(".windows-cli-composer form");fire(form,"submit");fire(form,"submit");await settle(12);
+      expect(sent).toHaveLength(1);expect(sent[0]).toMatchObject({cwd:"C:\\Desktop",prompt:"Fixture analysis",cli:"codex",sandbox:"read-only"});
+      expect(submit().disabled).toBe(true);expect(p.root.textContent).toContain("A task outcome is unconfirmed.");
+      expect(requests.some(item=>item.path.startsWith("/ui/windows-cli/"))).toBe(false);
+    }finally{globalThis.fetch=fixtureFetch;}
+  });
+  it("supports remote-only diagnostics and disables offline actions without falling back to the host",async()=>{
+    machines=[machine(idA,"Offline desk","offline")];await p.mount(h(Panel,{navKey:"remote-only-diagnostics"}));await settle(12);
+    expect(p.root.querySelector(".runtime-diagnostic-target select").value).toBe(idA);
+    expect(p.root.querySelector("#windows-cwd").value).toBe("C:\\Offline desk");
+    expect(p.root.querySelector(".windows-cli-probe").disabled).toBe(true);
+    expect(p.root.querySelector(".windows-cli-composer button[type=submit]").disabled).toBe(true);
+    expect(p.root.textContent).toContain("This computer is offline.");expect(requests.some(item=>item.path.startsWith("/ui/windows-cli/"))).toBe(false);
+  });
   it("keeps existing Windows settings addresses as aliases of Runtime",()=>{
     for(const path of ["/settings/runtimes","/settings/windows-cli","/ui/windows-cli"])expect(routes.parseRoute(path)).toEqual({panel:"settings",section:"runtimes"});
     expect(routes.sectionPath("windows-cli")).toBe("/settings/runtimes");
@@ -73,7 +138,7 @@ describe("remote machine UI",()=>{
   it("shows actual machines and installed product marks, and approves a pending computer",async()=>{
     await p.mount(h(Panel,{navKey:"runtime"}));await settle(8);
     expect(p.root.textContent).toContain("Desktop");expect(p.root.textContent).toContain("Awaiting approval");
-    expect(p.root.querySelectorAll('[data-cli="codex"]').length).toBe(2);expect(p.root.querySelector('[data-cli="muse"]')).toBeNull();
+    expect(p.root.querySelectorAll('.runtime-machines [data-cli="codex"]').length).toBe(2);expect(p.root.querySelector('[data-cli="muse"]')).toBeNull();
     expect(p.root.querySelector(".runtime-pairing-fingerprint").textContent).toBe("ABCD-1234-5678");
     button("Approve computer").click();await settle(8);
     expect(requests).toContainEqual({path:`/ui/runtimes/machines/${idB}/approve`,body:{fingerprint:"ABCD-1234-5678"}});
@@ -98,7 +163,7 @@ describe("remote machine UI",()=>{
     await p.mount(h(Panel,{navKey:"runtime"}));await settle(8);
     expect(p.root.querySelector(`[data-machine-id="${idA}"] header p`).textContent).toBe("win32 · DESKTOP-7Q2");
     expect(p.root.querySelector(`[data-machine-id="${idB}"] header p`).textContent).toBe("win32");
-    expect(p.root.textContent).not.toContain("Not reported");
+    expect(p.root.querySelector(".runtime-machines").textContent).not.toContain("Not reported");
   });
   it("keeps local Runtime settings visible while remote connections are disabled",async()=>{
     enabled=false;machines=[];await p.mount(h(Panel,{navKey:"runtime"}));await settle(8);
