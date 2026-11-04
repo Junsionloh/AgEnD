@@ -19,6 +19,19 @@ import type { RuntimePaneHost } from "./runtime-pane-host.js";
 import type { RuntimePaneHostOptions } from "./runtime-pane-host.js";
 export { RUNTIME_PANE_MODULES } from "./runtime-pane-assets.js";
 
+export type RuntimeStopKind = "refused" | "revoked" | "replaced" | "rejected";
+export interface RuntimeStopReason { kind: RuntimeStopKind; /** The close reason AgEnD gave, when it gave one. */ detail?: string }
+const REPAIR = "run .\\agend-runtime.cmd disconnect in this folder, then double-click connect-agend.bat and enter a new pairing code.";
+/** Plain-language cause and next step for a stop AgEnD caused. AgEnD answers an unknown and a revoked credential with the same bare 401, so "refused" covers both. */
+export function describeRuntimeStop(reason: RuntimeStopReason): string {
+  switch (reason.kind) {
+    case "refused": return `AgEnD did not accept this computer's saved connection, so the Runtime stopped. Open AgEnD Settings -> Runtime: if this computer is missing or revoked, or AgEnD's data was reset, it must be paired again; ${REPAIR} If the pairing was made against a different AgEnD address than this folder's, use the download that matches it.`;
+    case "revoked": return `This computer was revoked in AgEnD Settings -> Runtime, so the Runtime stopped. To connect it again, ${REPAIR}`;
+    case "replaced": return "This computer connected to AgEnD again from somewhere else, so AgEnD closed this connection. A pairing allows one live connection. Close the other Runtime window (or the other computer that uses a copy of this profile), then double-click connect-agend.bat again. Each computer needs its own pairing code.";
+    case "rejected": return `AgEnD rejected a message from this Runtime${reason.detail ? ` (${reason.detail})` : ""}. Usual causes: leftover data from pairing this profile with a different AgEnD server, or a Runtime/AgEnD version mismatch. If this profile was used with another AgEnD server, ${REPAIR} Otherwise download the Windows Runtime again from AgEnD Settings -> Runtime, extract it, and double-click connect-agend.bat.`;
+  }
+}
+
 export interface RuntimeBridge {
   probe(options?: { force?: boolean }): Promise<WindowsCliProbe>;
   prepareWorkspace(agentId: string): Promise<string>;
@@ -98,6 +111,8 @@ export class RuntimeClient {
   private mcpPort = 0;
   private inventory: WindowsCliProbe | null = null;
   private readonly stoppedListeners = new Set<() => void>();
+  /** Set only when AgEnD ended the connection and the person must act; a local stop (Ctrl+C) leaves it undefined. */
+  stopReason: RuntimeStopReason | undefined;
   constructor(private readonly options: RuntimeClientOptions) {
     this.runtimeInfo = readRuntimeInfo({ panes: process.platform === "win32" || !!options.createPaneHost || !!options.openPaneLink });
     this.bridge = options.bridge ?? new WindowsCliBridge(nativeWindowsTransport, join(options.store.directory, WINDOWS_CLI_INVENTORY_FILE));
@@ -121,6 +136,7 @@ export class RuntimeClient {
         try { credentials = await rotating; } finally { if (this.startupRotation === rotating) this.startupRotation = null; }
       }
       if (this.stopped) throw Error("Runtime start was cancelled");
+      this.options.store.adoptMachine(credentials.machineId);
       this.options.store.recoverInterrupted(); this.credentials = credentials;
       // Connect immediately, then publish the last administrator detection from the private profile.
       // A cached read starts no CLI. Only an explicit probe command with force:true performs detection.
@@ -155,6 +171,7 @@ export class RuntimeClient {
       response.resume();
       if (response.statusCode === 401 || response.statusCode === 403) {
         this.report("Runtime credential was refused. Re-pair after the machine is authorized.");
+        this.stopReason = { kind: "refused" };
         void this.stop();
       } else socket.terminate();
     });
@@ -165,8 +182,10 @@ export class RuntimeClient {
       this.rejectTools();
       if (this.stopped) return;
       if (code === 1008) {
-        this.report("Runtime connection was refused, revoked or replaced. Check pairing and protocol compatibility before reconnecting.");
-        void this.stop({retirePanes:reason.toString()==="Machine revoked"}); return;
+        const why = reason.toString().replace(/[^ -~]/g, "?").slice(0, 120);
+        this.report(`AgEnD closed the connection (code 1008${why ? `: ${why}` : ""}).`);
+        this.stopReason = { kind: why === "Machine revoked" ? "revoked" : why === "Connection replaced" ? "replaced" : "rejected", ...(why ? { detail: why } : {}) };
+        void this.stop({retirePanes:why==="Machine revoked"}); return;
       }
       this.report("Disconnected. Existing execution is not replayed; reconnecting…");
       if (!this.graceTimer) this.graceTimer = setTimeout(() => {
@@ -200,7 +219,7 @@ export class RuntimeClient {
       for (const job of this.options.store.list()) this.publish(job);
       return;
     }
-    if (value.type === "revoked") { this.report("This machine was revoked by AgEnD."); await this.stop({retirePanes:true}); return; }
+    if (value.type === "revoked") { this.report("This machine was revoked by AgEnD."); this.stopReason = { kind: "revoked" }; await this.stop({retirePanes:true}); return; }
     if (!this.welcomed) throw new Error("Runtime handshake is incomplete");
     if (value.type === "ping") { this.send({ v: 1, type: "pong" }); return; }
     if (value.type === "tool.result") {
@@ -477,6 +496,7 @@ export async function pairRuntime(input: { server: string; code: string; name: s
     if (claimed.status === 200 && claimed.data.status === "approved" && claimed.data.machineId === paired.data.machineId
       && typeof claimed.data.credential === "string" && /^[A-Za-z0-9._-]{16,256}$/.test(claimed.data.credential)) {
       const credentials = { server: server.origin, machineId: paired.data.machineId, credential: claimed.data.credential, name: input.name.trim() };
+      input.store.adoptMachine(credentials.machineId, true);
       input.store.saveCredentials(credentials); input.report?.("Runtime paired. Its machine credential was saved in the private local profile."); return credentials;
     }
     if (claimed.status !== 202 || claimed.data.status !== "pending") throw new Error(`Runtime approval was refused or expired (HTTP ${claimed.status})`);
@@ -486,7 +506,7 @@ export async function pairRuntime(input: { server: string; code: string; name: s
       input.signal?.addEventListener("abort", abort, { once: true });
     });
   }
-  throw new Error("Runtime pairing was cancelled or expired");
+  throw new Error(input.signal?.aborted ? "Runtime pairing was cancelled" : "Runtime pairing expired before the computer was approved. Open AgEnD Settings -> Runtime, then double-click connect-agend.bat again and enter a new pairing code.");
 }
 
 import type {} from "./runtime-pane-stdio.js";

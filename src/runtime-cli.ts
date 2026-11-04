@@ -4,7 +4,7 @@ import { homedir, hostname } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
-import { RuntimeClient, pairRuntime, rotateRuntimeCredentials } from "./runtime-client.js";
+import { RuntimeClient, describeRuntimeStop, pairRuntime, rotateRuntimeCredentials } from "./runtime-client.js";
 import { RuntimeClientStore, validateRuntimeServer } from "./runtime-client-store.js";
 import { readRuntimeInfo } from "./runtime-build-info.js";
 import { readPaneSystemBootId, reusedRuntimeLockPid } from "./runtime-pane-boot.js";
@@ -97,6 +97,8 @@ export async function runtimeMain(argv = process.argv.slice(2), options: Runtime
   process.once("SIGINT", stop); process.once("SIGTERM", stop);
   try { await client.waitUntilStopped(); }
   finally { process.removeListener("SIGINT", stop); process.removeListener("SIGTERM", stop); }
+  // AgEnD ended the connection and someone has to act: that is a failure (non-zero exit), never a silent normal exit.
+  if (client.stopReason) throw new Error(describeRuntimeStop(client.stopReason));
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   void runtimeMain().catch(error => { process.stderr.write(`${error instanceof Error ? error.message : "Runtime failed"}\n`); process.exitCode = 1; });
