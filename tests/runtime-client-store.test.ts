@@ -105,6 +105,21 @@ describe("jobs belong to the machine they ran for", () => {
     expect(new RuntimeClientStore(directory).list()).toEqual([]);
     expect(JSON.parse(readFileSync(join(directory, "jobs.json"), "utf8")).machineId).toBe(B);
   });
+  it("leaves an ownerless ledger unstamped when connecting, so another server's jobs are never claimed as this one's", () => {
+    const directory = home(), store = new RuntimeClientStore(directory); settled(store, task());
+    store.adoptMachine(A);
+    expect(JSON.parse(readFileSync(join(directory, "jobs.json"), "utf8")).machineId).toBeUndefined();
+    store.adoptMachine(B);
+    expect(new RuntimeClientStore(directory).list()).toHaveLength(1);
+    const empty = home(), fresh = new RuntimeClientStore(empty); fresh.adoptMachine(A);
+    expect(JSON.parse(readFileSync(join(empty, "jobs.json"), "utf8")).machineId).toBe(A);
+  });
+  it("assertCanPair refuses only while an unsettled job is recorded", () => {
+    const store = new RuntimeClientStore(home()), value = task();
+    expect(() => store.assertCanPair()).not.toThrow();
+    store.accept(value, digest); expect(() => store.assertCanPair()).toThrow(/pairing code is still unused/);
+    store.update({ ...value, status: "completed", finishedAt: 200, outcomeConfirmed: true }); expect(() => store.assertCanPair()).not.toThrow();
+  });
   it("keeps an older ledger without an owner when connecting, but clears it for a brand-new pairing", () => {
     const directory = home(), store = new RuntimeClientStore(directory); settled(store, task());
     store.adoptMachine(A); expect(store.list()).toHaveLength(1);
