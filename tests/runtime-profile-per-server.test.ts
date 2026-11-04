@@ -16,6 +16,7 @@ vi.mock("node:readline/promises", () => ({ createInterface: () => ({ question: a
 import { RuntimeClientStore } from "../src/runtime-client-store.js";
 import { chooseRuntimeProfile, runtimeProfileName, runtimeServerProfile, RUNTIME_SERVER_FILE } from "../src/runtime-connection.js";
 import { runtimeMain } from "../src/runtime-cli.js";
+import { rotateRuntimeCredentials } from "../src/runtime-client.js";
 import { reusedRuntimeLockPid } from "../src/runtime-pane-boot.js";
 
 const A = "https://fleet.example.test:10443", B = "https://preview.example.test:8445";
@@ -118,6 +119,13 @@ describe("connect-agend.bat with a default profile paired to another server", ()
     for (const [argv, env] of [[["connect", "--profile", explicit], {}], [["connect"], { AGEND_RUNTIME_HOME: explicit }]] as const) {
       await expect(runtimeMain([...argv], { home, programDirectory: program, env })).rejects.toThrow(new RegExp(`${A}.*${B}[^]*--profile[^]*disconnect`));
     }
+    // The follow-up commands must name the profile the user chose, not fall back to the default one.
+    const failure = (argv: string[], env: NodeJS.ProcessEnv) => runtimeMain(argv, { home, programDirectory: program, env }).then(() => "", (error: Error) => error.message);
+    const withFlag = await failure(["connect", "--profile", explicit], {}), withEnv = await failure(["connect"], { AGEND_RUNTIME_HOME: explicit });
+    expect(withFlag).toContain(`disconnect --profile "${resolve(explicit)}"`);
+    expect(withFlag).toContain(`connect --server ${B} --profile "${resolve(explicit)}"`);
+    expect(withFlag).toContain("pass the same --profile to run, status, rotate and disconnect");
+    expect(withEnv).not.toContain("disconnect --profile"); expect(withEnv).toContain("disconnect, then connect again");
     expect(pairing.pair).not.toHaveBeenCalled(); expect(pairing.started).not.toHaveBeenCalled();
     expect(existsSync(join(base, "profiles"))).toBe(false);
     pairTo(base, A, "a");
@@ -137,6 +145,15 @@ describe("disconnect and rotate with a stale profile lock", () => {
     const { home, base } = fixture(); pairTo(base, A, "a"); stale(base, "a".repeat(64));
     await runtimeMain(["disconnect"], { home, env: {} });
     expect(existsSync(join(base, "connection.json"))).toBe(false); expect(existsSync(lockFile(base))).toBe(false);
+  });
+  it("rotate also replaces a lock left from before a Windows restart, and keeps one from this boot", async () => {
+    const { home, base } = fixture(); pairTo(base, A, "a"); stale(base, "a".repeat(64));
+    vi.mocked(rotateRuntimeCredentials).mockClear();
+    await runtimeMain(["rotate"], { home, env: {} });
+    expect(rotateRuntimeCredentials).toHaveBeenCalledTimes(1); expect(existsSync(lockFile(base))).toBe(false);
+    stale(base, pairing.boot); vi.mocked(rotateRuntimeCredentials).mockClear();
+    await expect(runtimeMain(["rotate"], { home, env: {} })).rejects.toThrow(/Another runtime already uses this profile/);
+    expect(rotateRuntimeCredentials).not.toHaveBeenCalled(); expect(existsSync(lockFile(base))).toBe(true);
   });
   it("never unlocks a profile whose lock belongs to the current boot: the message names the PID and the manual check", async () => {
     const { home, base } = fixture(); pairTo(base, A, "a"); stale(base, pairing.boot);

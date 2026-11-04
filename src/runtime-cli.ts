@@ -77,7 +77,7 @@ export async function runtimeMain(argv = process.argv.slice(2), options: Runtime
   if (command === "connect") {
     const current = store.credentials();
     const target = flags["--server"] ?? bundledServer ?? current?.server;
-    const server = validateRuntimeServer(resolveRuntimeServer(flags["--server"], bundledServer, current?.server, target && runtimeServerProfile(defaultProfile, target)));
+    const server = validateRuntimeServer(resolveRuntimeServer(flags["--server"], bundledServer, current?.server, target && runtimeServerProfile(defaultProfile, target), flags["--profile"] && resolve(flags["--profile"])));
     process.stdout.write(`AgEnD server: ${server.origin}\n`);
     if (choice?.separate) process.stdout.write(`This computer's default profile is paired with ${choice.defaultServer}; using a separate profile for this server:\n  ${store.directory}\nThe same connect-agend.bat reuses it. The existing pairing is untouched.\n`);
     if (!current) {

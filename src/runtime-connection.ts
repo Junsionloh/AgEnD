@@ -53,7 +53,8 @@ export function chooseRuntimeProfile(base: string, bundled: string | undefined, 
   if (defaultServer === undefined || !forConnect) return { directory: base, separate: false, defaultServer };
   return { directory: own, separate: true, defaultServer };
 }
-export function resolveRuntimeServer(explicit: string | undefined, bundled: string | undefined, stored: string | undefined, profileHint?: string): string {
+/** `explicitProfile` is the --profile the user passed: the follow-up commands must name it again, not fall back to the default profile. */
+export function resolveRuntimeServer(explicit: string | undefined, bundled: string | undefined, stored: string | undefined, profileHint?: string, explicitProfile?: string): string {
   const target = explicit ?? bundled ?? stored;
   if (!target) throw Error("No AgEnD address is configured. Download a connection-ready Runtime or use connect --server https://your-agend-host");
   const origin = runtimeServerOrigin(target);
@@ -61,7 +62,10 @@ export function resolveRuntimeServer(explicit: string | undefined, bundled: stri
     const profile = profileHint ?? runtimeServerProfile("%USERPROFILE%\\.agend-runtime", origin);
     throw Error(`This profile is paired with ${runtimeServerOrigin(stored)}, but this connection is for ${origin}. Its credentials will not be sent to the new server.\n`
       + `  Keep both: .\\agend-runtime.cmd connect --server ${origin} --profile "${profile}"\n`
-      + `  Replace the old pairing: .\\agend-runtime.cmd disconnect, then connect again.`);
+      + `    (then pass the same --profile to run, status, rotate and disconnect)\n`
+      + (explicitProfile
+        ? `  Replace the old pairing: .\\agend-runtime.cmd disconnect --profile "${explicitProfile}", then .\\agend-runtime.cmd connect --server ${origin} --profile "${explicitProfile}".`
+        : `  Replace the old pairing: .\\agend-runtime.cmd disconnect, then connect again.`));
   }
   return origin;
 }
