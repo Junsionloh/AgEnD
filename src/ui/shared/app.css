@@ -2986,6 +2986,11 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 .runtime-remote-targets { display: grid; gap: 8px; margin-top: 16px; }
 .runtime-remote-targets h4 { margin: 0 0 4px; font-size: var(--fs-md); }
 .runtime-remote-targets .agent-runtime-choice { min-width: 0; width: 100%; }
+.runtime-remote-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.runtime-remote-heading h4 { margin: 0; }
+.agent-runtime-choice.blocked { cursor: not-allowed; }
+.agent-runtime-choice.blocked > :not(span), .agent-runtime-choice.blocked strong, .agent-runtime-choice.blocked small:not(.runtime-machine-reason) { opacity: .65; }
+.agent-runtime-choice small.runtime-machine-reason { color: var(--warn); }
 .runtime-manage-link { display: inline-block; margin-top: 12px; }
 .inst-machine { display: flex; gap: 5px; overflow: hidden; white-space: nowrap; font-size: var(--fs-xs); color: var(--text-3); }
 /* S-30: the machine name gives way; "Connection revoked" / "Offline" always stays readable. */
