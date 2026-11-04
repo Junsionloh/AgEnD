@@ -31,7 +31,7 @@ afterEach(() => {
 });
 
 describe("connect-agend.bat exit behaviour", () => {
-  it.each([["refused", /Settings -> Runtime.*disconnect.*connect-agend\.bat/], ["revoked", /revoked.*disconnect.*connect-agend\.bat/], ["replaced", /one live connection.*Close the other Runtime window/], ["rejected", /version mismatch.*connect-agend\.bat/]] as const)(
+  it.each([["refused", /Settings -> Runtime.*disconnect.*connect-agend\.bat/], ["revoked", /revoked.*disconnect.*connect-agend\.bat/], ["replaced", /one live connection.*Close the other Runtime window/], ["rejected", /rejected a message.*connect-agend.bat/], ["incompatible", /different versions.*connect-agend.bat/]] as const)(
     "fails with a plain next step when AgEnD ends the connection (%s), so the exit code is non-zero",
     async (kind, next) => {
       stop.reason = { kind }; const { home, program } = paired();
@@ -48,6 +48,7 @@ describe("connect-agend.bat exit behaviour", () => {
     expect(lines.indexOf("pause")).toBeGreaterThan(lines.findIndex(line => line.includes("runtime-cli.js")));
     expect(lines.indexOf("pause")).toBe(lines.length - 2); // not inside an if-block
     expect(RUNTIME_CONNECT_BAT).toMatch(/AGEND_EXIT=%errorlevel%/);
+    expect(lines.indexOf("setlocal")).toBe(1); // the exit-code variable must not leak into a cmd window that ran the bat
     expect(RUNTIME_CONNECT_BAT).not.toMatch(/[^\x00-\x7f]/);
   });
 });

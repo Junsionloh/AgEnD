@@ -63,17 +63,26 @@ export class RuntimeClientStore {
     privateDirectory(directory); this.file = join(directory, "jobs.json");
     this.data = existsSync(this.file) ? this.validate(readPrivate(this.file)) : { version: 1, jobs: {}, used: {} };
   }
+  private unsettled(): boolean { return this.blocked() || Object.values(this.data.jobs).some(job => job.task.outcomeConfirmed === false); }
+  private ledgerConflict(tail: string): Error {
+    return new Error(`This profile (${this.directory}) still has an active or unconfirmed execution recorded for a different AgEnD pairing, and AgEnD would reject it. Check that no CLI process from it is left running, then delete jobs.json in that folder. ${tail}`);
+  }
+  /** Run before a pairing code is spent: a one-time credential must never be issued into a profile that cannot take it. */
+  assertCanPair(): void { if (this.unsettled()) throw this.ledgerConflict("Nothing was paired and your pairing code is still unused; run connect-agend.bat again before the code expires."); }
   /**
-   * Called after acquiring the profile lock, before recoverInterrupted. The ledger is replayed to AgEnD on every connect, and AgEnD closes the
-   * connection for a job it did not issue to this machine. When the profile is paired to a different machine than the ledger's owner, settled jobs
-   * of the old pairing are dropped; an unsettled one is never discarded silently. A ledger with no recorded owner (older profile) is adopted as is when connecting, but
-   * a brand-new pairing (`pairing: true`) proves any earlier job belongs to some other machine, so an ownerless ledger is cleared too.
+   * The ledger is replayed to AgEnD on every connect, and AgEnD closes the connection for a job it did not issue to this machine, so jobs are
+   * tied to the machine they ran for. Called after acquiring the profile lock, before recoverInterrupted. When the profile now belongs to a
+   * different machine than the ledger's owner, settled jobs of the old pairing are dropped; an unsettled one is never discarded silently.
+   * A ledger with no recorded owner (older profile) cannot be attributed to anyone: when connecting it is left exactly as it is (and unstamped,
+   * unless it is empty), because stamping it would claim another server's jobs as this one's. Only a brand-new pairing (`pairing: true`) proves
+   * every earlier job belongs to some other machine, so that clears an ownerless ledger too.
    */
   adoptMachine(machineId: string, pairing = false): void {
     const owner = this.data.machineId;
     if (owner === machineId) return;
+    if (owner === undefined && !pairing && (Object.keys(this.data.jobs).length || Object.keys(this.data.used).length)) return;
     if (owner !== undefined || pairing) {
-      if (this.blocked() || Object.values(this.data.jobs).some(job => job.task.outcomeConfirmed === false)) throw new Error(`This profile (${this.directory}) still has an active or unconfirmed execution recorded for a different AgEnD pairing, and AgEnD would reject it. Check that no CLI process from it is left running, then delete jobs.json in that folder and connect again.`);
+      if (this.unsettled()) throw this.ledgerConflict("No new pairing code is needed; connect again afterwards.");
       this.data.jobs = {}; this.data.used = {}; delete this.data.usedAt;
     }
     this.data.machineId = machineId; this.save();
