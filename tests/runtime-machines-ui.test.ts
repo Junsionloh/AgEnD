@@ -276,6 +276,14 @@ describe("remote machine UI",()=>{
     await p.mount(h(Panel,{navKey:"revoked-here-reloaded"}));await settle(12);
     expect(card()).toBeNull();expect(p.root.textContent).not.toContain("Desktop");expect(p.root.querySelector(`[data-machine-id="${idB}"]`)).not.toBeNull();
   });
+  it("drops a computer revoked on the page when the page is left and opened again, with the loaded list still cached",async()=>{
+    (globalThis as any).confirm=()=>true;await p.mount(h(Panel,{navKey:"revoked-leave"}));await settle(12);
+    p.root.querySelector(`[data-machine-id="${idA}"] .runtime-machine-menu button`).click();await settle();button("Revoke connection").click();await settle(12);
+    expect(p.root.querySelector(`[data-machine-id="${idA}"]`).className).toContain("is-revoked");
+    await p.unmount(); // the catalog is NOT forgotten: only the page's own memory of the revocation goes
+    await p.mount(h(Panel,{navKey:"revoked-leave-again"}));await settle(12);
+    expect(p.root.querySelector(`[data-machine-id="${idA}"]`)).toBeNull();expect(p.root.querySelector(`[data-machine-id="${idB}"]`)).not.toBeNull();
+  });
   it("shows the empty note once the only computer is revoked and the page is reloaded",async()=>{
     machines=[machine(idA,"Desktop","revoked")];await p.mount(h(Panel,{navKey:"only-revoked"}));await settle(12);
     expect(p.root.querySelector(".runtime-machine")).toBeNull();expect(p.root.querySelector(".runtime-empty-remotes").textContent).toBe("No remote computers connected yet.");

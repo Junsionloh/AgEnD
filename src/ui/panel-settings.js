@@ -805,7 +805,8 @@ function Agents({ ctx, search, clearSearch, openDialog }) {
   const [status, setStatus] = useState("");
   // The computers' names come from the same list as the Runtime page (revoked ones included, so an Agent still bound to one can say so).
   const catalog = useRuntimeCatalog(Object.values(insts).some((inst) => inst?.machine_id));
-  const machines = catalog.data ? new Map(catalog.data.machines.map((machine) => [machine.id, { name: machine.name, status: machine.status }])) : null;
+  // A fleet with remote Runtimes off answers { enabled: false, machines: [] }: that is no list, not an empty one.
+  const machines = catalog.data && catalog.data.enabled !== false ? new Map(catalog.data.machines.map((machine) => [machine.id, { name: machine.name, status: machine.status }])) : null;
   const chs = channelsOf(ctx.fleet);
   // #2172: the sidebar's grouping — an agent in a team under its team, else under its first tag.
   const teamsOf = (name) => Object.keys(ctx.fleet.teams || {}).filter((t) => Array.isArray(ctx.fleet.teams[t]?.members) && ctx.fleet.teams[t].members.includes(name));

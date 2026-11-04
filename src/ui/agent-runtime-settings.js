@@ -19,7 +19,7 @@ export function AgentRuntimeSettings({name,inst,disabled=false,onChanged}){
  const [open,setOpen]=useState(false);
  // The computer's name as the Runtime page shows it; a computer that is revoked or gone says so (with the start of its id), never the whole id.
  const where=inst.runtime==="windows"?(inst.machine_id?machineLabel(inst.machine_id,inst.machine_name,inst.machine_status,inst.machine_missing!==true):null):null;
- const place=inst.runtime==="windows"?(where?(inst.machine_name&&inst.machine_status!=="revoked"?inst.machine_name:where.label):tr("windows")):tr("wsl");
+ const place=inst.runtime==="windows"?(where?where.label:tr("windows")):tr("wsl");
  return html`<section class="agent-runtime-settings"><div><span class="note">${text("current")}</span><p><${CliProductMark} id=${inst.backend} size=${20}/><strong class="agent-runtime-place" title=${where?.title||place}>${place}</strong><span>· ${cliLabel(inst.backend)}</span></p></div><button type="button" class="btn btn-sm" disabled=${disabled} title=${disabled?text("dirty"):undefined} onClick=${()=>setOpen(true)}>${text("change")}</button>${open?html`<${AgentRuntimeChangeDialog} name=${name} inst=${inst} onClose=${()=>setOpen(false)} onChanged=${onChanged}/>`:null}</section>`;
 }
 export function AgentRuntimeChangeDialog({name,inst,onClose,onChanged}){
