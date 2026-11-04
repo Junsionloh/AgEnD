@@ -26,7 +26,7 @@ function tn(key, values = {}) {
   for (const [k, v] of Object.entries(values)) s = s.split(`{${k}}`).join(String(v));
   return s;
 }
-/** A remote computer by its name; with no name yet, by the start of its id, never the whole id. */
+/** A remote computer by its name; with no name yet, by the start of its id, never the whole id. The 8-character cut matches `shortId` in src/ui/settings-agent-filters.js; keep the two in step. */
 export const machineName = (id, name) => name || tn("machineShort", { value: String(id).slice(0, 8) });
 const stored = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 /** A row's instance name: `name` (status frames) or `instance_name` (View's roster). */
