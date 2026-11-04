@@ -33,6 +33,7 @@ Requires a supported Windows Node.js version and each coding CLI installed and s
 Stop the runtime before using rotate to replace its machine credential without pairing again, then use run to reconnect. A saved interrupted rotation is completed before run connects.
 Use --version to inspect the installed Runtime version, code Build ID and supported protocol.
 Use status to inspect local pairing and journal state. disconnect forgets a stopped local connection; revoke the machine in AgEnD Settings to invalidate its credential centrally.
+Using one computer with more than one AgEnD server: connect-agend.bat keeps the existing pairing and, when this folder's server differs from the default profile's, pairs a separate profile under %USERPROFILE%\\.agend-runtime\\profiles\\<host>-<port>. The same bat and run/status/rotate/disconnect run from this folder find it again. Use --profile DIRECTORY (or AGEND_RUNTIME_HOME) to choose a profile yourself; that always wins.
 The private profile defaults to %USERPROFILE%\\.agend-runtime. Its machine credential is stored as a private file, not encrypted by this preview. Use your Windows user profile and do not share it. CLI login credentials are never uploaded.
 Do not install this preview as SYSTEM: it uses the logged-in user's CLI login, PATH, workspaces and devices.
 Only loopback origins may use HTTP; remote servers require HTTPS and valid TLS.
