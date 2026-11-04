@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { page, settle, h, type AppPage } from "./helpers/app-harness.js";
 import { fire } from "./helpers/mini-dom.js";
 
-let p:AppPage, Panel:any, Create:any, catalog:any, models:any, app:any, routes:any, connectCommand:any;
+let p:AppPage, Panel:any, Create:any, catalog:any, windowsCatalog:any, windowsInventory:any, models:any, app:any, routes:any, connectCommand:any;
 const originalFetch=globalThis.fetch;
 const idA="12345678-1234-4321-abcd-123456789012", idB="22345678-1234-4321-abcd-123456789012";
 const requests:Array<{path:string;body:any}>=[];
@@ -18,6 +18,11 @@ beforeAll(async()=>{
   globalThis.fetch=(async(path:string,options:any={})=>{
     const body=options.body?JSON.parse(options.body):null;requests.push({path,body});
     if(path==="/ui/runtimes")return response({enabled,machines});
+    if(path==="/ui/windows-cli/probe") {
+      if(body?.force) windowsInventory={...windowsInventory,hostname:"REFRESHED-DESKTOP"};
+      return response(windowsInventory);
+    }
+    if(path==="/ui/windows-cli/tasks")return response({tasks:[]});
     if(path==="/api/settings/runtimes")return response({switches:{windows_cli:{on:false,configured:false,environment:null},remote_runtime:{on:enabled,configured:enabled,environment:null}},max_agents_per_machine:{value:4,min:1,max:16,default:4},local_origin:"http://127.0.0.1:19280"});
     if(path==="/ui/runtimes/pairing")return response({pairingId:"test",code:"PAIR-TEST-CODE",expiresAt:Date.now()+60000});
     if(path===`/ui/runtimes/machines/${idB}/approve`){machines=machines.map(item=>item.id===idB?{...item,status:"online"}:item);return response({ok:true});}
@@ -28,13 +33,39 @@ beforeAll(async()=>{
   }) as any;
   const {setLang}=await import("/assets/app-i18n.js");setLang("en",{store:false});
   catalog=await import("/ui/js/runtime-catalog.js");models=await import("/ui/js/settings-catalog.js");app=await import("/assets/app-store.js");
+  windowsCatalog=await import("/ui/js/windows-cli-catalog.js");
   const runtimeUi=await import("/ui/js/panel-runtimes.js");Panel=runtimeUi.RuntimesPanel;connectCommand=runtimeUi.runtimeConnectCommand;Create=(await import("/ui/js/panel-fleet.js")).CreateInstanceDialog;routes=await import("/assets/app-route.js");
 });
-beforeEach(()=>{requests.length=0;enabled=true;machines=[machine(idA,"Desktop"),machine(idB,"Laptop","pending")];catalog.forgetRuntimeCatalog();models.forgetCatalogs();app.appStore.set({windowsCli:false});});
+beforeEach(()=>{requests.length=0;enabled=true;machines=[machine(idA,"Desktop"),machine(idB,"Laptop","pending")];windowsInventory={home:"C:\\Test",hostname:"WINDOWS-DESK",probedAt:1,clis:[cli()]};windowsCatalog.forgetWindowsCliCatalog();catalog.forgetRuntimeCatalog();models.forgetCatalogs();app.appStore.set({windowsCli:false});});
 afterEach(async()=>{await p.unmount();catalog.forgetRuntimeCatalog();});
 afterAll(()=>{p.restore();globalThis.fetch=originalFetch;});
 
 describe("remote machine UI",()=>{
+  it("identifies the host Windows computer in the local summary and actual diagnostics without running detection",async()=>{
+    app.appStore.set({windowsCli:true});
+    await p.mount(h(Panel,{navKey:"diagnostic-host"}));await settle(12);
+    const localTarget=p.root.querySelector(".runtime-native-local .windows-cli-target-name");
+    expect(localTarget).not.toBeNull();expect(localTarget.textContent).toBe("WINDOWS-DESK");
+    const diagnostics=p.root.querySelector(".runtime-local-diagnostics");
+    expect(diagnostics.querySelector("summary small").textContent).toBe("WINDOWS-DESK");
+    const diagnosticTarget=diagnostics.querySelector(".windows-cli-target-name");
+    expect(diagnosticTarget).not.toBeNull();expect(diagnosticTarget.textContent).toBe("WINDOWS-DESK");
+    expect(diagnostics.querySelector(".windows-cli-target").textContent).toContain("Windows on the AgEnD host");
+    expect(requests.filter(item=>item.path==="/ui/windows-cli/probe")).toHaveLength(1);
+    expect(requests.some(item=>item.body?.force===true)).toBe(false);
+  });
+  it("keeps legacy computer names unknown until an explicit detection updates all diagnostic labels",async()=>{
+    delete windowsInventory.hostname;app.appStore.set({windowsCli:true});
+    await p.mount(h(Panel,{navKey:"legacy-diagnostic-host"}));await settle(12);
+    const targets=()=>p.root.querySelectorAll(".windows-cli-target-name").map((item:any)=>item.textContent);
+    expect(targets()).toEqual(["Computer name not reported","Computer name not reported"]);
+    expect(p.root.querySelector(".runtime-local-diagnostics").textContent).toContain("Detect again to read the Windows computer name.");
+    expect(requests.some(item=>item.body?.force===true)).toBe(false);
+    p.root.querySelector(".windows-cli-probe").click();await settle(12);
+    expect(targets()).toEqual(["REFRESHED-DESKTOP","REFRESHED-DESKTOP"]);
+    expect(p.root.querySelector(".runtime-local-diagnostics summary small").textContent).toBe("REFRESHED-DESKTOP");
+    expect(requests.filter(item=>item.body?.force===true)).toHaveLength(1);
+  });
   it("keeps existing Windows settings addresses as aliases of Runtime",()=>{
     for(const path of ["/settings/runtimes","/settings/windows-cli","/ui/windows-cli"])expect(routes.parseRoute(path)).toEqual({panel:"settings",section:"runtimes"});
     expect(routes.sectionPath("windows-cli")).toBe("/settings/runtimes");

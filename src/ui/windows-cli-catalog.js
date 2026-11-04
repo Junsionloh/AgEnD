@@ -60,7 +60,20 @@ register("windetect", {
   "zh-TW": { loading:"正在偵測 Windows CLI…", refreshing:"正在更新 Windows CLI…", hint:"正在確認已安裝的 CLI、版本與登入狀態。完成後會重用結果，不必每次重新等待。", elapsed:"已等待 {0} 秒，仍在檢查中。", failed:"無法完成 Windows CLI 偵測", previous:"更新未完成，目前顯示上次成功偵測的結果。", retry:"重試偵測", refresh:"重新偵測", cached:"已載入最近的偵測結果", never:"尚未偵測 Windows CLI。偵測會逐一啟動已安裝的 CLI 一次，讀取版本與登入狀態；之後只在你按下「重新偵測」時再做。", detect:"偵測 Windows CLI" },
   en: { loading:"Detecting Windows CLIs…", refreshing:"Updating Windows CLIs…", hint:"Checking installed CLIs, versions and sign-ins. Results are reused so reopening does not repeat the wait.", elapsed:"Still checking after {0} seconds.", failed:"Windows CLI detection failed", previous:"Refresh failed. Showing the last successful inventory.", retry:"Retry detection", refresh:"Detect again", cached:"Loaded the recent inventory", never:"Windows CLIs have not been detected yet. Detection starts each installed CLI once to read its version and sign-in; after that, only when you press Detect again.", detect:"Detect Windows CLIs" },
 });
+register("windetect", {
+  en: { computer:"Diagnostic computer", hostWindows:"Windows on the AgEnD host", hostHint:"Diagnostics and test tasks use this computer's CLIs and sign-ins.", hostUnknown:"Computer name not reported", hostRefresh:"Detect again to read the Windows computer name." },
+  "zh-TW": { computer:"診斷電腦", hostWindows:"AgEnD 主機的 Windows", hostHint:"診斷與測試任務使用這台電腦的 CLI 與登入。", hostUnknown:"電腦名稱尚未回報", hostRefresh:"重新偵測後可取得 Windows 電腦名稱。" },
+});
 export const detectionText = key => t(`windetect.${key}`);
+
+/** This catalog belongs to the host's Windows worker, regardless of which computer opens the dashboard. */
+export function WindowsCliHostIdentity({ inventory, compact = false }) {
+  const hostname = typeof inventory?.hostname === "string" ? inventory.hostname.trim() : "";
+  return html`<div class=${`windows-cli-target${compact ? " is-compact" : ""}`} aria-label=${detectionText("computer")}>
+    <${Icon} name="fleet" size=${compact ? 16 : 21} /><div><span class="windows-cli-target-label">${detectionText("hostWindows")}</span><strong class="windows-cli-target-name">${hostname || detectionText("hostUnknown")}</strong>
+    ${!compact ? html`<p>${detectionText(hostname ? "hostHint" : "hostRefresh")}</p>` : null}</div>
+  </div>`;
+}
 
 export function WindowsCliDiscoveryStatus({ state }) {
   const lease = useLease("windows-cli-discovery-status");

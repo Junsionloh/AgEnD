@@ -12,7 +12,7 @@ import { parseNativeProviderEvent, validateNativeMcpConnection, type NativeMcpCo
 
 const exec = promisify(execFile);
 /** `probedAt`: when an administrator last ran detection (ms), null when it never ran — then `clis` is empty. */
-export interface WindowsCliProbe { clis: NativeCliRow[]; home: string; probedAt: number | null }
+export interface WindowsCliProbe { clis: NativeCliRow[]; home: string; probedAt: number | null; hostname?: string }
 export interface WindowsCliTask {
   id: string; cli: NativeProviderId; model?: string; cwd: string; sandbox: NativeTaskInput["sandbox"];
   status: "starting" | "running" | "cancelling" | "completed" | "failed" | "cancelled";
@@ -121,7 +121,7 @@ export class WindowsCliBridge {
   private async doProbe(authorized: () => boolean): Promise<WindowsCliProbe> {
     const value = await this.workerResult({ op: "probe" }, 60_000, authorized);
     if (value.type !== "probe" || !Array.isArray(value.clis) || typeof value.home !== "string") throw new Error(String(value.message || "Windows CLI probe failed"));
-    return { clis: value.clis, home: value.home, probedAt: Date.now() };
+    return { clis: value.clis, home: value.home, probedAt: Date.now(), ...inventoryHostname(value.hostname) };
   }
   private async workerResult(request: { op: "probe" } | { op: "workspace"; agentId: string }, timeoutMs: number, authorized: () => boolean = () => true): Promise<Record<string, unknown>> {
     if (!authorized()) throw new Error("Authorization expired before the Windows operation started");
@@ -295,11 +295,16 @@ export function windowsBridgeFor(owner: object & { dataDir?: string }): WindowsC
   return bridge;
 }
 
+/** Older inventories have no computer name. Never substitute the coordinator's or browser's hostname. */
+function inventoryHostname(value: unknown): { hostname?: string } {
+  return typeof value === "string" && value.trim().length > 0 && value.length <= 255 && !/[\x00-\x1f\x7f]/.test(value)
+    ? { hostname: value.trim() } : {};
+}
 function readInventory(file: string): WindowsCliProbe | null {
   try {
     const value: unknown = JSON.parse(readFileSync(file, "utf8"));
     const v = value as Partial<WindowsCliProbe> | null;
-    return v && Array.isArray(v.clis) && typeof v.home === "string" && typeof v.probedAt === "number" ? { clis: v.clis, home: v.home, probedAt: v.probedAt } : null;
+    return v && Array.isArray(v.clis) && typeof v.home === "string" && typeof v.probedAt === "number" ? { clis: v.clis, home: v.home, probedAt: v.probedAt, ...inventoryHostname(v.hostname) } : null;
   } catch { return null; }
 }
 function writeInventory(file: string, value: WindowsCliProbe): void {

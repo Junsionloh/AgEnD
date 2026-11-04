@@ -2751,6 +2751,14 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 .p-windows-cli .windows-cli-intro h2 { margin-top: 7px; font-size: 26px; font-weight: 600; line-height: 1.3; letter-spacing: -.04em; }
 .p-windows-cli .windows-cli-intro p { margin-top: 7px; font-size: 13px; color: var(--text-2); line-height: 1.7; }
 .p-windows-cli .windows-cli-probe { flex-shrink: 0; min-height: 38px; border-radius: 9px; }
+.windows-cli-target { display: flex; align-items: flex-start; gap: 12px; min-width: 0; margin: 0 0 20px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+.windows-cli-target > svg { flex-shrink: 0; margin-top: 3px; color: var(--text-2); }
+.windows-cli-target > div { min-width: 0; }
+.windows-cli-target-label { display: block; color: var(--text-2); font-size: 11px; line-height: 1.5; }
+.windows-cli-target-name { display: block; margin-top: 3px; font-size: 15px; overflow-wrap: anywhere; }
+.windows-cli-target p { margin: 5px 0 0; color: var(--text-2); font-size: 12px; line-height: 1.6; }
+.windows-cli-target.is-compact { margin: 12px 0; padding: 0; border: 0; background: none; gap: 8px; }
+.windows-cli-target.is-compact .windows-cli-target-name { margin-top: 1px; font-size: 13px; }
 .p-windows-cli .windows-cli-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
 .p-windows-cli .windows-cli-provider { min-width: 0; padding: 20px 20px 0; border: 1px solid var(--border); border-radius: 14px; background: var(--bg); }
 .p-windows-cli .windows-cli-provider-head { display: flex; align-items: center; gap: 12px; }

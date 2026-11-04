@@ -5,7 +5,7 @@ import { PanelHeader, setTitle } from "/assets/app-shell.js";
 import { Icon } from "/assets/ui-icons.js";
 import { CliPicker, CliProductMark, cliLabel } from "./cli-picker.js";
 import { ModelSelect } from "./settings-dialogs.js";
-import { useWindowsCliCatalog, WindowsCliDiscoveryStatus } from "./windows-cli-catalog.js";
+import { useWindowsCliCatalog, WindowsCliDiscoveryStatus, WindowsCliHostIdentity } from "./windows-cli-catalog.js";
 
 register("wincli", {
   "zh-TW": { intro:"在 Windows 上執行一次性任務，使用本機已安裝的 CLI 和登入。", probe:"偵測 Windows CLI", probing:"正在偵測…", newTask:"派送 Windows Codex 任務", folder:"Windows 工作目錄", prompt:"任務內容", access:"檔案存取", readOnly:"唯讀", write:"工作目錄可寫入", limits:"目前支援 Codex 單次任務，同時一個，五分鐘後請求取消。使用 CLI 的沙箱與核准政策；此頁不提供互動核准按鈕。Claude 目前提供偵測。", run:"開始任務", results:"任務與結果", refresh:"更新", signedIn:"已登入", signedOut:"尚未登入", unknown:"登入狀態未知", missing:"未找到執行檔", empty:"還沒有任務。", cancel:"取消任務", starting:"準備啟動", running:"執行中", cancelling:"正在取消", cancelled:"已取消", completed:"已完成", failed:"失敗", waiting:"正在接收 Windows CLI 的輸出…", uncertain:"提交結果不明，請按「更新」確認任務狀態，勿立即重送。" },
@@ -115,6 +115,7 @@ export function WindowsCliPanel({ navKey, embedded = false }) {
       <header class="windows-cli-intro"><div><span class="windows-cli-eyebrow"><${Icon} name="view" size=${14} />${tn("native")}</span><h2>${tn("workspace")}</h2><p>${tn("intro")}</p></div>
         <button type="button" class="btn windows-cli-probe" disabled=${probing} onClick=${probe}><${Icon} name="restart" size=${16} cls=${probing ? "windows-cli-spin" : ""} />${tn(probing ? "probing" : "probe")}</button>
       </header>
+      <${WindowsCliHostIdentity} inventory=${discovery.data} />
       <${WindowsCliDiscoveryStatus} state=${discovery} />
       <section class="windows-cli-cards" aria-label=${tn("providers")}>${providers.map(cli => html`<${CliCard} key=${cli.id} cli=${cli} probing=${probing} />`)}${discovery.data && !providers.length && !probing && !discovery.error ? html`<p class="note">${tn("noProviders")}</p>` : null}</section>
       ${error ? html`<p class="error windows-cli-error" role="alert"><${Icon} name="alert" size=${18} /><span>${error}</span></p>` : null}

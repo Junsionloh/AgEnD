@@ -8,7 +8,7 @@ import { confirmedWrite } from "./settings-confirm.js";
 import { CliProductMark, cliLabel } from "./cli-picker.js";
 import { WindowsCliPanel } from "./panel-windows-cli.js";
 import { useRuntimeCatalog } from "./runtime-catalog.js";
-import { useWindowsCliCatalog } from "./windows-cli-catalog.js";
+import { useWindowsCliCatalog, WindowsCliHostIdentity } from "./windows-cli-catalog.js";
 
 register("machines", {
   en: {
@@ -111,6 +111,7 @@ function LocalWindowsRuntime({ openDiagnostics }) {
   const inventory = useWindowsCliCatalog();
   const installed = (inventory.data?.clis || []).filter(cli => cli.path);
   return html`<article class="runtime-local runtime-native-local"><div><h3><${Icon} name="fleet" size=${20} />${machineText("nativeWindows")}</h3><p class="note">${machineText("nativeHint")}</p>
+    <${WindowsCliHostIdentity} inventory=${inventory.data} compact=${true} />
     ${installed.length ? html`<ul class="runtime-local-cli-tags" aria-label=${machineText("cli")}>${installed.map(cli => html`<li key=${cli.id}><${CliProductMark} id=${cli.id} size=${19} /><span>${cliLabel(cli.id)}</span></li>`)}</ul>` : html`<p class="note">${machineText("inventoryHint")}</p>`}
   </div><button type="button" class="btn btn-sm" onClick=${openDiagnostics}>${machineText("openDiagnostics")}<span aria-hidden="true">→</span></button></article>`;
 }
@@ -207,6 +208,7 @@ function RuntimeSwitches({ lease, onChanged, computers, diagnosticsPanel }) {
 }
 export function RuntimesPanel({navKey}) {
   const lease=useLease(`runtimes:${navKey}`), state=useRuntimeCatalog(), {windowsCli}=useStore(appStore);
+  const localInventory=useWindowsCliCatalog(windowsCli);
   const [pairing,setPairing]=useState(null), [busy,setBusy]=useState(""), [error,setError]=useState("");
   const [server,setServer]=useState(() => typeof location === "undefined" ? "" : location.origin);
   const diagnostics=useRef(null);
@@ -241,7 +243,7 @@ export function RuntimesPanel({navKey}) {
   const computers = html`<section class="runtime-computers"><h3>${machineText("computersTitle")}</h3>${windowsCli ? html`<${LocalWindowsRuntime} openDiagnostics=${() => {if (diagnostics.current) {diagnostics.current.open=true;diagnostics.current.scrollIntoView?.({block:"start"});}}} />` : null}
     <section class="runtime-machines" aria-label=${machineText("machines")}>${machines.map(machine => html`<${MachineCard} key=${machine.id} machine=${machine} busy=${!!busy} action=${action} />`)}${state.data && !machines.length ? html`<p class="note">${machineText("empty")}</p>` : null}</section>
     <article class="runtime-host-note"><${Icon} name="info" size=${18} /><span>${machineText("localHint")}</span></article></section>`;
-  const diagnosticsPanel = windowsCli ? html`<details ref=${diagnostics} class="runtime-local-diagnostics s-ui-disclosure"><summary><${Icon} name="view" size=${22} /><span><strong>${machineText("diagnostics")}</strong><small>${machineText("localWindows")}</small></span></summary><div class="s-disclosure-body"><${WindowsCliPanel} navKey=${`${navKey}:local`} embedded=${true} /></div></details>` : null;
+  const diagnosticsPanel = windowsCli ? html`<details ref=${diagnostics} class="runtime-local-diagnostics s-ui-disclosure"><summary><${Icon} name="view" size=${22} /><span><strong>${machineText("diagnostics")}</strong><small>${localInventory.data?.hostname || machineText("localWindows")}</small></span></summary><div class="s-disclosure-body"><${WindowsCliPanel} navKey=${`${navKey}:local`} embedded=${true} /></div></details>` : null;
   return html`<section class="runtime-settings">
     <header class="runtime-heading s-page-head"><div><h2>${machineText("title")}<span class="s-scope">${machineText("fleetScope")}</span></h2><p class="s-page-lead">${machineText("lead")}</p></div><div><button type="button" class="btn btn-primary btn-sm" disabled=${!!busy || state.data?.enabled !== true} onClick=${connect}><${Icon} name="plus" size=${15} />${machineText("connect")}</button>${state.data?.enabled === true && !pairing ? download() : null}<button type="button" class="btn btn-sm" disabled=${state.loading} onClick=${state.refresh}><${Icon} name="restart" size=${15} />${machineText("refresh")}</button></div></header>
     ${state.data?.enabled === false ? html`<p class="note">${machineText("disabled")}</p>` : null}
