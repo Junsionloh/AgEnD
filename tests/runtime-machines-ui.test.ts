@@ -42,92 +42,110 @@ beforeEach(()=>{requests.length=0;enabled=true;machines=[machine(idA,"Desktop"),
 afterEach(async()=>{await p.unmount();catalog.forgetRuntimeCatalog();});
 afterAll(()=>{p.restore();globalThis.fetch=originalFetch;});
 
+const diagnosticDialog=()=>p.root.querySelector(".runtime-diagnostics-dialog");
+const closeDiagnostics=async()=>{diagnosticDialog().querySelector(".dlg-x").click();await settle(8);};
+const openDiagnostics=async(id="")=>{
+  if(diagnosticDialog())await closeDiagnostics();
+  p.root.querySelector(`[data-machine-id="${id || "local"}"] .runtime-inspect`).click();await settle(12);
+};
+
 describe("remote machine UI",()=>{
-  it("identifies the host Windows computer in the local summary and actual diagnostics without running detection",async()=>{
-    app.appStore.set({windowsCli:true});
-    await p.mount(h(Panel,{navKey:"diagnostic-host"}));await settle(12);
-    const localTarget=p.root.querySelector(".runtime-native-local .windows-cli-target-name");
-    expect(localTarget).not.toBeNull();expect(localTarget.textContent).toBe("WINDOWS-DESK");
-    const diagnostics=p.root.querySelector(".runtime-local-diagnostics");
-    expect(diagnostics.querySelector("summary small").textContent).toBe("WINDOWS-DESK");
-    const diagnosticTarget=diagnostics.querySelector(".windows-cli-target-name");
-    expect(diagnosticTarget).not.toBeNull();expect(diagnosticTarget.textContent).toBe("WINDOWS-DESK");
-    expect(diagnostics.querySelector(".windows-cli-target").textContent).toContain("Windows on the AgEnD host");
-    expect(requests.filter(item=>item.path==="/ui/windows-cli/probe")).toHaveLength(1);
-    expect(requests.some(item=>item.body?.force===true)).toBe(false);
+  it("uses the same machine cards and does not load task history until diagnostics open",async()=>{
+    app.appStore.set({windowsCli:true});await p.mount(h(Panel,{navKey:"unified-machine-cards"}));await settle(12);
+    const cards=p.root.querySelectorAll(".runtime-machine");expect(cards).toHaveLength(3);
+    expect(cards.map((card:any)=>card.querySelector(".runtime-cli-table")!==null)).toEqual([true,true,true]);
+    expect(cards[0].querySelector("h3").textContent).toBe("WINDOWS-DESKThis PC");
+    expect(cards[1].querySelector("h3").textContent).toBe("DesktopPaired");
+    expect(cards[0].querySelector(".runtime-inspect").textContent).toBe(cards[1].querySelector(".runtime-inspect").textContent);
+    expect(diagnosticDialog()).toBeNull();expect(p.root.querySelector(".runtime-local-diagnostics")).toBeNull();
+    expect(requests.some(item=>item.path.endsWith("/tasks"))).toBe(false);expect(requests.some(item=>item.body?.force===true)).toBe(false);
   });
-  it("keeps legacy computer names unknown until an explicit detection updates all diagnostic labels",async()=>{
-    delete windowsInventory.hostname;app.appStore.set({windowsCli:true});
-    await p.mount(h(Panel,{navKey:"legacy-diagnostic-host"}));await settle(12);
-    const targets=()=>p.root.querySelectorAll(".windows-cli-target-name").map((item:any)=>item.textContent);
-    expect(targets()).toEqual(["Computer name not reported","Computer name not reported"]);
-    expect(p.root.querySelector(".runtime-local-diagnostics").textContent).toContain("Detect again to read the Windows computer name.");
-    expect(requests.some(item=>item.body?.force===true)).toBe(false);
+  it("opens local diagnostics as a named dialog with testing collapsed, and restores focus on Escape",async()=>{
+    app.appStore.set({windowsCli:true});await p.mount(h(Panel,{navKey:"local-diagnostic-dialog"}));await settle(12);
+    const opener=p.root.querySelector('[data-machine-id="local"] .runtime-inspect');opener.focus();await openDiagnostics();
+    const dialog=diagnosticDialog();expect(dialog.open).toBe(true);expect(dialog.getAttribute("aria-label")).toBe("CLI diagnostics · WINDOWS-DESK");
+    const testBlock=dialog.querySelector(".windows-cli-test-disclosure");expect(testBlock.open).toBe(false);
+    expect(testBlock.contains(dialog.querySelector(".windows-cli-composer"))).toBe(true);
+    expect(testBlock.contains(dialog.querySelector(".windows-cli-history"))).toBe(true);
+    expect(testBlock.contains(dialog.querySelector(".windows-cli-close-note"))).toBe(true);
+    expect(dialog.querySelector(".windows-cli-diagnostic-row").textContent).toContain("Codex");
+    expect(dialog.querySelector(".runtime-diagnostic-target")).toBeNull();
+    fire(dialog,"cancel");await settle(8);expect(diagnosticDialog()).toBeNull();expect(p.window.document.activeElement).toBe(opener);
+  });
+  it("keeps legacy names unknown until explicit detection updates the card and dialog title",async()=>{
+    delete windowsInventory.hostname;app.appStore.set({windowsCli:true});await p.mount(h(Panel,{navKey:"legacy-diagnostic-host"}));await settle(12);
+    await openDiagnostics();expect(diagnosticDialog().getAttribute("aria-label")).toBe("CLI diagnostics · Native Windows");
     p.root.querySelector(".windows-cli-probe").click();await settle(12);
-    expect(targets()).toEqual(["REFRESHED-DESKTOP","REFRESHED-DESKTOP"]);
-    expect(p.root.querySelector(".runtime-local-diagnostics summary small").textContent).toBe("REFRESHED-DESKTOP");
+    expect(p.root.querySelector('[data-machine-id="local"] h3').textContent).toContain("REFRESHED-DESKTOP");
+    expect(diagnosticDialog().getAttribute("aria-label")).toBe("CLI diagnostics · REFRESHED-DESKTOP");
     expect(requests.filter(item=>item.body?.force===true)).toHaveLength(1);
   });
-  it("selects paired computers and keeps diagnostic drafts, models, paths and probes on their owner",async()=>{
+  it("opens the clicked computer and keeps diagnostic drafts, models, paths and probes on their owner",async()=>{
     app.appStore.set({windowsCli:true});machines=[machine(idA,"Desktop"),machine(idB,"Laptop")];
     machines[0].inventory.clis[0].models=[{id:"model-a",label:"Model A"}];machines[1].inventory.clis[0].models=[{id:"model-b",label:"Model B"}];
-    await p.mount(h(Panel,{navKey:"diagnostic-selection"}));await settle(12);
-    const select=async(id:string)=>{const picker=p.root.querySelector(".runtime-diagnostic-target select");picker.value=id;fire(picker,"change");await settle(12);};
-    await select(idA);
-    expect(p.root.querySelector("#windows-cwd").value).toBe("C:\\Desktop");
-    expect(p.root.querySelector(".runtime-local-diagnostics .windows-cli-target-name").textContent).toBe("Desktop");
+    await p.mount(h(Panel,{navKey:"diagnostic-selection"}));await settle(12);await openDiagnostics(idA);
+    expect(p.root.querySelector("#windows-cwd").value).toBe("C:\\Desktop");expect(diagnosticDialog().getAttribute("aria-label")).toBe("CLI diagnostics · Desktop");
     const prompt=p.root.querySelector("#windows-prompt");prompt.value="Desktop draft";fire(prompt,"input");
     const model=p.root.querySelector("#windows-model");model.value="model-a";fire(model,"change");await settle();
     const before=requests.length;p.root.querySelector(".windows-cli-probe").click();await settle(12);
     expect(requests.slice(before).some(item=>item.path===`/ui/runtimes/machines/${idA}/probe`)).toBe(true);
     expect(requests.slice(before).some(item=>item.path==="/ui/windows-cli/probe")).toBe(false);
-    await select(idB);
-    expect(p.root.querySelector("#windows-cwd").value).toBe("C:\\Laptop");expect(p.root.querySelector("#windows-prompt").value).toBe("");
+    await openDiagnostics(idB);expect(p.root.querySelector("#windows-cwd").value).toBe("C:\\Laptop");expect(p.root.querySelector("#windows-prompt").value).toBe("");
     expect(p.root.querySelector("#windows-model").textContent).toContain("Model B");expect(p.root.querySelector("#windows-model").textContent).not.toContain("Model A");
-    await select(idA);expect(p.root.querySelector("#windows-prompt").value).toBe("Desktop draft");expect(p.root.querySelector("#windows-model").value).toBe("model-a");
+    await openDiagnostics(idA);expect(p.root.querySelector("#windows-prompt").value).toBe("Desktop draft");expect(p.root.querySelector("#windows-model").value).toBe("model-a");
   });
-  it("ignores a late inventory after switching computers and keeps a revoked selection unavailable",async()=>{
+  it("ignores a late inventory after closing and opening another computer, and fences revocation",async()=>{
     app.appStore.set({windowsCli:true});machines=[machine(idA,"Desktop"),machine(idB,"Laptop")];
     const fixtureFetch=globalThis.fetch;let release!:(value:unknown)=>void;
     globalThis.fetch=(async(path:any,options:any)=>path===`/ui/runtimes/machines/${idA}/inventory`?new Promise(resolve=>{release=resolve;}):fixtureFetch(path,options)) as any;
     try{
-      await p.mount(h(Panel,{navKey:"held-computer-inventory"}));await settle(12);
-      const picker=()=>p.root.querySelector(".runtime-diagnostic-target select");
-      picker().value=idA;fire(picker(),"change");await settle(8);
-      picker().value=idB;fire(picker(),"change");await settle(12);
+      await p.mount(h(Panel,{navKey:"held-computer-inventory"}));await settle(12);await openDiagnostics(idA);await openDiagnostics(idB);
       release(response({inventory:machine(idA,"Desktop").inventory}));await settle(12);
-      expect(p.root.querySelector("#windows-cwd").value).toBe("C:\\Laptop");
-      expect(p.root.querySelector(".runtime-local-diagnostics .windows-cli-target-name").textContent).toBe("Laptop");
+      expect(p.root.querySelector("#windows-cwd").value).toBe("C:\\Laptop");expect(diagnosticDialog().getAttribute("aria-label")).toBe("CLI diagnostics · Laptop");
       machines=machines.map(item=>item.id===idB?{...item,status:"revoked"}:item);button("Refresh machines").click();await settle(12);
-      expect(picker().value).toBe(idB);expect(p.root.textContent).toContain("This Runtime is unavailable or no longer approved.");
-      expect(p.root.querySelector(".windows-cli-probe").disabled).toBe(true);
-      expect(requests.filter(item=>item.path==="/ui/windows-cli/probe")).toHaveLength(1);
+      expect(diagnosticDialog().getAttribute("aria-label")).toBe("CLI diagnostics · Laptop");expect(p.root.textContent).toContain("This Runtime is unavailable or no longer approved.");
+      expect(p.root.querySelector(".windows-cli-probe").disabled).toBe(true);expect(requests.filter(item=>item.path==="/ui/windows-cli/probe")).toHaveLength(1);
     }finally{globalThis.fetch=fixtureFetch;}
   });
-  it("waits for the selected computer's history, submits once and blocks an unconfirmed outcome",async()=>{
+  it("keeps a diagnostic probe alive and visible on its card across close and reopen",async()=>{
+    machines=[machine(idA,"Desktop")];const fixtureFetch=globalThis.fetch;let release!:(value:unknown)=>void,signal:AbortSignal,count=0;
+    globalThis.fetch=(async(path:any,options:any)=>{if(path!==`/ui/runtimes/machines/${idA}/probe`)return fixtureFetch(path,options);count++;signal=options.signal;return new Promise(resolve=>{release=resolve;});}) as any;
+    try{
+      await p.mount(h(Panel,{navKey:"diagnostic-probe-ownership"}));await settle(12);await openDiagnostics(idA);
+      p.root.querySelector(".windows-cli-probe").click();await settle(8);await closeDiagnostics();
+      expect(signal!.aborted).toBe(false);const cardProbe=p.root.querySelector(`[data-machine-id="${idA}"] .runtime-probe`);
+      expect(cardProbe.disabled).toBe(true);expect(cardProbe.textContent).toContain("Detecting…");
+      await openDiagnostics(idA);expect(p.root.querySelector(".windows-cli-probe").disabled).toBe(true);expect(count).toBe(1);
+      release(response({inventory:machines[0].inventory}));await settle(12);
+      expect(p.root.querySelector(".windows-cli-probe").disabled).toBe(false);expect(count).toBe(1);
+    }finally{globalThis.fetch=fixtureFetch;}
+  });
+  it("waits for history, submits once and preserves a pending send across dialog close and reopen",async()=>{
     machines=[machine(idA,"Desktop")];const fixtureFetch=globalThis.fetch,root=`/ui/runtimes/machines/${idA}/tasks`;
-    let release!:(value:unknown)=>void,first=true,task:any=null;const sent:any[]=[];
+    let releaseHistory!:(value:unknown)=>void,releaseSend!:(value:unknown)=>void,first=true,task:any=null,signal:AbortSignal;const sent:any[]=[];
     globalThis.fetch=(async(path:any,options:any={})=>{
       if(path!==root)return fixtureFetch(path,options);
-      if(options.method==="POST") {const body=JSON.parse(options.body);sent.push(body);task={id:body.requestId,cli:body.cli,cwd:body.cwd,sandbox:body.sandbox,startedAt:1,status:"failed",output:"",outcomeConfirmed:false};return response({task},202);}
-      if(first){first=false;return new Promise(resolve=>{release=resolve;});}return response({tasks:task?[task]:[]});
+      if(options.method==="POST"){const body=JSON.parse(options.body);sent.push(body);signal=options.signal;return new Promise(resolve=>{releaseSend=resolve;});}
+      if(first){first=false;return new Promise(resolve=>{releaseHistory=resolve;});}return response({tasks:task?[task]:[]});
     }) as any;
     try{
-      await p.mount(h(Panel,{navKey:"remote-diagnostic-submission"}));await settle(12);
+      await p.mount(h(Panel,{navKey:"remote-diagnostic-submission"}));await settle(12);await openDiagnostics(idA);
       const prompt=p.root.querySelector("#windows-prompt");prompt.value="Fixture analysis";fire(prompt,"input");await settle();
       const submit=()=>p.root.querySelector(".windows-cli-composer button[type=submit]");expect(submit().disabled).toBe(true);
-      release(response({tasks:[]}));await settle(12);expect(submit().disabled).toBe(false);
-      const form=p.root.querySelector(".windows-cli-composer form");fire(form,"submit");fire(form,"submit");await settle(12);
-      expect(sent).toHaveLength(1);expect(sent[0]).toMatchObject({cwd:"C:\\Desktop",prompt:"Fixture analysis",cli:"codex",sandbox:"read-only"});
-      expect(submit().disabled).toBe(true);expect(p.root.textContent).toContain("A task outcome is unconfirmed.");
-      expect(requests.some(item=>item.path.startsWith("/ui/windows-cli/"))).toBe(false);
+      releaseHistory(response({tasks:[]}));await settle(12);expect(submit().disabled).toBe(false);
+      const form=p.root.querySelector(".windows-cli-composer form");fire(form,"submit");fire(form,"submit");await settle(8);expect(sent).toHaveLength(1);
+      await closeDiagnostics();expect(signal!.aborted).toBe(false);expect(requests.some(item=>item.path.endsWith("/cancel"))).toBe(false);
+      await openDiagnostics(idA);expect(submit().disabled).toBe(true);expect(p.root.querySelector("#windows-prompt").value).toBe("Fixture analysis");
+      task={id:sent[0].requestId,cli:"codex",cwd:"C:\\Desktop",sandbox:"read-only",startedAt:1,status:"running",output:"Fixture output"};releaseSend(response({task},202));
+      diagnosticDialog().querySelector('[aria-label="Refresh"]').click();await settle(12);expect(p.root.textContent).toContain("Fixture output");expect(submit().disabled).toBe(true);expect(sent).toHaveLength(1);
+      task={...task,status:"failed",outcomeConfirmed:false};diagnosticDialog().querySelector('[aria-label="Refresh"]').click();await settle(12);
+      expect(submit().disabled).toBe(true);expect(p.root.textContent).toContain("A task outcome is unconfirmed.");expect(requests.some(item=>item.path.startsWith("/ui/windows-cli/"))).toBe(false);
     }finally{globalThis.fetch=fixtureFetch;}
   });
   it("supports remote-only diagnostics and disables offline actions without falling back to the host",async()=>{
-    machines=[machine(idA,"Offline desk","offline")];await p.mount(h(Panel,{navKey:"remote-only-diagnostics"}));await settle(12);
-    expect(p.root.querySelector(".runtime-diagnostic-target select").value).toBe(idA);
-    expect(p.root.querySelector("#windows-cwd").value).toBe("C:\\Offline desk");
-    expect(p.root.querySelector(".windows-cli-probe").disabled).toBe(true);
+    machines=[machine(idA,"Offline desk","offline")];await p.mount(h(Panel,{navKey:"remote-only-diagnostics"}));await settle(12);await openDiagnostics(idA);
+    expect(diagnosticDialog().getAttribute("aria-label")).toBe("CLI diagnostics · Offline desk");
+    expect(p.root.querySelector("#windows-cwd").value).toBe("C:\\Offline desk");expect(p.root.querySelector(".windows-cli-probe").disabled).toBe(true);
     expect(p.root.querySelector(".windows-cli-composer button[type=submit]").disabled).toBe(true);
     expect(p.root.textContent).toContain("This computer is offline.");expect(requests.some(item=>item.path.startsWith("/ui/windows-cli/"))).toBe(false);
   });
@@ -161,13 +179,13 @@ describe("remote machine UI",()=>{
   it("S-30: a computer card names its platform and host name, never a version slot that is always \"Not reported\"",async()=>{
     machines=[{...machine(idA,"Desktop"),version:undefined,hostname:"DESKTOP-7Q2"},{...machine(idB,"Laptop","pending"),version:undefined}];
     await p.mount(h(Panel,{navKey:"runtime"}));await settle(8);
-    expect(p.root.querySelector(`[data-machine-id="${idA}"] header p`).textContent).toBe("win32 · DESKTOP-7Q2");
-    expect(p.root.querySelector(`[data-machine-id="${idB}"] header p`).textContent).toBe("win32");
+    expect(p.root.querySelector(`[data-machine-id="${idA}"] header p`).textContent).toBe("Windows · DESKTOP-7Q2 · 1 CLIs");
+    expect(p.root.querySelector(`[data-machine-id="${idB}"] header p`).textContent).toBe("Windows · 1 CLIs");
     expect(p.root.querySelector(".runtime-machines").textContent).not.toContain("Not reported");
   });
   it("keeps local Runtime settings visible while remote connections are disabled",async()=>{
     enabled=false;machines=[];await p.mount(h(Panel,{navKey:"runtime"}));await settle(8);
-    expect(p.root.textContent).toContain("Other Windows PCs can connect once “Allow other Windows PCs to pair” is on.");expect(p.root.textContent).toContain("This computer");expect(button("Connect a computer").disabled).toBe(true);
+    expect(p.root.textContent).toContain("Other Windows PCs can connect once “Allow other Windows PCs to pair” is on.");expect(p.root.querySelector(".runtime-policy")).not.toBeNull();expect(button("Connect a computer").disabled).toBe(true);
   });
   it("creates a remote agent with an optional workspace while local Windows CLI is disabled",async()=>{
     expect(app.appStore.get().windowsCli).toBe(false);

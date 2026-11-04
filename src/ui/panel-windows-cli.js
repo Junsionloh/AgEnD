@@ -24,13 +24,20 @@ register("wincli", {
   en: { remoteIntro:"Inspect CLIs and run a one-off task on the selected Windows computer.", offline:"This computer is offline. Showing its last reported inventory; reconnect its Runtime to detect or run tasks.", removed:"This Runtime is unavailable or no longer approved. Select another computer.", historyLoading:"Loading this computer's task status…", outcomePending:"A task outcome is unconfirmed. Reconnect this Runtime to reconcile before sending another task.", remoteHistory:"Latest 20 tasks on this computer", remoteWorkspace:"Selected Windows computer", remoteHint:"Choose this computer's CLI and model, then run a task in its working directory." },
   "zh-TW": { remoteIntro:"查看所選 Windows 電腦的 CLI，並在該電腦執行一次性任務。", offline:"這台電腦已離線。目前顯示上次回報的清單；請重新連接該 Runtime，才能偵測或派送任務。", removed:"此 Runtime 無法使用或已不再核准，請選擇另一台電腦。", historyLoading:"正在讀取這台電腦的任務狀態…", outcomePending:"有任務的執行結果尚未確認，請重新連接該 Runtime 完成確認後再派工。", remoteHistory:"保留這台電腦最近 20 筆任務", remoteWorkspace:"所選 Windows 電腦", remoteHint:"選擇這台電腦的 CLI 與模型，在該電腦的工作目錄執行任務。" },
 });
+register("wincli", {
+  en: { testCli:"Test CLI", testHint:"Optional: send a one-off task to check execution on this computer.", closeKeepsTask:"Closing this window keeps submitted tasks running. Reopen this computer's diagnostics to check their status.", lastDetection:"Last detection: {0}", inventoryTitle:"Detected CLIs", neverDetection:"No detection recorded yet", modelsFound:"Models reported by this CLI", localDisabled:"This computer's Windows CLI access is disabled." },
+  "zh-TW": { testCli:"測試 CLI", testHint:"選用：送出一次性任務，確認這台電腦的 CLI 執行能力。", closeKeepsTask:"關閉視窗後，已提交的任務會繼續執行；重開這台電腦的診斷即可查看狀態。", lastDetection:"最近偵測：{0}", inventoryTitle:"偵測到的 CLI", neverDetection:"尚未有偵測紀錄", modelsFound:"此 CLI 回報的模型", localDisabled:"這台電腦的 Windows CLI 存取已停用。" },
+});
 const active = task => ["starting","running","cancelling"].includes(task.status);
 
-function CliCard({ cli, probing }) {
+function CliCard({ cli, probing, diagnostic = false }) {
   const signedIn = cli.authenticated === true;
   const checking = probing && !cli.path;
   const authKey = checking ? "checking" : !cli.path ? "missing" : signedIn ? "signedIn" : cli.authenticated === false ? "signedOut" : "unknown";
   const providerLabel = cli.company || ({codex:"OpenAI","claude-code":"Anthropic",antigravity:"Google",grok:"xAI","kiro-cli":"AWS",opencode:"Anomaly",muse:"Meta"})[cli.id];
+  if(diagnostic) return html`<details class="windows-cli-diagnostic-row"><summary><${CliProductMark} id=${cli.id} size=${24} /><strong>${cliLabel(cli.id)}</strong><span class="windows-cli-diagnostic-version">${cli.version || "—"}</span><span class=${`windows-cli-auth ${signedIn ? "tone-ready" : "tone-neutral"}`}><span class="windows-cli-dot"></span>${tn(authKey)}</span><${Icon} name="chevron" size=${16} /></summary>
+    <div class="windows-cli-diagnostic-facts"><span class=${`windows-cli-badge ${cli.runnable ? "tone-ready" : "tone-neutral"}`}>${tn(cli.runnable ? "available" : cli.supports?.execution === false ? "detectionOnly" : "unavailableBadge")}</span><dl><dt>${tn("path")}</dt><dd><code class="windows-cli-path">${cli.path || tn("missing")}</code></dd>${cli.models?.length ? html`<dt>${tn("modelsFound")}</dt><dd><ul class="windows-cli-model-list">${cli.models.map(model=>html`<li key=${model.id}><code>${model.id}</code>${model.label && model.label!==model.id ? html`<span>${model.label}</span>` : null}</li>`)}</ul></dd>` : null}</dl>${cli.reason ? html`<p class="note">${cli.reason}</p>` : null}</div>
+  </details>`;
   return html`<article class=${`windows-cli-provider is-${cli.id}`}>
     <div class="windows-cli-provider-head">
       <span class="windows-cli-brand"><${CliProductMark} id=${cli.id} size=${28} /></span>
@@ -55,10 +62,10 @@ function TaskResult({ task, latest, cancel }) {
   </details>`;
 }
 
-export function WindowsCliPanel({ navKey, embedded = false, machineId = "", machine, drafts, onInventoryChanged }) {
+export function WindowsCliPanel({ navKey, embedded = false, machineId = "", machine, drafts, onInventoryChanged, diagnostic = false, enabled = true, session, taskLease }) {
   const lease = useLease(navKey);
-  const approved = !machineId || ["online","offline"].includes(machine?.status);
-  const online = !machineId || machine?.status === "online";
+  const approved = enabled && (!machineId || ["online","offline"].includes(machine?.status));
+  const online = enabled && (!machineId || machine?.status === "online");
   const discovery = useWindowsCliCatalog(approved,machineId);
   const apiBase = machineId ? `/ui/runtimes/machines/${encodeURIComponent(machineId)}` : "/ui/windows-cli";
   const initialDraft = drafts?.get(machineId) || {};
@@ -67,14 +74,18 @@ export function WindowsCliPanel({ navKey, embedded = false, machineId = "", mach
   const [tasks,setTasks] = useState([]), [cwd,setCwd] = useState(initialDraft.cwd || "");
   const [prompt,setPrompt] = useState(initialDraft.prompt || ""), [sandbox,setSandbox] = useState(initialDraft.sandbox || "read-only");
   const [selected,setSelected] = useState(initialDraft.selected || "codex"), [model,setModel] = useState(initialDraft.model || "");
-  const [submitting,setSubmitting] = useState(false), [error,setError] = useState("");
-  const submission = useRef(null), claimed = useRef(false), readGeneration = useRef(0), polling = useRef(false);
+  // The page owns a send across diagnostic-dialog close/reopen. Closing never aborts a submitted POST.
+  const ownSession = useRef({requestId:null,pending:false,error:""});
+  const operation = session || ownSession.current;
+  const [submitting,setSubmitting] = useState(!!operation.requestId), [error,setError] = useState(operation.error || "");
+  const [testOpen,setTestOpen] = useState(initialDraft.testOpen || false);
+  const readGeneration = useRef(0), polling = useRef(false);
   const [historyReady,setHistoryReady] = useState(false);
   const latestDraft = useRef(null), directoryInitialized = useRef(!!initialDraft.cwd);
-  latestDraft.current = {cwd,prompt,sandbox,selected,model};
+  latestDraft.current = {cwd,prompt,sandbox,selected,model,testOpen};
   useEffect(() => () => { drafts?.set(machineId,latestDraft.current); },[drafts,machineId]);
-  const api = async (path,body) => {
-    const r = await lease.fetch(path, { credentials:"same-origin", ...(body === undefined ? {} : { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(body) }) });
+  const api = async (path,body,owner = lease) => {
+    const r = await owner.fetch(path, { credentials:"same-origin", ...(body === undefined ? {} : { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(body) }) });
     const data = await r.json();
     if (!r.ok) { const e = new Error(data.error || `HTTP ${r.status}`); e.rejected = true; throw e; }
     return data;
@@ -85,29 +96,35 @@ export function WindowsCliPanel({ navKey, embedded = false, machineId = "", mach
       const data = await api(`${apiBase}/tasks`);
       if (!lease.current() || generation !== readGeneration.current) return;
       setTasks(data.tasks); setHistoryReady(true);
-      if (submission.current && data.tasks.some(task => task.id === submission.current)) { submission.current = null; claimed.current = false; setSubmitting(false); }
-    } catch (e) { if (lease.current()) setError(e.message); }
+      if (operation.requestId && data.tasks.some(task => task.id === operation.requestId)) { operation.requestId = null; operation.pending = false; operation.error = ""; }
+      setSubmitting(!!operation.requestId);
+      if(operation.error) setError(operation.error);
+    } catch (e) { if (lease.current() && generation === readGeneration.current) setError(e.message); }
   };
   const probe = async () => { if (!online || !approved) return; const result = await discovery.refresh(); if (result && lease.current()) onInventoryChanged?.(); };
-  useEffect(() => { if (!embedded) setTitle("Windows CLI"); if (approved) void refresh(); },[lease,approved]);
+  useEffect(() => { if (!embedded) setTitle("Windows CLI"); if (approved) void refresh(); },[lease,approved,online]);
   useEffect(() => { if (discovery.data?.home && !directoryInitialized.current) { directoryInitialized.current = true; setCwd(discovery.data.home); } },[discovery.data]);
   const running = tasks.some(active);
   const uncertain = tasks.some(task => task.outcomeConfirmed === false);
   useEffect(() => {
-    if ((!running && !uncertain) || !online || !approved) return;
+    if ((!running && !uncertain && !operation.requestId) || !online || !approved) return;
     const timer = lease.interval(async () => { if (polling.current) return; polling.current = true; try { await refresh(); } finally { polling.current = false; } },1000);
     return () => lease.clear(timer);
-  },[lease,running,uncertain,online,approved]);
+  },[lease,running,uncertain,online,approved,submitting]);
   const run = async () => {
-    if (claimed.current || !online || !approved || !historyReady || running || uncertain) return;
-    claimed.current = true; setSubmitting(true); setError("");
+    if (operation.requestId || !online || !approved || !historyReady || running || uncertain) return;
     const input = { requestId:crypto.randomUUID(), cli:selected, ...(model.trim() ? {model:model.trim()} : {}), cwd:cwd.trim(), prompt, sandbox };
-    submission.current = input.requestId;
-    try { await api(`${apiBase}/tasks`,input); }
+    operation.requestId = input.requestId; operation.pending = true; operation.error = "";
+    setSubmitting(true);setError("");
+    try { await api(`${apiBase}/tasks`,input,taskLease || lease); }
     catch (e) {
-      if (!lease.current()) return;
-      setError(e.rejected ? e.message : `${e.message}\n${tn("uncertain")}`);
-      if (e.rejected) { submission.current = null; claimed.current = false; setSubmitting(false); }
+      if(operation.requestId === input.requestId) {
+        operation.error = e.rejected ? e.message : `${e.message}\n${tn("uncertain")}`;
+        if(e.rejected) operation.requestId = null;
+        if (lease.current()) setError(operation.error || e.message);
+      }
+    } finally {
+      if(operation.requestId === input.requestId) operation.pending = false;
     }
     if (lease.current()) await refresh();
   };
@@ -125,14 +142,16 @@ export function WindowsCliPanel({ navKey, embedded = false, machineId = "", mach
   },[clis]);
   return html`<div class=${embedded ? "p-windows-cli windows-cli-settings" : "panel p-windows-cli"}>${!embedded ? html`<${PanelHeader} title="Windows CLI" />` : null}
     <div class=${embedded ? "windows-cli-settings-body" : "panel-body"}><div class="windows-cli-content">
-      <header class="windows-cli-intro"><div><span class="windows-cli-eyebrow"><${Icon} name="view" size=${14} />${tn("native")}</span><h2>${tn(machineId ? "remoteWorkspace" : "workspace")}</h2><p>${tn(machineId ? "remoteIntro" : "intro")}</p></div>
+      <header class="windows-cli-intro"><div>${diagnostic ? html`<p>${discovery.data?.probedAt ? t("wincli.lastDetection",new Date(discovery.data.probedAt).toLocaleString()) : tn("neverDetection")}</p>` : html`<span class="windows-cli-eyebrow"><${Icon} name="view" size=${14} />${tn("native")}</span><h2>${tn(machineId ? "remoteWorkspace" : "workspace")}</h2><p>${tn(machineId ? "remoteIntro" : "intro")}</p>`}</div>
         <button type="button" class="btn windows-cli-probe" disabled=${probing || !online || !approved} onClick=${probe}><${Icon} name="restart" size=${16} cls=${probing ? "windows-cli-spin" : ""} />${tn(probing ? "probing" : "probe")}</button>
       </header>
-      <${WindowsCliHostIdentity} inventory=${discovery.data} machineId=${machineId} machine=${machine} />
-      ${machineId && (!approved || !online) ? html`<p class="note" role="status">${tn(approved ? "offline" : "removed")}</p>` : null}
+      ${!diagnostic ? html`<${WindowsCliHostIdentity} inventory=${discovery.data} machineId=${machineId} machine=${machine} />` : null}
+      ${!approved || !online ? html`<p class="note" role="status">${tn(!enabled ? "localDisabled" : approved ? "offline" : "removed")}</p>` : null}
       ${approved ? html`<${WindowsCliDiscoveryStatus} state=${{...discovery,refresh:probe}} disabled=${!online} />` : null}
-      <section class="windows-cli-cards" aria-label=${tn("providers")}>${providers.map(cli => html`<${CliCard} key=${cli.id} cli=${cli} probing=${probing} />`)}${discovery.data && !providers.length && !probing && !discovery.error ? html`<p class="note">${tn("noProviders")}</p>` : null}</section>
+      <section class=${diagnostic ? "windows-cli-diagnostic-list" : "windows-cli-cards"} aria-label=${tn(diagnostic ? "inventoryTitle" : "providers")}>${providers.map(cli => html`<${CliCard} key=${cli.id} cli=${cli} probing=${probing} diagnostic=${diagnostic} />`)}${discovery.data && !providers.length && !probing && !discovery.error ? html`<p class="note">${tn("noProviders")}</p>` : null}</section>
       ${error ? html`<p class="error windows-cli-error" role="alert"><${Icon} name="alert" size=${18} /><span>${error}</span></p>` : null}
+      <details class=${diagnostic ? "windows-cli-test-disclosure" : "windows-cli-test-disclosure is-standalone"} open=${!diagnostic || testOpen || running || uncertain || submitting} onToggle=${event=>{if(event.target===event.currentTarget)setTestOpen(event.currentTarget.open);}}>
+        ${diagnostic ? html`<summary><${Icon} name="view" size=${19} /><span><strong>${tn("testCli")}</strong><small>${tn("testHint")}</small></span><${Icon} name="chevron" size=${16} /></summary>` : null}
       <div class="windows-cli-workbench">
         <section class="windows-cli-card windows-cli-composer" aria-labelledby="windows-task-title"><div class="windows-cli-section-head"><span class="windows-cli-section-icon"><${Icon} name="edit" size=${19} /></span><div><h2 id="windows-task-title">${tn("newTask")}</h2><p>${tn(machineId ? "remoteHint" : "taskHint")}</p></div></div>
           <form onSubmit=${e => { e.preventDefault(); if (runnable && !submitting && !running && cwd.trim() && prompt.trim()) void run(); }}>
@@ -154,5 +173,7 @@ export function WindowsCliPanel({ navKey, embedded = false, machineId = "", mach
           <p class="windows-cli-history-note">${tn(machineId ? "remoteHistory" : "historyNote")}</p>
         </section>
       </div>
+      ${diagnostic ? html`<p class="windows-cli-close-note"><${Icon} name="info" size=${15} />${tn("closeKeepsTask")}</p>` : null}
+      </details>
     </div></div></div>`;
 }

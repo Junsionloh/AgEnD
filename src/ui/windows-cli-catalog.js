@@ -52,10 +52,17 @@ export function createWindowsCliCatalog({ fetcher = (...args) => fetch(...args),
 
 const catalog = createWindowsCliCatalog();
 const remoteCatalogs = new Map();
+function catalogFor(machineId) {
+  if (!machineId) return catalog;
+  if (!remoteCatalogs.has(machineId)) remoteCatalogs.set(machineId,createWindowsCliCatalog({machineId}));
+  return remoteCatalogs.get(machineId);
+}
+export const refreshWindowsCliCatalog = (machineId = "") => catalogFor(machineId).load({force:true});
+/** Subscribe to progress without starting a read; cards observe detection started in a dialog. */
+export const useWindowsCliCatalogSnapshot = (machineId = "") => useStore(catalogFor(machineId));
 export function forgetWindowsCliCatalog() { catalog.clear(); for (const remote of remoteCatalogs.values()) remote.clear(); remoteCatalogs.clear(); }
 export function useWindowsCliCatalog(enabled = true, machineId = "") {
-  if (machineId && !remoteCatalogs.has(machineId)) remoteCatalogs.set(machineId,createWindowsCliCatalog({machineId}));
-  const current = machineId ? remoteCatalogs.get(machineId) : catalog;
+  const current = catalogFor(machineId);
   const state = useStore(current);
   useEffect(() => { if (enabled) void current.load(); },[enabled,current]);
   return { ...(enabled ? state : initial()), refresh:() => current.load({force:true}) };

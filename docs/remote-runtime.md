@@ -10,9 +10,9 @@ Design references, source-review scope and bundled license notices are recorded 
 
 ## CLI diagnostics on a selected computer
 
-In **Settings → Runtime → CLI diagnostics and test tasks**, use **Diagnostic computer** to choose the host's Windows installation or an approved paired computer. A computer card's **Open CLI diagnostics** button selects that computer directly. Paired-computer diagnostics also work when the coordinator has no local Windows CLI support.
+In **Settings → Runtime**, the host's Windows installation and approved paired computers use the same machine cards. Each card shows detected CLIs, versions and sign-ins. Click **CLI diagnostics** on a card to open a dialog fixed to that computer. Paired-computer diagnostics also work when the coordinator has no local Windows CLI support.
 
-Opening the panel reads saved inventory. **Detect Windows CLIs** explicitly refreshes the selected computer only. The CLI list, models, working directory, draft and test-task results belong to that computer; paths are interpreted on that computer. Offline computers show saved inventory with detection and dispatch disabled. Revocation does not switch a selection to the host.
+Opening the dialog reads saved inventory. **Detect Windows CLIs** explicitly refreshes that computer only. Expand a CLI row for its executable path and reported models. Expand **Test CLI** for the optional one-off task form and results; it starts collapsed until a test is active. Closing the dialog does not cancel submitted work; reopen the same computer to read its task status. Working directories, models and drafts stay separate for each computer. Offline computers show saved inventory with detection and dispatch disabled. Revocation never moves diagnostics to another computer.
 
 Test tasks use the existing per-turn execution protocol and task journal. An unconfirmed acknowledgement remains visible and blocks another task until the Runtime reconciles its outcome; reopening the panel never replays the request.
 
