@@ -20,7 +20,7 @@ const ID = /^[A-Za-z0-9-]{16,80}$/;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 export interface RuntimeCredentials { server: string; machineId: string; credential: string; name: string; pendingCredential?: string }
 export interface RuntimeStoredJob { digest: string; seq: number; task: WindowsCliTask; uncertain: boolean }
-interface Ledger { version: 1; jobs: Record<string, RuntimeStoredJob>; used: Record<string, string>; usedAt?: Record<string, number> }
+interface Ledger { version: 1; jobs: Record<string, RuntimeStoredJob>; used: Record<string, string>; usedAt?: Record<string, number>; /** Machine these jobs were run for; a job of another pairing is unknown to this server and would be rejected. */ machineId?: string }
 
 function object(value: unknown): value is Record<string, unknown> { return !!value && typeof value === "object" && !Array.isArray(value); }
 function canonical(value: unknown): string {
@@ -63,6 +63,21 @@ export class RuntimeClientStore {
     privateDirectory(directory); this.file = join(directory, "jobs.json");
     this.data = existsSync(this.file) ? this.validate(readPrivate(this.file)) : { version: 1, jobs: {}, used: {} };
   }
+  /**
+   * Called after acquiring the profile lock, before recoverInterrupted. The ledger is replayed to AgEnD on every connect, and AgEnD closes the
+   * connection for a job it did not issue to this machine. When the profile is paired to a different machine than the ledger's owner, settled jobs
+   * of the old pairing are dropped; an unsettled one is never discarded silently. A ledger with no recorded owner (older profile) is adopted as is when connecting, but
+   * a brand-new pairing (`pairing: true`) proves any earlier job belongs to some other machine, so an ownerless ledger is cleared too.
+   */
+  adoptMachine(machineId: string, pairing = false): void {
+    const owner = this.data.machineId;
+    if (owner === machineId) return;
+    if (owner !== undefined || pairing) {
+      if (this.blocked() || Object.values(this.data.jobs).some(job => job.task.outcomeConfirmed === false)) throw new Error(`This profile (${this.directory}) still has an active or unconfirmed execution recorded for a different AgEnD pairing, and AgEnD would reject it. Check that no CLI process from it is left running, then delete jobs.json in that folder and connect again.`);
+      this.data.jobs = {}; this.data.used = {}; delete this.data.usedAt;
+    }
+    this.data.machineId = machineId; this.save();
+  }
   /** Called only after acquiring the profile lock: reading status must not interrupt a live runtime. */
   recoverInterrupted(): void {
     let changed = false;
@@ -80,6 +95,7 @@ export class RuntimeClientStore {
     if (!object(raw) || raw.version !== 1 || !object(raw.jobs) || !object(raw.used)
       || Object.keys(raw.jobs).length > MAX_JOBS || Object.keys(raw.used).length > MAX_IDS) throw new Error("Invalid runtime job ledger");
     for (const [id, digest] of Object.entries(raw.used)) if (!ID.test(id) || typeof digest !== "string" || !/^[a-f0-9]{64}$/.test(digest)) throw new Error("Invalid runtime job identity");
+    if (raw.machineId !== undefined && (typeof raw.machineId !== "string" || !UUID.test(raw.machineId))) throw new Error("Invalid runtime job ledger owner");
     if (raw.usedAt !== undefined && (!object(raw.usedAt) || Object.entries(raw.usedAt).some(([id, at]) => !Object.hasOwn(raw.used as object, id) || typeof at !== "number" || !Number.isFinite(at)))) throw new Error("Invalid runtime job identity times");
     for (const [id, value] of Object.entries(raw.jobs)) {
       if (!ID.test(id) || !object(value) || !Number.isSafeInteger(value.seq) || (value.seq as number) < 1

@@ -87,6 +87,8 @@ export interface RuntimeCoordinatorOptions {
   /** Injectable clock for pairing expiry and offline tests. */
   now?(): number;
   requestTimeoutMs?: number;
+  /** Called when AgEnD itself closes a runtime connection with a policy code, so the cause reaches the daemon log. */
+  warn?(fields: { machineId: string; code: number; reason: string }, message: string): void;
 }
 export type { RuntimeMachine } from "./runtime-protocol.js";
 
@@ -205,7 +207,7 @@ export class RuntimeCoordinator {
   }
   revoke(id: string): RuntimeMachine {
     const row = this.entry(id); row.machine.status = "revoked"; delete row.credentialHash; delete row.claimHash; delete row.claimExpiresAt;
-    this.save(); const connection = this.connections.get(id); if (connection) { this.connections.delete(id); this.rejectPending(connection, "Runtime machine was revoked"); connection.ws.close(1008, "Machine revoked"); }
+    this.save(); const connection = this.connections.get(id); if (connection) { this.connections.delete(id); this.rejectPending(connection, "Runtime machine was revoked"); this.options.warn?.({ machineId: id, code: 1008, reason: "Machine revoked" }, "Runtime connection closed because the machine was revoked"); connection.ws.close(1008, "Machine revoked"); }
     this.emit({ type: "machine", machineId: id }); return structuredClone(row.machine);
   }
   private credentialOwner(auth: unknown): MachineRecord | undefined {
@@ -292,12 +294,16 @@ export class RuntimeCoordinator {
   private current(connection: Connection): boolean { return !this.closed && this.connections.get(connection.machineId) === connection && this.entry(connection.machineId).machine.status !== "revoked"; }
   private attach(ws: WebSocket, row: MachineRecord): void {
     const old = this.connections.get(row.machine.id);
-    if (old) { this.rejectPending(old, "Runtime connection was replaced; execution must be reconciled"); old.ws.close(1008, "Connection replaced"); }
+    if (old) { this.rejectPending(old, "Runtime connection was replaced; execution must be reconciled"); this.options.warn?.({ machineId: row.machine.id, code: 1008, reason: "Connection replaced" }, "Runtime connection closed because the same machine credential connected again"); old.ws.close(1008, "Connection replaced"); }
     row.machine.generation++; row.machine.status = "offline"; this.save();
     const connection: Connection = { ws, machineId: row.machine.id, generation: row.machine.generation, ready: false, alive: true, helloTimer: setTimeout(() => ws.close(1008, "Runtime hello required"), 10_000) };
     connection.helloTimer.unref(); this.connections.set(row.machine.id, connection);
     ws.on("pong", () => { connection.alive = true; if (this.current(connection)) row.machine.lastSeenAt = this.now(); });
-    ws.on("message", (data, binary) => { if (binary) { ws.close(1008, "Runtime requires JSON text frames"); return; } void this.message(connection, data).catch(() => ws.close(1008, "Invalid runtime message")); });
+    ws.on("message", (data, binary) => { if (binary) { ws.close(1008, "Runtime requires JSON text frames"); return; } void this.message(connection, data).catch(error => {
+      // The cause (a static validation message) goes to the log and, trimmed, to the runtime so its terminal can show it.
+      const reason = `Invalid runtime message: ${error instanceof Error ? error.message : "unknown"}`.replace(/[^ -~]/g, "?").slice(0, 120);
+      this.options.warn?.({ machineId: connection.machineId, code: 1008, reason }, "Runtime connection closed because of an invalid runtime message"); ws.close(1008, reason);
+    }); });
     ws.on("error", () => { /* close owns disconnect handling */ });
     ws.on("close", () => {
       clearTimeout(connection.helloTimer);
