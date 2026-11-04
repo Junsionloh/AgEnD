@@ -1,8 +1,9 @@
 /** Public connection defaults only; paired credentials stay in the private runtime profile. */
-import { closeSync, fstatSync, openSync, readSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { closeSync, existsSync, fstatSync, openSync, readSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateRuntimeServer } from "./runtime-client-store.js";
+import { RuntimeClientStore, validateRuntimeServer } from "./runtime-client-store.js";
 
 export const RUNTIME_SERVER_FILE = "agend-server.json";
 export const RUNTIME_CONNECT_BAT = '@echo off\r\nnode.exe "%~dp0dist\\runtime-cli.js" connect\r\nif errorlevel 1 (\r\n  echo.\r\n  echo AgEnD Runtime could not connect. Review the message above.\r\n  pause\r\n)\r\n';
@@ -25,10 +26,42 @@ export function readBundledRuntimeServer(directory = join(dirname(fileURLToPath(
     return runtimeServerOrigin(value.server);
   } catch { throw Error("Invalid agend-server.json. Re-download the Runtime or use connect --server with an explicit AgEnD address."); } finally { closeSync(fd); }
 }
-export function resolveRuntimeServer(explicit: string | undefined, bundled: string | undefined, stored: string | undefined): string {
+/** Folder name for one server inside the default profile, e.g. `fleet.example.test-8445`; stable so the same bat finds it again. */
+export function runtimeProfileName(origin: string): string {
+  const url = validateRuntimeServer(origin);
+  const port = url.port || (url.protocol === "https:" ? "443" : "80");
+  const host = url.hostname.replace(/[^a-z0-9.-]/g, "_");
+  return host === url.hostname ? `${host}-${port}` : `${host}-${port}-${createHash("sha256").update(url.origin).digest("hex").slice(0, 8)}`;
+}
+export function runtimeServerProfile(base: string, origin: string): string { return join(base, "profiles", runtimeProfileName(origin)); }
+/** Reads only the public server address of a profile; a profile that does not exist is not created. */
+export function readStoredRuntimeServer(directory: string): string | undefined {
+  return existsSync(join(directory, "connection.json")) ? new RuntimeClientStore(directory).credentials()?.server : undefined;
+}
+/**
+ * Picks the profile when neither --profile nor AGEND_RUNTIME_HOME was given. Without a bundled server the default profile is used.
+ * With one, the default profile is kept while it is unpaired or already paired to that server; once it belongs to another server the
+ * per-server profile is used instead, so no profile's credentials are ever aimed at a different server.
+ * Commands other than connect only look for an existing per-server profile, so run/status/rotate/disconnect land where connect paired.
+ */
+export function chooseRuntimeProfile(base: string, bundled: string | undefined, forConnect: boolean,
+  stored: (directory: string) => string | undefined = readStoredRuntimeServer): { directory: string; separate: boolean; defaultServer?: string } {
+  if (!bundled) return { directory: base, separate: false };
+  const defaultServer = stored(base), own = runtimeServerProfile(base, bundled);
+  if (defaultServer !== undefined && runtimeServerOrigin(defaultServer) === bundled) return { directory: base, separate: false, defaultServer };
+  if (stored(own) !== undefined) return { directory: own, separate: true, defaultServer };
+  if (defaultServer === undefined || !forConnect) return { directory: base, separate: false, defaultServer };
+  return { directory: own, separate: true, defaultServer };
+}
+export function resolveRuntimeServer(explicit: string | undefined, bundled: string | undefined, stored: string | undefined, profileHint?: string): string {
   const target = explicit ?? bundled ?? stored;
   if (!target) throw Error("No AgEnD address is configured. Download a connection-ready Runtime or use connect --server https://your-agend-host");
   const origin = runtimeServerOrigin(target);
-  if (stored && runtimeServerOrigin(stored) !== origin) throw Error("This profile is paired with another server. Use another --profile; its credentials will not be sent to the new server.");
+  if (stored && runtimeServerOrigin(stored) !== origin) {
+    const profile = profileHint ?? runtimeServerProfile("%USERPROFILE%\\.agend-runtime", origin);
+    throw Error(`This profile is paired with ${runtimeServerOrigin(stored)}, but this connection is for ${origin}. Its credentials will not be sent to the new server.\n`
+      + `  Keep both: .\\agend-runtime.cmd connect --server ${origin} --profile "${profile}"\n`
+      + `  Replace the old pairing: .\\agend-runtime.cmd disconnect, then connect again.`);
+  }
   return origin;
 }
