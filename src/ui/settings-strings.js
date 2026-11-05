@@ -6,6 +6,8 @@ register("settings", {
   en: {
     noticeTopic: "Topic", noticeOff: "Off",
     webNotifyLogin: "Web sign-in notices", dailyTips: "Daily tips",
+    webLoginQr: "Show a QR code when a new device signs in with another device",
+    webLoginQrHint: "On the new device's sign-in page, beside the 8-character code. It holds only that page's address and the code, never a credential, and approving still takes a device signed in as the owner. Off by default; it has no effect on a fleet with a chat connection.",
     webNotifyLoginHint: "Posted in the topic. Off suppresses operator notices only; guest and public-link security notices still post. Default: Topic.",
     dailyTipsHint: "Posted in the General topic. Default: Topic. /tips still posts where invoked.",
     title: "Settings",
@@ -697,6 +699,8 @@ register("settings", {
     se_hint: "留空即使用預設值。預覽由 AgEnD 依 bot 實際 react 的方式解析。進度前綴不是反應，而是進度訊息開頭的 emoji。",
     noticeTopic: "頻道", noticeOff: "關閉",
     webNotifyLogin: "網頁登入通知", dailyTips: "每日提示",
+    webLoginQr: "新裝置用其他裝置登入時顯示 QR Code",
+    webLoginQrHint: "顯示在新裝置登入頁、8 碼代碼旁邊。裡面只有該頁面的網址和代碼，沒有任何憑證；核准仍需要已登入並驗證擁有者的裝置。預設關閉；有連接聊天平台的 fleet 不受影響。",
     webNotifyLoginHint: "發在頻道。關閉只停用管理者登入通知；訪客與公開連結安全通知仍會發出。預設：頻道。",
     dailyTipsHint: "發在 General 頻道。預設：頻道。/tips 仍送至呼叫的聊天室。",
     title: "設定",
