@@ -1411,6 +1411,8 @@ function WebSection({ ctx, staged, part = "all" }) {
       <div class="s-access-banner"><${Icon} name="info" size=${18} /><p>${layoutText("revAccessPolicy")}</p><details class="s-access-policy"><summary>${layoutText("revDetails")}</summary><p class="note">${tn("webLead")}</p></details></div>
       <${SettingsTabPanel} group="access" id="login" active=${accessTab === "login"}>
         <div class="s-access-login-layout"><div class="s-access-stack">
+          ${/* #3008: a web-only fleet's connections from outside — changed on this computer only, shown (read-only) elsewhere. */ ""}
+          <${OutsideCard} />
           ${lock(html`<section class="card s-access-session"><h3>${layoutText("revLoginSessions")}</h3>
       <div class=${fc("field", "notify")}><label for="webNotifyLogin">${tn("webNotifyLogin")}<${Impact} schema=${schema} field="web.notify_login" /></label><${Select} id="webNotifyLogin" value=${f.notify} onChange=${set("notify")} options=${noticeChoices()} /><${InEffect} text=${noticeLabel(noticeMode(f.notify))} /></div>
       <div class="grid2">
@@ -1425,8 +1427,6 @@ function WebSection({ ctx, staged, part = "all" }) {
       <details class="s-setting-details"><summary>${layoutText("revSessionDetails")}</summary><p class="note">${tn("webSessionHint")}</p><p class="note">${tn("webNotifyLoginHint")}</p></details>
     </section>`)}
           ${!overPublicLink ? html`<${WebAuthorityCard} ctx=${ctx} staged=${staged} />` : null}
-          ${/* #3008: a web-only fleet's connections from outside — changed on this computer only, shown (read-only) elsewhere. */ ""}
-          <${OutsideCard} />
           <details class="drawer s-terminal-disclosure"><summary>${tn("webTerminalTitle")}</summary><div class="drawer-body">${lock(html`<section class="card s-access-terminal"><h3>${tn("webTerminalTitle")}</h3>
       <p class="note">${tn("webTerminalHint")}</p>
       <label class=${fc("check", "termOn")}><input id="webTerminalEnabled" type="checkbox" checked=${f.termOn} onChange=${(e) => set("termOn")(e.target.checked)} /><span>${tn("webTerminalEnabled")}</span><${Impact} schema=${schema} field="web_terminal.enabled" /></label>
