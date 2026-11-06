@@ -215,6 +215,18 @@ export const LIVE_TASK_STATUSES: string[] = ["open", "claimed", "blocked", "revi
  * " \t " and [" ", "\t"] both normalize to undefined (not treated as explicit
  * filters). The same result drives the live-only default and the cap decision.
  */
+/**
+ * #3195: the saved value of each plain-update field the call named (assignee, priority, result), read back from the
+ * task — so the answer shows what was persisted, not what was asked. Status is always in the ack already.
+ */
+export function savedFields(t: Task, named: Record<string, unknown>): Partial<Pick<Task, "assignee" | "priority" | "result">> {
+  const out: Partial<Pick<Task, "assignee" | "priority" | "result">> = {};
+  if (named.assignee !== undefined) out.assignee = t.assignee;
+  if (named.priority !== undefined) out.priority = t.priority;
+  if (named.result !== undefined) out.result = t.result;
+  return out;
+}
+
 export function normalizeStatusFilter(v: unknown): string | string[] | undefined {
   if (typeof v === "string") {
     const s = v.trim();
@@ -250,12 +262,14 @@ export function applyTaskListCap<T extends { updated_at: string }>(
 import { handleWebRequest, webPeerOf, broadcastSseEvent, broadcastToGuests, SSE_HEARTBEAT_MS, type PublicPreviewForUi } from "./web-api.js";
 import { windowsCliEnabled, closeWindowsBridge, inventoryProbed, LOCAL_WINDOWS_CLI_OFF } from "./windows-cli.js";
 import { localWindowsCliEnabled, remoteRuntimeEnabled, setConfiguredRuntimeSwitches, maxAgentsPerMachine } from "./runtime-switches.js";
+import { RuntimeInstallService } from "./runtime-install.js";
+import { RUNTIME_CREDENTIAL_CAPABILITY } from "./runtime-credential-profiles.js";
 import { RuntimeCoordinator } from "./runtime-coordinator.js";
 import { RuntimeWindowsBridge } from "./runtime-windows-bridge.js";
 import { FleetWindowsRuntime, type NativeRuntimePatch, type NativeExecutionResult } from "./fleet-windows-runtime.js";
 import { NativeMcpSessions } from "./native-mcp.js";
 import { nativeProviderMcpSupported } from "./windows-cli-providers.js";
-import { isWindowsInstance, isNativePaneInstance, isNativeExecInstance, WINDOWS_CONFIG_REFUSED } from "./native-instance-registry.js";
+import { isWindowsInstance, isNativePaneInstance, isNativeExecInstance, WINDOWS_CONFIG_REFUSED, nativeCredentialProfile } from "./native-instance-registry.js";
 import { createNativeWindowsInstance, updateNativeWindowsInstance } from "./native-instance-api.js";
 import { NativeInstanceConfigEdit, parseNativeInstanceCreate, type NativeInstanceCreateInput } from "./native-instance-input.js";
 import { LogService, type LogAnswer, type LogQuery, type LogSource } from "./log-service.js";
@@ -295,7 +309,8 @@ import { discordGeneralChannelId } from "./discord-general.js";
 import { parseEnvText } from "./env-file.js";
 import { isDisallowedIntentsError, isRejectedTokenError } from "./discord-permissions.js";
 import { filterUsageProviders, formatDiscordUsageActivity, getUsageSnapshot, handleUsageRequest, isUsagePath, setCapacityLookup, usageProviderIdForBackend } from "./usage/usage-api.js";
-import { LOGIN_FLOWS, checkAuthStatus, LOGIN_BACKEND_ALIASES, type LoginFlow, type AuthCheckResult } from "./login-flows.js";
+import { LOGIN_FLOWS, checkAuthStatus, checkAuthIdentity, authIdentitySupported, LOGIN_BACKEND_ALIASES, type LoginFlow, type AuthCheckResult } from "./login-flows.js";
+import type { AccountIdentity } from "./claude-auth-status.js";
 import { LoginSession } from "./login-manager.js";
 import { runOnLoginShell } from "./login-shell.js";
 import { tightenInstanceDirs } from "./private-dir.js";
@@ -450,9 +465,10 @@ type ReconcileObserver = (
   error?: string,
 ) => void;
 import { kiroHome } from "./backend/kiro-kas-store.js";
-import { CHAT_PROFILE_LOGIN_BACKENDS, credentialHomeSpec, credentialProfileHome, credentialProfileLogin, credentialProfileLoginCommand, credentialProfileStoreHome, credentialSwitchCarriesConversation, credentialSwitchStartsFresh, instanceCredentialProfile, listConfiguredProfiles } from "./backend/credential-profile.js";
+import { CHAT_PROFILE_LOGIN_BACKENDS, credentialHomeSpec, credentialProfileHome, credentialProfileEnv, credentialProfileLogin, credentialProfileLoginCommand, credentialProfileStoreHome, credentialSwitchCarriesConversation, credentialSwitchStartsFresh, instanceCredentialProfile, listConfiguredProfiles } from "./backend/credential-profile.js";
 import { carryClaudeConversation, type CarryResult } from "./backend/claude-carry.js";
-import { mergeBackendOptions, profileKey, profileName, profileOf, type ClassicProfile } from "./classic-bindings.js";
+import { classicProfile, mergeBackendOptions, profileKey, profileName, profileOf, readClassicBindings, type ClassicProfile } from "./classic-bindings.js";
+import { ACCOUNT_CLIS, PROFILE_CLIS, buildAccountsView, profilesOnDisk, weeklyUsage, type AccountUsage, type AccountsView } from "./accounts-view.js";
 import {
   classifyInstanceChange,
   CLASSIC_HOT_CONFIG_KEYS,
@@ -1254,6 +1270,9 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   private localPaneRelay: import("./local-pane-endpoint.js").LocalPaneEndpoint | null = null;
   private openingLocalPane: Promise<import("./local-pane-endpoint.js").LocalPaneEndpoint> | null = null;
   private runtimeHub: RuntimeCoordinator | null = null;
+  private runtimeInstall: RuntimeInstallService | undefined;
+  /** One service for the public installer routes and the administrator API: the hash the dashboard shows is the hash of what is sent. */
+  runtimeInstaller(): RuntimeInstallService { return this.runtimeInstall ??= new RuntimeInstallService(); }
   private runtimeExecutor: RuntimeWindowsBridge | null = null;
   private runtimeStatusScheduled = false;
   private readonly reconciledRemoteResults = new Set<string>();
@@ -1307,11 +1326,18 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       machineAvailable:id=>remoteRuntimeEnabled() && this.runtimeCoordinator().machine(id)?.status==="online",
       machineGeneration:id=>this.runtimeCoordinator().machine(id)?.bootId??null,
       paneAvailable:id=>this.runtimeCoordinator().machine(id)?.paneProtocol===1,
-      validateMachine:(id,cli,sandbox)=>{
+      validateMachine:(id,cli,sandbox,credentialProfile)=>{
         const machine=this.runtimeCoordinator().machine(id);
         const provider=machine?.inventory?.clis.find(row=>row.id===cli && row.runnable && row.supports.resume);
         if(!machine || machine.status!=="online" || machine.platform!=="win32" || !provider)throw new Error("Choose an online runtime and an available CLI");
         if(sandbox==="read-only" && !provider.readOnlySupport)throw new Error("This runtime CLI cannot enforce read-only execution");
+        if(credentialProfile!==undefined){
+          // Fail closed at selection time, not at the first message: an old Runtime would ignore the name and run another account.
+          if(!machine.runtimeInfo?.capabilities.includes(RUNTIME_CREDENTIAL_CAPABILITY))throw new Error("This computer's Runtime is too old to choose a Claude account. Update the Runtime on that computer, then try again.");
+          const row=machine.inventory?.credentialProfiles?.profiles.find(profile=>profile.name===credentialProfile);
+          if(!row)throw new Error(`This computer has not reported a credential profile named "${credentialProfile}". On that computer run: agend-runtime login claude-code ${credentialProfile}, then choose Detect again in that computer's CLI diagnostics (Settings → Runtime).`);
+          if(row.loggedIn===false)throw new Error(`Credential profile "${credentialProfile}" is not signed in on that computer. Sign in there: agend-runtime login claude-code ${credentialProfile}`);
+        }
       },
       emit:(event,data)=>{
         this.emitSseEvent(event,event === "status" ? this.getUiStatus() : data);
@@ -1494,8 +1520,12 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         if (this.shuttingDown || !isNativePaneInstance(now) || now?.native_agent_id !== config.native_agent_id
           || now?.machine_id !== config.machine_id || now?.working_directory !== config.working_directory || now?.backend !== config.backend
           || now?.model !== config.model || now?.native_sandbox !== config.native_sandbox || now?.systemPrompt !== config.systemPrompt || now?.workflow !== config.workflow
-          || now?.general_topic !== config.general_topic || now?.native_general_binding !== config.native_general_binding)
+          || now?.general_topic !== config.general_topic || now?.native_general_binding !== config.native_general_binding
+          || nativeCredentialProfile(now) !== nativeCredentialProfile(config))
           throw Error("Native pane configuration or lifetime changed");
+        // Fail closed: a Runtime that does not report the capability would start the terminal on the computer's own account.
+        if (nativeCredentialProfile(config) && !this.runtimeCoordinator().machine(config.machine_id!)?.runtimeInfo?.capabilities.includes(RUNTIME_CREDENTIAL_CAPABILITY))
+          throw Error("This computer's Runtime is too old to choose a Claude account. Update the Runtime on that computer, then try again.");
         if (config.machine_id ? this.remotePaneDrain || !remoteRuntimeEnabled() : this.localPaneDrain || !localWindowsCliEnabled()) throw Error("Native runtime is switched off");
       },
       endpoint: async (agent,cleanup=false) => {
@@ -10834,8 +10864,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
    *                 that should be running is running
    *  - `degraded` — reachable, but something the operator should look at (an
    *                 adapter retrying, an instance crashed or stopped)
-   *  - `down`     — the fleet cannot do its job: no adapter is connected, so no
-   *                 message can arrive or be answered
+   *  - `down`     — no configured adapter is connected, or a dedicated Hub's
+   *                 server mount is unavailable
    *
    * Deliberately does NOT gate the systemd watchdog — see the comment at the
    * WATCHDOG timer for why.
@@ -10852,6 +10882,9 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     memory: FleetMemory;
     hostMemory: MemoryPressureSnapshot & { topProcesses?: MemoryHog[]; topProcessesAt?: string };
     problems: string[];
+    warnings: string[];
+    /** Local server mount availability; absent when the Hub server switch is off. */
+    hub?: { server: import("./hub/runtime.js").HubServerHealth };
   } {
     const names = Object.keys(this.fleetConfig?.instances ?? {});
     const counts = { configured: names.length, running: 0, crashed: 0, paused: 0, stopped: 0 };
@@ -10876,10 +10909,17 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       if (effectiveStatus === "connected") connected++;
     }
 
-    const problems: string[] = [];
+    const problems: string[] = [], warnings: string[] = [];
+    const rawHub = this.rawFleetConfig?.hub as { enabled?: unknown } | undefined;
+    const hub = rawHub?.enabled === true ? { server: this.shuttingDown ? "stopped" as const
+      : this.hubRuntime?.serverHealth?.(rawHub) ?? "unavailable" as const } : undefined;
+    const hubOnly = !!hub && names.length === 0 && this.adapterState.size === 0;
+    if (hub && hub.server !== "ready") problems.push(`Hub server is ${hub.server}`);
     const hostMemory = this.memoryPressure.snapshot();
-    if (!this.memoryPressure.advisoryOnly() && (hostMemory.level === "critical" || hostMemory.level === "elevated")) {
-      problems.push(`host memory pressure is ${hostMemory.level}`);
+    if (hostMemory.level === "critical" || hostMemory.level === "elevated") {
+      const pressure = `host memory pressure is ${hostMemory.level}`;
+      if (hubOnly) warnings.push(pressure);
+      else if (!this.memoryPressure.advisoryOnly()) problems.push(pressure);
     }
     if (this.adapterState.size > 0 && connected === 0) problems.push("no channel adapter is connected");
     if (counts.crashed > 0) problems.push(`${counts.crashed} instance(s) crashed`);
@@ -10888,9 +10928,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     }
     if (!this.startupComplete) problems.push("startup has not completed");
 
-    // "down" is reserved for "cannot receive or answer a message at all". A fleet
-    // with adapters configured but none connected is exactly that.
-    const status = this.adapterState.size > 0 && connected === 0
+    // Preserve adapter scoring. A dedicated Hub also cannot serve its workload before its server mount is ready.
+    const status = (this.adapterState.size > 0 && connected === 0) || (hubOnly && hub?.server !== "ready")
       ? "down"
       : problems.length > 0 ? "degraded" : "ok";
 
@@ -10903,7 +10942,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       memory: readFleetMemory(),
       hostMemory: this.memoryTop && (hostMemory.level === "elevated" || hostMemory.level === "critical")
         ? { ...hostMemory, topProcesses: this.memoryTop.processes, topProcessesAt: this.memoryTop.at } : hostMemory,
-      problems,
+      problems, warnings, ...(hub ? { hub } : {}),
     };
   }
 
@@ -13760,6 +13799,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const asStatusFilter = normalizeStatusFilter;
     // #1336: small write ack — identifying fields only.
     const ack = (t: Task) => ({ id: t.id, status: t.status, updated_at: t.updated_at });
+    // #3195: an update's ack also carries what was SAVED for each field it named, read back from the task.
+    const updatedAck = (t: Task, named: Record<string, unknown>) => ({ ...ack(t), ...savedFields(t, named) });
     // The board's notes for the write (a send-back reason, a comment the assignee had not seen): with the ack when any.
     const noted = <T extends object>(a: T): T | (T & { notes: string[] }) => { const notes = db.board.takeNotes(); return notes.length ? { ...a, notes } : a; };
     try {
@@ -13811,12 +13852,12 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         case "update": {
           const id = asStr(args.id);
           if (!id) return { error: "id is required" };
-          return noted(ack(db.updateTask(db.getTaskByPrefix(id).id, {
+          return noted(updatedAck(db.updateTask(db.getTaskByPrefix(id).id, {
             status: asStatus(args.status),
             assignee: asStr(args.assignee),
             result: asStr(args.result),
             priority: asPriority(args.priority),
-          }, { kind: "instance", name: instance })));
+          }, { kind: "instance", name: instance }), args));
         }
         default: return { error: `Unknown task action: ${action}` };
       }
@@ -13970,7 +14011,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
             result: payload.result as string | undefined,
             priority: payload.priority as string | undefined,
           } as Record<string, unknown>, { kind: "instance", name: meta.instance_name || instanceName });
-          result = noted(ack(logTask));
+          // #3195: with what was SAVED for each field the update named, read back from the task.
+          result = noted({ ...ack(logTask), ...savedFields(logTask, payload) });
           break;
         default:
           throw new Error(`Unknown task action: ${action}`);
@@ -19721,6 +19763,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       changed: (event, owner, launched) => {
         try { this.eventLog?.insert("login", "browser_backend_signin", event); } catch { /* safe metadata only */ }
         broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"));
+        if (event.phase === "done") this.forgetSignInIdentities();   // a sign-in may be a different account now
         this.needsYou?.poke();
         if (!this.browserSignInOwnerCurrent(owner)) return;
         if (event.phase === "starting") {
@@ -19756,7 +19799,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       cancel: () => this.cancelLoginSession(),
       notice: ({ shown, label, handle }) => this.notifyFleetError(t("login.web_dashboard_notice", shown, label, handle.slice(0, 8))),
       // No details in the event: each page reads its own view (GET /ui/backend-login), as its session may see it.
-      changed: () => broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed")),
+      // The accounts are forgotten when ANY sign-in ends, even one a later one replaced (it may be a different account now), and not at every step of a
+      // running one: `changed` only tells the pages to read again.
+      changed: () => { broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed")); },
+      loginEnded: () => this.forgetSignInIdentities(),
     });
     return this.webBackendLoginsInstance;
   }
@@ -19772,6 +19818,107 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
    * #2233: Settings → Agents' sign-in list — every backend's default login as the availability snapshot has it, then
    * each credential profile an agent uses (its own login state, read offline).
    */
+  /** Which account each sign-in is, as the host's own `claude auth status` said (masked; see checkAuthIdentity). Keys are `backend\0profile` in a Map: a name is data, never a property. */
+  private readonly signInIdentities = new Map<string, { identity: AccountIdentity | null; at: number }>();
+  /** Reads in flight, by the same key: a second request for a sign-in that is already being read joins it instead of starting another process. */
+  private readonly signInIdentityReads = new Map<string, Promise<boolean>>();
+  /** Raised each time the accounts are forgotten: a read that began before is never allowed to write what it found. */
+  private signInIdentityGeneration = 0;
+  private signInIdentitySlots = 0;
+  private readonly signInIdentityWaiters: Array<() => void> = [];
+  private signInIdentity(backend: string, profile?: string): AccountIdentity | undefined { return this.signInIdentities.get(`${backend}\0${profile ?? ""}`)?.identity ?? undefined; }
+  /** A sign-in finished (or changed): forget what was read and let no read that was already running put its answer back. */
+  private forgetSignInIdentities(): void { this.signInIdentityGeneration++; this.signInIdentities.clear(); this.signInIdentityReads.clear(); }
+  /** At most three `claude auth status` at once across the whole host, however many requests ask. */
+  private async withSignInIdentitySlot<T>(task: () => Promise<T>): Promise<T> {
+    while (this.signInIdentitySlots >= 3) await new Promise<void>(resolve => this.signInIdentityWaiters.push(resolve));
+    this.signInIdentitySlots++;
+    try { return await task(); } finally { this.signInIdentitySlots--; this.signInIdentityWaiters.shift()?.(); }
+  }
+  /** One `claude auth status` for a sign-in (the default one, or a credential profile's folder). */
+  private async readSignInIdentity(target: SignInTarget): Promise<AccountIdentity | undefined> {
+    let env: Record<string, string> | undefined;
+    if (target.profile) env = credentialProfileEnv(this.dataDir, target.backend, target.profile) ?? undefined;
+    return checkAuthIdentity(target.backend, env);
+  }
+  /**
+   * Start reading, in the background, the account of each Claude Code sign-in that is signed in (the default and every profile an agent uses) and
+   * not read in the last five minutes. It never waits and never blocks a request: the list shows what is already known, and the pages are told to
+   * read it again when something new was learned. A sign-in already being read is not read twice, and a read that began before the accounts were
+   * forgotten (a sign-in finished meanwhile) is dropped. No login, no network request of ours, nothing logged.
+   */
+  refreshSignInIdentities(): void {
+    const now = Date.now(), fresh = (target: SignInTarget): boolean => { const entry = this.signInIdentities.get(`${target.backend}\0${target.profile ?? ""}`); return !!entry && now - entry.at < 5 * 60_000; };
+    const started: Array<Promise<boolean>> = [];
+    for (const target of this.backendSignInTargets()) {
+      const key = `${target.backend}\0${target.profile ?? ""}`;
+      if (target.state !== "usable" || !authIdentitySupported(target.backend) || fresh(target) || this.signInIdentityReads.has(key)) continue;
+      const generation = this.signInIdentityGeneration;
+      const read: Promise<boolean> = this.withSignInIdentitySlot(() => this.readSignInIdentity(target)).then(identity => {
+        if (generation !== this.signInIdentityGeneration) return false;            // forgotten while it ran: its answer may be the old account
+        this.signInIdentities.set(key, { identity: identity ?? null, at: Date.now() }); return true;
+      }).catch(() => {
+        // A read that threw is an answer too: remembered as "no account" for the same five minutes, so every GET does not try again.
+        if (generation === this.signInIdentityGeneration) this.signInIdentities.set(key, { identity: null, at: Date.now() });
+        return false;
+      }).finally(() => { if (this.signInIdentityReads.get(key) === read) this.signInIdentityReads.delete(key); });
+      this.signInIdentityReads.set(key, read); started.push(read);
+    }
+    if (started.length) void Promise.all(started).then(results => {
+      if (results.some(Boolean)) broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"));   // read the list again: it knows more now
+    });
+  }
+  /**
+   * #3212 PR 1: the Accounts view (accounts-view.ts) — every CLI's default sign-in and named profiles (used or only on
+   * disk), who uses each and its weekly usage. Host rows only; a paired computer's rows come with #3190 Part 3c. Its
+   * usage is the usage panel's cached read (never forced), given at most `usageWaitMs` before the view is sent without it.
+   */
+  async accountsView(usageWaitMs = 1500): Promise<AccountsView> {
+    const fleet = this.fleetConfig;
+    const defaultBackend = fleet?.defaults?.backend ?? "claude-code";
+    this.refreshSignInIdentities();
+    const targets = this.backendSignInTargets();
+    const diskProfiles = new Map<string, Array<{ profile: string; state: SignInTarget["state"]; signIn: boolean; hostCommand?: string; identity?: AccountIdentity }>>();
+    for (const backend of PROFILE_CLIS) {
+      const rows = [];
+      for (const profile of profilesOnDisk(this.dataDir, backend)) {
+        let login: ReturnType<typeof credentialProfileLogin>["state"] = "unknown";
+        try { login = credentialProfileLogin(this.dataDir, backend, profile).state; } catch { /* unknown */ }
+        const signIn = dashboardSignInSupported(backend, profile);
+        const hostCommand = signIn ? null : credentialProfileLoginCommand(this.dataDir, backend, profile);
+        const identity = this.signInIdentity(backend, profile);
+        rows.push({ profile, state: (login === "logged-in" ? "usable" : login === "signed-out" ? "not_signed_in" : "unknown") as SignInTarget["state"], signIn,
+          ...(hostCommand ? { hostCommand } : {}), ...(identity ? { identity } : {}) });
+      }
+      diskProfiles.set(backend, rows);
+    }
+    // Host agents only: an agent on a paired Windows computer runs on that computer's accounts (its own scope, later).
+    const agents = Object.keys(fleet?.instances ?? {}).filter(name => !isWindowsInstance(fleet!.instances[name])).sort()
+      .map(name => { const backend = this.backendNameForInstance(name); return { name, backend, profile: this.credentialProfileOf(name, backend) }; });
+    const classic = readClassicBindings(this.dataDir).map(b => {
+      const backend = b.backend ?? defaultBackend;
+      return { key: b.key, backend, profile: profileName(classicProfile(b.backend_options, fleet?.defaults?.backend_options, backend)) };
+    });
+    const fleetDefaults = new Map<string, string>();
+    for (const backend of PROFILE_CLIS) { const p = profileName(profileOf(fleet?.defaults?.backend_options, backend)); if (p) fleetDefaults.set(backend, p); }
+    // Weekly usage, from the usage panel's own (cached, never forced) read.
+    const usage = new Map<string, AccountUsage>();
+    const ids = new Map<string, string>();                                   // provider id → backend\0profile
+    for (const backend of ACCOUNT_CLIS) {
+      const pid = usageProviderIdForBackend(backend); if (!pid) continue;
+      ids.set(pid, `${backend}\0`);
+      for (const p of new Set([...(diskProfiles.get(backend) ?? []).map(d => d.profile), ...targets.filter(t => t.backend === backend && t.profile).map(t => t.profile!)])) ids.set(`${pid}:${p}`, `${backend}\0${p}`);
+    }
+    try {
+      const payload = await Promise.race([getUsageSnapshot(false, undefined, { allowStale: true }), new Promise<null>(r => { const tm = setTimeout(() => r(null), usageWaitMs); tm.unref?.(); })]);
+      for (const provider of payload?.providers ?? []) {
+        const at = ids.get(provider.id); const w = at ? weeklyUsage(provider as never) : undefined;
+        if (at && w) usage.set(at, w);
+      }
+    } catch { /* the view without usage */ }
+    return buildAccountsView({ targets, diskProfiles, agents, classic, fleetDefaults, usage });
+  }
+
   backendSignInTargets(): SignInTarget[] {
     const out: SignInTarget[] = [];
     for (const row of this.backendAvailabilityRows()) {
@@ -19783,6 +19930,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         ...(flow?.remoteLogin === "unsupported" ? { hostCommand: flow.command } : {}),
         ...(row.state === "not_installed" && install ? { install } : {}),
         ...(row.state === "too_old" && install ? { update: install } : {}),
+        ...(this.signInIdentity(row.backend) ? { identity: this.signInIdentity(row.backend) } : {}),
       });
     }
     const seen = new Set<string>();
@@ -19796,7 +19944,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       const signIn = dashboardSignInSupported(backend, profile);
       const hostCommand = signIn ? null : credentialProfileLoginCommand(this.dataDir, backend, profile);
       out.push({ backend, profile, state: login === "logged-in" ? "usable" : login === "signed-out" ? "not_signed_in" : "unknown", signIn,
-        ...(hostCommand ? { hostCommand } : {}) });
+        ...(hostCommand ? { hostCommand } : {}), ...(this.signInIdentity(backend, profile) ? { identity: this.signInIdentity(backend, profile) } : {}) });
     }
     return out;
   }
@@ -26184,8 +26332,12 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         return;
       }
       const requestPath = new URL(req.url ?? "/", `http://localhost:${port}`).pathname;
+      const publicUrl = new URL(req.url ?? "/",`http://localhost:${port}`);
       if(remoteRuntimeEnabled() && !gatewayRequestContext(req)
-        && this.runtimeCoordinator().handlePublicRequest(req,res,new URL(req.url ?? "/",`http://localhost:${port}`)))return;
+        && this.runtimeCoordinator().handlePublicRequest(req,res,publicUrl))return;
+      // The read-only installer files (/runtime/install.ps1 and the bundle ZIP) grant nothing. They answer 404 while remote runtimes
+      // are off or on a public gateway link, and touch no other path.
+      if(this.runtimeInstaller().handle(req,res,publicUrl))return;
 
       // Branding is public, after Host admission: automatic favicon requests
       // must not become noisy web-token 401s in the browser console.

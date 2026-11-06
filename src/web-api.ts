@@ -365,6 +365,8 @@ export interface WebApiContext {
   createNativePaneInstance?(profile:Record<string,unknown>,channelId:string|undefined,authorized:()=>boolean,execution:import("./settings-transaction.js").SettingsExecution):Promise<unknown>;
   updateNativePaneConfig?(name:string,patch:Partial<import("./fleet-windows-runtime.js").NativeRuntimePatch>,authorized:()=>boolean,execution?:import("./settings-transaction.js").SettingsExecution):Promise<unknown>;
   runtimeCoordinator?(): RuntimeCoordinator;
+  /** The static installer files (script and bundle) and the hash of the script the dashboard shows. */
+  runtimeInstaller?(): import("./runtime-install.js").RuntimeInstallService;
   readonly webToken: string | null;
   /** #2072: what this host can run (the published snapshot); absent in a hand-built context. */
   backendAvailabilityRows?(): import("./backend-availability.js").BackendAvailability[];
@@ -379,6 +381,8 @@ export interface WebApiContext {
   readonly browserBackendSignIns?: import("./browser-backend-signins.js").BrowserBackendSignIns;
   /** #2233: Settings → Agents' sign-in list (FleetManager.backendSignInTargets). */
   backendSignInTargets?(): import("./web-backend-login.js").SignInTarget[];
+  /** Starts, in the background, reading the account behind each Claude Code sign-in (masked). Never awaited: the list answers at once with what is known. */
+  refreshSignInIdentities?(): void;
   readonly dataDir: string;
   readonly sseClients: Set<ServerResponse>;
   readonly fleetConfig: {
@@ -398,6 +402,8 @@ export interface WebApiContext {
   /** #1666: the cancel/progress bubble a platform inbound starts, posted in the instance's topic. */
   startWebChatProgress?(name: string): Promise<void>;
   readonly daemons: Map<string, unknown>;
+  /** #3212: the Accounts view (accounts-view.ts), for the local admin session only. */
+  accountsView?(): Promise<unknown>;
   readonly eventLog: { logActivity(event: string, sender: string, summary: string, receiver?: string, detail?: string): void; listActivity(opts?: { since?: string; limit?: number }): unknown[] } | null;
   readonly logger: { info(obj: unknown, msg?: string): void; debug(obj: unknown, msg?: string): void; error(obj: unknown, msg?: string): void };
   getInstanceDir(name: string): string;
@@ -1158,7 +1164,14 @@ function handleBackendLogin(req: IncomingMessage, res: ServerResponse, url: URL,
   const logins = ctx.webBackendLogins;
   if (!logins) { json(res, 404, { error: "sign_in_unavailable" }); return true; }
   const action = /^\/ui\/backend-login\/(check|start|cancel)$/.exec(path)?.[1];
-  if (reading && path === "/ui/backend-login" && [...url.searchParams.keys()].length === 0) { json(res, 200, { login: logins.view(first.handle), targets: ctx.backendSignInTargets?.() ?? [] }); return true; }
+  if (reading && path === "/ui/backend-login" && [...url.searchParams.keys()].length === 0) {
+    // The sign-in view (its access code included) is answered at once and never waits for an account to be read: that happens in the background
+    // and the page is told to read again when something new is known.
+    try { ctx.refreshSignInIdentities?.(); } catch { /* the list is served with what is known */ }
+    try { json(res, 200, { login: logins.view(first.handle), targets: ctx.backendSignInTargets?.() ?? [] }); }
+    catch { json(res, 503, { error: "sign_in_unavailable" }); }
+    return true;
+  }
   if (method !== "POST" || !action) { json(res, 404, { error: "not_found" }); return true; }
   (async () => {
     let bytes: Buffer;
@@ -1940,6 +1953,28 @@ export function handleWebRequest(
     // said, so its empty chat is explained rather than blank. Only that there are some — never how many, or what.
     const allHidden = !!guest && messages.length === 0 && (ctx.webChatHistory?.list(instance, 1).length ?? 0) > 0;
     json(res, 200, { messages, boot: ctx.webChatHistory?.boot ?? null, lastId: ctx.webChatHistory?.lastId ?? 0, ...(allHidden ? { allHidden: true } : {}) });
+    return true;
+  }
+
+  // ── #3212 PR 1: Settings → Agents → Accounts (read-only) ─────────────────────────────────
+  // Each CLI's default sign-in and credential profiles, who uses them and their weekly usage. Names, states, the masked
+  // identity and the host login command (which, as in the sign-in list, names the profile's folder) — no credential or
+  // full e-mail: only for the fleet's local admin session — never the public link, a guest, a token or the gateway (the
+  // same rule as the sign-in list it extends).
+  if (method === "GET" && path === "/ui/accounts") {
+    res.setHeader("Cache-Control", "private, no-store");
+    if (gatewayRequestContext(req)) { json(res, 404, { error: "not_found" }); return true; }
+    const localAdmin = () => {
+      const v = evaluateWebRequest(req as unknown as WebGateRequest, url, ctx.webToken ?? null, ctx.webSessions, { touch: false });
+      return v.kind === "allow" && v.via === "session" && v.session.tier === "admin" && v.session.surface === "local" ? v.session : null;
+    };
+    const who = localAdmin();
+    if (!who) { json(res, 403, { error: "accounts_need_a_local_admin" }); return true; }
+    if (typeof ctx.accountsView !== "function") { json(res, 404, { error: "not_found" }); return true; }
+    void ctx.accountsView().then(view => {
+      if (localAdmin()?.handle !== who.handle) { json(res, 403, { error: "accounts_need_a_local_admin" }); return; }
+      json(res, 200, view);
+    }, err => { ctx.logger.error({ err: (err as Error).message }, "Accounts view failed"); json(res, 500, { error: "could not read the accounts" }); });
     return true;
   }
 
