@@ -1,3 +1,4 @@
+import { readInstalledBuild } from "./build-provenance.js";
 import { buildNativeFleetInstructions } from "./instructions.js";
 import { GENERAL_ROLE_INSTRUCTIONS } from "./general-role.js";
 import { NativePaneRecoveryError } from "./native-pane-recovery.js";
@@ -17,6 +18,7 @@ import { WorkingRecoveryCoordinator, WORKING_RECOVERY_KIND, buildWorkingRecovery
 import { PUBLIC_TUNNEL_TOKEN_ENV, PUBLIC_TUNNEL_TOKEN_HINT, normalizePublicTunnelToken } from "./public-tunnel-config.js";
 import { humanOwnerObjectId, webHumanOrigin, type HumanOrigin } from "./human-delivery-receipts.js";
 import { SettingsBaselines } from "./settings-baseline.js";
+import { hubMembershipSettings } from "./hub-membership-settings.js";
 import { prepareSettingsEffect } from "./settings-effect.js";
 import { settingsDisplay } from "./settings-change.js";
 import { SettingsConfirmationError, SettingsConfirmationStore, settingsSourceLabel, type SettingsPendingView } from "./settings-confirmation.js";
@@ -41,7 +43,7 @@ import { clearPublicLinkOwner, readPublicLinkOwner, writePublicLinkOwner } from 
 import { PUBLIC_PREVIEW_FRAME_SRC, PUBLIC_PREVIEW_TUNNEL_DIR, PublicPreview, publicPreviewWanted } from "./public-preview.js";
 import { CloudflaredProvider } from "./tunnel/cloudflared.js";
 import { ensureCloudflared } from "./tunnel/cloudflared-install.js";
-import { unattendedInstallCommand, loginShell } from "./unattended-install.js";
+import { installExitMarker, unattendedInstallCommand, loginShell } from "./unattended-install.js";
 import { InstallStream } from "./install-stream.js";
 import { namedTestLane, runNamedLinkTest, type NamedTestResult } from "./tunnel/named-link-test.js";
 import { daemonTopicMode, isWebOnlyFleetConfig } from "./web-only-fleet.js";
@@ -106,6 +108,10 @@ import { kiroLogGate } from "./kiro-log-gate.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+// Describe this running program, not files an updater may replace later. No reads on dashboard polls.
+const RUNNING_BUILD = readInstalledBuild();
+if (RUNNING_BUILD.source) Object.freeze(RUNNING_BUILD.source);
+Object.freeze(RUNNING_BUILD);
 import type { FleetConfig, RawFleetConfig, InstanceConfig, ChannelConfig, CostGuardConfig, DailySummaryConfig, WebhookConfig, AccessConfig, WebVerifiedAuthorityConfig } from "./types.js";
 
 /** Fallback access policy for a channel with no `access:` block — open (no gate). */
@@ -137,7 +143,8 @@ import { ParkedNotices, PARKED_NOTICE_LEDGER_FILE } from "./parked-notices.js";
 import { formatFleetTime } from "./tz-utils.js";
 import { createAdapter } from "./channel/factory.js";
 import { isWebChannelEcho, WEB_ECHO_PREFIX } from "./web-channel-echo.js";
-import { TelegramAdapter } from "./channel/adapters/telegram.js";
+import { TelegramAdapter, type MissedOfflineInbound } from "./channel/adapters/telegram.js";
+import { MissedOfflineStore } from "./missed-offline.js";
 import { createBackend } from "./backend/factory.js";
 import { readEffortMetadata } from "./backend/effort-metadata.js";
 import { codexEffort, flagEffort } from "./backend/launch-effort.js";
@@ -252,6 +259,7 @@ import { isWindowsInstance, isNativePaneInstance, isNativeExecInstance, WINDOWS_
 import { createNativeWindowsInstance, updateNativeWindowsInstance } from "./native-instance-api.js";
 import { NativeInstanceConfigEdit, parseNativeInstanceCreate, type NativeInstanceCreateInput } from "./native-instance-input.js";
 import { LogService, type LogAnswer, type LogQuery, type LogSource } from "./log-service.js";
+import { viewHistory, type ViewHistoryAnswer, type ViewHistoryQuery } from "./view-history.js";
 import { WebChatHistory, WEB_CHAT_TEXT_MAX, isWebMessageId, newWebMessageId, webChatFrom, type WebChatAttachment, type WebChatPost } from "./web-chat-history.js";
 import { WEB_ECHO_COPIES_MAX, WEB_MIRROR_TIMEOUT_MS, webReactionEmoji, webReactionProblem, type WebEchoCopy } from "./web-reactions.js";
 import { WebChatDiskStore } from "./web-chat-store.js";
@@ -355,7 +363,7 @@ import { CompactWatch, launchIdentity } from "./compact-watch.js";
 import { agyLegacyAgentsFile, danglingSymlink, migrateAgyAgentsFile } from "./backend/antigravity.js";
 import { claudeConfigDirFor, claudeProjectKey } from "./backend/claude-code.js";
 import { sharedRolloutIndex } from "./rollout-index.js";
-import { TASK_BOARD_ON_NOTICE, dashboardRefusalIn, taskBoardSwitchedOn } from "./dashboard-permissions.js";
+import { TASK_BOARD_ON_NOTICE, dashboardRefusalIn, taskBoardOffIn, taskBoardSwitchedOn } from "./dashboard-permissions.js";
 import {
   mayUseTool,
   resolveToolSet,
@@ -670,6 +678,8 @@ const INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
  * while anything real shows signs of life well before the old two minutes.
  */
 const PROGRESS_MIN_ELAPSED_MS = 30_000;
+/** M-2391: the threshold tick fires this long after it, never a millisecond before (timers can fire early). */
+const PROGRESS_THRESHOLD_MARGIN_MS = 50;
 /** How much of a tool summary the progress line will show before eliding. */
 const PROGRESS_ACTIVITY_MAX_CHARS = 48;
 /**
@@ -1965,12 +1975,43 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     if (!Object.prototype.hasOwnProperty.call(instances, agent)) return null;
     if (this.hubIncarnationsBroken) return null;
     let id: string | null;
-    try { id = this.hubAgentIncarnation(agent, instances[agent]!, true); }
+    try { this.settleHubIncarnations(); id = this.hubIncarnationsBroken ? null : this.hubAgentIncarnation(agent, instances[agent]!, true); }
     catch (err) { this.logger.warn({ err: (err as Error)?.message, agent }, "Hub agent incarnation could not be saved; the agent is not a deliverable representative"); return null; }
     return id ? createHash("sha256").update(JSON.stringify(["agend-hub-agent-v2", agent, id])).digest("hex") : null;
   }
   private hubIncarnationsPath(): string { return join(this.dataDir, "hub-member", "agent-incarnations.json"); }
   /**
+   * M-2451 (#3147 residual): written beside hub-member/, in the data directory itself, when an invalidation could not be
+   * made durable in hub-member/. A later process that finds it invalidates every incarnation before handing out any
+   * token, so a restart never revives consent the earlier process had to withdraw (A→B→A, or a removal, while hub-member/
+   * was unwritable).
+   */
+  private hubIncarnationsMarkerPath(): string { return join(this.dataDir, "hub-member-invalidate.pending"); }
+  /** Whether this process has settled the incarnations on disk (the marker handled, the file proven writable). */
+  private hubIncarnationsSettled = false;
+  /**
+   * Once per process, before the first token: an invalidation an earlier process could not persist (the marker) clears
+   * every incarnation; and an existing file must be rewritable here, else this process is broken (no token at all) —
+   * an incarnation this process could not rotate must never be handed out. Fails closed: any doubt marks it broken.
+   */
+  private settleHubIncarnations(): void {
+    if (this.hubIncarnationsSettled || this.hubIncarnationsBroken || !this.dataDir) return;
+    const path = this.hubIncarnationsPath(), marker = this.hubIncarnationsMarkerPath();
+    if (existsSync(marker)) {
+      try { unlinkSync(path); } catch (err) {
+        if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+          this.hubIncarnationsBroken = true;
+          this.logger.warn({ err: (err as Error)?.message }, "An earlier Hub consent invalidation is still pending and cannot be applied; no Hub representative token is handed out");
+          return;
+        }
+      }
+      // The clear is durable; a marker that cannot be removed only clears again next time (over-invalidation, never revival).
+      try { unlinkSync(marker); } catch { /* left: harmless */ }
+      this.logger.warn("An earlier Hub consent invalidation was applied: every Hub representative needs a republish");
+    }
+    if (existsSync(path)) this.writeHubIncarnations(this.readHubIncarnations());   // throws (broken) when hub-member/ is not writable
+    this.hubIncarnationsSettled = true;
+  }  /**
    * #3147 r2: set when an invalidation could not be made durable in any way (neither the atomic write nor removing the
    * file worked). From then on this process hands out no representative token at all, and the transitions the fleet
    * controls (a config save, a removal) are refused instead of applied.
@@ -1999,7 +2040,12 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       try {
         unlinkSync(path);
       } catch (gone) {
-        if ((gone as NodeJS.ErrnoException)?.code !== "ENOENT") { this.hubIncarnationsBroken = true; throw err; }
+        if ((gone as NodeJS.ErrnoException)?.code !== "ENOENT") {
+          this.hubIncarnationsBroken = true;
+          // M-2451: record the withdrawal outside hub-member/, so a restart does not revive what this process withdrew.
+          try { writeFileSync(this.hubIncarnationsMarkerPath(), "", { mode: 0o600 }); } catch { /* the data directory too: nothing durable is left */ }
+          throw err;
+        }
       }
       this.logger.warn({ err: (err as Error)?.message }, "Hub agent incarnations could not be saved; every earlier Hub consent is invalidated (republish needed)");
       return "cleared";
@@ -2025,6 +2071,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     // Only against a loaded configuration: never forget every agent because none is loaded yet.
     if (!this.dataDir || !this.fleetConfig?.instances) return;
     try {
+      this.settleHubIncarnations();
+      if (this.hubIncarnationsBroken) throw new Error("Hub agent incarnations cannot be written here");
       if (!existsSync(this.hubIncarnationsPath())) return;
       const instances = this.fleetConfig.instances;
       for (const agent of Object.keys(this.readHubIncarnations())) {
@@ -2083,6 +2131,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   getHubHolds(): readonly import("./hub/runtime.js").HubHold[] {
     return this.hubHolds;
   }
+  hubBrowserCertificate(): import("./hub/browser-certificate.js").HubBrowserCertificateControl | null { return this.hubRuntime?.browserCertificateSettings() ?? null; }
+  hubRetention(): import("./hub/retention.js").HubRetentionControl | null { return this.hubRuntime?.retentionSettings() ?? null; }
 
   private observeRuntimeSwitches(): void {
     setConfiguredRuntimeSwitches(this.fleetConfig?.runtimes);
@@ -2344,6 +2394,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   /** #1386 "Needs you": the list, its live chat messages and Acknowledge. Started with the fleet (finishStartup). */
   private needsYou: NeedsYouHub | null = null;
   private hubExecutionAttention: (() => import("./needs-you.js").HubExecutionAttentionInput[]) | null = null;
+  private missedOfflineStore: MissedOfflineStore | null = null;
   private configHistory: ConfigHistory | null = null;
   private configHistoryTimer: ReturnType<typeof setInterval> | null = null;
   private loadedFleetSource: ConfigSource | null = null;
@@ -2959,7 +3010,13 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const baselines = this.settingsBaselineReader = new SettingsBaselines({ dataDir: this.dataDir, configPath: () => this.configPath,
       config: () => this.fleetConfig, current: () => [this.settingsGeneration, this.settingsRuntimeRevision, this.shuttingDown],
       generalLocation: input => this.previewGeneralLocation(input),
+      hubMembership: raw => hubMembershipSettings(raw),
       // S3c (S-55): a Hub exposure publish's confirmation summary, while a member composition is attached.
+      hubBrowserCertificate: (input: unknown, binding: string) => {
+        const control = this.hubBrowserCertificate();
+        if (!control) throw Error("unavailable");
+        return control.preview(input, binding);
+      },
       hubExposure: (input: unknown) => {
         const api = this.hubMemberExposureApi;
         if (!api) throw Object.assign(new Error("hub_member_unavailable"), { code: "hub_member_unavailable" });
@@ -3779,6 +3836,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     this.topicCommands = new TopicCommands(this);
     this.topicArchiver = new TopicArchiver(this);
     this.statuslineWatcher = new StatuslineWatcher(this);
+    this.missedOfflineStore = new MissedOfflineStore(this.dataDir);
   }
 
   /** #1266: a reply's buttons — the store (reply-buttons.db) and what a click does. Created on first use. */
@@ -5112,9 +5170,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
 
   /** AgEnD package version (for the Settings "current version" / What's New). */
   get currentVersion(): string {
-    try { return JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8")).version ?? "unknown"; }
-    catch { return "unknown"; }
+    return RUNNING_BUILD.version;
   }
+
+  get currentBuild() { return RUNNING_BUILD; }
 
   /**
    * Resolve a slash-command target in a channel. Classic channels are looked up
@@ -5749,6 +5808,14 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       },
       changed: () => this.emitSseEvent("status", this.getUiStatus()),
     });
+  }
+
+  /**
+   * Claude history in the View: an instance's earlier conversation for its View, from the transcript the Log reads —
+   * the View's route applied its own access rules first (view-api.ts); the Log's switch plays no part.
+   */
+  viewHistory(name: string, q: ViewHistoryQuery): Promise<ViewHistoryAnswer | null> {
+    return viewHistory((n, rq) => this.log.readBack(n, rq), name, q);
   }
 
   /** #1218: GET /ui/steps — an instance's steps, read on demand (null: no such instance). */
@@ -10910,6 +10977,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     adapter.on("callback_query", safeHandler(async (data: AdapterCallbackData) => {
       await this.receiveAdapterCallback(data, adapterId, adapter, isCurrentAdapter);
     }, this.logger, "adapter.callback_query"));
+    adapter.on("missed_offline", (ev: MissedOfflineInbound) => {
+      if (!isCurrentAdapter()) return;
+      this.recordMissedOffline(ev);
+    });
 
     this.bindTopicClosedHandler(adapter, adapterId, "adapter.topic_closed");
 
@@ -11060,6 +11131,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     adapter.on("callback_query", safeHandler(async (data: AdapterCallbackData) => {
       await this.receiveAdapterCallback(data, adapterId, adapter, isCurrentAdapter);
     }, this.logger, `adapter[${adapterId}].callback_query`));
+    adapter.on("missed_offline", (ev: MissedOfflineInbound) => {
+      if (!isCurrentAdapter()) return;
+      this.recordMissedOffline(ev);
+    });
 
     this.bindTopicClosedHandler(adapter, adapterId, `adapter[${adapterId}].topic_closed`);
 
@@ -11754,6 +11829,36 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       if (ownerUser && suffix.toLowerCase() !== ownerUser.toLowerCase()) return false;
     }
     return true;
+  }
+
+  /** File a Telegram update that was too old to inject; Needs you lists it until Acknowledge. */
+  private recordMissedOffline(ev: MissedOfflineInbound): void {
+    if (!this.missedOfflineStore) this.missedOfflineStore = new MissedOfflineStore(this.dataDir);
+    const stub: InboundMessage = {
+      source: "telegram", adapterId: ev.adapterId, chatId: ev.chatId, threadId: ev.threadId,
+      messageId: ev.messageId, userId: ev.userId, username: ev.username, text: ev.preview,
+      timestamp: ev.timestamp, isBotMessage: false,
+    };
+    const threadId = this.inboundRouteThreadId(stub);
+    const target = threadId ? this.resolveInboundTarget(stub, threadId) : undefined;
+    let instance = target?.name ?? "";
+    if (!instance) {
+      instance = Object.entries(this.fleetConfig?.instances ?? {}).find(([name, cfg]) =>
+        cfg.general_topic && this.getInstanceAdapterId(name) === ev.adapterId)?.[0] ?? "";
+    }
+    const place = [ev.chatTitle, ev.threadId ? `#${ev.threadId}` : ""].filter(Boolean).join(" · ") || ev.chatId;
+    this.missedOfflineStore.add({
+      id: `missed:${ev.adapterId}:${ev.updateId}`,
+      adapterId: ev.adapterId,
+      instance,
+      username: ev.username,
+      place,
+      preview: ev.preview,
+      since: ev.timestamp.getTime(),
+    });
+    this.logger.info({ adapterId: ev.adapterId, updateId: ev.updateId, instance, chatId: ev.chatId, threadId: ev.threadId },
+      "Telegram message missed while AgEnD was offline — filed for Needs you");
+    this.needsYou?.poke();
   }
 
   /**
@@ -16936,6 +17041,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         if (!this.deliveryOutbox?.isOpen) throw new Error("the delivery outbox is not open");
         return this.deliveryOutbox.acknowledge(deliveryId, by);
       },
+      missedOffline: () => (this.missedOfflineStore?.list(Date.now()) ?? []).map(m => ({
+        id: m.id, instance: m.instance, owner: m.adapterId, username: m.username, place: m.place, preview: m.preview, since: m.since,
+      })),
+      acknowledgeMissed: (id, by) => this.missedOfflineStore?.acknowledge(id, by) ?? false,
       tasks: () => this.needsYouTaskItems(),
       backendSignIns: () => this.needsYouBackendSignIns(),
       hubExecution: () => this.hubExecutionAttention?.() ?? [],
@@ -18936,7 +19045,14 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     }
 
     const publication = this.beginCancelButtonPublication(instanceName, correlationId);
-    const initialProgressText = FleetManager.progressText(0, null, 1, this.progressPrefixFor(instanceName, 0, 1));
+    // M-2391: a re-post below a reply (preserveProgress) continues the same turn — its elapsed time continues from
+    // the live bubble's start, as its tool list does. Restarting it at 0 meant an agent replying more often than the
+    // threshold never showed elapsed time at all. A fresh turn (no preserve) starts at 0 as before.
+    const carriedStart = preserveProgress ? this.liveButtonStart(instanceName) : undefined;
+    const carriedMs = carriedStart !== undefined ? Math.max(0, Date.now() - carriedStart) : 0;
+    const initialProgressText = carriedStart !== undefined && carriedMs >= this.progressMinElapsedMs()
+      ? FleetManager.progressText(carriedMs, null, this.progressMinElapsedMs(), this.progressPrefixFor(instanceName, carriedMs))
+      : FleetManager.progressText(0, null, 1, this.progressPrefixFor(instanceName, 0, 1));
 
     try {
       const sent = await adapter.notifyAlert(chatId, {
@@ -18962,7 +19078,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         // Elapsed time is measured from when this button was posted — i.e. from
         // when the work was handed over — not from the pane's working transition,
         // which resets if the CLI blips idle mid-turn.
-        startedAt: Date.now(),
+        startedAt: carriedStart ?? Date.now(),
         // Matches the text notifyAlert just posted, so the first 60s tick does
         // not re-edit identical text — which put a "(edited)" mark on Discord
         // with nothing visibly changed.
@@ -19234,6 +19350,13 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     return PROGRESS_MIN_ELAPSED_MS;
   }
 
+  /** M-2391: when the instance's live (not retiring) bubble started — the current turn's start — or undefined. */
+  private liveButtonStart(instanceName: string): number | undefined {
+    const starts = [...this.cancelButtons.values()].filter((e) => e.instanceName === instanceName && !e.retiring && typeof e.startedAt === "number")
+      .map((e) => e.startedAt as number);
+    return starts.length ? Math.min(...starts) : undefined;
+  }
+
   private startProgressTicker(entry: CancelButtonEntry): void {
     const tick = () => this.refreshBubble(entry);
     entry.progressTimer = setInterval(tick, PROGRESS_UPDATE_INTERVAL_MS);
@@ -19243,7 +19366,9 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     // one additional edit per turn that lives past the threshold.
     const firstAt = this.progressMinElapsedMs() - (Date.now() - (entry.startedAt ?? Date.now()));
     if (firstAt > 0 && firstAt < PROGRESS_UPDATE_INTERVAL_MS) {
-      const firstTick = setTimeout(tick, firstAt);
+      // M-2391: a little past the threshold — a timer can fire a millisecond before Date.now() reaches it, which
+      // rendered the unchanged "處理中…" text and skipped the edit until the next 60 s interval.
+      const firstTick = setTimeout(tick, firstAt + PROGRESS_THRESHOLD_MARGIN_MS);
       firstTick.unref?.();
     }
   }
@@ -20238,9 +20363,12 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       this.loginWindow.release(claim);
       return t("login.web_shutting_down");
     }
+    // The wrapper says its own exit code after this marker: tmux may never record it (unattended-install.ts).
+    const exitMarker = installExitMarker();
     const flow: LoginFlow = {
       backend,
-      command: unattendedInstallCommand(info.unattended ?? info.install, shell),
+      command: unattendedInstallCommand(info.unattended ?? info.install, shell, exitMarker),
+      exitMarker,
       successPattern: /$^/,
       timeoutMs: this.installTimeoutMs,
     };
@@ -20581,9 +20709,12 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     this.taskBoardWaker?.stop();
     // #2303: each instance's cards at once, read at every claim (a fleet.yaml edit applies to the next one).
     db.board.setCardLimit((name) => boardCardLimit(this.fleetConfig, name));
+    // An instance with the task board switched off is handed no cards and sent no notices (read at each write and wake).
+    db.board.setBoardOff((name) => taskBoardOffIn(this.fleetConfig, name));
     const waker = this.taskBoardWaker = new TaskBoardWaker({
       deliver: (instance, message, key) => this.admitTaskBoardNotice(instance, message, key),
       isInstance: (name) => this.fleetConfig?.instances?.[name] != null,
+      boardOff: (name) => taskBoardOffIn(this.fleetConfig, name),
       // #2785 (c), #2801: the maker's own message already told it; the board's line would repeat it.
       messagedAbout: (from, to, codes, sinceMs) => {
         const outbox = this.deliveryOutbox;
@@ -23710,6 +23841,15 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     // because we asked it to. Set synchronously — doStopAll runs to its first
     // await in the same tick as the signal handler, so no event can slip in.
     this.shuttingDown = true;
+    // Stop receive admission before the first await or any instance shutdown; outbound
+    // adapters remain available below to retire notices and pending prompts.
+    for (const state of this.adapterState.values()) {
+      if (state.retryTimer) { clearTimeout(state.retryTimer); state.retryTimer = undefined; }
+    }
+    const inboundStopped = Promise.all([...this.adapters.values()].map(async adapter => {
+      try { await adapter.stopReceiving?.(); }
+      catch (err) { this.logger.warn({ adapterId: adapter.id, err }, "Adapter receive stop failed; inbound remains fenced"); }
+    }));
     this.workingRecovery?.reset();
     if (this.workingRecoveryTimer) clearInterval(this.workingRecoveryTimer);
     this.workingRecoveryTimer = null;
@@ -23770,6 +23910,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     // A login/install window is a dedicated tmux server with its own TTL
     // timer and HTTP listener living in THIS process: without an explicit
     // shutdown it would outlive us as an owner-less login CLI (sol B3).
+    await inboundStopped;
     await publicStopped;
     await sharesStopped?.catch(() => {});
     await profileStopped;
@@ -23781,10 +23922,6 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     await this.cpuProfileControl?.close();
     this.cpuProfileControl = null;
     await this.shutdownLoginWindows();
-    // Cancel adapter retry timers
-    for (const state of this.adapterState.values()) {
-      if (state.retryTimer) { clearTimeout(state.retryTimer); state.retryTimer = undefined; }
-    }
     this.clearStatuslineWatchers();
     this.costGuard?.stop();
     this.dailySummary?.stop();
@@ -26241,6 +26378,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
           res.end(JSON.stringify({
             ...sysInfo,
             version: this.currentVersion,
+            build: gatewayRequestContext(req) ? undefined : this.currentBuild,
             instances: enriched,
             publicLink: this.getPublicWebStatus(),
           }));

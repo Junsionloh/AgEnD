@@ -38,7 +38,7 @@ describe.skipIf(rig.AGEND_HUB_RIG !== "1")("agend hub init against the fake dire
   afterAll(() => setLocale("en"));
 
   const directory = (ca: string) => [
-    "rig", rig.AGEND_HUB_RIG_LDAPS_URL!, ca, "2", rig.AGEND_HUB_RIG_BASE_DN!, rig.AGEND_HUB_RIG_BIND_DN!, { hidden: rig.AGEND_HUB_RIG_BIND_PASSWORD! },
+    "rig", rig.AGEND_HUB_RIG_LDAPS_URL!, ca, "y", "2", rig.AGEND_HUB_RIG_BASE_DN!, rig.AGEND_HUB_RIG_BIND_DN!, { hidden: rig.AGEND_HUB_RIG_BIND_PASSWORD! },
   ];
   const start = () => ["Rig Hub", "https://hub.example.test:8443", "", "192.0.2.10:8443", "192.0.2.10:9443", certs.cert, certs.key];
 
@@ -46,7 +46,7 @@ describe.skipIf(rig.AGEND_HUB_RIG !== "1")("agend hub init against the fake dire
     const home = tempDir("agend-hubinit-rig-");
     const initializer = createHubInitializer({ home, identity: new FakeIdentity(), probe: { pidAlive: () => false } });
     const io = scriptedIO(answers);
-    const outcome = await runHubInitWizard({
+    const outcome = await runHubInitWizard({ checkNetwork: async () => [],
       io: io.io, home, initializer, createDirectory: createHubDirectory, readFile: (p) => readFileSync(p, "utf8"),
       service: { installed: () => false, install: async () => "unused" },
     });
@@ -81,7 +81,7 @@ describe.skipIf(rig.AGEND_HUB_RIG !== "1")("agend hub init against the fake dire
   });
 
   it("the rig's plaintext ldap:// port is refused before any connection", async () => {
-    const { outcome, io } = await run([...start(), "rig", rig.AGEND_HUB_RIG_LDAP_URL!, rig.AGEND_HUB_RIG_CA!, "2", rig.AGEND_HUB_RIG_BASE_DN!, rig.AGEND_HUB_RIG_BIND_DN!, "q"]);
+    const { outcome, io } = await run([...start(), "rig", rig.AGEND_HUB_RIG_LDAP_URL!, rig.AGEND_HUB_RIG_CA!, "y", "2", rig.AGEND_HUB_RIG_BASE_DN!, rig.AGEND_HUB_RIG_BIND_DN!, "q"]);
     expect(outcome).toBe("cancelled");
     expect(io.text()).toMatch(/ldap:\/\/ is plaintext/);
   });
