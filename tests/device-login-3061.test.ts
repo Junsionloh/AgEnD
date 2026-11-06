@@ -20,7 +20,7 @@
  *    take the owner's authority — and the approval — away at once; a rotated token or `/dashboard revoke` withdraws requests.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { request, type Server } from "node:http";
+import { Agent, request, type Server } from "node:http";
 import { PassThrough, Readable } from "node:stream";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -50,7 +50,13 @@ beforeEach(() => setLocale("en"));
 interface Res { status: number; headers: Record<string, string | string[] | undefined>; body: string }
 function raw(port: number, method: string, path: string, headers: Record<string, string> = {}, body?: string): Promise<Res> {
   return new Promise((resolve, reject) => {
-    const r = request({ host: "127.0.0.1", port, method, path, headers }, res => {
+    // A body is always framed. Node's client frames one itself only for POST/PUT/PATCH: written to a GET, HEAD or DELETE with no
+    // Content-Length, the bytes are not part of that request, they sit in front of the NEXT request on the keep-alive socket and
+    // the server drops it ("socket hang up" on Node 22.22.2, which then shows up on whichever request came next — here the
+    // no-Origin POST after a GET). Stating the length makes "a GET with a JSON body" a well-formed request, so a refusal that
+    // does not read the body (405, 403, 415) is what is tested, not a client that corrupts the connection.
+    const framed = body !== undefined && !Object.keys(headers).some(h => /^(content-length|transfer-encoding)$/i.test(h)) ? { ...headers, "content-length": String(Buffer.byteLength(body)) } : headers;
+    const r = request({ host: "127.0.0.1", port, method, path, headers: framed }, res => {
       let text = ""; res.on("data", (c: Buffer) => { text += c.toString(); });
       res.on("end", () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: text }));
     });
@@ -371,6 +377,71 @@ describe("#3061 P2a: who may approve — only this web-only fleet's verified own
       expect((await h.device(path, { extra: { origin: "https://evil.example" } })).status).toBe(403);
       expect((await raw(h.port, "POST", `/auth/device-login${path}`, { origin: h.origin, "content-type": "text/plain" }, "{}")).status).toBe(415);
     }
+    expect(h.any.webDeviceLogins.size).toBe(0);
+  }, 20_000);
+
+  // Review of #3165: a refusal that answers before the body is read (405 for the method, 403 for no Origin, 415 for the type) must not
+  // cost the connection — a browser reuses it for the next call. Over ONE keep-alive socket, with a framed body on every request.
+  it("refusals that never read the body (405, 403, 415) leave the keep-alive connection usable for the next call", async () => {
+    const h = await startFleet();
+    const agent = new Agent({ keepAlive: true, maxSockets: 1 });
+    const send = (method: string, headers: Record<string, string>) => new Promise<{ status: number; reused: boolean }>((resolve, reject) => {
+      const body = "{}";
+      const r = request({ host: "127.0.0.1", port: h.port, method, path: "/auth/device-login", agent, headers: { ...headers, "content-length": String(Buffer.byteLength(body)) } },
+        res => { res.resume(); res.on("end", () => resolve({ status: res.statusCode ?? 0, reused: r.reusedSocket })); });
+      r.on("error", reject); r.end(body);
+    });
+    const json = { "content-type": "application/json" };
+    try {
+      const seen = [
+        await send("GET", { origin: h.origin, ...json }),                                   // 405: not POST
+        await send("POST", json),                                                          // 403: no Origin
+        await send("POST", { origin: h.origin, "content-type": "text/plain" }),            // 415: not JSON
+        await send("DELETE", { origin: h.origin, ...json }),                               // 405
+        await send("POST", { origin: h.origin, ...json, "user-agent": ANDROID }),          // a real request, on the same socket
+      ];
+      expect(seen.map(r => r.status)).toEqual([405, 403, 415, 405, 200]);
+      expect(seen.slice(1).map(r => r.reused)).toEqual([true, true, true, true]);          // one socket the whole time
+    } finally { agent.destroy(); }
+  }, 20_000);
+});
+
+describe("#3061 P2a review: the route is absent (404) before its method is judged (405)", () => {
+  const METHODS = ["GET", "HEAD", "PUT", "DELETE"] as const;
+  const PATHS = ["", "/poll", "/cancel"] as const;
+  it("a chat-connected fleet: GET, HEAD and every other method on the three routes read 404, never 405", async () => {
+    const h = await startFleet({ chat: true });
+    for (const path of PATHS) for (const method of [...METHODS, "POST" as const]) expect([method, path, (await h.device(path, { method })).status]).toEqual([method, path, 404]);
+    expect(h.any.webDeviceLogins.size).toBe(0);
+  }, 20_000);
+
+  it("web authorization off: GET, HEAD and every other method read 404, never 405", async () => {
+    const h = await startFleet({ web: { verified_authority: { enabled: false } } });
+    for (const path of PATHS) for (const method of [...METHODS, "POST" as const]) expect([method, path, (await h.device(path, { method })).status]).toEqual([method, path, 404]);
+    expect(h.any.webDeviceLogins.size).toBe(0);
+  }, 20_000);
+
+  it("through the public link (the gateway's own provenance): 404 for every method — and the handler itself, handed the gateway, answers 404 to GET and HEAD too", async () => {
+    const h = await startFleet();
+    const owner = await h.hostSignIn();
+    await h.outsideOwner(owner);
+    for (const path of PATHS) for (const method of [...METHODS, "POST" as const]) expect([method, path, (await h.outside(method, `/auth/device-login${path}`, { body: {} })).status]).toEqual([method, path, 404]);
+    // Were a route to slip into the manifest, the handler refuses the gateway before it judges the method.
+    const { bindGatewayRequest } = await import("../src/web-request-context.js");
+    for (const method of [...METHODS, "POST" as const]) {
+      const req: any = { method, url: "/auth/device-login", headers: { host: HOST, origin: `https://${HOST}`, "content-type": "application/json" }, socket: { remoteAddress: "127.0.0.1" } };
+      bindGatewayRequest(req, { surface: "gateway", named: false, exposureId: h.any.publicWebLink.exposureId, expectedOrigin: `https://${HOST}`, isCurrent: () => true });
+      let status = 0;
+      const res: any = { writeHead(code: number) { status = code; return res; }, end() {}, setHeader() {}, getHeader() { return undefined; } };
+      expect(handleAuthRequest(req, res, new URL("https://x/auth/device-login"), h.any)).toBe(true);
+      expect([method, status]).toEqual([method, 404]);
+    }
+    expect(h.any.webDeviceLogins.size).toBe(0);
+  }, 30_000);
+
+  it("an available feature: a method other than POST is 405 on the three routes (HEAD too), and creates nothing", async () => {
+    const h = await startFleet();
+    for (const path of PATHS) for (const method of METHODS) expect([method, path, (await h.device(path, { method })).status]).toEqual([method, path, 405]);
     expect(h.any.webDeviceLogins.size).toBe(0);
   }, 20_000);
 });

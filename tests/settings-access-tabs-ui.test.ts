@@ -7,14 +7,16 @@ let p: AppPage, SettingsPanel: any, nav: any, registry: any;
 const originalFetch = globalThis.fetch;
 const writes: string[] = [];
 let webOnly = false;
+let hubFleet = false;
 const fakeFetch = async (path: string, init: { method?: string } = {}) => {
   if ((init.method || "GET") !== "GET") writes.push(path);
   const body = (() => {
     if (path === "/api/settings/schema") return buildSettingsImpactSchema();
-    if (path === "/api/settings/fleet/raw") return { defaults: {}, instances: {}, channels: [], web: {} };
+    if (path === "/api/settings/fleet/raw") return { defaults: {}, instances: {}, channels: [], web: {}, ...(hubFleet ? { hub: { hubId: "hub-test" } } : {}) };
     if (path === "/api/settings/classic") return { defaults: {}, channels: {} };
     if (path === "/api/fleet") return { version: "2.3.5-alpha", instances: [] };
     if (path === "/api/settings/web-authority") return { state: { enabled: true }, configured: {}, hours: { min: 1, max: 48, default: 8 }, lanHosts: [], authorized: [] };
+    if (path === "/ui/devices") return webOnly ? { webOnly: true, owner: true } : {};
     if (path === "/ui/outside") return webOnly ? { webOnly: true, here: true, enrolled: false, outside: false, pausedForMs: 0 } : {};
     if (path === "/api/settings/guests") return { enabled: false, chat: true, explicit: true, instances: [], connections: [], guests: [] };
     if (path === "/api/settings/public-tunnel-token") return [{ token_present: false }];
@@ -39,6 +41,7 @@ afterEach(async () => {
   (await import("/ui/js/settings-confirm.js")).resetConfirmations();
   writes.length = 0;
   webOnly = false;
+  hubFleet = false;
 });
 afterAll(() => { p.restore(); globalThis.fetch = originalFetch; });
 
@@ -75,6 +78,28 @@ describe("the real Settings forms across page tabs", () => {
     expect(order).toEqual(["s-outside", "s-access-session", "s-web-authority"]);
     expect([byId("outsideCard").querySelector("h3").textContent, byId("outState").textContent]).toEqual(["Owner verification", "Not set up"]);
     expect(login.querySelector(".s-authority-rule")?.textContent).toContain("judged separately");
+  });
+
+  // The merge of release/2.3.5-alpha into this branch (src/ui/panel-settings.js): the release's Hub cards keep their place and order
+  // (membership, then retention, then browser certificate, after web authorization); ours (Owner verification, Devices) sit ahead of them, once each.
+  const CARDS = [["s-outside", ".s-outside"], ["s-devices", ".s-devices"], ["s-access-session", ".s-access-session"], ["s-web-authority", ".s-web-authority"],
+    ["hub-membership-settings", ".hub-membership-settings"], ["hub-retention", ".hub-retention"], ["hub-browser-certificate", ".hub-browser-certificate"]] as const;
+  const cardOrder = () => [...byId("access-panel-login").querySelectorAll(CARDS.map(([, sel]) => sel).join(", "))]
+    .map((c: any) => CARDS.find(([cls]) => c.className.split(" ").includes(cls))![0]);
+
+  it("keeps the release's Hub cards in their order after web authorization, with Owner verification and Devices once each ahead of them", async () => {
+    webOnly = true; hubFleet = true;
+    await open("access");
+    await settle(30);                                                                  // the three Hub cards are lazy modules
+    expect(cardOrder()).toEqual(["s-outside", "s-devices", "s-access-session", "s-web-authority", "hub-membership-settings", "hub-retention", "hub-browser-certificate"]);
+    expect(p.root.querySelectorAll("#outsideCard, #devicesCard").length).toBe(2);
+  });
+
+  it("without a Hub id the membership switch stays (it is available while off) and the retention and certificate cards are not rendered", async () => {
+    webOnly = true;
+    await open("access");
+    await settle(30);
+    expect(cardOrder()).toEqual(["s-outside", "s-devices", "s-access-session", "s-web-authority", "hub-membership-settings"]);
   });
 
   it("opens a hidden Sharing tab and its credentials disclosure for a settings-search target", async () => {

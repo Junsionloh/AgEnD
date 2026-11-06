@@ -153,6 +153,9 @@ const ASSETS: Readonly<Record<string, { file: string; type: string }>> = {
     "app-shell.js", "app-session.js", "web-authorize.js", "app-needs.js", "app-swipe.js", "text-undo.js", "ui-confirm.js", "ui-dialog.js", "ui-menu.js", "ui-states.js", "ui-icons.js", "ui-toast.js",
     // #1408 step 2: View is public (an anonymous reader opens it under web.view_access: open), loaded on demand.
     "panel-view.js", "view-strings.js",
+    // Claude history in the View: its renderer, loaded by View when a Claude agent's View is scrolled up (static code; the
+    // history is read through the pane's own route and gate).
+    "view-history.js",
     // alpha.2 (N1): the sidebar's one instance list, and View's roster read it shows to an anonymous reader.
     "instance-nav.js", "view-roster-store.js",
     // #1523 N2: the instance view switch (Chat | View | Details), in Chat's, View's and Details' headers.
@@ -191,6 +194,14 @@ const ASSETS: Readonly<Record<string, { file: string; type: string }>> = {
   "hub.css": { file: join("shared", "hub.css"), type: "text/css; charset=utf-8" },
   // #3153 P1: the Files & changes panel's own stylesheet (linked by its lazy module; an older app.css lacks it).
   "workspace.css": { file: join("shared", "workspace.css"), type: "text/css; charset=utf-8" },
+  // #3212: the Accounts view's stylesheet (linked by accounts-view.js; an older app.css lacks it).
+  "accounts.css": { file: join("shared", "accounts.css"), type: "text/css; charset=utf-8" },
+  // The task board's list, filters, card menu and Insights (#3169-#3171): linked by fleet-task-view.js (an older app.css lacks it).
+  "task-board.css": { file: join("shared", "task-board.css"), type: "text/css; charset=utf-8" },
+  // Settings -> Runtime -> Connect a computer: the install tabs, command cards and reinstall notice (linked by panel-runtimes.js; an older app.css lacks it).
+  "runtime-install.css": { file: join("shared", "runtime-install.css"), type: "text/css; charset=utf-8" },
+  // Claude history in the View: the renderer's own stylesheet (linked by it, so an older app.css never lacks its rules).
+  "view-history.css": { file: join("shared", "view-history.css"), type: "text/css; charset=utf-8" },
 };
 
 /** True for a name `/assets/` serves. The public link's manifest asks this too: one list, not two. */
@@ -383,9 +394,12 @@ export function handleAuthRequest(
   // with a chat connection the route does not exist either (its codes come from the chat). Nothing here is an input to
   // authority: the session it makes is an ordinary admin session, owner authority not verified (SessionRecord.via).
   if (path === "/auth/device-login" || path === "/auth/device-login/poll" || path === "/auth/device-login/cancel") {
-    if (method !== "POST") { json(res, 405, { error: "method not allowed" }); return true; }
+    // Whether the route exists comes first, whatever the method: where it is absent (a chat connection, web authorization off, the
+    // public link) a GET or HEAD must read 404 as the public gateway's own refusal does, not 405 — a 405 would say "this path is
+    // here, with another method". The 405 is for a feature that is available.
     const token = ctx.webToken, logins = ctx.webDeviceLogins, sessions = ctx.webSessions;
     if (gatewayRequestContext(req) || !token || !logins || !sessions || ctx.deviceLoginAvailable?.() !== true) { json(res, 404, { error: "not_found" }); return true; }
+    if (method !== "POST") { json(res, 405, { error: "method not allowed" }); return true; }
     // As the one-time code's own exchange: Origin required, from this very site, JSON.
     if (!req.headers.origin || !isSameOriginRequest(gateReq)) { json(res, 403, { error: "Cross-site request rejected" }); return true; }
     if (!isJsonRequest(req)) { json(res, 415, { error: "expected application/json" }); return true; }
