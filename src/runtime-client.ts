@@ -14,8 +14,9 @@ import { RUNTIME_CREDENTIAL_CAPABILITY, credentialLoginRequired, credentialProfi
 import { RuntimeClientStore, runtimeJobDigest, validateRuntimeServer, type RuntimeCredentials, type RuntimeStoredJob } from "./runtime-client-store.js";
 import { RUNTIME_ROTATE_PATH, RUNTIME_REINSTALL_CLOSE_PREFIX, runtimeClaimFingerprint } from "./runtime-protocol.js";
 import { readRuntimeInfo } from "./runtime-build-info.js";
-import { RemoteAccounts, type RemoteAccountsDeps } from "./runtime-remote-accounts.js";
+import { RemoteAccounts, type RemoteAccountsDeps, type RemoteInstaller } from "./runtime-remote-accounts.js";
 import { CLI_INSTALL_CAPABILITY, REMOTE_SIGNIN_CAPABILITY } from "./runtime-remote-setup.js";
+import { managedCliRoot, managedInstaller, nativeInstallSupported } from "./runtime-cli-install.js";
 import { isRuntimeRemoteOperation } from "./runtime-protocol.js";
 import { PANE_IN_PROCESS_DIRECTORY, paneLedgerFiles } from "./runtime-pane-store.js";
 import { findCli, nativeCliEnvironment } from "./windows-cli-worker.js";
@@ -145,6 +146,10 @@ export class RuntimeClient {
   /** Run id -> the credential profile it runs under, so removing or signing out a profile waits for its runs. */
   private readonly activeProfiles = new Map<string, string>();
   private remoteAccounts: RemoteAccounts | null = null;
+  /** Ends a CLI install that is still running when this Runtime stops (the install's child process is the exact one it started). */
+  private readonly installAbort = new AbortController();
+  /** The Runtime's own installer (native Windows only): its closed table, its pinned versions and one install at a time. */
+  private readonly managed: RemoteInstaller | null;
   private readonly snapshots = new Map<string, string>();
   private readonly pendingPaneTools = new Map<string, PendingTool>();
   private readonly pendingTools = new Map<string, PendingTool>();
@@ -166,13 +171,14 @@ export class RuntimeClient {
   /** The socket this Runtime itself closed with 1008 because it could not read AgEnD's frame; that is not AgEnD refusing us. */
   private selfClosed: WebSocket | null = null;
   constructor(private readonly options: RuntimeClientOptions) {
-    const info = readRuntimeInfo({ panes: process.platform === "win32" || !!options.createPaneHost || !!options.openPaneLink });
+    this.managed = nativeInstallSupported() ? managedInstaller({ root: managedCliRoot(options.store.directory) }, () => this.installAbort.signal) : null;
+    const info = readRuntimeInfo({ panes: process.platform === "win32" || !!options.createPaneHost || !!options.openPaneLink, install: !!options.remoteAccounts?.installer || nativeInstallSupported() });
     // Offered only when this client has a profile root to resolve names under; otherwise AgEnD must not ask for a profile.
     if (options.managedUpdate?.trialId !== undefined && !validRuntimeUpdateId(options.managedUpdate.trialId)) throw Error("Invalid Runtime update trial");
     this.runtimeInfo = { ...info, capabilities: [...info.capabilities.filter(name => options.credentialProfilesRoot || name !== RUNTIME_CREDENTIAL_CAPABILITY), ...(options.managedUpdate ? [RUNTIME_MANAGED_UPDATE_CAPABILITY] : [])] };
     // Remote account operations need the profile folder, and a way to run the Windows CLI (native Windows, or a test's own). `cli-install` also needs an installer.
     const remote = !!options.credentialProfilesRoot && (process.platform === "win32" || !!options.remoteAccounts);
-    this.runtimeInfo = { ...this.runtimeInfo, capabilities: [...this.runtimeInfo.capabilities.filter(name => name !== REMOTE_SIGNIN_CAPABILITY || remote), ...(remote && options.remoteAccounts?.installer ? [CLI_INSTALL_CAPABILITY] : [])] };
+    this.runtimeInfo = { ...this.runtimeInfo, capabilities: this.runtimeInfo.capabilities.filter(name => name === REMOTE_SIGNIN_CAPABILITY ? remote : name === CLI_INSTALL_CAPABILITY ? remote && !!(options.remoteAccounts?.installer || nativeInstallSupported()) : true) };
     this.bridge = options.bridge ?? new WindowsCliBridge(nativeWindowsTransport, join(options.store.directory, WINDOWS_CLI_INVENTORY_FILE));
   }
   private report(text: string): void { this.options.report?.(text); }
@@ -505,7 +511,9 @@ export class RuntimeClient {
       inUse: name => this.profileInUse(name), report: text => this.report(text),
       defaultProfile: () => { try { return this.options.store.credentialDefault(); } catch { return undefined; } },
       changed: () => { this.credentialStamp = this.stamp(); void this.refreshInventory(false).catch(() => {}); },
-      ...(extra?.installer ? { installer: extra.installer } : {}), ...(extra?.switchWatchMs ? { switchWatchMs: extra.switchWatchMs } : {}), ...(extra?.signIn ? { signIn: extra.signIn } : {}), ...(extra?.ownership ? { ownership: extra.ownership } : {}),
+      // Native Windows installs from the Runtime's own closed table (3b); a test supplies its own installer.
+      ...(extra?.installer ? { installer: extra.installer } : this.managed ? { installer: this.managed } : {}),
+      ...(extra?.switchWatchMs ? { switchWatchMs: extra.switchWatchMs } : {}), ...(extra?.signIn ? { signIn: extra.signIn } : {}), ...(extra?.ownership ? { ownership: extra.ownership } : {}),
       ...(extra?.now ? { now: extra.now } : {}),
     });
   }
@@ -699,6 +707,7 @@ export class RuntimeClient {
     if (this.stopPromise) return this.stopPromise;
     if (this.stopped) return Promise.resolve();
     this.stopped = true; this.welcomed = false;
+    this.installAbort.abort();
     this.activity.close();
     // Own cleanup before callbacks (bridge.close, pane cleanup) can re-enter stop().
     return this.stopPromise = Promise.resolve().then(() => this.stopOwned(options));

@@ -10,6 +10,7 @@
  * Built-ins and shared Runtime modules only: part of the Runtime bundle.
  */
 import { existsSync } from "node:fs";
+import { CliInstallError } from "./runtime-cli-install.js";
 import { parseAccountIdentity, type AccountIdentity } from "./claude-auth-status.js";
 import { CredentialProfileRefusal, credentialProfileCaseClash, credentialProfileDirectory, isCredentialProfileCli, rememberCredentialStatus, withCredentialProfile,
   type CredentialProfileCli } from "./runtime-credential-profiles.js";
@@ -59,11 +60,12 @@ export interface RemoteAccountsDeps {
 const GENERIC = "The operation could not be completed on this computer. Check that computer's Runtime window.";
 /** Text that may leave this computer: only our own refusals. Everything else (a filesystem error carries a path) becomes one fixed sentence. */
 export function safeRemoteMessage(error: unknown): string {
-  if (error instanceof RemoteSetupRefusal || error instanceof ProfileOwnershipRefusal || error instanceof SignInRefusal || error instanceof CredentialProfileRefusal) return error.message;
+  if (error instanceof RemoteSetupRefusal || error instanceof ProfileOwnershipRefusal || error instanceof SignInRefusal || error instanceof CredentialProfileRefusal || error instanceof CliInstallError) return error.message;
   return GENERIC;
 }
 function reasonOf(error: unknown): AuditReason {
   if (error instanceof RemoteSetupRefusal || error instanceof SignInRefusal || error instanceof ProfileOwnershipRefusal) return error.reason;
+  if (error instanceof CliInstallError) return error.reason === "timed-out" ? "timeout" : error.reason === "busy" ? "busy" : "failed";
   return "failed";
 }
 const NEEDS_ACCOUNTS: readonly RuntimeRemoteOperation[] = ["signin.start", "signin.capture", "signin.status", "signin.write", "accounts.check", "accounts.signout", "accounts.remove"];
@@ -114,7 +116,9 @@ export class RemoteAccounts {
     steps: { check?: () => void | Promise<void>; run: () => Promise<T>; /** The operation goes on after `run` (a sign-in): its own end is recorded later, so no `ok` here. */ openEnded?: boolean;
       /** Only one operation of this kind at a time on the computer, taken in the same synchronous step as the switch and profile checks (before any await). */ exclusive?: "signin-start" | "install" }): Promise<T> {
     const base = { actor, action, ...(subject.cli ? { cli: subject.cli } : {}), ...(subject.profile ? { profile: subject.profile } : {}) };
-    const refuse = (error: unknown): never => { this.record({ ...base, outcome: error instanceof RemoteSetupRefusal || error instanceof ProfileOwnershipRefusal || error instanceof SignInRefusal ? "refused" : "failed", reason: reasonOf(error) }, false); throw error; };
+    // A failure in `check` changed nothing, so it is a refusal whatever threw (a `find` or `knows` that throws too): it joins the folded refusals instead of
+    // writing one unmergeable `failed` line per request. Only a failure of `run` is `failed`.
+    const refuse = (error: unknown, inCheck = false): never => { this.record({ ...base, outcome: inCheck || error instanceof RemoteSetupRefusal || error instanceof ProfileOwnershipRefusal || error instanceof SignInRefusal ? "refused" : "failed", reason: reasonOf(error) }, false); throw error; };
     const key = subject.profile?.toLowerCase();
     try { requireRemoteSwitch(this.deps.pairingDirectory, switchName, this.now()); } catch (error) { return refuse(error); }
     if (key !== undefined) { if (this.busy.has(key)) return refuse(new SignInRefusal(`Another operation on "${subject.profile}" is in progress; try again in a moment`, "busy")); this.busy.add(key); }
@@ -124,7 +128,7 @@ export class RemoteAccounts {
       this.exclusive.add(taken);
     }
     try {
-      try { await steps.check?.(); } catch (error) { return refuse(error); }
+      try { await steps.check?.(); } catch (error) { return refuse(error, true); }
       this.record({ ...base, outcome: "started" }, true);
       try {
         const result = await steps.run();
@@ -172,7 +176,12 @@ export class RemoteAccounts {
           if (!this.deps.installer) throw new ProfileOwnershipRefusal("This Runtime cannot install CLIs", "unsupported");
           if (!this.deps.installer.knows(input.cli)) throw new ProfileOwnershipRefusal("That CLI is not in this Runtime's install list", "unsupported");
         },
-        run: async () => ({ version: (await this.deps.installer!.install(input.cli)).version }),
+        run: async () => {
+          const result = await this.deps.installer!.install(input.cli);
+          // The computer's CLI list changes now: the dashboard sees the new CLI without waiting for the next detection.
+          this.deps.changed();
+          return { version: result.version };
+        },
       });
     }
     // Everything below is "accounts". A sign-in that is still open when its switch is off ends, whichever request finds it first (the watch also does).
