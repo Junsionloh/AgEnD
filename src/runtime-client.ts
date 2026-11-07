@@ -16,6 +16,7 @@ import { RuntimeClientStore, runtimeJobDigest, validateRuntimeServer, type Runti
 import { RUNTIME_ROTATE_PATH, RUNTIME_REINSTALL_CLOSE_PREFIX, runtimeClaimFingerprint } from "./runtime-protocol.js";
 import { readRuntimeInfo } from "./runtime-build-info.js";
 import { ProcessNotConfirmedEnded, RemoteAccounts, type RemoteAccountsDeps, type RemoteInstaller } from "./runtime-remote-accounts.js";
+import { isCreatedProfile } from "./runtime-profile-ownership.js";
 import { killTree } from "./runtime-signin.js";
 import { CLI_INSTALL_CAPABILITY, REMOTE_SIGNIN_CAPABILITY } from "./runtime-remote-setup.js";
 import { managedCliRoot, managedInstaller, nativeInstallSupported } from "./runtime-cli-install.js";
@@ -542,7 +543,7 @@ export class RuntimeClient {
       catch { still(); this.remember(root, "claude-code", name, { loggedIn: null }); }
     }
     let name: string | undefined; try { name = this.options.store.credentialDefault(); } catch { /* reported as no default; a run refuses with the real error */ }
-    return credentialProfileReport(root, name);
+    return credentialProfileReport(root, name, profile => isCreatedProfile(root, "claude-code", profile));
   }
   private computerBoot: Promise<string | undefined> | undefined;
   private computerBootValue: string | undefined;
