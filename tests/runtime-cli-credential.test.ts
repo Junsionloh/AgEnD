@@ -95,8 +95,8 @@ describe("agend-runtime profile list / default", () => {
   });
   it("status reports names and signed-in state, never a folder or an account", async () => {
     const f = setup(); ensureCredentialProfile(f.root, "claude-code", "work");
-    await f.run(["profile", "list"]); f.out.length = 0; await f.run(["status"]);
-    const status = JSON.parse(f.text()); expect(status.credentialProfiles).toEqual({ profiles: [{ name: "work", loggedIn: true, created: false }] });   // a folder made without the Runtime recording it (#3190 Part 3c)
+    await f.run(["profile", "list"]); f.out.length = 0; await f.run(["status", "--json"]);
+    const status = JSON.parse(f.text()).profiles[0]; expect(status.credentialProfiles).toEqual({ profiles: [{ name: "work", loggedIn: true, created: false }] });   // a folder made without the Runtime recording it (#3190 Part 3c)
     expect(JSON.stringify(status.credentialProfiles)).not.toContain(f.root);
   });
 });
