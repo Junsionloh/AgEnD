@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { TmuxTerminalBackend, shellQuote, segmentInput, type TerminalBackend } from "./web-terminal.js";
 import type { StructuredSignInLaunch, StructuredSignInTransport } from "./structured-signin.js";
+import {
+  CHAT_PROFILE_LOGIN_BACKENDS, credentialHomeSpec, credentialProfileEnv, credentialProfileHome, isCredentialProfileName, prepareCredentialProfileHome,
+} from "./backend/credential-profile.js";
 
 /** Only host-selected paths/locale enter the dedicated CLI. No fleet/MCP/provider env injection. */
 export function structuredSignInEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
@@ -17,7 +20,33 @@ export function structuredSignInEnvironment(env: NodeJS.ProcessEnv): Record<stri
   return result;
 }
 
-export function createStructuredSignInTransport(options: { native?: TerminalBackend; env?: NodeJS.ProcessEnv } = {}): StructuredSignInTransport {
+/**
+ * AGEND-103: what a NAMED account's sign-in on this host adds to the environment. The same folder and variable the other profile sign-in (login-controller) and an
+ * agent's launch use (`credentialProfileEnv`: `CLAUDE_CONFIG_DIR=<dataDir>/credential-profiles/claude-code/<name>`), so the login lands in that profile's own folder and
+ * the default account's files are never touched. Only a NAME comes in (the closed profile-name check, no trimming, no path); the variable and the folder are this
+ * module's. The folder is prepared as a launch prepares it (links, seeded settings, a symlinked home refused), so a profile is never signed in through a link to the
+ * shared login. Throws `signin_profile_invalid` (not a name), `signin_profile_unsupported` (a backend whose login screen was not checked under a relocated home) or
+ * `signin_profile_failed` (the folder could not be made safely).
+ */
+export function structuredSignInProfileEnvironment(dataDir: string, backend: string, profile: string): Record<string, string> {
+  if (typeof profile !== "string" || !isCredentialProfileName(profile)) throw new Error("signin_profile_invalid");
+  const spec = credentialHomeSpec(backend);
+  if (!spec || !CHAT_PROFILE_LOGIN_BACKENDS.has(backend)) throw new Error("signin_profile_unsupported");
+  try { prepareCredentialProfileHome(spec, credentialProfileHome(dataDir, backend, profile)); } catch { throw new Error("signin_profile_failed"); }
+  const env = credentialProfileEnv(dataDir, backend, profile);
+  if (!env) throw new Error("signin_profile_unsupported");
+  return env;
+}
+
+export interface StructuredSignInTransportOptions {
+  native?: TerminalBackend;
+  env?: NodeJS.ProcessEnv;
+  /** AGEND-103: with these two, a launch that carries a `profile` signs that named account in (above). Without them a profile is refused, never dropped. */
+  backend?: string;
+  dataDir?: string;
+}
+
+export function createStructuredSignInTransport(options: StructuredSignInTransportOptions = {}): StructuredSignInTransport {
   const native = options.native ?? new TmuxTerminalBackend();
   const socket = `agend-signin-${randomBytes(16).toString("hex")}`;
   let dir: string | null = null, touched = false, closed = false;
@@ -30,10 +59,13 @@ export function createStructuredSignInTransport(options: { native?: TerminalBack
     start(spec: StructuredSignInLaunch, signal: AbortSignal) {
       return serial(async () => {
         guard(signal);
-        // A named profile is signed in through the host's own profile flow (login-controller) or, on a paired computer, through that computer's Runtime.
-        // This transport launches a CLI with the host's own environment only: a profile is never silently dropped.
-        if (spec.profile !== undefined) throw new Error("signin_profile_unsupported");
+        // A named profile (AGEND-103) is signed in here with that profile's own folder and variable; a transport that was not given its backend and data
+        // directory cannot say where that is, so it refuses: a profile is never silently dropped (that would sign the DEFAULT account in).
         const environment = structuredSignInEnvironment(options.env ?? process.env);
+        if (spec.profile !== undefined) {
+          if (!options.backend || !options.dataDir) throw new Error("signin_profile_unsupported");
+          Object.assign(environment, structuredSignInProfileEnvironment(options.dataDir, options.backend, spec.profile));
+        }
         const envArgs = Object.entries(environment).map(([key, value]) => shellQuote(`${key}=${value}`)).join(" ");
         // Exec closes the shell boundary after the fixed login command exits.
         // Neither this spec nor env values come from browser-provided bytes.

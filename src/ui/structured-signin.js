@@ -8,7 +8,7 @@ export const SIGNIN_STRINGS = {
     consoleOnly: "Use the explicit console fallback, or sign in later.", needed: "Sign-in needed", waiting: "Waiting for the CLI…", login: "Login: {0}",
     openProvider: "Open provider sign-in", deviceCode: "Device code:", answerSent: "Answer sent. Waiting for the next screen; it will not be sent twice.",
     cancel: "Cancel sign-in", signIn: "Sign in", signInAgain: "Sign in again", later: "Sign in later", submit: "Submit {0}",
-    relogin: "Sign in again? Kiro will sign out its existing account first.", ready: "You can continue setup.",
+    relogin: "Sign in again? This replaces the current sign-in.", relogin_kiro: "Sign in again? Kiro will sign out its existing account first.", ready: "You can continue setup.",
     field_code: "Paste the returned code", field_start_url: "Organization Start URL", field_region: "AWS region",
     phase_method: "method", phase_code: "code", phase_start_url: "start URL", phase_region: "region", phase_authorization: "authorization",
     choice_organization: "Your organization", choice_subscription: "Claude subscription",
@@ -22,6 +22,8 @@ export const SIGNIN_STRINGS = {
     error_backend_signin_local_only: "Backend sign-in is available only on this computer. Use the local setup page, or sign in later.",
     error_signin_session_expired: "This setup session has ended. Reopen setup on the host.",
     error_expired: "This login attempt expired. Start a new attempt.",
+    error_busy: "Another sign-in is already running. Finish or cancel it, then try again.",
+    error_signin_busy: "Another sign-in is already running. Finish or cancel it, then try again.",
     error_auth_unconfirmed: "The CLI exited, but credentials could not be verified. Retry or sign in later.",
     error_provider_rejected: "The provider rejected this sign-in. Retry or sign in later.",
     // #3190 Part 3c: a profile on a paired computer (the dashboard's Accounts view).
@@ -42,7 +44,7 @@ export const SIGNIN_STRINGS = {
     consoleOnly: "請改用主控台備援，或稍後登入。", needed: "需要登入", waiting: "等待 CLI 回應…", login: "登入：{0}",
     openProvider: "開啟登入頁", deviceCode: "裝置代碼：", answerSent: "已送出。等待下一個畫面；不會重複送出。",
     cancel: "取消登入", signIn: "登入", signInAgain: "重新登入", later: "稍後登入", submit: "送出{0}",
-    relogin: "要重新登入嗎？Kiro 會先登出目前的帳號。", ready: "可以繼續設定了。",
+    relogin: "要重新登入嗎？這會取代目前的登入。", relogin_kiro: "要重新登入嗎？Kiro 會先登出目前的帳號。", ready: "可以繼續設定了。",
     field_code: "貼上取得的代碼", field_start_url: "組織的 Start URL", field_region: "AWS 區域",
     phase_method: "選擇方式", phase_code: "代碼", phase_start_url: "Start URL", phase_region: "區域", phase_authorization: "授權",
     choice_organization: "你的組織", choice_subscription: "Claude 訂閱",
@@ -56,6 +58,8 @@ export const SIGNIN_STRINGS = {
     error_backend_signin_local_only: "後端登入只能在這台電腦上進行。請使用本機的設定頁，或稍後登入。",
     error_signin_session_expired: "這個設定工作階段已結束。請在主機上重新開啟設定。",
     error_expired: "這次登入已過期。請重新開始。",
+    error_busy: "已有另一個登入正在進行。請等它結束或先取消，再試一次。",
+    error_signin_busy: "已有另一個登入正在進行。請等它結束或先取消，再試一次。",
     error_auth_unconfirmed: "CLI 已結束，但無法確認憑證。請重試或稍後登入。",
     error_provider_rejected: "平台拒絕了這次登入。請重試或稍後登入。",
     // #3190 Part 3c：配對電腦上的憑證設定檔（儀表板的「帳號」頁）。
@@ -79,8 +83,16 @@ const pageLang = doc => /^zh/i.test(doc?.documentElement?.lang || "") ? "zh-TW" 
  * `machine` (#3190 Part 3c): these cards are for ONE credential profile on a paired computer (the endpoint carries `?machine=&profile=`). The dialog around them says
  * so, so the setup page's heading and lead are not repeated; there is no "sign in later" (this is an explicit request); and a sign-in again asks nothing about
  * Kiro (Claude Code's own sign-in replaces the login; it signs nothing out first).
+ *
+ * `dialog: true` (AGEND-103): the cards are inside the dashboard's own account sign-in dialog (Settings → Accounts), which says WHICH account in its title. So none of what the
+ * first-install setup page needs is drawn: no "Sign in your AI backends" heading and lead, no "Check sign-ins" button (the cards read themselves every second), no "Sign in
+ * later" (nothing would remember it) and no "You can continue setup". `focus` (a backend id) then shows only that backend's card: the default account's checklist may hold
+ * others. The setup page and the installer's `?backend_signins=` list do not pass `dialog`, and look as they did.
+ *
+ * `confirm` ({ message, confirmLabel } → Promise<boolean>): how "Sign in again?" is asked. The dashboard passes its in-app confirmation (ui-confirm.js); the setup page, which
+ * loads this file alone, falls back to the browser's `confirm()`.
  */
-export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, changed = () => {}, lang, machine = false } = {}) {
+export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, changed = () => {}, lang, machine = false, dialog = false, focus, confirm } = {}) {
   const doc = root.ownerDocument;
   let view = null, busy = false, disposed = false, timer = null, generation = 0, message = "", rendered = "";
   const language = () => (lang ? lang() : pageLang(doc)) === "zh-TW" ? "zh-TW" : "en";
@@ -110,10 +122,10 @@ export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, change
     const signature = JSON.stringify([view, busy, message, language()]);
     if (disposed || rendered === signature) return;
     rendered = signature; root.replaceChildren();
-    if (!machine) { el("h2", tr("heading")); el("p", tr("lead")); }
+    if (!machine && !dialog) { el("h2", tr("heading")); el("p", tr("lead")); }
     if (message) { const alert = el("p", errorText(message)); alert.setAttribute("role", "alert"); }
-    if (!view) { button(root, tr("check"), () => perform({ operation: "refresh" })); return; }
-    for (const backend of view.selected) {
+    if (!view) { if (!dialog) button(root, tr("check"), () => perform({ operation: "refresh" })); return; }
+    for (const backend of dialog && focus ? view.selected.filter(b => b === focus) : view.selected) {
       const card = el("section"); card.dataset.backend = backend;
       el("h3", name(backend), card);
       const state = view.states[backend], pending = view.pending.includes(backend), skipped = view.skipped.includes(backend);
@@ -144,16 +156,21 @@ export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, change
       } else {
         if (login?.reason && login.reason !== "cancelled") el("p", errorText(login.reason), card);
         const usable = !["antigravity"].includes(backend) && state !== "not_installed";
-        if (usable) button(card, tr(state === "valid" ? "signInAgain" : "signIn"), () => {
+        if (usable) button(card, tr(state === "valid" ? "signInAgain" : "signIn"), async () => {
           const relogin = state === "valid";
-          if (relogin && !machine && !globalThis.confirm(tr("relogin"))) return;
+          // Only Kiro signs its existing account out first; for the others a new sign-in simply replaces the login. Asked in the dashboard's own dialog when it gave one.
+          if (relogin && !machine) {
+            const ask = confirm || (async ({ message }) => globalThis.confirm(message));
+            let yes = false; try { yes = await ask({ message: tr(backend === "kiro-cli" ? "relogin_kiro" : "relogin"), confirmLabel: tr("signInAgain") }); } catch { yes = false; }
+            if (!yes || disposed) return;
+          }
           void perform({ operation: "start", backend, relogin });
         });
       }
-      if (pending && !skipped && !machine) button(card, tr("later"), () => perform({ operation: "skip", backend }));
+      if (pending && !skipped && !machine && !dialog) button(card, tr("later"), () => perform({ operation: "skip", backend }));
     }
-    button(root, tr("check"), () => perform({ operation: "refresh" }));
-    if (view.ready && !machine) el("p", tr("ready"));
+    if (!dialog) button(root, tr("check"), () => perform({ operation: "refresh" }));
+    if (view.ready && !machine && !dialog) el("p", tr("ready"));
   }
   async function poll() {
     if (disposed) return;
