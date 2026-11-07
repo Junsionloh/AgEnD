@@ -238,7 +238,9 @@ describe("#2599 shared browser controls", () => {
     const snapshot = { selected: ["codex"], pending: ["codex"], skipped: [], states: { codex: "invalid" }, login: null, ready: false };
     answer = r => r.url === "/ui/browser-backend-signins" ? snapshot : {};
     await p.mount(h(S.BrowserSignInDialog, { backend: "codex" })); await settle(8);
-    expect(text()).toContain("Sign in your AI backends"); expect(text()).toContain("Sign in later"); expect(text()).not.toContain("Open the sign-in terminal");
+    // The account page's dialog (AGEND-103): the title names the account; the first-install page's heading, lead, "Sign in later" and "Check sign-ins" are not carried over.
+    expect(p.root.querySelector(".dlg-title").textContent).toBe("Sign in to Codex · Default sign-in");
+    for (const gone of ["Sign in your AI backends", "Sign in later", "Check sign-ins", "Open the sign-in terminal"]) expect(text(), gone).not.toContain(gone);
     const start = p.root.querySelectorAll("section button").find((b: any) => b.textContent === "Sign in") as any;
     expect(start).toBeDefined(); await start.onclick(); await settle(4);
     expect(reqs.some(r => r.url === "/ui/browser-backend-signins" && r.body?.operation === "start" && r.body.backend === "codex")).toBe(true);
@@ -283,6 +285,8 @@ describe("#2599 installer dashboard handoff", () => {
     expect(reqs.filter(r => r.body?.operation === "select").map(r => r.body.backends)).toEqual([["kiro-cli", "codex", "antigravity"]]);
     expect(reqs.filter(r => ["start", "input", "cancel"].includes(r.body?.operation))).toEqual([]);
     expect(text()).toContain("Antigravity (console fallback)");
+    // The installer's list is the setup page's own: heading, lead, "Sign in later" and "Check sign-ins" stay as they were.
+    expect(text()).toContain("Sign in your AI backends"); expect(btn("Check sign-ins")).toBeDefined(); expect(text()).toContain("Sign in later");
     expect(btn("antigravity · Use console fallback")).toBeUndefined();
     fire(btn("codex · Use console fallback"), "click"); await settle(4);
     expect(reqs.some(r => r.body?.operation === "cancel")).toBe(true);

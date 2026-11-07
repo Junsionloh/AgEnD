@@ -8,7 +8,7 @@ export const SIGNIN_STRINGS = {
     consoleOnly: "Use the explicit console fallback, or sign in later.", needed: "Sign-in needed", waiting: "Waiting for the CLI…", login: "Login: {0}",
     openProvider: "Open provider sign-in", deviceCode: "Device code:", answerSent: "Answer sent. Waiting for the next screen; it will not be sent twice.",
     cancel: "Cancel sign-in", signIn: "Sign in", signInAgain: "Sign in again", later: "Sign in later", submit: "Submit {0}",
-    relogin: "Sign in again? Kiro will sign out its existing account first.", ready: "You can continue setup.",
+    relogin: "Sign in again? This replaces the current sign-in.", relogin_kiro: "Sign in again? Kiro will sign out its existing account first.", ready: "You can continue setup.",
     field_code: "Paste the returned code", field_start_url: "Organization Start URL", field_region: "AWS region",
     phase_method: "method", phase_code: "code", phase_start_url: "start URL", phase_region: "region", phase_authorization: "authorization",
     choice_organization: "Your organization", choice_subscription: "Claude subscription",
@@ -44,7 +44,7 @@ export const SIGNIN_STRINGS = {
     consoleOnly: "請改用主控台備援，或稍後登入。", needed: "需要登入", waiting: "等待 CLI 回應…", login: "登入：{0}",
     openProvider: "開啟登入頁", deviceCode: "裝置代碼：", answerSent: "已送出。等待下一個畫面；不會重複送出。",
     cancel: "取消登入", signIn: "登入", signInAgain: "重新登入", later: "稍後登入", submit: "送出{0}",
-    relogin: "要重新登入嗎？Kiro 會先登出目前的帳號。", ready: "可以繼續設定了。",
+    relogin: "要重新登入嗎？這會取代目前的登入。", relogin_kiro: "要重新登入嗎？Kiro 會先登出目前的帳號。", ready: "可以繼續設定了。",
     field_code: "貼上取得的代碼", field_start_url: "組織的 Start URL", field_region: "AWS 區域",
     phase_method: "選擇方式", phase_code: "代碼", phase_start_url: "Start URL", phase_region: "區域", phase_authorization: "授權",
     choice_organization: "你的組織", choice_subscription: "Claude 訂閱",
@@ -84,10 +84,15 @@ const pageLang = doc => /^zh/i.test(doc?.documentElement?.lang || "") ? "zh-TW" 
  * so, so the setup page's heading and lead are not repeated; there is no "sign in later" (this is an explicit request); and a sign-in again asks nothing about
  * Kiro (Claude Code's own sign-in replaces the login; it signs nothing out first).
  *
- * `checklist: false` (AGEND-103): these cards are for ONE named account on this host (the endpoint carries `?backend=&profile=`) — the same screen as the default account's,
- * but there is no setup checklist behind it, so there is no "Sign in later" (nothing would remember it).
+ * `dialog: true` (AGEND-103): the cards are inside the dashboard's own account sign-in dialog (Settings → Accounts), which says WHICH account in its title. So none of what the
+ * first-install setup page needs is drawn: no "Sign in your AI backends" heading and lead, no "Check sign-ins" button (the cards read themselves every second), no "Sign in
+ * later" (nothing would remember it) and no "You can continue setup". `focus` (a backend id) then shows only that backend's card: the default account's checklist may hold
+ * others. The setup page and the installer's `?backend_signins=` list do not pass `dialog`, and look as they did.
+ *
+ * `confirm` ({ message, confirmLabel } → Promise<boolean>): how "Sign in again?" is asked. The dashboard passes its in-app confirmation (ui-confirm.js); the setup page, which
+ * loads this file alone, falls back to the browser's `confirm()`.
  */
-export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, changed = () => {}, lang, machine = false, checklist = true } = {}) {
+export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, changed = () => {}, lang, machine = false, dialog = false, focus, confirm } = {}) {
   const doc = root.ownerDocument;
   let view = null, busy = false, disposed = false, timer = null, generation = 0, message = "", rendered = "";
   const language = () => (lang ? lang() : pageLang(doc)) === "zh-TW" ? "zh-TW" : "en";
@@ -117,10 +122,10 @@ export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, change
     const signature = JSON.stringify([view, busy, message, language()]);
     if (disposed || rendered === signature) return;
     rendered = signature; root.replaceChildren();
-    if (!machine) { el("h2", tr("heading")); el("p", tr("lead")); }
+    if (!machine && !dialog) { el("h2", tr("heading")); el("p", tr("lead")); }
     if (message) { const alert = el("p", errorText(message)); alert.setAttribute("role", "alert"); }
-    if (!view) { button(root, tr("check"), () => perform({ operation: "refresh" })); return; }
-    for (const backend of view.selected) {
+    if (!view) { if (!dialog) button(root, tr("check"), () => perform({ operation: "refresh" })); return; }
+    for (const backend of dialog && focus ? view.selected.filter(b => b === focus) : view.selected) {
       const card = el("section"); card.dataset.backend = backend;
       el("h3", name(backend), card);
       const state = view.states[backend], pending = view.pending.includes(backend), skipped = view.skipped.includes(backend);
@@ -151,16 +156,21 @@ export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, change
       } else {
         if (login?.reason && login.reason !== "cancelled") el("p", errorText(login.reason), card);
         const usable = !["antigravity"].includes(backend) && state !== "not_installed";
-        if (usable) button(card, tr(state === "valid" ? "signInAgain" : "signIn"), () => {
+        if (usable) button(card, tr(state === "valid" ? "signInAgain" : "signIn"), async () => {
           const relogin = state === "valid";
-          if (relogin && !machine && !globalThis.confirm(tr("relogin"))) return;
+          // Only Kiro signs its existing account out first; for the others a new sign-in simply replaces the login. Asked in the dashboard's own dialog when it gave one.
+          if (relogin && !machine) {
+            const ask = confirm || (async ({ message }) => globalThis.confirm(message));
+            let yes = false; try { yes = await ask({ message: tr(backend === "kiro-cli" ? "relogin_kiro" : "relogin"), confirmLabel: tr("signInAgain") }); } catch { yes = false; }
+            if (!yes || disposed) return;
+          }
           void perform({ operation: "start", backend, relogin });
         });
       }
-      if (pending && !skipped && !machine && checklist) button(card, tr("later"), () => perform({ operation: "skip", backend }));
+      if (pending && !skipped && !machine && !dialog) button(card, tr("later"), () => perform({ operation: "skip", backend }));
     }
-    button(root, tr("check"), () => perform({ operation: "refresh" }));
-    if (view.ready && !machine) el("p", tr("ready"));
+    if (!dialog) button(root, tr("check"), () => perform({ operation: "refresh" }));
+    if (view.ready && !machine && !dialog) el("p", tr("ready"));
   }
   async function poll() {
     if (disposed) return;

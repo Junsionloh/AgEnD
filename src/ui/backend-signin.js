@@ -10,6 +10,7 @@ import { t, register, lang, onLang } from "/assets/app-i18n.js";
 import { appStore, createStore, useStore } from "/assets/app-store.js";
 import { closeDialog, shellStore, showDialog } from "/assets/app-shell.js";
 import { Dialog } from "/assets/ui-dialog.js";
+import { confirmDialog } from "/assets/ui-confirm.js";
 import { toast } from "/assets/ui-toast.js";
 import { mountStructuredSignIns } from "./structured-signin.js";
 import { CliProductMark, cliLabel } from "./cli-picker.js";
@@ -54,6 +55,7 @@ register("signin", {
     listTitle: "Sign-ins",
     browserRunning: "Signing in to {0} on this machine",
     consoleFallback: "Use console fallback",
+    defaultAccount: "Default sign-in",
     listHint: "Each backend's login on this machine, and each credential profile an agent uses.",
     stUsable: "signed in",
     stNotSignedIn: "not signed in",
@@ -105,6 +107,7 @@ register("signin", {
     listTitle: "登入",
     browserRunning: "正在這台機器登入 {0}",
     consoleFallback: "改用主控台備援",
+    defaultAccount: "預設登入",
     listHint: "這台機器上每個 backend 的登入，以及代理使用的每個憑證設定檔。",
     stUsable: "已登入",
     stNotSignedIn: "未登入",
@@ -225,16 +228,20 @@ function Running({ login }) {
 }
 
 /**
- * The same closed controls as first setup — for a backend's default login and, with `profile` (AGEND-103), for a named account on this host: one press of Sign in, the
- * provider's page, the code pasted back. A named account's sign-in lives as long as this dialog: closing it (Close, ×, Esc, or the fallback) ends the sign-in, so none is
- * left running in the background to refuse Remove or Sign out.
+ * The Sign in dialog of Settings → Accounts, for the default account and (with `profile`, AGEND-103) for a named account on this host: one press of Sign in, the
+ * provider's page, the code pasted back. The title says which account (`Sign in to Claude Code · CHY` / `· Default sign-in`) and the two look the same, so the cards
+ * leave out what only the first-install page needs (see `dialog` in structured-signin.js); the console fallback is a line of small text at the bottom. A named
+ * account's sign-in lives as long as this dialog: closing it (Close, ×, Esc, or the fallback) ends the sign-in, so none is left running to refuse Remove or Sign out.
+ * `backends` (the installer's `?backend_signins=` list) is the setup page's own list, drawn as it was.
+ * Shared pieces only: Dialog, `.btn`, `.note`, the in-app confirmation (ui-confirm.js).
  */
 export function BrowserSignInDialog({ backend, profile, backends, onClose }) {
   const root = useRef(null), close = onClose || closeDialog;
   const endpoint = profile ? profileSignInEndpoint(backend, profile) : "/ui/browser-backend-signins";
+  const single = !backends;
   useEffect(() => {
     let cards, last = "";
-    cards = mountStructuredSignIns(root.current, { endpoint, lang, checklist: !profile, changed: next => {
+    cards = mountStructuredSignIns(root.current, { endpoint, lang, ...(single ? { dialog: true, focus: backend, confirm: confirmDialog } : {}), changed: next => {
       if (!profile) {
         if (backends) { if (backends.some(b => !next.selected.includes(b))) void cards.addBackends(backends); }
         else if (!next.selected.includes(backend)) void cards.addBackend(backend);
@@ -255,10 +262,11 @@ export function BrowserSignInDialog({ backend, profile, backends, onClose }) {
   };
   const actions = html`<div class="signin-browser-actions">
     ${backends ? backends.filter(b => b !== "antigravity").map(b => html`<button type="button" class="btn" onClick=${() => fallback(b)}>${b} · ${tn("consoleFallback")}</button>`) : null}
-    ${backend ? html`<button type="button" class="btn" onClick=${() => fallback(backend)}>${tn("consoleFallback")}</button>` : null}
     <button type="button" class="btn" onClick=${close}>${tn("close")}</button></div>`;
-  return html`<${Dialog} title=${backends ? tn("listTitle") : tn("title", profile ? tn("profile", cliLabel(backend), profile) : cliLabel(backend))} onClose=${close} actions=${actions}>
+  const account = backend ? `${cliLabel(backend)} · ${profile || tn("defaultAccount")}` : "";
+  return html`<${Dialog} title=${backends ? tn("listTitle") : tn("title", account)} onClose=${close} actions=${actions}>
     <div class="signin-browser" ref=${root}></div>
+    ${single ? html`<p class="note"><button type="button" class="btn btn-sm btn-ghost" onClick=${() => fallback(backend)}>${tn("consoleFallback")}</button></p>` : null}
   </${Dialog}>`;
 }
 
