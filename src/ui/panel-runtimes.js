@@ -58,7 +58,7 @@ register("machines", {
     guide:"How another PC connects", guideAddress:"1. Give this fleet an HTTPS address the other PC can reach. Recommended: Tailscale Serve, run on this computer (on Windows, if AgEnD runs in WSL). Then use the https://….ts.net address it prints:",
     guideSsh:"Or: an SSH tunnel, opened on the other PC (replace user@this-computer with your SSH sign-in for this computer). Then use http://localhost:{0}:", guideFunnel:"Never use Tailscale Funnel: it puts this fleet on the internet.",
     guideLan:"A plain http:// address on your network (such as http://192.168.1.20) is refused: it would send the pairing code unencrypted.",
-    guidePair:"2. Click Connect a computer, install the Runtime on the other PC with the PowerShell command it shows (or download the ZIP instead), then run the connect command there.", guideApprove:"3. When that PC asks to join, approve it here.",
+    guidePair:"2. Click Connect a computer, then paste the PowerShell command it shows on the other PC: it installs the Runtime and connects it in the same window, and asks for the pairing code from this page (or download the ZIP instead, extract it there and double-click its connect file).", guideApprove:"3. When that PC asks to join, approve it here.",
     turnOff:"Turn off",
   },
   "zh-TW": {
@@ -85,7 +85,7 @@ register("machines", {
     guide:"另一台電腦如何連線", guideAddress:"1. 讓另一台電腦能用 HTTPS 位址連到這個 Fleet。建議在這台電腦上執行 Tailscale Serve（若 AgEnD 在 WSL 中執行，請在 Windows 上執行），再使用它顯示的 https://….ts.net 位址：",
     guideSsh:"或：在另一台電腦上開啟 SSH 通道（把 user@this-computer 換成你登入這台電腦的 SSH 帳號），再使用 http://localhost:{0}：", guideFunnel:"請勿使用 Tailscale Funnel：它會把這個 Fleet 公開到網際網路。",
     guideLan:"網路上的一般 http:// 位址（例如 http://192.168.1.20）會被拒絕：配對碼會以未加密的方式傳送。",
-    guidePair:"2. 按「連接電腦」，在另一台電腦用頁面顯示的 PowerShell 指令安裝 Runtime（或改為下載 ZIP），再在那裡執行連線指令。", guideApprove:"3. 那台電腦要求加入時，在這裡核准它。",
+    guidePair:"2. 按「連接電腦」，在另一台電腦貼上頁面顯示的 PowerShell 指令：它會安裝 Runtime 並在同一個視窗直接連線，提示時輸入這一頁的配對碼（或改為下載 ZIP，在那裡解壓縮後雙擊裡面的連線檔）。", guideApprove:"3. 那台電腦要求加入時，在這裡核准它。",
     turnOff:"關閉此功能",
   },
 });

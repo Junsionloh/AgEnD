@@ -316,6 +316,22 @@ describe("remote machine UI",()=>{
       expect(p.root.textContent).not.toMatch(/another Claude account|claude-config-dir|--profile/i);expect(p.root.querySelectorAll('.runtime-pairing input[type=checkbox]')).toHaveLength(0);
       expect(p.root.textContent).toContain("never put in the command");expect(p.root.textContent).toContain("22.14");
     });
+    it.each([
+      ["en",["Paste the command into PowerShell","Enter the pairing code when the window asks"],"connects that computer in the same window","When the PowerShell window asks for the one-time pairing code","Manual commands (for an AI agent or a script)","Install only (does not connect)"],
+      ["zh-TW",["在 PowerShell 貼上指令","視窗提示時輸入配對碼"],"在同一個視窗直接連線那台電腦","PowerShell 視窗要求一次性配對碼時","手動指令（給 AI 或腳本使用）","只安裝（不連線）"],
+    ] as const)("describes the one pasted command in %s: paste, type the code when asked, approve; the old 'does not connect / run the connect command' wording is gone",async(lang,titles,hint,codeHint,manual,installOnly)=>{
+      const i18n=await import("/assets/app-i18n.js");i18n.setLang(lang,{store:false});
+      try{
+        await p.mount(h(Panel,{navKey:`runtime-windows-copy-${lang}`}));await settle(8);button(lang==="en" ? "Connect a computer" : "連接電腦").click();await settle(8);
+        expect(stepTitles().slice(1,3)).toEqual(titles);
+        const text=p.root.querySelector(".runtime-install-panel").textContent;
+        expect(text).toContain(hint);expect(text).toContain(codeHint);expect(text).toContain(manual);expect(text).toContain(installOnly);
+        expect(text).toContain("connect-agend.bat");   // the reconnect hint: double-click it next time
+        expect(p.root.textContent).not.toMatch(/not connect, pair|then run the connect command there|再在那裡執行連線指令|不會連線、不會配對/);   // (the manual "Install only (does not connect)" label is deliberate)
+        // the connection guide above the steps says the same thing: one pasted command, the code typed when asked
+        expect(p.root.querySelector("details.runtime-connect-guide").textContent).toContain(lang==="en" ? "installs the Runtime and connects it in the same window" : "它會安裝 Runtime 並在同一個視窗直接連線");
+      }finally{i18n.setLang("en",{store:false});}
+    });
     it("rewrites both commands when the address changes, and shows neither for an unsafe one",async()=>{
       await open("runtime-windows-address");
       await setServer("https://fleet.example.test:10443");
