@@ -2,7 +2,7 @@
 // (the ones agents use, and the ones only on this host), which account each is (masked, #3190), who uses it and its
 // weekly usage. From GET /ui/accounts (the local admin session only; nothing about a credential reaches this page).
 // - Sign in / Sign in again: the existing dialogs (backend-signin.js: one implementation, the same login flows).
-// - Move agents here…: stages each chosen agent's `backend_options.<cli>.credential_profile`, through Settings' own
+// - Move agents here: stages each chosen agent's `backend_options.<cli>.credential_profile`, through Settings' own
 //   staging and Save (a change of account waits for the same confirmation as any credential setting, and restarts).
 // - Fleet default: the same, for `defaults.backend_options.<cli>.credential_profile`.
 // - AccountSelect: the Agent dialog's Account field (settings-dialogs.js), from the same view.
@@ -31,9 +31,10 @@ register("accounts", {
     def: "Default sign-in", profile: "Account “{0}”", state_usable: "signed in", state_not_signed_in: "not signed in", state_unknown: "not checked",
     state_not_installed: "not installed", state_too_old: "too old",
     usedBy: "used by {0}", usedByNone: "used by no agent", agents: "{0} agents", agent: "1 agent", channels: "{0} ClassicBot rooms", channel: "1 ClassicBot room",
-    fleetDefaultTag: "fleet default", weekly: "{0}% of the week", resets: "resets {0}", stale: "last known",
+    fleetDefaultTag: "fleet default", resets: "resets {0}", resetsIn: "resets in {0}",
+    usageLabel: "Usage", winHours: "{0}h", winDays: "{0}d", winWeek: "7d", winStale: "(stale)",
     signIn: "Sign in", signInAgain: "Sign in again", hostCommand: "Sign in on the host", hostCommandHint: "Run this in a terminal on the host running AgEnD.",
-    moveHere: "Move agents here…", moveTitle: "Move agents to {0}", moveLead: "Choose the {0} agents that should use {1}. Each restarts on it when you Save:",
+    moveHere: "Move agents here", moveTitle: "Move agents to {0}", moveLead: "Choose the {0} agents that should use {1}. Each restarts on it when you Save:",
     carry_claude: "Claude Code carries its conversation over.", carry_codex: "Codex keeps its conversation.", carry_kiro: "Kiro starts a new conversation, with a handover.",
     moveNone: "Every {0} agent already uses this account.", moveStage: "Stage", cancel: "Cancel", current: "now: {0}",
     fleetDefault: "Fleet default for {0} agents", fleetDefaultHint: "Agents that don't choose an account use this one.",
@@ -50,6 +51,7 @@ register("accounts", {
     acctLabel: "Account", acctInherit: "Fleet default ({0})", acctInheritDefault: "Fleet default (default sign-in)", acctNotSignedIn: "{0} — not signed in",
     acctHint: "Changing the account restarts the agent. A signed-out account can't be chosen: sign it in under Accounts first.",
     acctDefaultBlocked: "This fleet's default for {0} is “{1}”, so an agent follows it unless it names another account.",
+    usedPopTitle: "Agents using this account", usedGo: "Open settings →", usedGoFor: "Open the settings of {0}",
   },
   "zh-TW": {
     title: "帳號", hint: "這台主機上各 CLI 的登入：預設登入與具名帳號（憑證設定檔）、誰在使用，以及每週用量。",
@@ -57,9 +59,10 @@ register("accounts", {
     def: "預設登入", profile: "帳號「{0}」", state_usable: "已登入", state_not_signed_in: "尚未登入", state_unknown: "未確認",
     state_not_installed: "未安裝", state_too_old: "版本太舊",
     usedBy: "使用者：{0}", usedByNone: "沒有 Agent 使用", agents: "{0} 個 Agent", agent: "1 個 Agent", channels: "{0} 個 ClassicBot 房間", channel: "1 個 ClassicBot 房間",
-    fleetDefaultTag: "Fleet 預設", weekly: "本週已用 {0}%", resets: "{0} 重置", stale: "最後已知",
+    fleetDefaultTag: "Fleet 預設", resets: "{0} 重置", resetsIn: "{0} 後重置",
+    usageLabel: "用量", winHours: "{0}h", winDays: "{0}天", winWeek: "本週", winStale: "（未更新）",
     signIn: "登入", signInAgain: "重新登入", hostCommand: "在主機上登入", hostCommandHint: "請在執行 AgEnD 的主機終端機執行。",
-    moveHere: "把 Agent 移到這裡…", moveTitle: "把 Agent 移到 {0}", moveLead: "選擇要改用 {1} 的 {0} Agent。按「儲存」後，各自會以它重新啟動：",
+    moveHere: "移入 Agent", moveTitle: "把 Agent 移到 {0}", moveLead: "選擇要改用 {1} 的 {0} Agent。按「儲存」後，各自會以它重新啟動：",
     carry_claude: "Claude Code 會帶著對話過去。", carry_codex: "Codex 保留原本的對話。", carry_kiro: "Kiro 會開新對話並附上交接。",
     moveNone: "所有 {0} Agent 都已經使用這個帳號。", moveStage: "加入待儲存", cancel: "取消", current: "目前：{0}",
     fleetDefault: "{0} Agent 的 Fleet 預設帳號", fleetDefaultHint: "沒有指定帳號的 Agent 會使用這個。",
@@ -76,6 +79,7 @@ register("accounts", {
     acctLabel: "帳號", acctInherit: "Fleet 預設（{0}）", acctInheritDefault: "Fleet 預設（預設登入）", acctNotSignedIn: "{0}——尚未登入",
     acctHint: "更換帳號會重新啟動 Agent。尚未登入的帳號不能選，請先在「帳號」登入。",
     acctDefaultBlocked: "這個 Fleet 的 {0} 預設帳號是「{1}」，Agent 除非指定其他帳號，否則會使用它。",
+    usedPopTitle: "使用此帳號的 Agent（點擊跳轉設定）", usedGo: "前往設定 →", usedGoFor: "前往 {0} 的設定",
   },
 });
 const tx = (k, ...v) => t(`accounts.${k}`, ...v);
@@ -132,7 +136,45 @@ const usedText = (row) => {
   if (c) parts.push(c === 1 ? tx("channel") : tx("channels", c));
   return parts.length ? tx("usedBy", parts.join(" · ")) : tx("usedByNone");
 };
-const when = (iso) => { try { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" }) : ""; } catch { return ""; } };
+/** A reset time as the person reads it: the time alone when it is today, else the weekday and the time. */
+const when = (iso, now = new Date()) => {
+  try {
+    const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) return "";
+    return d.toLocaleString(undefined, d.toDateString() === now.toDateString() ? { hour: "numeric", minute: "2-digit" } : { weekday: "short", hour: "numeric", minute: "2-digit" });
+  } catch { return ""; }
+};
+/** How long until `iso`, in the coarsest unit that still says something: "45m", "3h" (hours up to two days), "3d". "" when it is not ahead. */
+const until = (iso, now = Date.now()) => {
+  const ms = new Date(iso).getTime() - now;
+  if (!(ms > 0)) return "";
+  const min = Math.ceil(ms / 60_000);
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  return h < 48 ? `${h}h` : `${Math.floor(h / 24)}d`;
+};
+/** A usage window's name, from its length: "5h" for hours, the week's own word near seven days, else "30d". `fallback`: what a window of unknown length is. */
+const winLabel = (u, fallback = "") => {
+  const ms = Number(u && u.windowMs);
+  if (!(ms > 0)) return fallback;
+  const h = ms / 3_600_000;
+  if (h < 48) return tx("winHours", Math.max(1, Math.round(h)));
+  const d = Math.round(h / 24);
+  return d >= 6 && d <= 8 ? tx("winWeek") : tx("winDays", d);
+};
+/** One window of the usage block: its name, a meter, the percent (amber from 70%, red from 90%) and when it resets. A grid row of four fixed columns, so rows stack aligned. */
+function UsageWindow({ u, kind }) {
+  const p = Math.max(0, Math.min(100, Math.round(Number(u.percent) || 0)));
+  const level = p >= 90 ? " is-crit" : p >= 70 ? " is-warn" : "";
+  // The short window resets within hours: "resets in 3h" says more than a clock time. The week's reset is a day and time. The exact time is the tooltip.
+  const t = u.resetsAt ? (kind === "short" ? until(u.resetsAt) : when(u.resetsAt)) : "";
+  const reset = t ? tx(kind === "short" ? "resetsIn" : "resets", t) : "";
+  const exact = reset && new Date(u.resetsAt).toLocaleString();
+  // The spaces between the cells are not drawn (a grid ignores whitespace between its items); they keep the text readable where it is copied or read as text.
+  return html`<div class=${`s-usage-win is-${kind}${level}`}><span class="s-usage-win-lbl">${winLabel(u, kind === "weekly" ? tx("winWeek") : "")}</span>${" "}
+    <progress class="s-usage-meter" max="100" value=${p} aria-hidden="true"></progress>${" "}
+    <span class="s-usage-win-pct">${p}%</span>${" "}<span class="s-usage-win-reset" title=${exact || null}>${reset}</span>${" "}</div>`;
+}
 
 /**
  * The fleet default's `backend_options` after choosing `profile` (null: none) for `backend`: the whole map, because the
@@ -193,7 +235,7 @@ export function AccountsView({ instances, stageAgent, stageDefault, openAgent })
   const clis = (view && view.clis) || [];
   return html`<section class="s-group s-accounts" aria-label=${tx("title")}>
     <header class="s-auth-section-head"><div><h3>${tx("title")}</h3><p>${tx("hint")}</p></div></header>
-    ${!clis.length ? html`<p class="note">${tx("empty")}</p>` : clis.map((cli) => html`<${Card} key=${cli.backend} cli=${cli} running=${running} onMove=${begin((row) => setMove({ cli, row }))} stageDefault=${stageDefault}
+    ${!clis.length ? html`<p class="note">${tx("empty")}</p>` : clis.map((cli) => html`<${Card} key=${cli.backend} cli=${cli} running=${running} openAgent=${openAgent} onMove=${begin((row) => setMove({ cli, row }))} stageDefault=${stageDefault}
       onAdd=${begin((machine) => setAdding(machine ? { cli, machine } : cli))} onRemove=${begin((row) => setRemoving({ cli, row }))} onSignIn=${begin((target) => (target.machine ? openMachineSignIn(target) : openSignIn(target)))}
       onSignOut=${begin((row, mode) => setSigningOut({ cli, row, mode }))} />`)}
     ${move ? html`<${MoveDialog} cli=${move.cli} row=${move.row} instances=${instances} stageAgent=${stageAgent} onClose=${() => setMove(null)} />` : null}
@@ -248,7 +290,7 @@ function moveUser(backend, user, openAgent) {
   }
 }
 
-function Card({ cli, running, onMove, stageDefault, onAdd, onRemove, onSignIn, onSignOut }) {
+function Card({ cli, running, openAgent, onMove, stageDefault, onAdd, onRemove, onSignIn, onSignOut }) {
   const [picked, setPicked] = useState(undefined);   // a staged fleet default, shown until Save reads it back
   useEffect(() => setPicked(undefined), [cli.fleetDefault]);
   const host = cli.rows.filter((r) => r.scope && r.scope.kind === "host");
@@ -258,8 +300,8 @@ function Card({ cli, running, onMove, stageDefault, onAdd, onRemove, onSignIn, o
   return html`<div class="s-account-card" data-backend=${cli.backend}>
     <div class="s-account-head"><${CliProductMark} id=${cli.backend} size=${24} /><strong>${cliLabel(cli.backend)}</strong>
       ${cli.profiles && typeof onAdd === "function" ? html`<button type="button" class="btn btn-sm s-account-add" onClick=${() => onAdd()}>${manageWords.add()}</button>` : null}</div>
-    <div class="s-account-rows">${host.map((row) => html`<${Row} key=${row.profile || ""} cli=${cli} row=${row} running=${running} onMove=${onMove} onRemove=${onRemove} onSignIn=${onSignIn} onSignOut=${onSignOut} />`)}</div>
-    ${[...machines.values()].map((m) => html`<${MachineSection} key=${m.scope.id} cli=${cli} m=${m} running=${running} onAdd=${onAdd} onSignIn=${onSignIn} onSignOut=${onSignOut} onRemove=${onRemove} />`)}
+    <div class="s-account-rows">${host.map((row) => html`<${Row} key=${row.profile || ""} cli=${cli} row=${row} running=${running} openAgent=${openAgent} onMove=${onMove} onRemove=${onRemove} onSignIn=${onSignIn} onSignOut=${onSignOut} />`)}</div>
+    ${[...machines.values()].map((m) => html`<${MachineSection} key=${m.scope.id} cli=${cli} m=${m} running=${running} openAgent=${openAgent} onAdd=${onAdd} onSignIn=${onSignIn} onSignOut=${onSignOut} onRemove=${onRemove} />`)}
     ${cli.profiles && typeof stageDefault === "function" ? html`<label class="field s-account-default"><span>${tx("fleetDefault", cliLabel(cli.backend))}</span>
       <select value=${(picked !== undefined ? picked : cli.fleetDefault) || ""} onChange=${(e) => { setPicked(e.target.value || null); stageDefault(cli.backend, e.target.value || null); }}>
         <option value="">${tx("def")}</option>
@@ -273,7 +315,7 @@ function Card({ cli, running, onMove, stageDefault, onAdd, onRemove, onSignIn, o
  * #3190 Part 3c: one paired computer's accounts under its name: online or not, why nothing can be changed there when that is so (said once, for the whole
  * computer), + Add account where its Runtime will take one, and its rows.
  */
-function MachineSection({ cli, m, running, onAdd, onSignIn, onSignOut, onRemove }) {
+function MachineSection({ cli, m, running, openAgent, onAdd, onSignIn, onSignOut, onRemove }) {
   const level = m.rows.map((r) => r.scope.readOnlyReason).find((code) => code && MACHINE_LEVEL.has(code));
   const online = !!m.scope.online;
   return html`<div class="s-account-machine" data-machine=${m.scope.id}>
@@ -281,35 +323,73 @@ function MachineSection({ cli, m, running, onAdd, onSignIn, onSignOut, onRemove 
       <span class=${`tag s-auth-state is-${online ? "usable" : "unknown"}`}>${online ? tx("machineOnline") : tx("machineOffline")}</span>
       ${cli.profiles && !level && typeof onAdd === "function" ? html`<button type="button" class="btn btn-sm s-account-add" disabled=${running} onClick=${() => onAdd(m.scope)}>${manageWords.add()}</button>` : null}</div>
     ${level ? html`<p class="note s-account-why" role="status">${reasonText(level, m.scope.name)}</p>` : null}
-    ${m.rows.map((row) => html`<${Row} key=${`m:${m.scope.id}:${row.profile || ""}`} cli=${cli} row=${row} running=${running} onSignIn=${onSignIn} onSignOut=${onSignOut} onRemove=${onRemove} />`)}
+    ${m.rows.map((row) => html`<${Row} key=${`m:${m.scope.id}:${row.profile || ""}`} cli=${cli} row=${row} running=${running} openAgent=${openAgent} onSignIn=${onSignIn} onSignOut=${onSignOut} onRemove=${onRemove} />`)}
   </div>`;
 }
 
-function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, running = false, readOnly = false }) {
+/**
+ * "used by …" (#3212 box layout): a pill. When agents use the account it is a button, and its list opens as a floating
+ * layer (`.s-used-popover`, position: absolute: it covers what is below and never moves the card or the next one): each agent
+ * with a jump to its own settings (`openAgent`). A click outside or Esc closes it. Closed, the list is not in the page at all.
+ */
+function UsedBy({ row, label, openAgent }) {
+  const agents = row.usedBy.agents;
+  const [open, setOpen] = useState(false);
+  const wrap = useRef(null), pill = useRef(null);
+  useEffect(() => {
+    if (!open || typeof document === "undefined") return undefined;
+    const away = (e) => { if (wrap.current && !wrap.current.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === "Escape") { setOpen(false); if (pill.current && pill.current.focus) pill.current.focus(); } };
+    document.addEventListener("click", away); document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("click", away); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  useEffect(() => { if (open && !agents.length) setOpen(false); }, [agents.length]);   // read again: nobody uses it any more
+  if (!agents.length) return html`<small class="s-account-used">${label}</small>`;
+  return html`<span class="s-used-wrap" ref=${wrap}>
+    <button type="button" class=${`s-account-used has-users${open ? " is-open" : ""}`} ref=${pill} aria-haspopup="true" aria-expanded=${open ? "true" : "false"} onClick=${() => setOpen(!open)}>${label}</button>
+    ${open ? html`<div class="s-used-popover" role="group" aria-label=${tx("usedPopTitle")}>
+      <p class="s-used-popover-title">${tx("usedPopTitle")}</p>
+      <ul>${agents.map((name) => html`<li key=${name}><span class="s-used-agent">${name}</span>
+        ${typeof openAgent === "function" ? html`<button type="button" class="btn btn-sm s-used-go" aria-label=${tx("usedGoFor", name)} onClick=${() => { setOpen(false); openAgent(name); }}>${tx("usedGo")}</button>` : null}</li>`)}</ul>
+    </div>` : null}
+  </span>`;
+}
+
+function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, openAgent, running = false, readOnly = false }) {
   // #3212 PR 3: a signed-in account of a CLI whose own logout the dashboard runs; Switch account on the default sign-in.
   // #3190 Part 3c: a computer's row is changed only where its Runtime allows it (`signIn`); never its default (the Windows user's own sign-in), never Move or Switch.
   const machine = row.scope && row.scope.kind === "machine" ? row.scope : null;
   const manageable = !machine || (row.signIn && !!row.profile);
   const canSignOut = manageable && typeof onSignOut === "function" && row.state === "usable" && SIGN_OUT_CLIS.has(row.backend);
   const who = identityText(row.identity);
-  const u = row.usage;
+  // The week's usage and the short window's (the "5h"), as the server gives them; a CLI that reports one shows one.
+  const windows = [row.shortUsage ? ["short", row.shortUsage] : null, row.usage ? ["weekly", row.usage] : null].filter(Boolean);
+  const stale = windows.some(([, w]) => w.stale);
   const why = machine && machine.readOnlyReason && !MACHINE_LEVEL.has(machine.readOnlyReason) ? reasonText(machine.readOnlyReason, machine.name) : "";
+  // Four layers in one box: the title bar (name, state, default tag · the buttons), the meta bar (who, used by), the usage block (5h and the week) and Keep sign-in alive as the box's foot.
   return html`<div class="s-row s-account-row" data-account=${row.profile || "default"}>
-    <div class="s-account-who"><strong>${rowName(row)}</strong>
-      ${who ? html`<small class="s-account-identity">${who}</small>` : null}
-      <small class="s-account-used">${usedText(row)}${row.usedBy.fleetDefault && cli.profiles ? html` · <span class="tag">${machine ? tx("machineDefaultTag") : tx("fleetDefaultTag")}</span>` : null}</small>
-      ${machine ? html`<small class="s-account-usage is-none" title=${tx("machineNoUsageHint")}>${tx("machineNoUsage")}</small>` : null}
-      ${why ? html`<small class="note s-account-why">${why}</small>` : null}
-      ${u ? html`<small class=${`s-account-usage${u.stale ? " is-stale" : ""}`}>${tx("weekly", u.percent)}${u.resetsAt ? ` · ${tx("resets", when(u.resetsAt))}` : ""}${u.stale ? ` · ${tx("stale")}` : ""}</small>` : null}
+    <div class="s-account-title-bar">
+      <div class="s-account-title-left"><strong>${rowName(row)}</strong>
+        <span class=${`tag s-auth-state is-${row.state || "unknown"}`}>${tx(`state_${row.state || "unknown"}`)}</span>
+        ${row.usedBy.fleetDefault && cli.profiles ? html`<span class="tag s-account-default-tag">${machine ? tx("machineDefaultTag") : tx("fleetDefaultTag")}</span>` : null}</div>
+      ${readOnly ? null : html`<span class="s-actions">
+        ${row.signIn && typeof onSignIn === "function" ? html`<button type="button" class=${row.state === "not_signed_in" ? "btn btn-sm btn-primary" : "btn btn-sm"} disabled=${running} onClick=${() => onSignIn({ backend: row.backend, ...(row.profile ? { profile: row.profile } : {}), ...(machine ? { machine } : {}) })}>${row.state === "usable" ? tx("signInAgain") : tx("signIn")}</button>` : null}
+        ${!machine && cli.profiles && row.state !== "not_signed_in" && typeof onMove === "function" ? html`<button type="button" class="btn btn-sm" onClick=${() => onMove(row)}>${tx("moveHere")}</button>` : null}
+        ${canSignOut && !machine && !row.profile && row.signIn ? html`<button type="button" class="btn btn-sm s-account-switch" disabled=${running} onClick=${() => onSignOut(row, "switch")}>${manageWords.switchAccount()}</button>` : null}
+        ${canSignOut ? html`<button type="button" class="btn btn-sm btn-ghost s-account-signout" disabled=${running} onClick=${() => onSignOut(row, "signout")}>${manageWords.signOut()}</button>` : null}
+        ${manageable && row.profile && typeof onRemove === "function" ? html`<button type="button" class="btn btn-sm btn-ghost s-account-remove" onClick=${() => onRemove(row)}>${manageWords.remove()}</button>` : null}
+      </span>`}
     </div>
-    <span class=${`tag s-auth-state is-${row.state || "unknown"}`}>${tx(`state_${row.state || "unknown"}`)}</span>
-    ${readOnly ? null : html`<span class="s-actions">
-      ${row.signIn && typeof onSignIn === "function" ? html`<button type="button" class=${row.state === "not_signed_in" ? "btn btn-sm btn-primary" : "btn btn-sm"} disabled=${running} onClick=${() => onSignIn({ backend: row.backend, ...(row.profile ? { profile: row.profile } : {}), ...(machine ? { machine } : {}) })}>${row.state === "usable" ? tx("signInAgain") : tx("signIn")}</button>` : null}
-      ${!machine && cli.profiles && row.state !== "not_signed_in" && typeof onMove === "function" ? html`<button type="button" class="btn btn-sm" onClick=${() => onMove(row)}>${tx("moveHere")}</button>` : null}
-      ${canSignOut && !machine && !row.profile && row.signIn ? html`<button type="button" class="btn btn-sm s-account-switch" disabled=${running} onClick=${() => onSignOut(row, "switch")}>${manageWords.switchAccount()}</button>` : null}
-      ${canSignOut ? html`<button type="button" class="btn btn-sm btn-ghost s-account-signout" disabled=${running} onClick=${() => onSignOut(row, "signout")}>${manageWords.signOut()}</button>` : null}
-      ${manageable && row.profile && typeof onRemove === "function" ? html`<button type="button" class="btn btn-sm btn-ghost s-account-remove" onClick=${() => onRemove(row)}>${manageWords.remove()}</button>` : null}
-    </span>`}
+    <div class="s-account-meta-bar">
+      ${who ? html`<small class="s-account-identity">${who}</small>` : null}
+      <${UsedBy} row=${row} label=${usedText(row)} openAgent=${openAgent} />
+      ${machine ? html`<small class="s-account-usage is-none" title=${tx("machineNoUsageHint")}>${tx("machineNoUsage")}</small>` : null}
+    </div>
+    ${windows.length ? html`<div class=${`s-account-usage${stale ? " is-stale" : ""}`} role="group" aria-label=${tx("usageLabel")}>
+      ${windows.map(([kind, w]) => html`<${UsageWindow} key=${kind} u=${w} kind=${kind} />`)}
+      ${stale ? html`<small class="s-usage-stale">${tx("winStale")}</small>` : null}
+    </div>` : null}
+    ${why ? html`<p class="note s-account-why">${why}</p>` : null}
     ${!readOnly && !row.signIn && row.hostCommand ? html`<details class="s-host-cli-help"><summary>${machine ? tx("machineCommand") : tx("hostCommand")}</summary><p class="note">${machine ? tx("machineCommandHint", machine.name) : tx("hostCommandHint")}</p><p class="s-host-cli-command"><code>${row.hostCommand}</code></p></details>` : null}
     ${!readOnly && row.keepAlive && (!row.scope || row.scope.kind === "host") ? html`<${KeepAliveControl} row=${row} onSaved=${() => refreshAccounts({ fresh: true })} />` : null}
   </div>`;
