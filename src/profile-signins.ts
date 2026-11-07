@@ -94,8 +94,10 @@ export class ProfileSignIns {
     // After a finished sign-in the account is signed in, whatever an older probe said.
     const known = this.states.get(keyOf(target.backend, target.profile)) ?? "unknown";
     const state = login?.phase === "done" ? "valid" : known;
+    // `ready` is what the cards turn into "You can continue": here, only once the account is signed in and no attempt is in flight (as the default account's, whose
+    // `ready` is "nothing is pending"), not merely because nothing is running.
     return { selected: [target.backend], pending: state === "valid" ? [] : [target.backend], skipped: [], states: { [target.backend]: state },
-      login, ready: this.terminal(run), target: { backend: target.backend, profile: target.profile } };
+      login, ready: this.terminal(run) && state === "valid", target: { backend: target.backend, profile: target.profile } };
   }
   /** What the page polls (GET): the snapshot, reading the account's state first when it has not been read since the last change. */
   async refresh(owner: object, target: ProfileSignInTarget, force = false): Promise<ProfileSignInSnapshot> {

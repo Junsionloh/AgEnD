@@ -119,11 +119,12 @@ describe("ProfileSignIns", () => {
   it("reads the account's own state (its profile, never the default's), once until asked again; not the default account's checklist", async () => {
     const h = rig();
     const first = await h.c.refresh(h.owner, h.target());
-    expect(first).toEqual({ selected: ["claude-code"], pending: ["claude-code"], skipped: [], states: { "claude-code": "invalid" }, login: null, ready: true, target: { backend: "claude-code", profile: "CHY" } });
+    expect(first).toEqual({ selected: ["claude-code"], pending: ["claude-code"], skipped: [], states: { "claude-code": "invalid" }, login: null, ready: false, target: { backend: "claude-code", profile: "CHY" } });
     await h.c.refresh(h.owner, h.target());
     expect(h.checkAuth).toHaveBeenCalledTimes(1); expect(h.checkAuth).toHaveBeenCalledWith("claude-code", "CHY");
     h.state.auth = "valid";
-    expect((await h.c.refresh(h.owner, h.target(), true)).pending).toEqual([]);
+    const signedIn = await h.c.refresh(h.owner, h.target(), true);
+    expect(signedIn.pending).toEqual([]); expect(signedIn.ready, "signed in and nothing running: the cards may say so").toBe(true);
     expect(h.checkAuth).toHaveBeenCalledTimes(2);
     // Another account is read separately.
     await h.c.refresh(h.owner, h.target("home")); expect(h.checkAuth).toHaveBeenLastCalledWith("claude-code", "home");
@@ -300,7 +301,7 @@ describe("the route: ?backend=claude-code&profile=<name>", () => {
     const h = await http();
     const read = await h.call(Q);
     expect(read.status).toBe(200);
-    expect(read.body).toMatchObject({ selected: ["claude-code"], pending: ["claude-code"], skipped: [], ready: true, target: { backend: "claude-code", profile: "CHY" } });
+    expect(read.body).toMatchObject({ selected: ["claude-code"], pending: ["claude-code"], skipped: [], ready: false, target: { backend: "claude-code", profile: "CHY" } });
     const started = await h.call(Q, { operation: "start", backend: "claude-code" });
     expect(started.status).toBe(200); expect(started.body.login).toMatchObject({ phase: "code", mine: true, url: URL_OK, canAct: true });
     expect(h.transport.start.mock.calls[0]![0]).toEqual({ argv: ["claude", "auth", "login"], profile: "CHY" });
