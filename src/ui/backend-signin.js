@@ -166,9 +166,19 @@ export function installerSignInBackends(search) {
   return ids.length <= 4 && ids.every(b => ["kiro-cli", "claude-code", "codex", "antigravity"].includes(b)) ? [...new Set(ids)] : null;
 }
 
-/** Open the dialog for one login (a backend's default one, or a credential profile). */
+/**
+ * AGEND-103: which backends' NAMED accounts the dashboard signs in with the structured controls (Sign in → open the page → paste the code), as the default account is.
+ * The server's `CHAT_PROFILE_LOGIN_BACKENDS` (a login screen that was checked under a relocated home); a named kiro or codex account is not signed in from the dashboard at
+ * all (its row has no Sign in button), and the older dialog is what says so, with the command to run on the machine.
+ */
+const STRUCTURED_BACKENDS = ["kiro-cli", "claude-code", "codex"];
+const STRUCTURED_PROFILE_BACKENDS = ["claude-code"];
+/** One named account's sign-in controls on this host (the same endpoint as the default account's, addressed by `?backend=&profile=`). */
+export const profileSignInEndpoint = (backend, profile) => `/ui/browser-backend-signins?backend=${encodeURIComponent(backend)}&profile=${encodeURIComponent(profile)}`;
+
+/** Open the dialog for one login (a backend's default one, or a credential profile): the same dialog for both. */
 export function openSignIn({ backend, profile }) {
-  if (!profile && ["kiro-cli", "claude-code", "codex"].includes(backend)) showDialog(BrowserSignInDialog, { backend });
+  if (STRUCTURED_BACKENDS.includes(backend) && (!profile || STRUCTURED_PROFILE_BACKENDS.includes(backend))) showDialog(BrowserSignInDialog, { backend, ...(profile ? { profile } : {}) });
   else showDialog(SignInDialog, { backend, ...(profile ? { profile } : {}) });
 }
 
@@ -214,30 +224,40 @@ function Running({ login }) {
   </div>`;
 }
 
-/** The same closed controls as first setup. Profile-specific logins retain their existing flow. */
-export function BrowserSignInDialog({ backend, backends, onClose }) {
+/**
+ * The same closed controls as first setup — for a backend's default login and, with `profile` (AGEND-103), for a named account on this host: one press of Sign in, the
+ * provider's page, the code pasted back. A named account's sign-in lives as long as this dialog: closing it (Close, ×, Esc, or the fallback) ends the sign-in, so none is
+ * left running in the background to refuse Remove or Sign out.
+ */
+export function BrowserSignInDialog({ backend, profile, backends, onClose }) {
   const root = useRef(null), close = onClose || closeDialog;
+  const endpoint = profile ? profileSignInEndpoint(backend, profile) : "/ui/browser-backend-signins";
   useEffect(() => {
     let cards, last = "";
-    cards = mountStructuredSignIns(root.current, { endpoint: "/ui/browser-backend-signins", lang, changed: next => {
-      if (backends) { if (backends.some(b => !next.selected.includes(b))) void cards.addBackends(backends); }
-      else if (!next.selected.includes(backend)) void cards.addBackend(backend);
+    cards = mountStructuredSignIns(root.current, { endpoint, lang, checklist: !profile, changed: next => {
+      if (!profile) {
+        if (backends) { if (backends.some(b => !next.selected.includes(b))) void cards.addBackends(backends); }
+        else if (!next.selected.includes(backend)) void cards.addBackend(backend);
+      }
       const signature = JSON.stringify([next.login, next.pending]);
       if (signature !== last) { last = signature; void refreshSignIn(); }
     } });
     const unlisten = onLang(() => cards.relabel());
-    return () => { unlisten(); cards.dispose(); };
-  }, [backend, backends]);
+    return () => {
+      unlisten(); cards.dispose();
+      if (profile) void post(endpoint, { operation: "cancel" }).then(() => refreshSignIn());   // nothing to end once it is over: the server answers with what is there
+    };
+  }, [backend, profile, backends]);
   const fallback = async (chosen = backend) => {
-    const result = await post("/ui/browser-backend-signins", { operation: "cancel" });
+    const result = await post(endpoint, { operation: "cancel" });
     if (!result.ok) { toast(tn("failed")); return; }
-    showDialog(SignInDialog, { backend: chosen });
+    showDialog(SignInDialog, { backend: chosen, ...(profile && chosen === backend ? { profile } : {}) });
   };
   const actions = html`<div class="signin-browser-actions">
     ${backends ? backends.filter(b => b !== "antigravity").map(b => html`<button type="button" class="btn" onClick=${() => fallback(b)}>${b} · ${tn("consoleFallback")}</button>`) : null}
     ${backend ? html`<button type="button" class="btn" onClick=${() => fallback(backend)}>${tn("consoleFallback")}</button>` : null}
     <button type="button" class="btn" onClick=${close}>${tn("close")}</button></div>`;
-  return html`<${Dialog} title=${backends ? tn("listTitle") : tn("title", cliLabel(backend))} onClose=${close} actions=${actions}>
+  return html`<${Dialog} title=${backends ? tn("listTitle") : tn("title", profile ? tn("profile", cliLabel(backend), profile) : cliLabel(backend))} onClose=${close} actions=${actions}>
     <div class="signin-browser" ref=${root}></div>
   </${Dialog}>`;
 }

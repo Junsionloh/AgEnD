@@ -22,6 +22,8 @@ export const SIGNIN_STRINGS = {
     error_backend_signin_local_only: "Backend sign-in is available only on this computer. Use the local setup page, or sign in later.",
     error_signin_session_expired: "This setup session has ended. Reopen setup on the host.",
     error_expired: "This login attempt expired. Start a new attempt.",
+    error_busy: "Another sign-in is already running. Finish or cancel it, then try again.",
+    error_signin_busy: "Another sign-in is already running. Finish or cancel it, then try again.",
     error_auth_unconfirmed: "The CLI exited, but credentials could not be verified. Retry or sign in later.",
     error_provider_rejected: "The provider rejected this sign-in. Retry or sign in later.",
     // #3190 Part 3c: a profile on a paired computer (the dashboard's Accounts view).
@@ -56,6 +58,8 @@ export const SIGNIN_STRINGS = {
     error_backend_signin_local_only: "後端登入只能在這台電腦上進行。請使用本機的設定頁，或稍後登入。",
     error_signin_session_expired: "這個設定工作階段已結束。請在主機上重新開啟設定。",
     error_expired: "這次登入已過期。請重新開始。",
+    error_busy: "已有另一個登入正在進行。請等它結束或先取消，再試一次。",
+    error_signin_busy: "已有另一個登入正在進行。請等它結束或先取消，再試一次。",
     error_auth_unconfirmed: "CLI 已結束，但無法確認憑證。請重試或稍後登入。",
     error_provider_rejected: "平台拒絕了這次登入。請重試或稍後登入。",
     // #3190 Part 3c：配對電腦上的憑證設定檔（儀表板的「帳號」頁）。
@@ -79,8 +83,11 @@ const pageLang = doc => /^zh/i.test(doc?.documentElement?.lang || "") ? "zh-TW" 
  * `machine` (#3190 Part 3c): these cards are for ONE credential profile on a paired computer (the endpoint carries `?machine=&profile=`). The dialog around them says
  * so, so the setup page's heading and lead are not repeated; there is no "sign in later" (this is an explicit request); and a sign-in again asks nothing about
  * Kiro (Claude Code's own sign-in replaces the login; it signs nothing out first).
+ *
+ * `checklist: false` (AGEND-103): these cards are for ONE named account on this host (the endpoint carries `?backend=&profile=`) — the same screen as the default account's,
+ * but there is no setup checklist behind it, so there is no "Sign in later" (nothing would remember it).
  */
-export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, changed = () => {}, lang, machine = false } = {}) {
+export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, changed = () => {}, lang, machine = false, checklist = true } = {}) {
   const doc = root.ownerDocument;
   let view = null, busy = false, disposed = false, timer = null, generation = 0, message = "", rendered = "";
   const language = () => (lang ? lang() : pageLang(doc)) === "zh-TW" ? "zh-TW" : "en";
@@ -150,7 +157,7 @@ export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, change
           void perform({ operation: "start", backend, relogin });
         });
       }
-      if (pending && !skipped && !machine) button(card, tr("later"), () => perform({ operation: "skip", backend }));
+      if (pending && !skipped && !machine && checklist) button(card, tr("later"), () => perform({ operation: "skip", backend }));
     }
     button(root, tr("check"), () => perform({ operation: "refresh" }));
     if (view.ready && !machine) el("p", tr("ready"));

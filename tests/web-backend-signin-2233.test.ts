@@ -229,9 +229,10 @@ describe("#2233 where Sign in is offered", () => {
 
 
 describe("#2599 shared browser controls", () => {
-  it("default Kiro/Claude/Codex use browser cards; credential profiles retain their existing dialog", () => {
+  it("default Kiro/Claude/Codex use browser cards; so does a named Claude account (AGEND-103), carrying its name", () => {
     for (const backend of ["kiro-cli", "claude-code", "codex"]) { S.openSignIn({ backend }); expect(shell.shellStore.get().dialog.Component).toBe(S.BrowserSignInDialog); }
-    S.openSignIn({ backend: "claude-code", profile: "work" }); expect(shell.shellStore.get().dialog.Component).toBe(S.SignInDialog);
+    S.openSignIn({ backend: "claude-code", profile: "work" });
+    expect(shell.shellStore.get().dialog.Component).toBe(S.BrowserSignInDialog); expect(shell.shellStore.get().dialog.props).toEqual({ backend: "claude-code", profile: "work" });
   });
   it("the real shared cards use the closed API, with an explicit console fallback", async () => {
     const snapshot = { selected: ["codex"], pending: ["codex"], skipped: [], states: { codex: "invalid" }, login: null, ready: false };
