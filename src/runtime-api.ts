@@ -82,7 +82,24 @@ export function handleRuntimeRequest(req: IncomingMessage, res: ServerResponse, 
   const hub = ctx.runtimeCoordinator!();
   // The header token (an agent's) may still use these routes, but it is shown no account: only an admin session on the directly reached dashboard is (accountIdentityVisible).
   const machineFor = (machine: RuntimeMachine): RuntimeMachine => accountIdentityVisible(req, url, ctx) ? machine : machineWithoutAccountIdentity(machine);
-  if (method === "GET" && url.pathname === "/ui/runtimes") { json(res, 200, { enabled: true, machines: hub.listMachines().map(machineFor) }); return true; }
+  // `enrollments` is what the page shows next to a token it issued (a status and a time, never the token or its hash), so a computer that joins is noticed on the next refresh.
+  if (method === "GET" && url.pathname === "/ui/runtimes") { json(res, 200, { enabled: true, machines: hub.listMachines().map(machineFor), enrollments: hub.listEnrollments() }); return true; }
+  // AGEND-110: one-time install-command tokens. Exactly the people who may create a pairing code (nativeCliAuthorization, rechecked after every await); the
+  // token is in the one reply that issues it and nowhere else. `actor` is the opaque session handle (or "api-token") the audit record keeps.
+  const enrollRoute = /^\/ui\/runtimes\/enrollment(?:\/([a-f0-9-]{36})\/(revoke))?$/.exec(url.pathname);
+  if (enrollRoute) {
+    if (method !== "POST") { json(res, 404, { error: "Unknown runtime operation" }); return true; }
+    void (async () => {
+      const raw = await readBoundedWebBody(req, 1024);
+      if (!nativeCliAuthorization(req, url, ctx)) { json(res, 403, { error: "Authorization expired" }); return; }
+      const body: unknown = raw.length ? JSON.parse(raw.toString("utf8")) : {};
+      if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length) throw Error("Install-command tokens take no fields");
+      const actor = remoteSetupActor(req, url, ctx) ?? "api-token";
+      if (enrollRoute[1]) json(res, 200, { enrollment: hub.revokeEnrollment(enrollRoute[1], actor) });
+      else json(res, 201, hub.createEnrollment(actor));
+    })().catch(error => { const authorized = nativeCliAuthorization(req, url, ctx); json(res, authorized ? 400 : 403, { error: authorized ? error instanceof Error ? error.message : "Runtime operation failed" : "Authorization expired" }); });
+    return true;
+  }
   const tasksRoute = /^\/ui\/runtimes\/machines\/([a-f0-9-]{36})\/tasks(?:\/([a-z0-9-]{16,80})\/cancel)?$/.exec(url.pathname);
   if (tasksRoute) {
     const id = tasksRoute[1], runId = tasksRoute[2];

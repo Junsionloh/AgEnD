@@ -1304,6 +1304,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       handleMcp:(machineId,runId,body)=>this.runtimeWindowsExecutor().mcp(machineId,runId,body),
       handlePaneMcp:async(machineId,body,current)=>(await this.nativePanes()).handle(machineId,body,current),
       warn:(fields,message)=>this.logger.warn(fields,message),
+      // Issue, use, revocation (and a refused use) of an install-command token: ids and an opaque actor handle only, never the token.
+      audit:entry=>this.logger[entry.event==="rejected" ? "warn" : "info"]({runtimeEnrollment:entry},`Runtime install-command token ${entry.event}`),
       changed:event=>{
         if (event?.type === "machine") this.needsYou?.poke();
         if(event?.type==="machine" && this.runtimeHub?.machine(event.machineId)?.status!=="online") {

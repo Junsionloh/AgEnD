@@ -1,7 +1,7 @@
 /** Versioned, bounded runtime transport. This module is safe in the standalone Windows client. */
 import type { WindowsCliProbe, WindowsCliTask } from "./windows-cli.js";
 import type { NativeTaskInput } from "./windows-cli-worker.js";
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, timingSafeEqual, verify } from "node:crypto";
 import type { PaneMcpBody } from "./runtime-pane-mcp-protocol.js";
 import type { RuntimePaneRequest, RuntimePaneSnapshot } from "./runtime-pane-protocol.js";
 import type { RuntimeUpdateControl, RuntimeUpdateClientPhase, RuntimeUpdateServerPhase } from "./runtime-update-protocol.js";
@@ -12,6 +12,45 @@ export const RUNTIME_CONNECT_PATH = "/runtime/v1/connect";
 export const RUNTIME_PAIR_PATH = "/runtime/v1/pair";
 export const RUNTIME_CLAIM_PATH = "/runtime/v1/claim";
 export const RUNTIME_ROTATE_PATH = "/runtime/v1/rotate";
+/** AGEND-110: join with a one-time token from the install command. `enroll-hello` proves who the server is BEFORE the token is sent; `enroll` spends it. */
+export const RUNTIME_ENROLL_HELLO_PATH = "/runtime/v1/enroll-hello";
+export const RUNTIME_ENROLL_PATH = "/runtime/v1/enroll";
+/** The token is 256 random bits behind a fixed, greppable prefix (so a secret scanner can find a leaked one). The server keeps only its SHA-256. */
+export const RUNTIME_ENROLL_TOKEN_PATTERN = /^agend_enroll_[A-Za-z0-9_-]{43}$/;
+/** SHA-256 of the server's enrollment public key (SPKI DER), in lower-case hex: what the install command pins. */
+export const RUNTIME_SERVER_FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/;
+const RUNTIME_ENROLL_NONCE_PATTERN = /^[a-f0-9]{32,64}$/;
+/** Why an enrollment was refused; the Runtime turns each into one plain sentence and the next step. */
+export type RuntimeEnrollRefusal = "invalid" | "expired" | "used" | "revoked" | "mismatch" | "limit";
+export const RUNTIME_ENROLL_REFUSALS: readonly RuntimeEnrollRefusal[] = ["invalid", "expired", "used", "revoked", "mismatch", "limit"];
+export interface RuntimeEnrollHelloResult { publicKey: string; signature: string }
+export interface RuntimeEnrollResult { status: "enrolled"; machineId: string; credential: string; signature: string }
+/** The bytes the server signs, so a reply cannot be replayed to another request (the nonce) or swapped for another credential (its hash). */
+export function runtimeEnrollHelloMessage(nonce: string): Buffer {
+  if (!RUNTIME_ENROLL_NONCE_PATTERN.test(nonce)) throw Error("Invalid enrollment nonce");
+  return Buffer.from(`agend-runtime-enroll-hello-v1\n${nonce}`, "utf8");
+}
+export function runtimeEnrollGrantMessage(nonce: string, machineId: string, credential: string): Buffer {
+  if (!RUNTIME_ENROLL_NONCE_PATTERN.test(nonce) || !/^[a-f0-9-]{36}$/i.test(machineId)) throw Error("Invalid enrollment grant");
+  return Buffer.from(`agend-runtime-enroll-v1\n${nonce}\n${machineId}\n${createHash("sha256").update(credential).digest("hex")}`, "utf8");
+}
+export function runtimeServerFingerprint(publicKeyDer: Uint8Array): string { return createHash("sha256").update(publicKeyDer).digest("hex"); }
+/**
+ * Client side of the server proof: the key must be an Ed25519 key whose fingerprint is EXACTLY the one pinned in the install command, and the
+ * signature must cover this request's message. Anything else is false; nothing here throws on hostile input.
+ */
+export function verifyRuntimeServerProof(pinnedFingerprint: string, publicKey: unknown, signature: unknown, message: Uint8Array): boolean {
+  try {
+    if (typeof publicKey !== "string" || typeof signature !== "string" || publicKey.length > 256 || signature.length > 256
+      || !RUNTIME_SERVER_FINGERPRINT_PATTERN.test(pinnedFingerprint)) return false;
+    const der = Buffer.from(publicKey, "base64url");
+    if (der.toString("base64url") !== publicKey) return false;
+    const actual = Buffer.from(runtimeServerFingerprint(der), "hex");
+    if (!timingSafeEqual(actual, Buffer.from(pinnedFingerprint, "hex"))) return false;
+    const key = createPublicKey({ key: der, format: "der", type: "spki" });
+    return key.asymmetricKeyType === "ed25519" && verify(null, message, key, Buffer.from(signature, "base64url"));
+  } catch { return false; }
+}
 /** Public comparison value, not an authentication credential. Also works for pending v1 store records. */
 export function runtimeFingerprintFromHash(digest: string): string {
   if (!/^[a-f0-9]{64}$/.test(digest)) throw Error("Invalid runtime claim digest");
@@ -131,6 +170,9 @@ export interface RuntimeMachine {
   bootId?: string;
   generation: number;
   pairingFingerprint?: string;
+  /** AGEND-110: this computer joined with a one-time token from the install command (no pairing code, no approval step). Shown to the administrator, with a way to revoke. */
+  enrolledVia?: "install-command";
+  enrollmentId?: string;
   paneProtocol?: 1;
   runtimeInfo?: RuntimeInfo;
   updateReport?: RuntimeUpdateReport;

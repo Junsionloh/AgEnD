@@ -28,3 +28,16 @@
 .runtime-update-notice { margin-block: .75rem; padding: .6rem .8rem; border-inline-start: 3px solid var(--border, #777); }
 .runtime-update-notice p { margin-block: .25rem; overflow-wrap: anywhere; }
 .runtime-update-notice[role="alert"] { border-inline-start-color: var(--warning, #b87218); }
+/* AGEND-110: the one-time install command's card, and the notice that a computer joined with it. */
+.runtime-enroll-card h4 { margin: 0 0 10px; font-size: var(--fs-md); }
+.runtime-enroll-card.is-used .runtime-pair-status { color: var(--ok); }
+.runtime-enroll-card.is-expired .runtime-pair-status, .runtime-enroll-card.is-revoked .runtime-pair-status { color: var(--warn); }
+.runtime-enroll-clock { font-variant-numeric: tabular-nums; }
+.runtime-enroll-warning { padding: 8px 10px; border-inline-start: 3px solid var(--warn); background: var(--warn-bg); }
+.runtime-enroll-ended { margin: 0 0 8px; padding: 10px 12px; border: 1px solid var(--warn); border-radius: 8px; background: var(--warn-bg); }
+.runtime-joined { display: flex; align-items: flex-start; gap: 12px; margin: 0 0 12px; padding: 12px 14px; border: 1px solid var(--warn); border-radius: 10px; background: var(--warn-bg); }
+.runtime-joined-text { flex: 1; min-width: 0; }
+.runtime-joined h4 { margin: 0 0 4px; font-size: var(--fs-md); }
+.runtime-joined .note { margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.runtime-joined-actions { display: flex; flex-wrap: wrap; gap: 8px; flex: none; }
+@media (max-width: 600px) { .runtime-joined { flex-wrap: wrap; } .runtime-joined-actions { width: 100%; } }

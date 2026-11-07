@@ -13,7 +13,8 @@ import { validNativeSessionId, type NativeMcpConnection } from "./windows-cli-pr
 import { RUNTIME_CREDENTIAL_CAPABILITY, credentialLoginRequired, credentialProfileReport, isCredentialProfileCli, listCredentialProfileNames, rememberCredentialStatus, requireCredentialProfile, credentialCacheStamp,
   assertCredentialProfileName, assertCredentialProfileCli, type CredentialProfileCli, type CredentialProfileReport } from "./runtime-credential-profiles.js";
 import { RuntimeClientStore, runtimeJobDigest, validateRuntimeServer, type RuntimeCredentials, type RuntimeStoredJob } from "./runtime-client-store.js";
-import { RUNTIME_ROTATE_PATH, RUNTIME_REINSTALL_CLOSE_PREFIX, runtimeClaimFingerprint } from "./runtime-protocol.js";
+import { RUNTIME_ROTATE_PATH, RUNTIME_REINSTALL_CLOSE_PREFIX, runtimeClaimFingerprint, RUNTIME_ENROLL_HELLO_PATH, RUNTIME_ENROLL_PATH, RUNTIME_ENROLL_TOKEN_PATTERN, RUNTIME_SERVER_FINGERPRINT_PATTERN, RUNTIME_ENROLL_REFUSALS,
+  runtimeEnrollHelloMessage, runtimeEnrollGrantMessage, verifyRuntimeServerProof, type RuntimeEnrollRefusal } from "./runtime-protocol.js";
 import { readRuntimeInfo } from "./runtime-build-info.js";
 import { ProcessNotConfirmedEnded, RemoteAccounts, type RemoteAccountsDeps, type RemoteInstaller } from "./runtime-remote-accounts.js";
 import { isCreatedProfile } from "./runtime-profile-ownership.js";
@@ -909,6 +910,60 @@ export async function pairRuntime(input: { server: string; code: string; name: s
     });
   }
   throw new Error(input.signal?.aborted ? "Runtime pairing was cancelled" : "Runtime pairing expired before the computer was approved. Open AgEnD Settings -> Runtime, then double-click connect-agend.bat again and enter a new pairing code.");
+}
+
+/** Where a person is sent in every enrollment failure: the one place that makes a new token. */
+const ENROLL_NEXT = "Open AgEnD Settings -> Runtime -> Connect a computer, generate a new install command there and run it again.";
+const ENROLL_REFUSALS: Record<RuntimeEnrollRefusal, string> = {
+  invalid: `This install command's one-time token is not valid for this AgEnD (it may be incomplete, mistyped, or from another AgEnD). ${ENROLL_NEXT}`,
+  expired: `This install command's one-time token has expired (it lasts 15 minutes). ${ENROLL_NEXT}`,
+  used: `This install command's one-time token was already used; each token works once. If this computer is already connected, run agend-runtime run (or double-click connect-agend.bat). Otherwise ${ENROLL_NEXT.replace(/^Open/, "open")}`,
+  revoked: `This install command's one-time token was revoked in AgEnD. ${ENROLL_NEXT}`,
+  mismatch: `This install command's token was issued by a different AgEnD than the one at this address. Nothing was sent anywhere else. ${ENROLL_NEXT}`,
+  limit: "This AgEnD has reached its limit of connected computers. Revoke a computer you no longer use in AgEnD Settings -> Runtime, then run the install command again.",
+};
+/** One plain sentence plus the next step for each reason AgEnD refuses an install-command token, and for a token or fingerprint that is malformed here. */
+export function describeEnrollRefusal(reason: unknown): string { return ENROLL_REFUSALS[(RUNTIME_ENROLL_REFUSALS as readonly unknown[]).includes(reason) ? reason as RuntimeEnrollRefusal : "invalid"]; }
+/**
+ * AGEND-110: joins this computer to AgEnD with the one-time token from the install command. No pairing code and no approval step: the token is the
+ * authorisation, and it could only come from an administrator's signed-in AgEnD page.
+ * Order matters. The server first proves it is the AgEnD the command pinned (an Ed25519 signature over a fresh nonce, whose key must hash to the
+ * pinned fingerprint); only then is the token sent. A server that cannot prove it never sees the token. The reply that carries the new credential
+ * is signed too, over this request's nonce, and is checked before anything is saved. The token is used once and is not kept anywhere here.
+ */
+export async function enrollRuntime(input: { server: string; token: string; fingerprint: string; name: string; store: RuntimeClientStore; signal?: AbortSignal; report?: (text: string) => void }): Promise<RuntimeCredentials> {
+  const server = validateRuntimeServer(input.server);
+  if (!RUNTIME_ENROLL_TOKEN_PATTERN.test(input.token)) throw new Error(describeEnrollRefusal("invalid"));
+  if (!RUNTIME_SERVER_FINGERPRINT_PATTERN.test(input.fingerprint)) throw new Error("The server fingerprint in this install command is not valid (it is 64 hexadecimal characters). " + ENROLL_NEXT);
+  if (!input.name.trim() || input.name.length > 100) throw new Error("Enter a valid machine name");
+  input.store.assertCanPair();
+  const nonce = randomBytes(24).toString("hex");
+  // Something that is not an AgEnD answering (an HTML page, an old AgEnD without this route) is the same failure as a wrong fingerprint: the token stays unsent.
+  const hello = await post(server, RUNTIME_ENROLL_HELLO_PATH, { nonce }, input.signal).catch((error: unknown) => {
+    if (error instanceof Error && /^Invalid runtime pairing response$|is too large$/.test(error.message)) return { status: 0, data: {} as Record<string, unknown> };
+    throw error;
+  });
+  if (hello.status !== 200 || !verifyRuntimeServerProof(input.fingerprint, hello.data.publicKey, hello.data.signature, runtimeEnrollHelloMessage(nonce))) {
+    throw new Error(`The AgEnD at ${server.origin} did not prove it is the AgEnD this install command was made for (its server fingerprint differs from the one in the command). The one-time token was NOT sent. Check the address; if it is right, ${ENROLL_NEXT.replace(/^Open/, "open")}`);
+  }
+  input.report?.(`AgEnD server verified (fingerprint ${input.fingerprint.slice(0, 16)}…).`);
+  const granted = await post(server, RUNTIME_ENROLL_PATH, { token: input.token, fingerprint: input.fingerprint, nonce, name: input.name.trim(), platform: process.platform, hostname: hostname() }, input.signal);
+  if (granted.status !== 201) {
+    if ([400, 403, 409].includes(granted.status) && typeof granted.data.reason === "string") throw new Error(describeEnrollRefusal(granted.data.reason));
+    throw new Error(granted.status === 429 ? "AgEnD is receiving too many requests from this address; wait a minute, then run the same command again." : `Joining AgEnD was refused (HTTP ${granted.status}). ${ENROLL_NEXT}`);
+  }
+  const { machineId, credential, signature } = granted.data;
+  if (granted.data.status !== "enrolled" || typeof machineId !== "string" || !/^[a-f0-9-]{36}$/i.test(machineId) || typeof credential !== "string" || !/^[A-Za-z0-9._-]{16,256}$/.test(credential)
+    || !verifyRuntimeServerProof(input.fingerprint, hello.data.publicKey, signature, runtimeEnrollGrantMessage(nonce, machineId, credential))) {
+    throw new Error(`AgEnD's answer could not be verified, so nothing was saved on this computer. The token may have been used up: ${ENROLL_NEXT.replace(/^Open/, "open")} If a computer with this name shows up connected-but-never-online in Settings, revoke it there.`);
+  }
+  const credentials = { server: server.origin, machineId, credential, name: input.name.trim() };
+  // Save first: the credential is only ever sent once. A ledger that changed since the check above is reported after it is safe.
+  input.store.saveCredentials(credentials);
+  try { input.store.adoptMachine(credentials.machineId, true); }
+  catch (error) { throw new Error(`The computer joined AgEnD and its credential is saved. ${error instanceof Error ? error.message : "Its job ledger could not be updated."}`); }
+  input.report?.("This computer joined AgEnD with the one-time token. Its machine credential was saved in the private local profile.");
+  return credentials;
 }
 
 import type {} from "./runtime-pane-stdio.js";

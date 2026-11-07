@@ -19,7 +19,10 @@ import { parseRuntimeUpdateReport, parseRuntimeUpdateStatusFrame, RUNTIME_UPDATE
 import { validatePaneMcpBody, type PaneMcpBody } from "./runtime-pane-mcp-protocol.js";
 import { validateRuntimePaneRequest, validateRuntimePaneSnapshot, validateRuntimePaneShutdown, type RuntimePaneRequest, type RuntimePaneSnapshot } from "./runtime-pane-protocol.js";
 import { withNativePaneVerification } from "./runtime-pane-native.js";
-import { RUNTIME_CLAIM_PATH, RUNTIME_CONNECT_PATH, RUNTIME_MAX_FRAME_BYTES, RUNTIME_PAIR_PATH, RUNTIME_ROTATE_PATH, runtimeFingerprintFromHash, parseRuntimeInfo, RUNTIME_PROTOCOL_VERSION, runtimeInfoCompatible, RUNTIME_REINSTALL_CLOSE_REASON,
+import { ENROLL_TTL_MS, enrollTokenMatches, generateEnrollToken, hashEnrollToken, isEnrollToken, loadRuntimeServerIdentity, type RuntimeServerIdentity } from "./runtime-enrollment.js";
+import { RUNTIME_CLAIM_PATH, RUNTIME_CONNECT_PATH, RUNTIME_MAX_FRAME_BYTES, RUNTIME_PAIR_PATH, RUNTIME_ROTATE_PATH, RUNTIME_ENROLL_PATH, RUNTIME_ENROLL_HELLO_PATH, RUNTIME_SERVER_FINGERPRINT_PATTERN, runtimeEnrollHelloMessage, runtimeEnrollGrantMessage,
+  type RuntimeEnrollRefusal, type RuntimeEnrollHelloResult, type RuntimeEnrollResult,
+  runtimeFingerprintFromHash, parseRuntimeInfo, RUNTIME_PROTOCOL_VERSION, runtimeInfoCompatible, RUNTIME_REINSTALL_CLOSE_REASON,
   type RuntimeInfo, type RuntimeMachine, type RuntimeOperation, type RuntimePairing, type RuntimePairResult, type RuntimeClaimResult,
   type RuntimeRunPayload, type RuntimeServerMessage, isRuntimeRemoteOperation, parseRuntimeRemotePayload, type RuntimeRemoteOperation, type RuntimeRemotePayloads } from "./runtime-protocol.js";
 
@@ -32,6 +35,8 @@ const equal = (value: string, digest: string) => /^[a-f0-9]{64}$/i.test(digest) 
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 /** A deliberate validation failure whose static message is safe to show the runtime; every other error (I/O, internal) is not. */
 class RuntimeProtocolError extends Error {}
+/** An enrollment the server refused. `reason` is a closed word the Runtime turns into a sentence; the message never contains the token. */
+class RuntimeEnrollError extends RuntimeProtocolError { constructor(readonly reason: RuntimeEnrollRefusal, message: string) { super(message); } }
 const text = (v: unknown, max: number): v is string => typeof v === "string" && v.length > 0 && v.length <= max && !/[\0\r\n]/.test(v);
 const terminal = (task: WindowsCliTask) => !!task.finishedAt && ["completed", "failed", "cancelled"].includes(task.status);
 const loopback = (address: string | undefined) => address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
@@ -102,6 +107,18 @@ function machineView(machine: RuntimeMachine): RuntimeMachine {
 }
 interface MachineRecord { machine: RuntimeMachine; credentialHash?: string; claimHash?: string; claimExpiresAt?: number }
 interface PairRecord { id: string; codeHash: string; expiresAt: number }
+/**
+ * AGEND-110: one install-command token. Only its SHA-256 is kept (never the token), plus what the page needs to show it: when it ends, whether it was used
+ * or revoked, and which computer used it. `fingerprint` is the server identity it was issued under: a token never works under another identity.
+ */
+interface EnrollmentRecord { id: string; tokenHash: string; fingerprint: string; createdAt: number; expiresAt: number; createdBy: string; usedAt?: number; machineId?: string; revokedAt?: number }
+/** What the administrator's page may see of a token: never the token or its hash. */
+export interface RuntimeEnrollmentView { id: string; status: "unused" | "used" | "expired" | "revoked"; createdAt: number; expiresAt: number; usedAt?: number; revokedAt?: number; machineId?: string }
+/** Returned once, when the token is issued; the page keeps it in memory only. */
+export interface RuntimeEnrollment { id: string; token: string; fingerprint: string; createdAt: number; expiresAt: number }
+/** The permanent record of what happened to tokens. No token, no hash, no address: who (an opaque handle), what, which token id and, for a use, which computer. */
+export interface RuntimeEnrollmentAuditEntry { at: number; event: "issued" | "used" | "revoked" | "superseded" | "rejected"; enrollmentId: string; actor?: string; machineId?: string; reason?: RuntimeEnrollRefusal }
+const PERSISTED_AUDIT_EVENTS = ["issued", "used", "revoked", "superseded"];
 interface CommandRecord {
   id: string; machineId: string; operation: RuntimeOperation; digest: string; payload: unknown;
   createdAt: number; state: "pending" | "accepted" | "failed" | "uncertain";
@@ -109,7 +126,8 @@ interface CommandRecord {
 }
 /** A compacted settled command: enough to keep refusing its id (replay protection) without its payload or task. */
 interface CommandTombstone { id: string; machineId: string; digest: string; at: number }
-interface State { version: 1; machines: MachineRecord[]; pairings: PairRecord[]; commands: CommandRecord[]; tombstones?: CommandTombstone[] }
+interface State { version: 1; machines: MachineRecord[]; pairings: PairRecord[]; commands: CommandRecord[]; tombstones?: CommandTombstone[]; enrollments?: EnrollmentRecord[]; enrollmentAudit?: RuntimeEnrollmentAuditEntry[] }
+const ENROLLMENT_CAP = 64, ENROLLMENT_AUDIT_CAP = 512, ENROLLMENT_KEEP_MS = 7 * 24 * 3_600_000;
 /**
  * M-2239 P2-1 (#2936 review): the journal is compacted, never just capped. A settled command (failed, or accepted with a
  * terminal, process-confirmed outcome) older than COMMAND_KEEP_MS, or the oldest settled ones beyond COMMAND_SOFT_CAP,
@@ -141,6 +159,8 @@ export interface RuntimeCoordinatorOptions {
   /** Injectable clock for pairing expiry and offline tests. */
   now?(): number;
   requestTimeoutMs?: number;
+  /** Every issue, use and revocation of an install-command token, as it is recorded, so it also reaches the daemon log. */
+  audit?(entry: RuntimeEnrollmentAuditEntry): void;
   /** Called when AgEnD itself closes a runtime connection with a policy code, so the cause reaches the daemon log. */
   warn?(fields: { machineId: string; code: number; reason: string; detail?: string }, message: string): void;
 }
@@ -163,7 +183,8 @@ export class RuntimeCoordinator {
   private readonly limits = new Map<string, { count: number; until: number }>();
   private readonly heartbeat: NodeJS.Timeout;
   private closed = false;
-  constructor(home: string, private readonly options: RuntimeCoordinatorOptions = {}) {
+  private identityValue?: RuntimeServerIdentity;
+  constructor(private readonly home: string, private readonly options: RuntimeCoordinatorOptions = {}) {
     mkdirSync(home, { recursive: true, mode: 0o700 });
     this.path = join(home, "runtime-machines.json");
     if (existsSync(this.path)) {
@@ -172,8 +193,10 @@ export class RuntimeCoordinator {
     }
     this.state = existsSync(this.path) ? JSON.parse(readFileSync(this.path, "utf8")) : { version: 1, machines: [], pairings: [], commands: [] };
     if (this.state.version !== 1 || !Array.isArray(this.state.machines) || !Array.isArray(this.state.pairings) || !Array.isArray(this.state.commands)
-      || this.state.tombstones !== undefined && !Array.isArray(this.state.tombstones)) throw Error("Invalid runtime machine store");
-    this.state.tombstones ??= [];
+      || this.state.tombstones !== undefined && !Array.isArray(this.state.tombstones)
+      || this.state.enrollments !== undefined && !Array.isArray(this.state.enrollments)
+      || this.state.enrollmentAudit !== undefined && !Array.isArray(this.state.enrollmentAudit)) throw Error("Invalid runtime machine store");
+    this.state.tombstones ??= []; this.state.enrollments ??= []; this.state.enrollmentAudit ??= [];
     if (this.state.machines.length > 256 || this.state.pairings.length > 16 || this.state.commands.length > COMMAND_HARD_CAP || this.state.tombstones.length > TOMBSTONE_CAP
       || this.state.tombstones.some(row => !record(row) || !text(row.id, 128) || !UUID.test(String(row.machineId)) || !/^[a-f0-9]{64}$/.test(row.digest) || !Number.isFinite(row.at))
       || this.state.machines.some(row => !record(row) || !record(row.machine) || !UUID.test(String(row.machine.id)) || !text(row.machine.name, 100)
@@ -183,6 +206,14 @@ export class RuntimeCoordinator {
         || row.credentialHash !== undefined && !/^[a-f0-9]{64}$/.test(row.credentialHash)
         || row.claimHash !== undefined && !/^[a-f0-9]{64}$/.test(row.claimHash))
       || new Set(this.state.machines.map(row => row.machine.id)).size !== this.state.machines.length
+      || this.state.machines.some(row => row.machine.enrolledVia !== undefined && (row.machine.enrolledVia !== "install-command" || row.machine.enrollmentId !== undefined && !UUID.test(String(row.machine.enrollmentId))))
+      || this.state.enrollments.length > ENROLLMENT_CAP || this.state.enrollmentAudit.length > ENROLLMENT_AUDIT_CAP
+      || this.state.enrollments.some(row => !record(row) || !UUID.test(String(row.id)) || !/^[a-f0-9]{64}$/.test(String(row.tokenHash)) || !/^[a-f0-9]{64}$/.test(String(row.fingerprint))
+        || !Number.isFinite(row.createdAt) || !Number.isFinite(row.expiresAt) || !text(row.createdBy, 64)
+        || row.usedAt !== undefined && !Number.isFinite(row.usedAt) || row.revokedAt !== undefined && !Number.isFinite(row.revokedAt) || row.machineId !== undefined && !UUID.test(String(row.machineId)))
+      || new Set(this.state.enrollments.map(row => row.id)).size !== this.state.enrollments.length
+      || this.state.enrollmentAudit.some(row => !record(row) || !Number.isFinite(row.at) || !PERSISTED_AUDIT_EVENTS.includes(String(row.event)) || !UUID.test(String(row.enrollmentId))
+        || row.actor !== undefined && !text(row.actor, 64) || row.machineId !== undefined && !UUID.test(String(row.machineId)))
       || this.state.pairings.some(row => !record(row) || !UUID.test(String(row.id)) || !/^[a-f0-9]{64}$/.test(row.codeHash) || !Number.isFinite(row.expiresAt))
       || this.state.commands.some(row => !record(row) || !text(row.id, 128) || !UUID.test(String(row.machineId)) || !/^[a-f0-9]{64}$/.test(row.digest)
         || !["probe", "workspace", "run", "cancel", "reconcile", "recover"].includes(row.operation)
@@ -234,6 +265,92 @@ export class RuntimeCoordinator {
     const code = randomBytes(6).toString("hex").toUpperCase(), pairingId = randomUUID(), expiresAt = this.now() + PAIR_TTL;
     this.state.pairings.push({ id: pairingId, codeHash: hash(code), expiresAt }); this.save();
     return { pairingId, code: code.match(/.{4}/g)!.join("-"), expiresAt };
+  }
+  /** The key a command pins. Created on first use and kept for the life of this AgEnD data folder. */
+  private identity(): RuntimeServerIdentity { return this.identityValue ??= loadRuntimeServerIdentity(this.home); }
+  /** SHA-256 fingerprint of this AgEnD's enrollment key: the "who the server is" value an install command carries. */
+  serverFingerprint(): string { return this.identity().fingerprint; }
+  private enrollmentStatus(row: EnrollmentRecord): RuntimeEnrollmentView["status"] {
+    return row.usedAt !== undefined ? "used" : row.revokedAt !== undefined ? "revoked" : row.expiresAt <= this.now() ? "expired" : "unused";
+  }
+  private audit(entry: RuntimeEnrollmentAuditEntry, persist = true): void {
+    if (persist) { const log = this.state.enrollmentAudit!; log.push(entry); while (log.length > ENROLLMENT_AUDIT_CAP) log.shift(); }
+    try { this.options.audit?.({ ...entry }); } catch { /* a logging hook never changes the verdict */ }
+  }
+  /**
+   * AGEND-110: issues a one-time install-command token. The same people who may create a pairing code may issue one (the caller checked
+   * `nativeCliAuthorization`); `actor` is only the opaque handle recorded for them. A new token ends every earlier unused one. The token is returned
+   * here and nowhere else: the journal keeps its SHA-256 only.
+   */
+  createEnrollment(actor: string): RuntimeEnrollment {
+    if (this.closed) throw Error("Runtime coordinator is closed");
+    if (!text(actor, 64)) throw Error("Invalid enrollment actor");
+    const now = this.now(), identity = this.identity(), previous = { enrollments: structuredClone(this.state.enrollments!), audit: structuredClone(this.state.enrollmentAudit!) };
+    const events: RuntimeEnrollmentAuditEntry[] = [];
+    // A week after it ended, a token leaves the list (the audit keeps the history); a full list drops its oldest ended token first.
+    let rows = this.state.enrollments!.filter(row => (row.usedAt ?? row.revokedAt ?? row.expiresAt) + ENROLLMENT_KEEP_MS > now);
+    while (rows.length >= ENROLLMENT_CAP) { const ended = rows.findIndex(row => this.enrollmentStatus(row) !== "unused"); if (ended < 0) throw Error("Too many install-command tokens"); rows = rows.filter((_, index) => index !== ended); }
+    this.state.enrollments = rows;
+    for (const row of rows) if (this.enrollmentStatus(row) === "unused") { row.revokedAt = now; events.push({ at: now, event: "superseded", enrollmentId: row.id, actor }); }
+    const token = generateEnrollToken(), id = randomUUID(), expiresAt = now + ENROLL_TTL_MS;
+    rows.push({ id, tokenHash: hashEnrollToken(token), fingerprint: identity.fingerprint, createdAt: now, expiresAt, createdBy: actor });
+    events.push({ at: now, event: "issued", enrollmentId: id, actor });
+    const log = this.state.enrollmentAudit!; log.push(...events); while (log.length > ENROLLMENT_AUDIT_CAP) log.shift();
+    try { this.save(); } catch (error) { this.state.enrollments = previous.enrollments; this.state.enrollmentAudit = previous.audit; throw error; }
+    for (const entry of events) this.audit(entry, false);
+    return { id, token, fingerprint: identity.fingerprint, createdAt: now, expiresAt };
+  }
+  /** Newest first, at most the last few: what the page shows next to the token it just issued. Never a token or a hash. */
+  listEnrollments(): RuntimeEnrollmentView[] {
+    return [...this.state.enrollments!].reverse().slice(0, 8).map(row => ({ id: row.id, status: this.enrollmentStatus(row), createdAt: row.createdAt, expiresAt: row.expiresAt,
+      ...(row.usedAt !== undefined ? { usedAt: row.usedAt } : {}), ...(row.revokedAt !== undefined ? { revokedAt: row.revokedAt } : {}), ...(row.machineId ? { machineId: row.machineId } : {}) }));
+  }
+  /** Ends a token that has not been used. A used token cannot be revoked (revoke the computer that used it); an ended one needs nothing. */
+  revokeEnrollment(id: string, actor: string): RuntimeEnrollmentView {
+    if (!text(actor, 64)) throw Error("Invalid enrollment actor");
+    const row = this.state.enrollments!.find(row => row.id === id);
+    if (!row) throw Error("Install-command token not found");
+    if (this.enrollmentStatus(row) !== "unused") throw Error("Only an unused install-command token can be revoked");
+    const now = this.now(), log = this.state.enrollmentAudit!, entry: RuntimeEnrollmentAuditEntry = { at: now, event: "revoked", enrollmentId: row.id, actor };
+    row.revokedAt = now; log.push(entry);
+    try { this.save(); } catch (error) { delete row.revokedAt; log.pop(); throw error; }
+    this.audit(entry, false);
+    return this.listEnrollments().find(view => view.id === id)!;
+  }
+  /**
+   * Step 1 of joining with a token: the server signs the Runtime's fresh nonce with its enrollment key, so the Runtime can compare the key's fingerprint
+   * with the one in its command BEFORE it sends the token. Anyone can ask; the answer is public by design and spends nothing.
+   */
+  enrollHello(input: unknown): RuntimeEnrollHelloResult {
+    if (!record(input) || Object.keys(input).some(key => key !== "nonce") || typeof input.nonce !== "string") throw new RuntimeEnrollError("invalid", "Invalid runtime enrollment request");
+    let message: Buffer; try { message = runtimeEnrollHelloMessage(input.nonce); } catch { throw new RuntimeEnrollError("invalid", "Invalid runtime enrollment request"); }
+    const identity = this.identity(); return { publicKey: identity.publicKey, signature: identity.signature(message) };
+  }
+  /**
+   * Step 2: spends the token. The computer is created already approved (the token IS the approval: it could only come from an authorised
+   * administrator's page) and gets its credential in this reply, which the server also signs so a forged or replayed answer is refused. Every refusal
+   * says why in one closed word; a token that is unknown to the server says only "invalid".
+   */
+  enroll(input: unknown): RuntimeEnrollResult {
+    if (!record(input) || Object.keys(input).some(key => !["token", "fingerprint", "nonce", "name", "platform", "hostname"].includes(key)) || !isEnrollToken(input.token)
+      || typeof input.fingerprint !== "string" || !RUNTIME_SERVER_FINGERPRINT_PATTERN.test(input.fingerprint) || typeof input.nonce !== "string" || !/^[a-f0-9]{32,64}$/.test(input.nonce)
+      || !text(input.name, 100) || !input.name.trim() || input.platform !== "win32" || input.hostname !== undefined && !text(input.hostname, 255)) throw new RuntimeEnrollError("invalid", "Invalid runtime enrollment request");
+    const token = input.token, now = this.now(), identity = this.identity();
+    const row = this.state.enrollments!.find(candidate => enrollTokenMatches(token, candidate.tokenHash));
+    if (!row) throw new RuntimeEnrollError("invalid", "Install-command token is not valid");
+    const refuse = (reason: RuntimeEnrollRefusal, message: string): never => { this.audit({ at: now, event: "rejected", enrollmentId: row.id, reason }, false); throw new RuntimeEnrollError(reason, message); };
+    if (row.usedAt !== undefined) refuse("used", "Install-command token was already used");
+    if (row.revokedAt !== undefined) refuse("revoked", "Install-command token was revoked");
+    if (row.expiresAt <= now) refuse("expired", "Install-command token expired");
+    if (input.fingerprint !== identity.fingerprint || row.fingerprint !== identity.fingerprint) refuse("mismatch", "Install-command token is for a different AgEnD");
+    if (this.state.machines.length >= 256 || this.state.machines.filter(machine => machine.machine.status !== "revoked").length >= 64) refuse("limit", "Runtime machine limit reached");
+    const machineId = randomUUID(), credential = secret(), entry: RuntimeEnrollmentAuditEntry = { at: now, event: "used", enrollmentId: row.id, machineId }, log = this.state.enrollmentAudit!;
+    const machine: MachineRecord = { machine: { id: machineId, name: (input.name as string).trim(), platform: "win32", ...(input.hostname ? { hostname: input.hostname as string } : {}), status: "offline", createdAt: now, approvedAt: now,
+      generation: 0, enrolledVia: "install-command", enrollmentId: row.id }, credentialHash: hash(credential) };
+    row.usedAt = now; row.machineId = machineId; this.state.machines.push(machine); log.push(entry);
+    try { this.save(); } catch (error) { delete row.usedAt; delete row.machineId; this.state.machines.pop(); log.pop(); throw error; }
+    this.audit(entry, false); this.emit({ type: "machine", machineId });
+    return { status: "enrolled", machineId, credential, signature: identity.signature(runtimeEnrollGrantMessage(input.nonce, machineId, credential)) };
   }
   pair(input: unknown): RuntimePairResult {
     if (!record(input) || Object.keys(input).some(k => !["code", "name", "platform", "hostname"].includes(k))
@@ -293,6 +410,10 @@ export class RuntimeCoordinator {
       const row = this.credentialOwner(req.headers.authorization);
       if (row) return `rotate:${row.machine.id}`;
     } else if (record(input)) {
+      if (path === RUNTIME_ENROLL_PATH && isEnrollToken(input.token)) {
+        const row = this.state.enrollments!.find(row => enrollTokenMatches(input.token as string, row.tokenHash));
+        if (row) return `enroll:${row.id}`;
+      }
       if (path === RUNTIME_PAIR_PATH && text(input.code, 32)) {
         const code = input.code.replaceAll("-", "").toUpperCase();
         const row = this.state.pairings.find(row => row.expiresAt > this.now() && equal(code, row.codeHash));
@@ -321,7 +442,7 @@ export class RuntimeCoordinator {
     return { machineId: row.machine.id, status: "rotated" };
   }
   handlePublicRequest(req: IncomingMessage, res: ServerResponse, url: URL): boolean {
-    if (![RUNTIME_PAIR_PATH, RUNTIME_CLAIM_PATH, RUNTIME_ROTATE_PATH].includes(url.pathname)) return false;
+    if (![RUNTIME_PAIR_PATH, RUNTIME_CLAIM_PATH, RUNTIME_ROTATE_PATH, RUNTIME_ENROLL_HELLO_PATH, RUNTIME_ENROLL_PATH].includes(url.pathname)) return false;
     const answer = (status: number, body: unknown) => { if (!res.destroyed && !res.writableEnded) { res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" }); res.end(JSON.stringify(body)); } };
     if (this.closed || req.method !== "POST" || url.search || !privateTransport(req)) { answer(403, { error: "Runtime pairing requires a protected non-browser connection" }); return true; }
     let charged = false;
@@ -335,10 +456,14 @@ export class RuntimeCoordinator {
         if (!this.credentialOwner(req.headers.authorization)) { answer(401, { error: "Runtime credential was refused" }); return; }
         answer(200, this.rotateCredential(req.headers.authorization, value)); return;
       }
+      if (url.pathname === RUNTIME_ENROLL_HELLO_PATH) { answer(200, this.enrollHello(value)); return; }
+      if (url.pathname === RUNTIME_ENROLL_PATH) { answer(201, this.enroll(value)); return; }
       if (url.pathname === RUNTIME_PAIR_PATH) answer(201, this.pair(value));
       else { const result = this.claim(value); answer(result.status === "pending" ? 202 : 200, result); }
-    }).catch(() => {
+    }).catch((error: unknown) => {
       const allowed = charged || this.rate(`invalid:${req.socket.remoteAddress ?? "unknown"}`, 30);
+      // A refused enrollment says why (a closed word and a fixed sentence, never the token); every other failure keeps the one generic answer.
+      if (allowed && error instanceof RuntimeEnrollError) { answer(error.reason === "invalid" ? 400 : error.reason === "limit" ? 409 : 403, { error: error.message, reason: error.reason }); return; }
       answer(allowed ? 400 : 429, { error: "Runtime pairing request is invalid, expired or already used" });
     });
     return true;

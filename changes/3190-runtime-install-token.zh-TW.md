@@ -1,0 +1,4 @@
+---
+section: Added
+---
+- **帶一次性 token 的 Windows 安裝指令：不限電腦、免配對碼、免核准。** 「設定 → Runtime → 連接電腦」現在會產生一個短效、只能用一次的安裝指令（token 15 分鐘內有效、只能用一次；AgEnD 只存它的 SHA-256，重新產生或「撤銷並關閉」會立刻讓它失效，每次發出、使用、撤銷都有紀錄）。在任何 Windows 電腦貼上，或交給在那台電腦上執行的 AI agent，它就會安裝 Runtime 並直接連線，不用輸入任何東西、也不用核准；不論視窗是不是互動式（`powershell -NonInteractive`、CI 都可以）。指令帶著這台 AgEnD 的伺服器指紋：Runtime 先確認連到的伺服器就是那台 AgEnD（對全新 nonce 的 Ed25519 證明），才送出 token；token 走 Runtime 的標準輸入，不放在命令列參數、環境變數或檔案；帶回新憑證的回應也有簽名。已經連到這台 AgEnD 的電腦只會重連，不消耗 token；連到另一台 AgEnD 的電腦會另開獨立的 profile。以這種方式加入的電腦會在 Runtime 頁面通知（**有新電腦透過安裝指令加入**，附**撤銷**）。token 過期、已使用、已撤銷、格式錯誤、伺服器不符時，各自以清楚的訊息和非零 exit code 停止。`agend-runtime connect` 新增 `--enroll-stdin` 與 `--server-fingerprint`；`install.ps1` 仍是被頁面雜湊固定的同一份位元組。配對碼仍只能在互動式終端機輸入，並移到**手動選項**，作為較舊的做法。在指令有效且未使用時拿到它的人，可以把自己的電腦註冊成你的 Runtime，所以請把它當成密碼；完整的安全分析見 `docs/remote-runtime.md`。
