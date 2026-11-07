@@ -699,6 +699,30 @@ process.stdout.write("RECORDER-CONNECT-RAN\\n");process.exitCode=Number(process.
       const s = scratch(), r = await run(s, { T_COMMAND: tokenCommand(), T_MARK: s.marker, T_EXIT: "7" });
       expect(r.code, r.out).toBe(7); expect(r.out).toContain("could not connect (status 7)"); expect(r.out).toContain(join(entryOf(s), "connect-agend.bat"));
     });
+    it("returns the outcome to the shell as its exit status (powershell -Command): 0 when the Runtime ends normally, 1 when the install or the connection failed", async () => {
+      const exitStatus = async (env: Record<string, string>): Promise<{ status: number | null; out: string }> => {
+        clock += 600_000; const s = scratch();
+        return new Promise(done => {
+          const child = spawn(PWSH, ["-NoProfile", "-NonInteractive", "-Command", `${BOOT_FIXTURE}; ${tokenCommand()}`],
+            { env: { PATH: process.env.PATH ?? "", HOME: s.root, DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1", LOCALAPPDATA: s.local, AGEND_RUNTIME_NO_PATH: "1", T_MARK: s.marker, ...env }, stdio: ["ignore", "pipe", "pipe"] });
+          let out = ""; child.stdout.on("data", d => { out += d; }); child.stderr.on("data", d => { out += d; });
+          const timer = setTimeout(() => child.kill("SIGKILL"), 45_000);
+          child.on("close", status => { clearTimeout(timer); done({ status, out }); });
+        });
+      };
+      const ok = await exitStatus({}); expect(ok.status, ok.out).toBe(0);
+      const stopped = await exitStatus({ T_EXIT: "7" }); expect(stopped.status, stopped.out).toBe(1);
+      expect(stopped.out).toContain("could not connect (status 7)"); expect(stopped.out).not.toContain(TOKEN);
+      // a stale $LASTEXITCODE from an earlier command is not mistaken for a failure: the command starts by resetting it
+      const stale = scratch(); clock += 600_000;
+      const staleRun = await new Promise<{ status: number | null; out: string }>(done => {
+        const child = spawn(PWSH, ["-NoProfile", "-NonInteractive", "-Command", `${BOOT_FIXTURE}; $global:LASTEXITCODE = 9; $agendNoConnect = 1; ${tokenCommand()}; $agendNoConnect = $null`],
+          { env: { PATH: process.env.PATH ?? "", HOME: stale.root, DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1", LOCALAPPDATA: stale.local, AGEND_RUNTIME_NO_PATH: "1", T_MARK: stale.marker }, stdio: ["ignore", "pipe", "pipe"] });
+        let out = ""; child.stdout.on("data", d => { out += d; }); child.stderr.on("data", d => { out += d; });
+        child.on("close", status => done({ status, out }));
+      });
+      expect(staleRun.status, staleRun.out).toBe(0);                       // install only, nothing failed: 0, whatever the session's $LASTEXITCODE was
+    });
     it("refuses a malformed token or fingerprint BEFORE installing or downloading anything, exit 1, and does not print it", async () => {
       for (const [token, fingerprint, said] of [["agend_enroll_short", FP, "one-time token in this install command is not valid"], [TOKEN.toUpperCase(), FP, "one-time token in this install command is not valid"],
         [TOKEN + "x", FP, "one-time token in this install command is not valid"], [TOKEN, "nope", "server fingerprint in this install command is missing or not valid"], [TOKEN, "", "server fingerprint in this install command is missing or not valid"],

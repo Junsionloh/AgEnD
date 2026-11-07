@@ -304,7 +304,7 @@ describe("remote machine UI",()=>{
       // the one-time command first (the same text the page builder makes), then the manual options (install only, connect) in the collapsed block
       expect(commands()).toEqual([enrollCommand("http://localhost",SCRIPT_SHA,TOKEN,FINGERPRINT),installOnlyCommand("http://localhost",SCRIPT_SHA),'agend-runtime connect --server "http://localhost"']);
       expect(commands()[0]).toContain(`$agendEnroll = '${TOKEN}'; $agendFingerprint = '${FINGERPRINT}'; try { `);expect(commands()[0]).toContain(installCommand("http://localhost",SCRIPT_SHA));
-      expect(commands()[0]).toMatch(/ finally \{ \$agendEnroll = \$null; \$agendFingerprint = \$null \}$/);expect(commands()[1]).toBe(`$agendNoConnect = 1; ${installCommand("http://localhost",SCRIPT_SHA)}; $agendNoConnect = $null`);
+      expect(commands()[0]).toContain(" finally { $agendEnroll = $null; $agendFingerprint = $null }; if ($LASTEXITCODE) { Write-Error ");expect(commands()[1]).toBe(`$agendNoConnect = 1; ${installCommand("http://localhost",SCRIPT_SHA)}; $agendNoConnect = $null`);
       expect(commands()[1]).not.toContain(TOKEN);expect(commands()[2]).not.toContain(TOKEN);
       const manual=p.root.querySelector(".runtime-install-panel details.runtime-manual-command");
       expect(manual.querySelector("summary").textContent).toBe("Manual options (pairing code, install only)");expect(manual.hasAttribute("open")).toBe(false);
@@ -632,7 +632,9 @@ describe("machine snapshot boundary",()=>{
   });
   it("builds the one-time install command around the same pinned command, with the token and server fingerprint as inert, single-quoted values cleared in a finally",()=>{
     const origin="https://runtime.example.com", text=enrollCommand(origin,SCRIPT_SHA,TOKEN,FINGERPRINT), base=installCommand(origin,SCRIPT_SHA);
-    expect(text).toBe(`$agendEnroll = '${TOKEN}'; $agendFingerprint = '${FINGERPRINT}'; try { ${base} } finally { $agendEnroll = $null; $agendFingerprint = $null }`);
+    expect(text).toMatch(new RegExp(`^\\$global:LASTEXITCODE = 0; \\$agendEnroll = '${TOKEN}'; \\$agendFingerprint = '${FINGERPRINT}'; try \\{ `));
+    expect(text).toContain(` try { ${base} } finally { $agendEnroll = $null; $agendFingerprint = $null }; if ($LASTEXITCODE) { Write-Error '`);   // the status of the last step reaches the shell's exit code
+    expect(text).toMatch(/-ErrorAction SilentlyContinue \}$/);
     expect(text.match(/\biex\b/g)).toHaveLength(1);expect(text).not.toMatch(/\n|SkipCertificateCheck|Set-ExecutionPolicy|-ExecutionPolicy|setx|\|\s*iex/i);
     expect(text).not.toContain("agendNoConnect");expect(text).not.toMatch(/--[a-z]/);   // no flag and no argument: the token is read from two variables, handed over on stdin
     expect(text.split(TOKEN)).toHaveLength(2);                                            // the token appears exactly once, in its own assignment

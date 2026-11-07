@@ -70,7 +70,10 @@ export function runtimeInstallCommand(server, scriptSha256) {
 export function runtimeEnrollCommand(server, scriptSha256, token, fingerprint) {
   const body = runtimeInstallCommand(server, scriptSha256);
   if (!body || typeof token !== "string" || !ENROLL_TOKEN.test(token) || typeof fingerprint !== "string" || !SERVER_FINGERPRINT.test(fingerprint)) return "";
-  return `$agendEnroll = '${token}'; $agendFingerprint = '${fingerprint}'; try { ${body} } finally { $agendEnroll = $null; $agendFingerprint = $null }`;
+  // `$LASTEXITCODE` is reset first (a stale value from an earlier command must not look like a failure) and checked last: `powershell -Command` returns 1 only when
+  // its last statement failed, so an AI agent or CI step sees a non-zero exit status when the install or the connection did not succeed. Silent and harmless at a prompt.
+  return `$global:LASTEXITCODE = 0; $agendEnroll = '${token}'; $agendFingerprint = '${fingerprint}'; try { ${body} } finally { $agendEnroll = $null; $agendFingerprint = $null }; `
+    + `if ($LASTEXITCODE) { Write-Error 'The AgEnD Runtime was not installed or did not connect (the message above says why).' -ErrorAction SilentlyContinue }`;
 }
 /** After the install script: agend-runtime is on the user's PATH. The pairing code is typed into the terminal, never here. */
 export function runtimeWindowsConnectCommand(server) {

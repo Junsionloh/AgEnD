@@ -38,7 +38,7 @@ export { RUNTIME_PANE_MODULES } from "./runtime-pane-assets.js";
 
 export type RuntimeStopKind = "refused" | "revoked" | "replaced" | "rejected" | "incompatible" | "reinstall";
 export interface RuntimeStopReason { kind: RuntimeStopKind; /** The close reason AgEnD gave, when it gave one. */ detail?: string }
-const REPAIR = "run .\\agend-runtime.cmd disconnect in this folder (add the same --profile if you used one), then double-click connect-agend.bat and enter a new pairing code.";
+const REPAIR = "run .\\agend-runtime.cmd disconnect in this folder (add the same --profile if you used one), then double-click connect-agend.bat and enter a new pairing code, or paste a new one-time install command from AgEnD Settings -> Runtime -> Connect a computer (no pairing code needed).";
 /** Plain-language cause and next step for a stop AgEnD caused. AgEnD answers an unknown and a revoked credential with the same bare 401, so "refused" covers both. */
 export function describeRuntimeStop(reason: RuntimeStopReason): string {
   switch (reason.kind) {
