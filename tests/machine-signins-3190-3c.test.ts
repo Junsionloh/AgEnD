@@ -4,76 +4,18 @@
  * what the server sends is only `{cli, profile, method, actor}` and a sign-in code; what comes back is the reduced screen; an e-mail address, the sign-in link's
  * query and the code never reach a log or an event. Fixtures only (example.com).
  */
-import { EventEmitter } from "node:events";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve, sep } from "node:path";
-import { PassThrough } from "node:stream";
-import type { ChildProcess } from "node:child_process";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { RemoteAccounts, type RemoteAccountsDeps, type RemoteStatusAnswer } from "../src/runtime-remote-accounts.js";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import { credentialProfilesRoot } from "../src/runtime-credential-profiles.js";
 import { createRuntimeProfile, requireOwnedProfile } from "../src/runtime-profile-ownership.js";
 import { setRemoteSwitch } from "../src/runtime-remote-setup.js";
-import { parseRuntimeRemotePayload, type RuntimeMachine } from "../src/runtime-protocol.js";
-import { MachineSignIns, type MachineSignInDeps } from "../src/machine-signins.js";
-import { MachineAccounts } from "../src/machine-accounts.js";
+import { MachineSignIns } from "../src/machine-signins.js";
 import { createRuntimeSignInTransport, runtimeAccountStatus, PROFILE_DOES_NOT_EXIST, RUNTIME_SIGNIN_CLIS, type AccountCaller } from "../src/runtime-signin-transport.js";
 import { structuredSignInSupported } from "../src/structured-signin.js";
+import { ACTOR, CODE, EMAIL, ID, URL_OK, cleanScratch, runtimeRig as fixture, waitFor } from "./helpers/machine-runtime.js";
 
-const ID = "11111111-2222-3333-4444-555555555555";
-const URL_OK = "https://claude.com/cai/oauth/authorize?code=true&client_id=fixture&response_type=code&state=STATE-NEVER-LOGGED";
-const CODE = "SECRETCODE123-abc";
-const EMAIL = "ada.lovelace@example.com";
-const ACTOR = "admin:0123456789abcdef";
-const directories: string[] = [];
-const scratch = (): string => { const path = mkdtempSync(join(tmpdir(), "agend-machine-signin-")); directories.push(path); return path; };
-afterEach(() => { for (const path of directories.splice(0)) { if (!resolve(path).startsWith(resolve(tmpdir()) + sep)) throw Error("Unexpected fixture path"); rmSync(path, { recursive: true, force: true }); } });
-
-class FakeChild extends EventEmitter {
-  stdin = new PassThrough(); stdout = new PassThrough(); stderr = new PassThrough(); pid = 77; exitCode: number | null = null; signalCode: NodeJS.Signals | null = null; killed = false; written = "";
-  constructor() { super(); this.stdin.on("data", chunk => { this.written += chunk.toString(); }); }
-  say(text: string): void { this.stdout.write(text); }
-  end(code: number): void { this.exitCode = code; this.emit("close", code); }
-  kill(): boolean { this.killed = true; queueMicrotask(() => { if (this.exitCode === null) this.end(1); }); return true; }
-}
-
-/** The real Runtime side, a fake CLI, and the server's side of the transport over a function call instead of a socket. */
-function fixture(options: { switchOn?: boolean; created?: string[]; unreachable?: () => boolean } = {}) {
-  const pairing = scratch(), root = credentialProfilesRoot(pairing), children: FakeChild[] = [], spawned: Array<{ args: readonly string[]; env: NodeJS.ProcessEnv | undefined }> = [];
-  for (const name of options.created ?? []) createRuntimeProfile(root, "claude-code", name);
-  let answer: RemoteStatusAnswer = { loggedIn: false };
-  let clock = Date.now();                                      // the Runtime's clock: it paces sign-in starts (5 s apart), so a test moves it
-  const deps: RemoteAccountsDeps = { pairingDirectory: pairing, credentialRoot: root, now: () => clock, status: async () => answer, find: async () => ({ path: "claude.exe", command: "claude.exe", args: [] }), environment: () => ({ PATH: "p" }),
-    runLogout: async () => 0, inUse: () => undefined, inUseNow: () => undefined, defaultProfile: () => undefined, changed: vi.fn(),
-    signIn: { scratchRoot: scratch(), spawn: (_c, args, spawnOptions) => { spawned.push({ args, env: spawnOptions.env }); const child = new FakeChild(); children.push(child); queueMicrotask(() => { child.say(`If the browser didn't open, visit: ${URL_OK}\nPaste code here if prompted > `); }); return child as unknown as ChildProcess; } } };
-  const runtime = new RemoteAccounts(deps);
-  if (options.switchOn !== false) setRemoteSwitch(pairing, "accounts", true, undefined, clock);
-  const sent: Array<{ operation: string; payload: any }> = [];
-  const replies: unknown[] = [];
-  const call: AccountCaller = async (_id, operation, payload) => {
-    if (options.unreachable?.()) throw new Error("Runtime machine is offline");
-    sent.push({ operation, payload: structuredClone(payload) });
-    const input = parseRuntimeRemotePayload(operation, payload);      // the coordinator's own closed check
-    const result = await runtime.handle(operation, input);
-    replies.push(structuredClone(result)); return result;
-  };
-  const machine = (): RuntimeMachine => ({ id: ID, name: "Desk PC", platform: "win32", status: "online", createdAt: 1, generation: 1, runtimeInfo: { protocolVersions: [1], capabilities: ["exec", "remote-signin"] },
-    inventory: { clis: [], home: "", probedAt: null, credentialProfiles: { profiles: (options.created ?? []).map(name => ({ name, loggedIn: false, created: true })) } } } as RuntimeMachine);
-  const accounts = new MachineAccounts({ call, machine: id => (id === ID ? machine() : undefined), machines: () => [machine()], agents: () => [], signingIn: () => false, log: () => {} });
-  const events: Array<Record<string, unknown>> = [];
-  let live = true;
-  const owner = {};
-  const signIns = new MachineSignIns({ call, current: who => live && who === owner, reported: (id, profile) => accounts.profileState(id, profile), readiness: id => accounts.readiness(id), actor: () => ACTOR,
-    changed: (event, who, launched) => { events.push({ ...event, launched, mine: who === owner }); } } satisfies MachineSignInDeps);
-  const target = (profile: string) => ({ machine: ID, profile });
-  const view = (profile: string) => signIns.snapshot(owner, target(profile)).login;
-  const phase = (profile: string) => signIns.snapshot(owner, target(profile)).login?.phase;
-  return { runtime, signIns, owner, pairing, root, children, spawned, sent, replies, events, call, target, view, phase, answer: (value: RemoteStatusAnswer) => { answer = value; }, tick: (ms: number) => { clock += ms; }, end: () => { live = false; },
-    stop: async () => { await signIns.close(); await runtime.stop().catch(() => {}); } };
-}
-type F = ReturnType<typeof fixture>;
-const waitFor = (fn: () => void) => vi.waitFor(fn, { timeout: 6000, interval: 25 });
+afterEach(cleanScratch);
 
 describe("a sign-in on a computer, end to end against the Runtime's side", () => {
   it("Add account: a new name is created and recorded by that computer's Runtime when its first sign-in starts; the dashboard gets the link, sends one code, and reads success from the CLI's own status", async () => {
@@ -199,6 +141,57 @@ describe("a sign-in on a computer, end to end against the Runtime's side", () =>
     // The Runtime still holds the child of the first attempt until its own close arrives: the retry reaches it, and only then is the computer free.
     await f.signIns.begin(f.owner, f.target("work"));
     expect(f.children[0]!.killed).toBe(true); expect(f.spawned).toHaveLength(2);
+    await f.stop();
+  });
+});
+
+describe("two starts at once on a computer whose last close could not be confirmed", () => {
+  /**
+   * A computer whose first sign-in could not be shown ended (it went offline while it was cancelled), then came back. Both starts retry the close of that attempt; the
+   * SECOND close is held, so that it returns only after the first start has taken the computer: a start that resets the lock and the run when its close returns late would
+   * take them from the one that already has them.
+   */
+  async function stuck(created: string[]) {
+    let offline = false, armed = false, closes = 0, release!: () => void;
+    const hold = new Promise<void>(done => { release = done; });
+    const f = fixture({ created, unreachable: () => offline, gate: operation => (operation === "signin.close" && armed && ++closes === 2 ? hold : undefined) });
+    await f.signIns.begin(f.owner, f.target("work"));
+    await waitFor(() => expect(f.phase("work")).toBe("code"));
+    offline = true;
+    await expect(f.signIns.cancel(f.owner, f.target("work"))).rejects.toThrow("signin_cleanup_failed");
+    offline = false; armed = true; f.tick(6_000);
+    return { f, release };
+  }
+  it("the same profile: the first start takes the computer, the second joins it (one login id, one new child) and nothing is reset under it", async () => {
+    const { f, release } = await stuck(["work"]);
+    const a = f.signIns.begin(f.owner, f.target("work")), b = f.signIns.begin(f.owner, f.target("work"));
+    const first = await a;                                              // the first start has the computer
+    release();
+    const second = await b;
+    expect(first.login).not.toBeNull(); expect(second.login!.id).toBe(first.login!.id);
+    expect(f.spawned).toHaveLength(2);                                  // the first attempt's child and exactly one new one
+    expect(f.signIns.busy(ID)).toBe(true); expect(f.signIns.signingIn(ID, "work")).toBe(true);
+    expect(f.view("work")).toMatchObject({ phase: expect.stringMatching(/^(?:code|authorization|starting|checking|waiting)$/), mine: true });   // it was not revoked
+    // The attempt that took the computer still owns it: a start for another profile is refused, not let through a reset lock.
+    await expect(f.signIns.begin(f.owner, f.target("home"))).rejects.toThrow("machine_busy");
+    await f.stop();
+  });
+  it("another profile: the first start takes the computer and the second is refused as busy, never let in", async () => {
+    const { f, release } = await stuck(["work", "home"]);
+    const a = f.signIns.begin(f.owner, f.target("work")), b = f.signIns.begin(f.owner, f.target("home"));
+    await a;
+    release();
+    await expect(b).rejects.toThrow("machine_busy");
+    expect(f.spawned).toHaveLength(2); expect(f.signIns.signingIn(ID, "work")).toBe(true); expect(f.signIns.signingIn(ID, "home")).toBe(false);
+    expect(f.view("work")).toMatchObject({ mine: true }); expect(f.view("work")?.phase).not.toBe("failed");
+    await f.stop();
+  });
+  it("starts are queued per computer: a later one waits for the earlier one to be settled, and a refusal of one does not hold the next", async () => {
+    const f = fixture({ created: ["work"], switchOn: false });
+    const results = await Promise.allSettled([f.signIns.begin(f.owner, f.target("work")), f.signIns.begin(f.owner, f.target("work"))]);
+    expect(results.map(r => (r as PromiseRejectedResult).reason?.message)).toEqual(["machine_accounts_off", "machine_accounts_off"]);
+    setRemoteSwitch(f.pairing, "accounts", true, undefined, Date.now());
+    await expect(f.signIns.begin(f.owner, f.target("work"))).resolves.toMatchObject({ target: { profile: "work" } });
     await f.stop();
   });
 });

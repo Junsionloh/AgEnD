@@ -594,7 +594,13 @@ export class RuntimeClient {
       // Throws when `credential-default.json` cannot be read: an unreadable default is not "no default" (the remove then answers `unconfirmed`).
       defaultProfile: () => this.options.store.credentialDefault(),
       enter: () => this.activity.enter(),
-      changed: () => { this.credentialStamp = this.stamp(); void this.refreshInventory(false).catch(() => {}); },
+      // With `authorized` (an account operation still waiting for its answer, which already holds a share of the Runtime's activity) the new inventory is sent over the same
+      // connection BEFORE the answer, so the dashboard that reads it on the answer sees the change; a revoked consent sends nothing. Without it (an install) it is only started.
+      changed: authorized => {
+        this.credentialStamp = this.stamp();
+        if (authorized) return authorized() ? this.readInventory(false, authorized).then(() => {}, () => {}) : undefined;
+        void this.refreshInventory(false).catch(() => {});
+      },
       // A CLI was just installed: the cached list is stale, so detect for real and send it (this request already holds a share of the Runtime's activity).
       installed: async authorized => { await this.readInventory(true, authorized); },
       // Native Windows installs from the Runtime's own closed table (3b); a test supplies its own installer.

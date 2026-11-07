@@ -11,6 +11,7 @@ import { MachineAccounts, machineAgents, type MachineAccountsDeps } from "../src
 import type { RuntimeMachine } from "../src/runtime-protocol.js";
 import { parseCredentialProfileReport, credentialProfileReport, ensureCredentialProfile } from "../src/runtime-credential-profiles.js";
 import { createRuntimeProfile, isCreatedProfile } from "../src/runtime-profile-ownership.js";
+import { ID as RIG_ID, cleanScratch, runtimeRig } from "./helpers/machine-runtime.js";
 
 const ID = "11111111-2222-3333-4444-555555555555";
 const ME = { id: ID, actor: "admin:0123456789abcdef" };
@@ -86,7 +87,7 @@ describe("what a Runtime reports about its profiles", () => {
   });
 });
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) rmSync(join(root, ".."), { recursive: true, force: true }); });
+afterEach(() => { cleanScratch(); for (const root of roots.splice(0)) rmSync(join(root, ".."), { recursive: true, force: true }); });
 
 function runtimeMachine(extra: Partial<RuntimeMachine> = {}): RuntimeMachine {
   return { id: ID, name: "Desk PC", platform: "win32", status: "online", createdAt: 1, generation: 1,
@@ -158,6 +159,9 @@ describe("add, remove and sign out on a computer", () => {
     f.calls.length = 0;
     expect(await f.accounts.add("claude-code", "fresh", ID, "me")).toEqual({ ok: true });
     expect(f.calls.map(c => c.operation)).toEqual(["accounts.switches"]);
+    // Only checked: the folder is made when the first sign-in starts, so the fleet log must not say a dialog that was closed after this "added" anything.
+    expect(f.log.at(-1)).toEqual({ machine: ID, machineName: "Desk PC", profile: "fresh", by: "me", action: "add_checked", outcome: "ok" });
+    expect(f.log.some(entry => (entry as any).action === "added" && (entry as any).outcome === "ok")).toBe(false);
     f.state.switchOn = false; expect(await f.accounts.add("claude-code", "fresh2", ID, "me")).toEqual({ ok: false, error: "machine_accounts_off" });
   });
   it("a refusal before anything is sent: offline, an older Runtime, switch off, unreadable", async () => {
@@ -210,5 +214,74 @@ describe("machineAgents", () => {
     const instances = { a: { runtime: "windows", machine_id: ID, backend: "claude-code" }, b: { runtime: "windows", machine_id: "other", backend: "claude-code" }, c: { backend: "claude-code" }, d: { runtime: "windows", machine_id: ID, backend: "codex" }, e: { runtime: "windows", machine_id: ID } };
     expect(machineAgents(instances, ID, name => (name === "a" ? "work" : null))).toEqual([{ name: "a", profile: "work" }, { name: "e", profile: null }]);
     expect(machineAgents(undefined, ID, () => null)).toEqual([]);
+  });
+});
+
+describe("the view right after a sign-out or remove (the inventory may not have arrived yet)", () => {
+  const signedIn = (name: string) => ({ name, loggedIn: true as const, created: true, identity: { maskedEmail: "ab***@example.com", plan: "max" as const } });
+  it("a removed profile is gone and a signed-out one is signed out at once, from the answer; the next inventory is the truth again", async () => {
+    const f = runtimeRig({ created: ["spare", "work"] });
+    f.report([{ name: "spare", loggedIn: false, created: true }, signedIn("work")]);
+    const profiles = async () => (await f.accounts.list())[0]!.profiles.map(p => [p.name, p.loggedIn, p.identity ? "identity" : "-", p.created]);
+    expect(await profiles()).toEqual([["spare", false, "-", true], ["work", true, "identity", true]]);
+    // The Runtime of this rig answers without sending its inventory (as one that answers first would): nothing in the machine's inventory has moved.
+    expect(await f.accounts.signOut("claude-code", "work", true, RIG_ID, f.who, "me")).toEqual({ ok: true });
+    expect(f.accounts.profileState(RIG_ID, "work")).toEqual({ exists: true, state: "invalid", created: true });
+    expect(await profiles()).toEqual([["spare", false, "-", true], ["work", false, "-", true]]);             // signed out, and no account left on the row
+    expect(await f.accounts.remove("claude-code", "spare", "spare", RIG_ID, f.who, "me")).toEqual({ ok: true });
+    expect(f.accounts.profileState(RIG_ID, "spare")).toEqual({ exists: false, state: "unknown", created: false });
+    expect(await profiles()).toEqual([["work", false, "-", true]]);
+    // A second Remove of what was just removed is `missing`, not a request to the computer.
+    f.sent.length = 0; f.tick(10_000);
+    expect(await f.accounts.remove("claude-code", "spare", "spare", RIG_ID, f.who, "me")).toMatchObject({ ok: false, error: "missing" });
+    expect(f.sent.some(s => s.operation === "accounts.remove")).toBe(false);
+    // The computer's next inventory arrives: it is the truth, whatever it says (here: the profile is back, and signed in again).
+    f.report([{ name: "spare", loggedIn: false, created: true }, signedIn("work")]);
+    expect(await profiles()).toEqual([["spare", false, "-", true], ["work", true, "identity", true]]);
+    expect(f.accounts.profileState(RIG_ID, "spare").exists).toBe(true);
+    expect(f.accounts.profileState(RIG_ID, "work").state).toBe("valid");
+    await f.stop();
+  });
+  it("what one operation changed does not outlive that computer's next inventory, and a case variant of the name is the same profile", async () => {
+    const f = runtimeRig({ created: ["Work"] }); f.report([signedIn("Work")]);
+    expect(await f.accounts.signOut("claude-code", "Work", true, RIG_ID, f.who, "me")).toEqual({ ok: true });
+    expect(f.accounts.profileState(RIG_ID, "WORK").state).toBe("invalid");
+    f.report([signedIn("Work")]);                                                                             // signed in again by someone at that computer
+    expect(f.accounts.profileState(RIG_ID, "work").state).toBe("valid");
+    await f.stop();
+  });
+  it("a Runtime that does send its inventory before the answer needs none of this: the view is the inventory", async () => {
+    const f = runtimeRig({ created: ["spare"], changed: async () => { f.report([]); } });                   // the Runtime sent the new (empty) inventory, then answered
+    expect(await f.accounts.remove("claude-code", "spare", "spare", RIG_ID, f.who, "me")).toEqual({ ok: true });
+    expect((await f.accounts.list())[0]!.profiles).toEqual([]);
+    expect(f.accounts.profileState(RIG_ID, "spare").exists).toBe(false);
+    await f.stop();
+  });
+});
+
+describe("a computer's failure is one fixed sentence: no path, account or output travels in the message (the real Runtime side)", () => {
+  const SECRET = "EACCES: C:\\Users\\alice\\.agend-runtime\\secret alice@example.com";
+  const GENERIC = "The operation could not be completed on this computer. Check that computer's Runtime window.";
+  const leaks = (r: any) => { expect(JSON.stringify(r)).not.toMatch(/alice|EACCES|C:|\\|secret|example\.com/); };
+  it("sign out: a logout that throws an ordinary error with a path and an e-mail is answered with the generic sentence", async () => {
+    const f = runtimeRig({ created: ["work"], runLogout: async () => { throw new Error(SECRET); } });
+    const r: any = await f.accounts.signOut("claude-code", "work", true, RIG_ID, f.who, "me");
+    expect(r).toEqual({ ok: false, error: "machine_refused", message: GENERIC }); leaks(r);
+    expect(JSON.stringify(f.logs)).not.toMatch(/alice|EACCES|C:|secret/);
+    await f.stop();
+  });
+  it("remove: a failure inside the Runtime's own deletion is the same generic sentence", async () => {
+    const f = runtimeRig({ created: ["spare"], ownership: { afterChecks: () => { throw new Error(SECRET); } } });
+    const r: any = await f.accounts.remove("claude-code", "spare", "spare", RIG_ID, f.who, "me");
+    expect(r).toEqual({ ok: false, error: "machine_refused", message: GENERIC }); leaks(r);
+    await f.stop();
+  });
+  it("the Runtime's own refusal sentences (ours: a name and a command, no path) still come through, so the person is told what to do", async () => {
+    const f = runtimeRig({ created: ["spare"], defaultProfile: () => "spare" });                              // only the Runtime knows its default; the server's view does not say
+    const r: any = await f.accounts.remove("claude-code", "spare", "spare", RIG_ID, f.who, "me");
+    expect(r).toMatchObject({ ok: false, error: "machine_refused" });
+    expect(r.message).toBe('Credential profile "spare" is this computer\'s default for agents; change it there first: agend-runtime profile default NAME');
+    expect(f.accounts.profileState(RIG_ID, "spare").exists).toBe(true);                                       // a refused remove changes nothing the view shows
+    await f.stop();
   });
 });

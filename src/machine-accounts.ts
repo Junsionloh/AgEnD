@@ -14,7 +14,7 @@
  */
 import { MACHINE_ACCOUNT_CLIS, type MachineAccountsInput, type MachineReadOnlyReason } from "./accounts-view.js";
 import { inventoryProbed } from "./windows-cli.js";
-import { validCredentialProfileName } from "./runtime-credential-profiles.js";
+import { validCredentialProfileName, type CredentialProfileStatus } from "./runtime-credential-profiles.js";
 import type { RuntimeMachine } from "./runtime-protocol.js";
 import type { AccountCaller } from "./runtime-signin-transport.js";
 import type { MachineRefusal } from "./machine-signins.js";
@@ -35,7 +35,7 @@ export interface MachineAccountsDeps {
   /** A dashboard sign-in for this computer and profile is running or not shown gone. */
   signingIn(machineId: string, profile: string): boolean;
   /** The fleet log. Names and ids only. */
-  log(entry: { machine: string; machineName: string; profile: string; by: string; action: "added" | "removed" | "signed_out"; outcome: "ok" | "refused"; reason?: string }): void;
+  log(entry: { machine: string; machineName: string; profile: string; by: string; action: "added" | "add_checked" | "removed" | "signed_out"; outcome: "ok" | "refused"; reason?: string }): void;
   now?(): number;
 }
 const SWITCH_TTL_MS = 5_000;
@@ -49,7 +49,15 @@ function accountsSwitchOn(value: unknown): boolean | null {
   return record(accounts) && typeof accounts.on === "boolean" ? accounts.on : null;
 }
 
+/**
+ * What a successful sign-out or remove changed, kept only until that computer's next inventory arrives. A Runtime sends its new inventory before it answers (so this is normally
+ * not needed), but a Runtime that does not, or an inventory that is late, must not leave the Accounts view showing a profile that was just removed or one that was just signed out.
+ * The marker is the computer's `inventoryUpdatedAt` when the operation finished: any later inventory moves it, and the inventory is then the truth again.
+ */
+interface PendingChange { at: number | undefined; removed: Set<string>; signedOut: Set<string> }
+
 export class MachineAccounts {
+  private readonly changes = new Map<string, PendingChange>();
   private readonly switchCache = new Map<string, { at: number; on: boolean | null }>();
   private readonly switchReads = new Map<string, Promise<boolean | null>>();
   constructor(private readonly deps: MachineAccountsDeps) {}
@@ -70,6 +78,22 @@ export class MachineAccounts {
     this.switchReads.set(machine, read);
     return read;
   }
+  /** The profiles a computer reported, with what this server has just changed on it applied until its next inventory arrives. */
+  private profilesOf(machine: RuntimeMachine): readonly CredentialProfileStatus[] {
+    const base = machine.inventory?.credentialProfiles?.profiles ?? [];
+    const change = this.changes.get(machine.id);
+    if (!change) return base;
+    if (machine.inventoryUpdatedAt !== change.at) { this.changes.delete(machine.id); return base; }          // a newer inventory is the truth
+    return base.filter(p => !change.removed.has(p.name.toLowerCase()))
+      .map(p => (change.signedOut.has(p.name.toLowerCase()) ? { name: p.name, loggedIn: false, ...(p.created !== undefined ? { created: p.created } : {}) } : p));
+  }
+  private noteChange(machineId: string, profile: string, action: "removed" | "signed_out"): void {
+    const at = this.deps.machine(machineId)?.inventoryUpdatedAt;
+    let change = this.changes.get(machineId);
+    if (!change || change.at !== at) this.changes.set(machineId, change = { at, removed: new Set(), signedOut: new Set() });
+    const key = profile.toLowerCase();
+    if (action === "removed") { change.removed.add(key); change.signedOut.delete(key); } else change.signedOut.add(key);
+  }
   private static capable(machine: RuntimeMachine): boolean { return machine.runtimeInfo?.capabilities.includes("remote-signin") === true; }
   private static claude(machine: RuntimeMachine) { return machine.inventory?.clis.find(row => row.id === "claude-code"); }
 
@@ -89,7 +113,7 @@ export class MachineAccounts {
       if (!readOnlyReason && inventoryProbed(machine.inventory) && (!cli || cli.path === null)) readOnlyReason = "not_installed";
       const report = machine.inventory?.credentialProfiles;
       return { id: machine.id, name: machine.name, online, ...(readOnlyReason ? { readOnlyReason } : {}),
-        profiles: (report?.profiles ?? []).map(p => ({ name: p.name, loggedIn: p.loggedIn, ...(p.identity ? { identity: p.identity } : {}), ...(p.created !== undefined ? { created: p.created } : {}) })),
+        profiles: this.profilesOf(machine).map(p => ({ name: p.name, loggedIn: p.loggedIn, ...(p.identity ? { identity: p.identity } : {}), ...(p.created !== undefined ? { created: p.created } : {}) })),
         ...(report?.default ? { defaultProfile: report.default } : {}),
         ...(cli ? { defaultLogin: { loggedIn: cli.authenticated, ...(cli.identity ? { identity: cli.identity } : {}) } } : {}),
         agents: this.deps.agents(machine.id) };
@@ -117,12 +141,13 @@ export class MachineAccounts {
     return { agents: this.deps.agents(machine.id).filter(a => same(a.profile, profile)).map(a => a.name).sort((a, b) => a.localeCompare(b)), classic: [], fleetDefault: same(defaultProfile, profile) };
   }
   private reported(machine: RuntimeMachine, profile: string): { name: string; created: boolean } | undefined {
-    const row = machine.inventory?.credentialProfiles?.profiles.find(p => same(p.name, profile));
+    const row = this.profilesOf(machine).find(p => same(p.name, profile));
     return row ? { name: row.name, created: row.created === true } : undefined;
   }
   /** What a computer last reported about one profile (its inventory; the computer is not asked): has it, signed in or not, and did its Runtime create it. */
   profileState(machineId: string, profile: string): { exists: boolean; state: "valid" | "invalid" | "unknown"; created: boolean } {
-    const row = this.deps.machine(machineId)?.inventory?.credentialProfiles?.profiles.find(p => same(p.name, profile));
+    const machine = this.deps.machine(machineId);
+    const row = machine ? this.profilesOf(machine).find(p => same(p.name, profile)) : undefined;
     return { exists: !!row, state: row?.loggedIn === true ? "valid" : row?.loggedIn === false ? "invalid" : "unknown", created: row?.created === true };
   }
 
@@ -138,7 +163,8 @@ export class MachineAccounts {
     if (refusal) return this.refused(refusal, machine, name, by, "added");
     const known = this.reported(machine!, name);
     if (known) return this.refused(known.name === name ? "exists" : "case_clash", machine, name, by, "added", known.name === name ? {} : { clash: known.name });
-    this.deps.log({ machine: machineId, machineName: machine!.name, profile: name, by, action: "added", outcome: "ok" });
+    // Only checked: the Runtime makes the folder when the first sign-in starts, so a dialog closed before that leaves nothing added, and the log must not say it was.
+    this.deps.log({ machine: machineId, machineName: machine!.name, profile: name, by, action: "add_checked", outcome: "ok" });
     return { ok: true };
   }
 
@@ -184,6 +210,7 @@ export class MachineAccounts {
     }
     this.deps.log({ machine: machine.id, machineName: machine.name, profile, by, action, outcome: "ok" });
     this.switchCache.delete(machine.id);
+    this.noteChange(machine.id, profile, action);
     return { ok: true };
   }
 }

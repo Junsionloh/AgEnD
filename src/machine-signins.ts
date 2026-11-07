@@ -92,9 +92,24 @@ export class MachineSignIns {
       login, ready: this.terminal(mine), target: { machine: target.machine, profile: target.profile } };
   }
 
-  async begin(owner: object, target: MachineSignInTarget, relogin = false): Promise<MachineSignInSnapshot> {
+  /**
+   * One start at a time per computer: a second request for the same computer waits for the first to be settled (running, joined or refused) and then looks at what is
+   * there. Without it two starts that both find an attempt whose child could not be shown gone would both retry its close, and the one that finished last would reset the
+   * lock and the run the other had just taken.
+   */
+  private readonly starting = new Map<string, Promise<unknown>>();
+  begin(owner: object, target: MachineSignInTarget, relogin = false): Promise<MachineSignInSnapshot> {
+    if (!this.current(owner)) return Promise.reject(new Error("signin_session_expired"));
+    try { this.validTarget(target); } catch (error) { return Promise.reject(error); }
+    const after = this.starting.get(target.machine) ?? Promise.resolve();
+    const mine = after.then(() => this.beginNow(owner, target, relogin));
+    const tail = mine.then(() => undefined, () => undefined);
+    this.starting.set(target.machine, tail);
+    void tail.then(() => { if (this.starting.get(target.machine) === tail) this.starting.delete(target.machine); });
+    return mine;
+  }
+  private async beginNow(owner: object, target: MachineSignInTarget, relogin: boolean): Promise<MachineSignInSnapshot> {
     if (!this.current(owner)) throw new Error("signin_session_expired");
-    this.validTarget(target);
     const previous = this.runs.get(target.machine);
     if (previous && !this.terminal(previous)) {
       if (previous.owner === owner && same(previous.target.profile, target.profile)) return this.snapshot(owner, target);   // a refresh or a double click joins
@@ -103,8 +118,8 @@ export class MachineSignIns {
     if (previous && this.cleanupFailed(previous)) {
       // The last attempt's child could not be shown gone (the computer was offline). Ask again; only a confirmed end frees the computer.
       try { await previous.transport.close(); } catch { throw new Error("signin_cleanup_failed"); }
-      previous.lock.close(); previous.lock.reopen();
-      this.runs.delete(target.machine);
+      // Only if it is still the attempt that was retried: whatever took its place owns the lock and the run now.
+      if (this.runs.get(target.machine) === previous) { previous.lock.close(); previous.lock.reopen(); this.runs.delete(target.machine); }
     }
     await this.preflight(owner, target);
     if (!this.current(owner)) throw new Error("signin_session_expired");
