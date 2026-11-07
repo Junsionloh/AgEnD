@@ -197,6 +197,8 @@ export class RuntimeCoordinator {
       || this.state.enrollments !== undefined && !Array.isArray(this.state.enrollments)
       || this.state.enrollmentAudit !== undefined && !Array.isArray(this.state.enrollmentAudit)) throw Error("Invalid runtime machine store");
     this.state.tombstones ??= []; this.state.enrollments ??= []; this.state.enrollmentAudit ??= [];
+    // A trail longer than its cap is cut to the newest entries (never a reason to refuse to start).
+    if (this.state.enrollmentAudit.length > ENROLLMENT_AUDIT_CAP) this.state.enrollmentAudit = this.state.enrollmentAudit.slice(-ENROLLMENT_AUDIT_CAP);
     if (this.state.machines.length > 256 || this.state.pairings.length > 16 || this.state.commands.length > COMMAND_HARD_CAP || this.state.tombstones.length > TOMBSTONE_CAP
       || this.state.tombstones.some(row => !record(row) || !text(row.id, 128) || !UUID.test(String(row.machineId)) || !/^[a-f0-9]{64}$/.test(row.digest) || !Number.isFinite(row.at))
       || this.state.machines.some(row => !record(row) || !record(row.machine) || !UUID.test(String(row.machine.id)) || !text(row.machine.name, 100)
@@ -207,7 +209,7 @@ export class RuntimeCoordinator {
         || row.claimHash !== undefined && !/^[a-f0-9]{64}$/.test(row.claimHash))
       || new Set(this.state.machines.map(row => row.machine.id)).size !== this.state.machines.length
       || this.state.machines.some(row => row.machine.enrolledVia !== undefined && (row.machine.enrolledVia !== "install-command" || row.machine.enrollmentId !== undefined && !UUID.test(String(row.machine.enrollmentId))))
-      || this.state.enrollments.length > ENROLLMENT_CAP || this.state.enrollmentAudit.length > ENROLLMENT_AUDIT_CAP
+      || this.state.enrollments.length > ENROLLMENT_CAP
       || this.state.enrollments.some(row => !record(row) || !UUID.test(String(row.id)) || !/^[a-f0-9]{64}$/.test(String(row.tokenHash)) || !/^[a-f0-9]{64}$/.test(String(row.fingerprint))
         || !Number.isFinite(row.createdAt) || !Number.isFinite(row.expiresAt) || !text(row.createdBy, 64)
         || row.usedAt !== undefined && !Number.isFinite(row.usedAt) || row.revokedAt !== undefined && !Number.isFinite(row.revokedAt) || row.machineId !== undefined && !UUID.test(String(row.machineId)))
@@ -273,8 +275,14 @@ export class RuntimeCoordinator {
   private enrollmentStatus(row: EnrollmentRecord): RuntimeEnrollmentView["status"] {
     return row.usedAt !== undefined ? "used" : row.revokedAt !== undefined ? "revoked" : row.expiresAt <= this.now() ? "expired" : "unused";
   }
-  private audit(entry: RuntimeEnrollmentAuditEntry, persist = true): void {
-    if (persist) { const log = this.state.enrollmentAudit!; log.push(entry); while (log.length > ENROLLMENT_AUDIT_CAP) log.shift(); }
+  /** Appends to the persisted trail, keeping it within its cap. Returns how to take the entries back out if the journal then cannot be saved. */
+  private trail(...entries: RuntimeEnrollmentAuditEntry[]): () => void {
+    const log = this.state.enrollmentAudit!, before = log.slice();
+    log.push(...entries); while (log.length > ENROLLMENT_AUDIT_CAP) log.shift();
+    return () => { this.state.enrollmentAudit = before; };
+  }
+  /** Reports an entry to the log hook (after it is saved, or for an entry that is only logged). */
+  private audit(entry: RuntimeEnrollmentAuditEntry): void {
     try { this.options.audit?.({ ...entry }); } catch { /* a logging hook never changes the verdict */ }
   }
   /**
@@ -285,7 +293,7 @@ export class RuntimeCoordinator {
   createEnrollment(actor: string): RuntimeEnrollment {
     if (this.closed) throw Error("Runtime coordinator is closed");
     if (!text(actor, 64)) throw Error("Invalid enrollment actor");
-    const now = this.now(), identity = this.identity(), previous = { enrollments: structuredClone(this.state.enrollments!), audit: structuredClone(this.state.enrollmentAudit!) };
+    const now = this.now(), identity = this.identity(), previousRows = structuredClone(this.state.enrollments!);
     const events: RuntimeEnrollmentAuditEntry[] = [];
     // A week after it ended, a token leaves the list (the audit keeps the history); a full list drops its oldest ended token first.
     let rows = this.state.enrollments!.filter(row => (row.usedAt ?? row.revokedAt ?? row.expiresAt) + ENROLLMENT_KEEP_MS > now);
@@ -295,9 +303,9 @@ export class RuntimeCoordinator {
     const token = generateEnrollToken(), id = randomUUID(), expiresAt = now + ENROLL_TTL_MS;
     rows.push({ id, tokenHash: hashEnrollToken(token), fingerprint: identity.fingerprint, createdAt: now, expiresAt, createdBy: actor });
     events.push({ at: now, event: "issued", enrollmentId: id, actor });
-    const log = this.state.enrollmentAudit!; log.push(...events); while (log.length > ENROLLMENT_AUDIT_CAP) log.shift();
-    try { this.save(); } catch (error) { this.state.enrollments = previous.enrollments; this.state.enrollmentAudit = previous.audit; throw error; }
-    for (const entry of events) this.audit(entry, false);
+    const undo = this.trail(...events);
+    try { this.save(); } catch (error) { this.state.enrollments = previousRows; undo(); throw error; }
+    for (const entry of events) this.audit(entry);
     return { id, token, fingerprint: identity.fingerprint, createdAt: now, expiresAt };
   }
   /** Newest first, at most the last few: what the page shows next to the token it just issued. Never a token or a hash. */
@@ -307,14 +315,15 @@ export class RuntimeCoordinator {
   }
   /** Ends a token that has not been used. A used token cannot be revoked (revoke the computer that used it); an ended one needs nothing. */
   revokeEnrollment(id: string, actor: string): RuntimeEnrollmentView {
+    if (this.closed) throw Error("Runtime coordinator is closed");
     if (!text(actor, 64)) throw Error("Invalid enrollment actor");
     const row = this.state.enrollments!.find(row => row.id === id);
     if (!row) throw Error("Install-command token not found");
     if (this.enrollmentStatus(row) !== "unused") throw Error("Only an unused install-command token can be revoked");
-    const now = this.now(), log = this.state.enrollmentAudit!, entry: RuntimeEnrollmentAuditEntry = { at: now, event: "revoked", enrollmentId: row.id, actor };
-    row.revokedAt = now; log.push(entry);
-    try { this.save(); } catch (error) { delete row.revokedAt; log.pop(); throw error; }
-    this.audit(entry, false);
+    const now = this.now(), entry: RuntimeEnrollmentAuditEntry = { at: now, event: "revoked", enrollmentId: row.id, actor };
+    row.revokedAt = now; const undo = this.trail(entry);
+    try { this.save(); } catch (error) { delete row.revokedAt; undo(); throw error; }
+    this.audit(entry);
     return this.listEnrollments().find(view => view.id === id)!;
   }
   /**
@@ -338,18 +347,18 @@ export class RuntimeCoordinator {
     const token = input.token, now = this.now(), identity = this.identity();
     const row = this.state.enrollments!.find(candidate => enrollTokenMatches(token, candidate.tokenHash));
     if (!row) throw new RuntimeEnrollError("invalid", "Install-command token is not valid");
-    const refuse = (reason: RuntimeEnrollRefusal, message: string): never => { this.audit({ at: now, event: "rejected", enrollmentId: row.id, reason }, false); throw new RuntimeEnrollError(reason, message); };
+    const refuse = (reason: RuntimeEnrollRefusal, message: string): never => { this.audit({ at: now, event: "rejected", enrollmentId: row.id, reason }); throw new RuntimeEnrollError(reason, message); };
     if (row.usedAt !== undefined) refuse("used", "Install-command token was already used");
     if (row.revokedAt !== undefined) refuse("revoked", "Install-command token was revoked");
     if (row.expiresAt <= now) refuse("expired", "Install-command token expired");
     if (input.fingerprint !== identity.fingerprint || row.fingerprint !== identity.fingerprint) refuse("mismatch", "Install-command token is for a different AgEnD");
     if (this.state.machines.length >= 256 || this.state.machines.filter(machine => machine.machine.status !== "revoked").length >= 64) refuse("limit", "Runtime machine limit reached");
-    const machineId = randomUUID(), credential = secret(), entry: RuntimeEnrollmentAuditEntry = { at: now, event: "used", enrollmentId: row.id, machineId }, log = this.state.enrollmentAudit!;
+    const machineId = randomUUID(), credential = secret(), entry: RuntimeEnrollmentAuditEntry = { at: now, event: "used", enrollmentId: row.id, machineId };
     const machine: MachineRecord = { machine: { id: machineId, name: (input.name as string).trim(), platform: "win32", ...(input.hostname ? { hostname: input.hostname as string } : {}), status: "offline", createdAt: now, approvedAt: now,
       generation: 0, enrolledVia: "install-command", enrollmentId: row.id }, credentialHash: hash(credential) };
-    row.usedAt = now; row.machineId = machineId; this.state.machines.push(machine); log.push(entry);
-    try { this.save(); } catch (error) { delete row.usedAt; delete row.machineId; this.state.machines.pop(); log.pop(); throw error; }
-    this.audit(entry, false); this.emit({ type: "machine", machineId });
+    row.usedAt = now; row.machineId = machineId; this.state.machines.push(machine); const undo = this.trail(entry);
+    try { this.save(); } catch (error) { delete row.usedAt; delete row.machineId; this.state.machines.pop(); undo(); throw error; }
+    this.audit(entry); this.emit({ type: "machine", machineId });
     return { status: "enrolled", machineId, credential, signature: identity.signature(runtimeEnrollGrantMessage(input.nonce, machineId, credential)) };
   }
   pair(input: unknown): RuntimePairResult {
@@ -409,6 +418,9 @@ export class RuntimeCoordinator {
     if (path === RUNTIME_ROTATE_PATH) {
       const row = this.credentialOwner(req.headers.authorization);
       if (row) return `rotate:${row.machine.id}`;
+    } else if (path === RUNTIME_ENROLL_HELLO_PATH) {
+      // Its own bucket: it signs a nonce for anyone and spends nothing, and must neither be starved by invalid pairing traffic behind a proxy nor starve it.
+      return `enroll-hello:${req.socket.remoteAddress ?? "unknown"}`;
     } else if (record(input)) {
       if (path === RUNTIME_ENROLL_PATH && isEnrollToken(input.token)) {
         const row = this.state.enrollments!.find(row => enrollTokenMatches(input.token as string, row.tokenHash));
@@ -451,7 +463,7 @@ export class RuntimeCoordinator {
       if (this.closed) { answer(403, { error: "Runtime coordinator is closed" }); return; }
       const key = this.requestRateKey(url.pathname, value, req);
       charged = true;
-      if (!this.rate(key, key.startsWith("claim:") ? 120 : 30)) { answer(429, { error: "Too many runtime pairing requests" }); return; }
+      if (!this.rate(key, key.startsWith("claim:") || key.startsWith("enroll-hello:") ? 120 : 30)) { answer(429, { error: "Too many runtime pairing requests" }); return; }
       if (url.pathname === RUNTIME_ROTATE_PATH) {
         if (!this.credentialOwner(req.headers.authorization)) { answer(401, { error: "Runtime credential was refused" }); return; }
         answer(200, this.rotateCredential(req.headers.authorization, value)); return;

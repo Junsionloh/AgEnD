@@ -9,7 +9,7 @@ const idA="12345678-1234-4321-abcd-123456789012", idB="22345678-1234-4321-abcd-1
 const requests:Array<{path:string;body:any}>=[];
 const cli=()=>({id:"codex",path:"C:\\tools\\codex.exe",runnable:true,authenticated:true,version:"1.0",readOnlySupport:true,supports:{execution:true,resume:true,mcp:true},models:[]});
 const machine=(id:string,name:string,status="online")=>({id,name,status,...(status==="pending"?{pairingFingerprint:"ABCD-1234-5678"}:{}),platform:"win32",version:"1.0",lastSeenAt:Date.now(),inventoryUpdatedAt:Date.now(),inventory:{home:`C:\\${name}`,clis:[cli(),{id:"muse",path:null,runnable:false}]}});
-let machines:any[], enabled:boolean, installerMode="ok", enrollments:any[]=[], enrollSeq=0;
+let machines:any[], enabled:boolean, installerMode="ok", enrollments:any[]=[], enrollSeq=0, pairingTtl=60000, enrollSkew=0;
 const TOKEN="agend_enroll_"+"Qw3_-".repeat(9).slice(0,43), FINGERPRINT="cd".repeat(32), ENROLL_ID="aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
 const SCRIPT_SHA="ab".repeat(32);
 const response=(body:any,status=200)=>({ok:status>=200&&status<300,status,json:async()=>body});
@@ -23,7 +23,7 @@ beforeAll(async()=>{
     const body=options.body?JSON.parse(options.body):null;requests.push({path,body});
     if(path==="/ui/runtimes")return response({enabled,machines,enrollments});
     if(path==="/ui/runtimes/enrollment"){
-      enrollSeq++;const issued={id:`${ENROLL_ID.slice(0,-1)}${enrollSeq}`,token:TOKEN,fingerprint:FINGERPRINT,createdAt:Date.now(),expiresAt:Date.now()+15*60_000};
+      enrollSeq++;const issued={id:`${ENROLL_ID.slice(0,-1)}${enrollSeq}`,token:TOKEN,fingerprint:FINGERPRINT,createdAt:Date.now()+enrollSkew,expiresAt:Date.now()+enrollSkew+15*60_000};
       enrollments=[{id:issued.id,status:"unused",createdAt:issued.createdAt,expiresAt:issued.expiresAt},...enrollments.map(row=>row.status==="unused"?{...row,status:"revoked"}:row)];return response(issued,201);
     }
     const enrollRevoke=/^\/ui\/runtimes\/enrollment\/([^/]+)\/revoke$/.exec(path);
@@ -37,7 +37,7 @@ beforeAll(async()=>{
     if(diagnostic){const target=machines.find(item=>item.id===diagnostic[1]);return response(diagnostic[2]==="tasks"?{tasks:[]}:{inventory:target?.inventory || null});}
     if(path==="/api/settings/runtimes")return response({switches:{windows_cli:{on:false,configured:false,environment:null},remote_runtime:{on:enabled,configured:enabled,environment:null}},max_agents_per_machine:{value:4,min:1,max:16,default:4},local_origin:"http://127.0.0.1:19280"});
     if(path==="/ui/runtimes/installer"){return installerMode==="fail"?response({error:"unavailable"},503):response({version:"2.3.5-alpha.7",scriptSha256:SCRIPT_SHA,scriptBytes:13536,bundleSha256:"c".repeat(64)});}
-    if(path==="/ui/runtimes/pairing")return response({pairingId:"test",code:"PAIR-TEST-CODE",expiresAt:Date.now()+60000});
+    if(path==="/ui/runtimes/pairing")return response({pairingId:"test",code:"PAIR-TEST-CODE",expiresAt:Date.now()+pairingTtl});
     const renaming=/^\/ui\/runtimes\/machines\/([^/]+)\/rename$/.exec(path);
     if(renaming){machines=machines.map(item=>item.id===renaming[1]?{...item,name:body.name}:item);return response({ok:true});}
     const revoking=/^\/ui\/runtimes\/machines\/([^/]+)\/revoke$/.exec(path);
@@ -53,7 +53,7 @@ beforeAll(async()=>{
   windowsCatalog=await import("/ui/js/windows-cli-catalog.js");
   const runtimeUi=await import("/ui/js/panel-runtimes.js");Panel=runtimeUi.RuntimesPanel;connectCommand=runtimeUi.runtimeConnectCommand;installCommand=runtimeUi.runtimeInstallCommand;installOnlyCommand=runtimeUi.runtimeInstallOnlyCommand;windowsConnectCommand=runtimeUi.runtimeWindowsConnectCommand;enrollCommand=runtimeUi.runtimeEnrollCommand;Create=(await import("/ui/js/panel-fleet.js")).CreateInstanceDialog;routes=await import("/assets/app-route.js");
 });
-beforeEach(()=>{requests.length=0;enabled=true;installerMode="ok";enrollments=[];enrollSeq=0;machines=[machine(idA,"Desktop"),machine(idB,"Laptop","pending")];windowsInventory={home:"C:\\Test",hostname:"WINDOWS-DESK",probedAt:1,clis:[cli()]};windowsCatalog.forgetWindowsCliCatalog();catalog.forgetRuntimeCatalog();models.forgetCatalogs();app.appStore.set({windowsCli:false});});
+beforeEach(()=>{requests.length=0;enabled=true;installerMode="ok";enrollments=[];enrollSeq=0;pairingTtl=60000;enrollSkew=0;machines=[machine(idA,"Desktop"),machine(idB,"Laptop","pending")];windowsInventory={home:"C:\\Test",hostname:"WINDOWS-DESK",probedAt:1,clis:[cli()]};windowsCatalog.forgetWindowsCliCatalog();catalog.forgetRuntimeCatalog();models.forgetCatalogs();app.appStore.set({windowsCli:false});});
 afterEach(async()=>{await p.unmount();catalog.forgetRuntimeCatalog();vi.restoreAllMocks();});
 afterAll(()=>{p.restore();globalThis.fetch=originalFetch;});
 
@@ -459,6 +459,35 @@ describe("remote machine UI",()=>{
       expect(requests.filter(item=>item.path==="/ui/runtimes/pairing")).toHaveLength(1);expect(p.root.querySelector(".runtime-manual-command .runtime-pair-code").value).toBe("PAIR-TEST-CODE");
       expect(commands().join(" ")).not.toContain("PAIR-TEST-CODE");
       await zipTab();expect(requests.filter(item=>item.path==="/ui/runtimes/pairing")).toHaveLength(1);   // already there: not made twice
+    });
+    it("makes the token visible: the header button on the ZIP tab goes to the Windows tab, and the ZIP route makes no token of its own",async()=>{
+      machines=[machine(idA,"Desktop")];await p.mount(h(Panel,{navKey:"runtime-enroll-header"}));await settle(8);
+      button("Download Windows Runtime (ZIP)").click();await settle(10);
+      expect(tabs()[1].getAttribute("aria-selected")).toBe("true");expect(requests.some(item=>item.path==="/ui/runtimes/enrollment")).toBe(false);   // the ZIP route needs no token
+      expect(p.root.querySelector(".runtime-pair-code").value).toBe("PAIR-TEST-CODE");
+      // switching to Windows shows how to get a command, instead of an empty step; the header button then makes one and shows it
+      tabs()[0].click();await settle(6);expect(commands().some((text:string)=>text.includes(TOKEN))).toBe(false);expect(p.root.querySelector(".runtime-enroll-generate").textContent).toBe("Generate the install command");
+      tabs()[1].click();await settle(6);button("Connect a computer").click();await settle(10);
+      expect(tabs()[0].getAttribute("aria-selected")).toBe("true");expect(requests.filter(item=>item.path==="/ui/runtimes/enrollment")).toHaveLength(1);expect(commands()[0]).toContain(TOKEN);
+    });
+    it("makes a token from the generate button when there is none yet",async()=>{
+      machines=[machine(idA,"Desktop")];await p.mount(h(Panel,{navKey:"runtime-enroll-generate"}));await settle(8);
+      button("Download Windows Runtime (ZIP)").click();await settle(10);tabs()[0].click();await settle(6);
+      p.root.querySelector(".runtime-enroll-generate").click();await settle(10);
+      expect(commands()[0]).toContain(TOKEN);expect(p.root.querySelector(".runtime-enroll-generate")).toBeNull();expect(requests.filter(item=>item.path==="/ui/runtimes/enrollment")).toHaveLength(1);
+    });
+    it("does not make a new pairing code on its own when the shown one expires; the card offers one on request",async()=>{
+      pairingTtl=120;machines=[machine(idA,"Desktop")];await p.mount(h(Panel,{navKey:"runtime-zip-expiry"}));await settle(8);
+      button("Download Windows Runtime (ZIP)").click();await settle(10);expect(p.root.querySelector(".runtime-pair-code").value).toBe("PAIR-TEST-CODE");
+      await new Promise(done=>setTimeout(done,400));await settle(10);
+      expect(p.root.querySelector(".runtime-pair-code")).toBeNull();expect(requests.filter(item=>item.path==="/ui/runtimes/pairing")).toHaveLength(1);   // not re-made behind the administrator's back
+      pairingTtl=60000;button("New code").click();await settle(10);expect(p.root.querySelector(".runtime-pair-code").value).toBe("PAIR-TEST-CODE");expect(requests.filter(item=>item.path==="/ui/runtimes/pairing")).toHaveLength(2);
+    });
+    it("measures a token's life from when the answer arrived, not by comparing the server's clock with the browser's (a skewed clock does not hide a valid command)",async()=>{
+      enrollSkew=3_600_000;machines=[machine(idA,"Desktop")];await open("runtime-enroll-skew");      // the server's clock is an hour ahead of this browser's
+      expect(commands()[0]).toContain(TOKEN);expect(p.root.querySelector(".runtime-enroll-clock").textContent).toMatch(/^Expires in 1[45]:\d\d$/);expect(p.root.querySelector(".runtime-enroll-ended")).toBeNull();
+      await p.unmount();enrollSkew=-3_600_000;catalog.forgetRuntimeCatalog();await open("runtime-enroll-skew-behind");   // and an hour behind
+      expect(commands()[0]).toContain(TOKEN);expect(p.root.querySelector(".runtime-enroll-clock").textContent).toMatch(/^Expires in 1[45]:\d\d$/);
     });
     it("keeps the ZIP flow as it was inside its tab: download, connect-agend.bat and the manual command",async()=>{
       await open("runtime-zip-unchanged");await zipTab();

@@ -179,6 +179,20 @@ describe("issuing, using, expiring and revoking a token", () => {
     expect(JSON.parse(readFileSync(join(homes[0], "runtime-machines.json"), "utf8")).enrollmentAudit.length).toBeLessThanOrEqual(512);
     expect(h.enroll(enrollInput(h, h.createEnrollment(ACTOR).token)).status).toBe("enrolled");
   });
+  it("keeps the audit trail within its cap through issue, use AND revoke, and still starts after a restart", () => {
+    const dir = home(), first = hub({}, dir);
+    for (let i = 0; i < 300; i++) { const { id, token } = first.createEnrollment(ACTOR); if (i % 3 === 0) first.revokeEnrollment(id, ACTOR); else if (i % 3 === 1 && i < 60) first.enroll(enrollInput(first, token, { name: `PC ${i}` })); }
+    const path = join(dir, "runtime-machines.json"), length = (): number => JSON.parse(readFileSync(path, "utf8")).enrollmentAudit.length;
+    expect(length()).toBeLessThanOrEqual(512);
+    // exactly full, then one more entry of each kind
+    for (let guard = 0; length() < 512 && guard < 400; guard++) first.createEnrollment(ACTOR);
+    const { id } = first.createEnrollment(ACTOR); first.revokeEnrollment(id, ACTOR); expect(length()).toBeLessThanOrEqual(512);
+    first.close(); hubs.pop();
+    expect(() => hub({}, dir)).not.toThrow();
+    // a journal that already holds too many entries (an older build, or an edit) is cut to the newest, never refused
+    const state = JSON.parse(readFileSync(path, "utf8")); state.enrollmentAudit.push(...state.enrollmentAudit.slice(0, 5)); writeFileSync(path, JSON.stringify(state));
+    expect(() => hub({}, dir)).not.toThrow();
+  });
   it("does not leave a half-made computer when the journal cannot be written", () => {
     const h = hub(), { token } = h.createEnrollment(ACTOR);
     const save = vi.spyOn(h as unknown as { save(): void }, "save").mockImplementation(() => { throw new Error("disk full"); });
@@ -254,6 +268,12 @@ describe("the public routes", () => {
     expect((await fetch(base + RUNTIME_ENROLL_PATH, { method: "POST", headers: { Origin: "https://evil.example" }, body: JSON.stringify(enrollInput(h, token)) })).status).toBe(403);
     expect((await fetch(base + RUNTIME_ENROLL_HELLO_PATH, { method: "POST", headers: { Cookie: "a=b" }, body: JSON.stringify({ nonce: nonce() }) })).status).toBe(403);
     expect(h.listEnrollments()[0].status).toBe("unused");
+  });
+  it("gives the identity check its own rate bucket, so invalid pairing traffic behind one proxy address cannot starve it", async () => {
+    const h = hub(), base = await listen(h);
+    for (let i = 0; i < 31; i++) await post(base, "/runtime/v1/pair", { code: "NOPE", name: "x", platform: "win32" });
+    expect((await post(base, "/runtime/v1/pair", { code: "NOPE", name: "x", platform: "win32" })).status).toBe(429);       // the shared invalid bucket is spent
+    expect((await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: nonce() })).status).toBe(200);                                // and a real installer's identity check still works
   });
   it("rate-limits a token that keeps being refused", async () => {
     const h = hub(), base = await listen(h), { id, token } = h.createEnrollment(ACTOR); h.revokeEnrollment(id, ACTOR);

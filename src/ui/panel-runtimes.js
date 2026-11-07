@@ -164,7 +164,8 @@ register("machines", {
     "joinedRevoke": "Revoke",
     "joinedDismiss": "Dismiss",
     "enrolledBadge": "Joined by install command",
-    "enrollNoInstaller": "The install command appears once the installer information has loaded."
+    "enrollNoInstaller": "The install command appears once the installer information has loaded.",
+    "enrollGenerate": "Generate the install command"
   },
   "zh-TW": {
     "enrollCardTitle": "一次性安裝指令",
@@ -185,7 +186,8 @@ register("machines", {
     "joinedRevoke": "撤銷",
     "joinedDismiss": "關閉通知",
     "enrolledBadge": "以安裝指令加入",
-    "enrollNoInstaller": "安裝程式資訊載入完成後，才會顯示安裝指令。"
+    "enrollNoInstaller": "安裝程式資訊載入完成後，才會顯示安裝指令。",
+    "enrollGenerate": "產生安裝指令"
   },
 });
 register("machines", {
@@ -341,6 +343,13 @@ function RuntimeSwitches({ lease, onChanged, computers }) {
     ${guide}
   </div>`;
 }
+/** The countdown is its own component: it ticks every second without re-rendering the whole Runtime page. */
+function EnrollClock({ lease, expiresAt }) {
+  const [now,setNow]=useState(() => Date.now());
+  useEffect(() => { const timer=lease.interval(() => setNow(Date.now()),1000);return () => lease.clear(timer); },[lease]);
+  const seconds=Math.max(0,Math.ceil((expiresAt-now)/1000));
+  return html`<p class="note runtime-enroll-clock">${machineText("enrollExpiresIn",`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,"0")}`)}</p>`;
+}
 /** Computers that joined with an install command stay announced on this page until the administrator dismisses the notice (kept in this browser only). */
 const JOINED_SEEN_KEY = "agend.runtime.joined.dismissed";
 function readSeenJoined() {
@@ -354,7 +363,8 @@ export function RuntimesPanel({navKey}) {
   const localInventory=useWindowsCliCatalog(windowsCli);
   const [pairing,setPairing]=useState(null), [busy,setBusy]=useState(""), [error,setError]=useState("");
   // The one-time install-command token lives here, in memory, and nowhere else (the server keeps only its hash); `open` shows the connect panel.
-  const [open,setOpen]=useState(false), [enroll,setEnroll]=useState(null), [now,setNow]=useState(() => Date.now()), [seenJoined,setSeenJoined]=useState(readSeenJoined);
+  const [open,setOpen]=useState(false), [enroll,setEnroll]=useState(null), [,setTick]=useState(0), [seenJoined,setSeenJoined]=useState(readSeenJoined);
+  const zipAsked=useRef(false);
   const [server,setServer]=useState(() => typeof location === "undefined" ? "" : location.origin);
   const drafts=useRef(new Map()), taskSessions=useRef(new Map()), downloadClaim=useRef(false);
   const [downloadedFor,setDownloadedFor]=useState(""), [copied,setCopied]=useState(false);
@@ -373,9 +383,13 @@ export function RuntimesPanel({navKey}) {
     const timer=lease.timeout(() => setPairing(null),remaining);
     return () => lease.clear(timer);
   },[lease,pairing]);
+  // One re-render at the moment the token ends (the countdown itself is EnrollClock's). Expiry is measured on THIS browser's clock from when the answer arrived,
+  // by the token's length of life, never by comparing the server's clock with this one.
   useEffect(() => {
     if (!enroll) return;
-    const timer=lease.interval(() => setNow(Date.now()),1000);
+    const remaining=enroll.localExpiresAt-Date.now()+100;
+    if (remaining <= 0) return;
+    const timer=lease.timeout(() => setTick(count => count+1),remaining);
     return () => lease.clear(timer);
   },[lease,enroll]);
   const loadInstaller=async() => {
@@ -390,7 +404,8 @@ export function RuntimesPanel({navKey}) {
   };
   useEffect(() => { if ((open || repairMachine) && installer.status === "idle") void loadInstaller(); },[open,repairMachine,installer.status]);
   // The ZIP route still uses a pairing code, made only when that route is shown (or asked for under Manual options), never for the install command.
-  useEffect(() => { if (open && tab === "zip" && !pairing && !busy) void newPairingCode(); },[open,tab,pairing]);
+  // Once per opening of the panel: an expired code is not replaced behind the administrator's back (the card offers a new one).
+  useEffect(() => { if (open && tab === "zip" && !pairing && !busy && !zipAsked.current) { zipAsked.current=true;void newPairingCode(); } },[open,tab,pairing]);
   const post=async(path,body={}) => {
     const response=await lease.fetch(path,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     const value=await response.json();
@@ -400,21 +415,22 @@ export function RuntimesPanel({navKey}) {
   // Makes a one-time install-command token (and ends any earlier unused one). Same authorization as a pairing code.
   const connect=async() => {
     setBusy("pairing");setError("");
-    try {const value=await post("/ui/runtimes/enrollment");if(lease.current()){setEnroll(value);setNow(Date.now());setInstallCopied(false);setOpen(true);}}catch(e){if(lease.current())setError(e.message);}finally{if(lease.current())setBusy("");}
+    try {const value=await post("/ui/runtimes/enrollment");if(lease.current()){setEnroll({...value,localExpiresAt:Date.now()+Math.max(0,value.expiresAt-value.createdAt)});setInstallCopied(false);setTab("windows");setOpen(true);}}catch(e){if(lease.current())setError(e.message);}finally{if(lease.current())setBusy("");}
   };
   const newPairingCode=async() => {
     setBusy("pairing");setError("");
     try {const value=await post("/ui/runtimes/pairing");if(lease.current())setPairing(value);}catch(e){if(lease.current())setError(e.message);}finally{if(lease.current())setBusy("");}
   };
   const openZip=() => { setTab("zip");setOpen(true); };
-  // Closing ends an unused token: nothing on screen can show it again, so it should not stay valid.
+  // Closing from the card ends an unused token: nothing on screen can show it again, so it should not stay valid. (Leaving the page without closing does not revoke it:
+  // the command may already be copied, and it ends by itself after 15 minutes.)
   const closePanel=async() => {
     if(enroll && enrollStatus === "unused") {
       setBusy("pairing");setError("");
       try {await post(`/ui/runtimes/enrollment/${encodeURIComponent(enroll.id)}/revoke`);}catch(e){if(lease.current())setError(e.message);}finally{if(lease.current())setBusy("");}
     }
     if(!lease.current())return;
-    setEnroll(null);setPairing(null);setOpen(false);
+    setEnroll(null);setPairing(null);setOpen(false);zipAsked.current=false;
     await state.refresh();
   };
   const dismissJoined=id => setSeenJoined(seen => { const next=new Set(seen).add(id); writeSeenJoined(next); return next; });
@@ -448,8 +464,7 @@ export function RuntimesPanel({navKey}) {
     try {await navigator.clipboard.writeText(pairing.code);if(!lease.current())return;setCopied(true);lease.timeout(() => setCopied(false),2000);}catch { /* the code is on screen to copy by hand */ }
   };
   const enrollRow=enroll ? (state.data?.enrollments || []).find(row => row.id === enroll.id) : null;
-  const enrollStatus=!enroll ? "none" : enrollRow?.status === "used" ? "used" : enrollRow?.status === "revoked" ? "revoked" : enrollRow?.status === "expired" || enroll.expiresAt <= now ? "expired" : "unused";
-  const enrollSeconds=enroll ? Math.max(0,Math.ceil((enroll.expiresAt-now)/1000)) : 0, enrollClock=`${Math.floor(enrollSeconds/60)}:${String(enrollSeconds%60).padStart(2,"0")}`;
+  const enrollStatus=!enroll ? "none" : enrollRow?.status === "used" ? "used" : enrollRow?.status === "revoked" ? "revoked" : enrollRow?.status === "expired" || enroll.localExpiresAt <= Date.now() ? "expired" : "unused";
   const enrollCommand=enrollStatus === "unused" ? runtimeEnrollCommand(server,installer.sha,enroll.token,enroll.fingerprint) : "";
   const joinedMachine=enrollStatus === "used" ? machines.find(machine => machine.id === enrollRow?.machineId) : null;
   const command=runtimeConnectCommand(server), installCommand=runtimeInstallCommand(server,installer.sha), installOnlyCommand=runtimeInstallOnlyCommand(server,installer.sha), windowsConnectCommand=runtimeWindowsConnectCommand(server);
@@ -495,6 +510,7 @@ export function RuntimesPanel({navKey}) {
       ${step(2,machineText("stepInstall"),html`<p class="note">${machineText("stepInstallHint")}</p>
         ${installer.status === "loading" || installer.status === "idle" ? html`<${Skeleton} lines=${3} label=${machineText("installerLoading")} />` : null}
         ${installer.status === "error" ? html`<p class="runtime-installer-error" role="alert">${machineText("installerUnavailable")} <button type="button" class="btn btn-ghost btn-sm" onClick=${() => void loadInstaller()}>${machineText("installerRetry")}</button></p>` : null}
+        ${!enroll ? html`<button type="button" class="btn btn-primary btn-sm runtime-enroll-generate" disabled=${!!busy} onClick=${connect}>${machineText("enrollGenerate")}</button>` : null}
         ${enrollCommand ? html`${commandCard("enroll",machineText("installCommand"),enrollCommand)}<p class="note runtime-installer-hash">${machineText("installerHash")} <code>${installer.sha}</code></p><p class="note runtime-installer-hash">${machineText("enrollFingerprint")} <code>${enroll.fingerprint}</code></p><p class="note">${machineText("tlsHelp")}</p><p class="note">${machineText("restrictedHelp")}</p>`
           : enroll && enrollStatus !== "unused" ? html`<p class="note runtime-enroll-ended" role="status">${machineText(enrollNote)}</p>` : null}
         ${windowsConnectCommand ? html`<details class="runtime-manual-command"><summary>${machineText("manualCommands")}</summary><p class="note">${machineText("manualCommandsHint")}</p>${installOnlyCommand ? commandCard("install-only",machineText("installOnlyCommand"),installOnlyCommand) : null}${commandCard("connect",machineText("connectCommand"),windowsConnectCommand)}${pairing ? pairCodeBlock() : html`<button type="button" class="btn btn-sm" disabled=${!!busy} onClick=${newPairingCode}>${machineText("showPairingCode")}</button>`}<p class="note">${machineText("manualCodeNote")}</p></details>` : null}`)}
@@ -504,9 +520,9 @@ export function RuntimesPanel({navKey}) {
       ${step(3,machineText("stepLaunch"),html`<p class="note">${machineText("stepLaunchHint")}</p>${command ? html`<details class="runtime-manual-command"><summary>${machineText("manualCommand")}</summary><label class="field"><span>${machineText("command")}</span><input class="runtime-command" value=${command} readOnly=${true} spellcheck=${false} /></label><p class="note">${machineText("manualMultiHint")}</p></details>` : null}`)}
       ${approveStep}`;
 
-  const enrollAside=html`<aside class=${`runtime-pair-card runtime-enroll-card is-${enrollStatus}${awaitingApproval ? " is-pending" : ""}`}><h4>${machineText("enrollCardTitle")}</h4><p class="runtime-pair-status" role="status"><span class="windows-cli-dot"></span>${machineText(awaitingApproval ? "pairingApprove" : enrollStatus === "unused" || enrollStatus === "none" ? "enrollWait" : enrollNote)}</p>${enrollStatus === "unused" ? html`<p class="note runtime-enroll-clock">${machineText("enrollExpiresIn",enrollClock)}</p>` : null}<p class="note runtime-enroll-warning">${machineText("enrollSecurity")}</p><div class="runtime-pair-actions"><button type="button" class="btn btn-sm" disabled=${!!busy} onClick=${connect}>${machineText("enrollNew")}</button><button type="button" class="btn btn-ghost btn-sm" disabled=${!!busy} onClick=${closePanel}>${machineText(enrollStatus === "unused" ? "enrollRevoke" : "closeCode")}</button></div></aside>`;
-  const zipAside=html`<aside class=${`runtime-pair-card${awaitingApproval ? " is-pending" : ""}`}>${pairing ? pairCodeBlock() : null}<div class="runtime-pair-actions"><button type="button" class="btn btn-ghost btn-sm" onClick=${closePanel}>${machineText("closeCode")}</button></div></aside>`;
-  const joinedNotices=machines.filter(machine => machine.enrolledVia === "install-command" && machine.status !== "revoked" && !revokedHere.has(machine.id) && !seenJoined.has(machine.id) && now-(machine.approvedAt || 0) < JOINED_NOTICE_MS)
+  const enrollAside=html`<aside class=${`runtime-pair-card runtime-enroll-card is-${enrollStatus}${awaitingApproval ? " is-pending" : ""}`}><h4>${machineText("enrollCardTitle")}</h4><p class="runtime-pair-status" role="status"><span class="windows-cli-dot"></span>${machineText(awaitingApproval ? "pairingApprove" : enrollStatus === "unused" || enrollStatus === "none" ? "enrollWait" : enrollNote)}</p>${enrollStatus === "unused" ? html`<${EnrollClock} lease=${lease} expiresAt=${enroll.localExpiresAt} />` : null}<p class="note runtime-enroll-warning">${machineText("enrollSecurity")}</p><div class="runtime-pair-actions"><button type="button" class="btn btn-sm" disabled=${!!busy} onClick=${connect}>${machineText("enrollNew")}</button><button type="button" class="btn btn-ghost btn-sm" disabled=${!!busy} onClick=${closePanel}>${machineText(enrollStatus === "unused" ? "enrollRevoke" : "closeCode")}</button></div></aside>`;
+  const zipAside=html`<aside class=${`runtime-pair-card${awaitingApproval ? " is-pending" : ""}`}>${pairing ? pairCodeBlock() : html`<button type="button" class="btn btn-sm" disabled=${!!busy} onClick=${newPairingCode}>${machineText("newCode")}</button>`}<div class="runtime-pair-actions"><button type="button" class="btn btn-ghost btn-sm" onClick=${closePanel}>${machineText("closeCode")}</button></div></aside>`;
+  const joinedNotices=machines.filter(machine => machine.enrolledVia === "install-command" && machine.status !== "revoked" && !revokedHere.has(machine.id) && !seenJoined.has(machine.id) && Date.now()-(machine.approvedAt || 0) < JOINED_NOTICE_MS)
     .map(machine => html`<section key=${machine.id} class="runtime-joined" role="status" data-machine-id=${machine.id}><${Icon} name="info" size=${18} /><div class="runtime-joined-text"><h4>${machineText("joinedTitle")}</h4><p class="note">${machineText("joinedBody",machine.name,machineTime(machine.approvedAt))}</p></div><div class="runtime-joined-actions"><button type="button" class="btn btn-sm" disabled=${!!busy} onClick=${() => action(machine,"revoke")}>${machineText("joinedRevoke")}</button><button type="button" class="btn btn-ghost btn-sm" onClick=${() => dismissJoined(machine.id)}>${machineText("joinedDismiss")}</button></div></section>`);
   const computers = html`<section class="runtime-computers"><div class="runtime-computers-heading"><h3>${machineText("computersTitle")}</h3><div class="note">${state.data ? machineText((allMachines.length) === 1 ? "machineCountOne" : "machineCount",allMachines.length) : !state.error ? html`<${Skeleton} variant="inline" lines=${1} />` : "—"}</div></div>
     ${joinedNotices}
