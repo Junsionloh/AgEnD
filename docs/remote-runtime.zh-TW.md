@@ -14,19 +14,31 @@
 
 ## 一行安裝（Windows PowerShell）
 
-頁面會帶入你確認過的位址。在另一台 Windows 電腦的 PowerShell 執行第一行；不需要系統管理員權限。
+頁面會帶入你確認過的位址。在另一台 Windows 電腦的 PowerShell 貼上這一行指令；不需要系統管理員權限。
 
 ```powershell
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; $agend = 'https://your-agend-host'; $s = $null; $h = $null; $s = (iwr "$agend/runtime/install.ps1" -UseBasicParsing).Content; $h = (-join ([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($s)) | % { $_.ToString('x2') })); if ($s -and $h -eq '<頁面上顯示的 SHA-256>') { iex $s } else { Write-Host 'install.ps1 could not be verified against the hash on the AgEnD page (a certificate or download error above is the usual cause: trust this AgEnD certificate, or use the ZIP; otherwise reload the page and copy the command again)' -ForegroundColor Red; throw 'install.ps1 was not run' }
 ```
 
-頁面會填入你的位址與 `install.ps1` 的 SHA-256。指令先下載腳本、計算收到的位元組的雜湊，與頁面上的雜湊比對，**相符才執行**。它只安裝，**不會連線、不會配對**，最後印出下一行要執行的指令：
+頁面會填入你的位址與 `install.ps1` 的 SHA-256。指令先下載腳本、計算收到的位元組的雜湊，與頁面上的雜湊比對，**相符才執行**。腳本接著安裝 Runtime，並**在同一個視窗**直接連線那台電腦：它會要求輸入頁面上的一次性配對碼、顯示**配對指紋**，再等你在 AgEnD 核准，做法與[連接電腦](#連接電腦)相同。不需要再打第二個指令。配對碼是在視窗提示時輸入，不會寫進指令。
+
+安裝完之後會怎麼做，取決於指令在哪裡執行：
+
+| 執行的地方 | 腳本的行為 |
+|---|---|
+| 互動式主控台（stdin 與 stdout 都是主控台，不是 `-NonInteractive`，也不是 PowerShell ISE），而且沒有設定 `$agendNoConnect` | 在那個視窗接著連線。它執行 Runtime 自己的 `connect --connection-dir`，邏輯與 ZIP 的 `connect-agend.bat` 相同：**新的 profile** 會要求輸入配對碼、顯示指紋、等待你核准，之後在前景執行；**已配對到這台 AgEnD** 的 profile 直接重連，不再要求配對碼；已配對到**另一台 AgEnD** 的電腦會另開獨立的 profile，原本的配對不受影響。 |
+| 其他情況：AI agent、CI、被管線串接、`powershell -NonInteractive`、輸入或輸出被導向，或 `$agendNoConnect = 1` | 只安裝。印出下一步要執行的確切指令（`agend-runtime connect --server "…"`），說明配對碼要由人在互動終端機輸入，結束時 exit code 為 0。 |
+
+配對碼仍然只能在互動式終端機輸入，不接受指令參數、環境變數或檔案，所以腳本無法代為傳遞，也看不到它。指紋比對與 AgEnD 的核准都沒有改變。`$agend` 只當成伺服器位址使用，沿用原本的來源檢查（HTTPS，或僅限本機的 HTTP；不得含帳密、路徑、查詢或片段）。
+
+**給 AI agent 或腳本使用**：頁面保留（預設收合的）「手動指令」，列出兩行。第一行只安裝（它只對那一次指令設定 `$agendNoConnect = 1`，結束後會清掉，免得變數留在視窗裡，讓之後的貼上悄悄變成只安裝）；第二行負責連線，必須由人在互動終端機執行。AI agent 請執行第一行，再把第二行交給人：
 
 ```powershell
+$agendNoConnect = 1; <同一個安裝指令>; $agendNoConnect = $null
 agend-runtime connect --server "https://your-agend-host"
 ```
 
-一次性配對碼是在終端機被詢問時輸入，不會出現在任何指令裡。之後比對**配對指紋**，並在 AgEnD 核准這台電腦。ZIP 流程維持原樣，放在「其他安裝方式（ZIP）」。
+**重新連線。** 安裝程式會在 Runtime 旁邊留下這台 AgEnD 的重連入口 `%LOCALAPPDATA%\agend-runtime\connect\<host>-<port>-<hash>\`，裡面有 `agend-server.json`（只放公開的伺服器位址，不含任何憑證或配對碼）和與 ZIP 相同的 `connect-agend.bat`，並印出位置。雙擊即可重新連線；已存的 profile 不會再要求配對碼。每台 AgEnD 各有自己的資料夾，同一台電腦連到兩台 AgEnD 時不會互相覆蓋。批次檔會呼叫 `agend-runtime.cmd connect --connection-dir <自己所在的資料夾>`（所以會經 `current.txt` 啟動最新安裝的 Runtime）。`--connection-dir DIRECTORY` 讓 Runtime 從 `DIRECTORY\agend-server.json` 讀取位址，並照 ZIP 的 `connect-agend.bat` 的規則選 profile（尚未配對或已配對到這台 AgEnD 時用預設 profile，否則用獨立的 `profiles\<host>-<port>`）；可搭配 `connect`、`run`、`status`、`rotate`、`disconnect`，不能與 `--server` 同時使用。若安裝資料夾名稱含 `%` 或 `^`（批次檔的 `call` 會誤讀），就不寫入入口，腳本改為印出連線指令。修復模式（`AGEND_RUNTIME_REPAIR=1`，更新流程使用）不寫入入口，也不會連線。
 
 ### 為什麼指令要固定腳本的雜湊
 
@@ -46,7 +58,7 @@ agend-runtime connect --server "https://your-agend-host"
 3. 自己計算壓縮檔的 SHA-256，與**寫在安裝腳本裡**的校驗碼比對；不符就在解壓縮之前停止。
 4. 解壓縮到 `%LOCALAPPDATA%\agend-runtime\<版本>+<build>`，放在既有版本**旁邊**。`<build>` 是壓縮檔 SHA-256 的前 8 個字元，因為同一個版本號可能對應不只一個 build。
 5. 讓 `agend-runtime` 指向它（見下），並把 `%LOCALAPPDATA%\agend-runtime\bin` 加進**你的使用者 PATH**。
-6. 印出連線指令。
+6. 寫入重連入口（見上），然後在互動式主控台且沒有設定 `$agendNoConnect` 時於同一個視窗連線；否則印出連線指令。Runtime 是在安裝鎖**釋放之後**才啟動，因為執行中的 Runtime 會取這個鎖來更新自己。
 
 **版本並存。** 既有的資料夾永遠不會被刪除或取代，因為它可能就是正在執行的 Runtime（執行中的 Windows 程式會鎖住它的檔案）。安裝資料夾叫 `<版本>+<build>`，所以較新 AgEnD 的 Runtime，以及同一個版本號的不同 build，都只會在舊資料夾旁邊多一個新資料夾；再執行同一個 build 的指令會找到它自己的資料夾，只重新指向 `agend-runtime`。更新時不需要任何人手動刪資料夾。`bin\agend-runtime.cmd` 只寫一次、之後不再改變：它啟動單行檔 `bin\current.txt` 所記的版本，安裝在新版本**完整就位之後**，才用原子取代把這個檔案換掉。所以 `agend-runtime` 啟動的不是舊版就是新版，不會是裝到一半的版本，正在執行的批次檔也不會被改寫。shim 一開始就是 `setlocal DisableDelayedExpansion`，所以安裝資料夾裡的 `!`（可接受的 `AGEND_RUNTIME_INSTALL_DIR` 可以含有）即使在 cmd.exe 開啟延遲展開（`/V:ON` 或登錄檔的 DelayedExpansion 設定）時也會保留。已經在執行的 Runtime 會維持自己的版本，直到你以 Ctrl+C 停止、再用 `agend-runtime run` 啟動。若在切換之前失敗，`current.txt` 仍指向可用的版本。**這個安裝程式不會移除舊資料夾**（其中一個可能正在執行）；清理舊版本留到之後的更新與解除安裝指令。在那之前它們會留著，等沒有 Runtime 使用時你可以自己刪除。腳本唯一會拒絕的情況，是已經有一個資料夾剛好叫這個 build 的名字、內容卻不是它：只有被手動改過或沒裝完才會發生，它會被原樣保留，腳本也會說明。
 
@@ -58,6 +70,7 @@ agend-runtime connect --server "https://your-agend-host"
 
 | 變數 | 作用 |
 |---|---|
+| `$agendNoConnect = 1` | 只安裝：即使在互動式視窗也不連線。除了空值、`0`、`false`、`no`、`off` 之外的任何值都視為已設定；它會留在該視窗，直到你用 `$agendNoConnect = $null` 清除。 |
 | `AGEND_RUNTIME_NO_PATH=1` | 不修改 PATH；最後會顯示 `agend-runtime.cmd` 的完整路徑。 |
 | `AGEND_RUNTIME_INSTALL_DIR=D:\agend` | 安裝到這個資料夾（須為磁碟機完整路徑），而不是 `%LOCALAPPDATA%\agend-runtime`。 |
 
