@@ -378,6 +378,12 @@ describe("the Runtime joining with a token (enrollRuntime)", () => {
     expect(store.credentials()).toBeNull();
     for (const reason of ["invalid", "expired", "used", "revoked", "mismatch", "limit", "anything-else"]) expect(describeEnrollRefusal(reason)).not.toBe("");
   });
+  it("says so, and still sends no token, when AgEnD answers the identity request with 'too many requests'", async () => {
+    const seenBodies: string[] = [], busy = createServer((req, res) => { req.on("data", chunk => seenBodies.push(String(chunk))); req.on("end", () => { res.writeHead(429, { "Content-Type": "application/json" }); res.end("{\"error\":\"Too many runtime pairing requests\"}"); }); });
+    servers.push(busy); busy.listen(0, "127.0.0.1"); await once(busy, "listening"); const base = `http://127.0.0.1:${(busy.address() as { port: number }).port}`, token = generateEnrollToken();
+    await expect(enrollRuntime({ server: base, token, fingerprint: "a".repeat(64), name: "Desk", store: storeDir() })).rejects.toThrow(/too many requests.*NOT sent/s);
+    expect(seenBodies.join("")).not.toContain(token);
+  });
   it("refuses a malformed token or fingerprint before it talks to anyone", async () => {
     const store = storeDir(), fetchSpy = vi.spyOn(globalThis, "fetch");
     await expect(enrollRuntime({ server: "http://127.0.0.1:1", token: "agend_enroll_short", fingerprint: "a".repeat(64), name: "Desk", store })).rejects.toThrow(/not valid/);

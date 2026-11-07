@@ -943,6 +943,7 @@ export async function enrollRuntime(input: { server: string; token: string; fing
     if (error instanceof Error && /^Invalid runtime pairing response$|is too large$/.test(error.message)) return { status: 0, data: {} as Record<string, unknown> };
     throw error;
   });
+  if (hello.status === 429) throw new Error("AgEnD is receiving too many requests from this address. Wait a minute, then run the same command again; the one-time token was NOT sent.");
   if (hello.status !== 200 || !verifyRuntimeServerProof(input.fingerprint, hello.data.publicKey, hello.data.signature, runtimeEnrollHelloMessage(nonce))) {
     throw new Error(`The AgEnD at ${server.origin} did not prove it is the AgEnD this install command was made for (its server fingerprint differs from the one in the command). The one-time token was NOT sent. Check the address; if it is right, ${ENROLL_NEXT.replace(/^Open/, "open")}`);
   }
