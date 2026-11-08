@@ -179,9 +179,11 @@ describe("this host's Antigravity row: the account and the two quota pools", () 
     current = view([hostRow({ identity: { maskedEmail: "ad***@example.com" }, shortUsage: usage(GEMINI, 1, 5 * 3_600_000), usage: usage(CLAUDE_OTHERS, 39, 168 * 3_600_000) })]);
     await mount();
     expect(text(hostBox().querySelector(".s-account-identity"))).toBe("ad***@example.com");
-    const windows = [...hostBox().querySelectorAll(".s-usage-cell")];
-    expect(windows.map((w: any) => [text(w.querySelector(".s-usage-win-lbl")), text(w.querySelector(".s-usage-win-pct")), text(w.querySelector(".s-usage-pool"))])).toEqual([
-      ["5h", "1%", "most used: Gemini"], ["7d", "39%", "most used: Claude & others"]]);
+    // (Which meter draws the window differs between the Accounts view's own and the Usage panel's shared one; the cell and its caption do not.)
+    const cells = [...hostBox().querySelectorAll(".s-usage-cell")].map((w: any) => text(w));
+    expect(cells).toHaveLength(2);
+    expect([/5h/.test(cells[0]), /1%/.test(cells[0]), /most used: Gemini$/.test(cells[0])]).toEqual([true, true, true]);
+    expect([/7d/.test(cells[1]), /39%/.test(cells[1]), /most used: Claude & others$/.test(cells[1])]).toEqual([true, true, true]);
     i18n.setLang("zh-TW", { store: false }); await p.unmount(); A.accountsStore.set({ loaded: false, failed: false, view: null }); await mount();
     expect([...hostBox().querySelectorAll(".s-usage-pool")].map((w: any) => text(w))).toEqual(["用量最高：Gemini", "用量最高：Claude 與其他模型"]);
   });
@@ -190,7 +192,7 @@ describe("this host's Antigravity row: the account and the two quota pools", () 
     await mount();
     expect(hostBox().querySelectorAll(".s-usage-cell").length).toBe(1);                     // only the window that has a pool is wrapped; the other is drawn as before
     expect([...hostBox().querySelectorAll(".s-usage-pool")].map((w: any) => text(w))).toEqual(["most used: Some pool"]);
-    expect(hostBox().querySelectorAll(".s-usage-win").length).toBe(2);
+    expect(hostBox().querySelector(".s-account-usage").children.length).toBe(2);           // both windows are still there, one grid item each
   });
   it("the account line is the address alone: no plan is invented for Antigravity", async () => {
     current = view([hostRow({ identity: { maskedEmail: "ad***@example.com" } })]); await mount();
