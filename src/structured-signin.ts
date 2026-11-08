@@ -281,9 +281,11 @@ export class StructuredSignIn {
         if (prompt.phase === "failed") { await this.finish(prompt.reason); return; }
         const status = await this.deps.transport.status();
         if (!this.current()) { await this.finish(this.lostReason()); return; }
-        if (prompt.phase === "success" || !status.alive) {
-          // A CLI whose sign-in ends by its exit code (Antigravity prints no success line): only a command that ended with exit 0 is checked. A non-zero exit is not "signed in" because an older login is still there.
-          if (hostFacts(this.backend, "structuredSignIn")?.ends === "exit-code" && !status.alive && status.exitCode !== undefined && status.exitCode !== 0) { await this.finish("auth_unconfirmed"); return; }
+        // A CLI whose sign-in ends by its exit code (Antigravity prints no success line): it has ended only when the command has, and only exit 0 is checked. No exit code at all (a signal, a closed
+        // window, a pane status that could not be read) is not "signed in" either, because an older login is still there and would pass the check.
+        const byExit = hostFacts(this.backend, "structuredSignIn")?.ends === "exit-code";
+        if (byExit ? !status.alive : (prompt.phase === "success" || !status.alive)) {
+          if (byExit && status.exitCode !== 0) { await this.finish("auth_unconfirmed"); return; }
           const auth = await this.deps.checkAuth();
           if (!this.current()) { await this.finish(this.lostReason()); return; }
           await this.finish(auth === "valid" ? undefined : "auth_unconfirmed");

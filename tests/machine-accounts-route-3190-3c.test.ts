@@ -196,4 +196,3 @@ describe("AGEND-113: a computer's own Antigravity login (no profile in the addre
     expect(f.snapshot).not.toHaveBeenCalled();
   });
 });
-
