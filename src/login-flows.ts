@@ -39,7 +39,8 @@
 import { claudeLoginScreenActive } from "./backend/claude-code.js";
 import { agyLoginScreenActive } from "./backend/antigravity.js";
 import { identityOf, parseClaudeAuthStatus, type AccountIdentity } from "./claude-auth-status.js";
-import { hostFacts, hostIds } from "./cli-registry.js";
+import { hostFacts, hostIds, type HostCliWith } from "./cli-registry.js";
+import { readAntigravityIdentity } from "./antigravity-identity.js";
 
 export interface AuthCheck {
   /** argv of a cheap, LLM-token-free status probe (5s timeout). */
@@ -379,19 +380,32 @@ async function runAuthCheckProcess(argv: string[], timeoutMs: number, env?: Reco
  * `env`: a credential profile's variable, so the probe reads that profile's login rather than the default one.
  */
 /**
- * Which account is a backend's sign-in (the default one, or a credential profile's `env`): a masked e-mail and a plan, from the SAME `auth status`
- * answer `authCheck` reads, so no extra login and no network request is made for it. Only Claude Code's answer carries an account; for any other
- * backend nothing is run and nothing is shown. The output is parsed and dropped here: it is never logged or kept, and what is returned is masked.
+ * Which account is a backend's sign-in (the default one, or a credential profile's `env`): a masked e-mail (and a plan, for Claude Code). Nothing is run for a CLI whose spec says it has no
+ * identity. The output is parsed and dropped here: it is never logged or kept, and what is returned is masked.
+ *
+ * The behaviour that backs each registry `host.identity` (cli-registry.ts), keyed by the CLI id and exhaustive over the CLIs whose spec says "yes": a CLI that gains the capability does
+ * not compile until it has its reader, and tests/cli-registry-completeness.test.ts checks that the reader's `from` is the spec's `source`. `status-command`: parsed from the output of the
+ * SAME status command `authCheck` runs, so no extra login and no network request is made. `token-file`: one field of the CLI's own token file, read locally (antigravity-identity.ts):
+ * nothing is started and nothing leaves this machine, and nothing else of the file is read, kept or logged. What comes back is masked; the output (or the file's text) is dropped here.
  */
-const AUTH_IDENTITY = new Map<string, (output: string) => AccountIdentity | undefined>([["claude-code", output => identityOf(parseClaudeAuthStatus(output))]]);
-export function authIdentitySupported(backend: string): boolean { return AUTH_IDENTITY.has(backend); }
+type IdentityCli = HostCliWith<"identity">;
+const IDENTITY_READERS: Record<IdentityCli, { from: "status-command"; parse: (output: string) => AccountIdentity | undefined } | { from: "token-file"; read: (env?: Record<string, string>) => AccountIdentity | undefined }> = {
+  "claude-code": { from: "status-command", parse: output => identityOf(parseClaudeAuthStatus(output)) },
+  "antigravity": { from: "token-file", read: env => readAntigravityIdentity({ ...process.env, ...(env ?? {}) }) },
+};
+/** How a CLI's identity is read (null: it has none), for the completeness test. */
+export function identityReaderKind(backend: string): "status-command" | "token-file" | null { return hostFacts(backend, "identity") ? IDENTITY_READERS[backend as IdentityCli]?.from ?? null : null; }
+export function authIdentitySupported(backend: string): boolean { return hostFacts(backend, "identity") !== null && !!IDENTITY_READERS[backend as IdentityCli]; }
 export async function checkAuthIdentity(backend: string, env?: Record<string, string>): Promise<AccountIdentity | undefined> {
-  const parse = AUTH_IDENTITY.get(backend), check = LOGIN_FLOWS[backend]?.authCheck;
-  if (!parse || !check) return undefined;
+  if (!authIdentitySupported(backend)) return undefined;
+  const reader = IDENTITY_READERS[backend as IdentityCli];
+  if (reader.from === "token-file") { try { return reader.read(env); } catch { return undefined; } }
+  const check = LOGIN_FLOWS[backend]?.authCheck;
+  if (!check) return undefined;
   const run = authCheckRunnerOverride ?? runAuthCheckProcess;
   try {
     const { code, output } = await (env ? run(check.argv, AUTH_CHECK_TIMEOUT_MS, env) : run(check.argv, AUTH_CHECK_TIMEOUT_MS));
-    return code === 0 && (!check.valid || check.valid(output)) ? parse(output) : undefined;
+    return code === 0 && (!check.valid || check.valid(output)) ? reader.parse(output) : undefined;
   } catch { return undefined; }
 }
 export async function checkAuthStatus(check: AuthCheck, env?: Record<string, string>): Promise<AuthCheckResult> {

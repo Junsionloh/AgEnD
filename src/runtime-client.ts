@@ -8,7 +8,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { WindowsCliBridge, nativeWindowsTransport, WINDOWS_CLI_INVENTORY_FILE, type WindowsCliProbe, type WindowsCliTask, type WindowsRunOptions } from "./windows-cli.js";
-import { refreshNativeModels, probeCredentialProfileStatus, validateNativeTask, validWindowsAgentId, type CredentialProfileAnswer, type NativeTaskInput } from "./windows-cli-worker.js";
+import { refreshNativeModels, probeDefaultLogin, probeCredentialProfileStatus, validateNativeTask, validWindowsAgentId, type CredentialProfileAnswer, type NativeTaskInput } from "./windows-cli-worker.js";
 import { validNativeSessionId, type NativeMcpConnection } from "./windows-cli-providers.js";
 import { RUNTIME_CREDENTIAL_CAPABILITY, credentialLoginRequired, credentialProfileReport, isCredentialProfileCli, listCredentialProfileNames, rememberCredentialStatus, requireCredentialProfile, credentialCacheStamp,
   assertCredentialProfileName, assertCredentialProfileCli, type CredentialProfileCli, type CredentialProfileReport } from "./runtime-credential-profiles.js";
@@ -20,6 +20,7 @@ import { ProcessNotConfirmedEnded, RemoteAccounts, type RemoteAccountsDeps, type
 import { isCreatedProfile } from "./runtime-profile-ownership.js";
 import { killTree } from "./runtime-signin.js";
 import { CLI_INSTALL_CAPABILITY, CLI_UPDATE_CAPABILITY, MODEL_REFRESH_CAPABILITY, REMOTE_SIGNIN_CAPABILITY } from "./runtime-remote-setup.js";
+import { runtimeSignInCapabilities } from "./cli-registry.js";
 import { managedCliRoot, managedInstaller, nativeInstallSupported } from "./runtime-cli-install.js";
 import { isRuntimeRemoteOperation } from "./runtime-protocol.js";
 import { PANE_IN_PROCESS_DIRECTORY, paneLedgerFiles } from "./runtime-pane-store.js";
@@ -99,7 +100,7 @@ export interface RuntimeClientOptions {
    */
   /** The Runtime's installation root, where the shared install lock is taken for a CLI install. Default: the managed install root this code runs from, else the CLI folder. */
   installRoot?: string;
-  remoteAccounts?: Partial<Pick<RemoteAccountsDeps, "find" | "runLogout" | "installer" | "signIn" | "ownership" | "environment" | "now" | "switchWatchMs" | "models">> & { systemBootId?: () => Promise<string | undefined> };
+  remoteAccounts?: Partial<Pick<RemoteAccountsDeps, "find" | "defaultStatus" | "runLogout" | "installer" | "signIn" | "ownership" | "environment" | "now" | "switchWatchMs" | "models">> & { systemBootId?: () => Promise<string | undefined> };
   /** Internal supervisor seam, never a server-supplied configuration option. */
   managedUpdate?: { trialId?: string; authenticated?(value: { bootId: string; generation: number; updateProtocol?: 1; runtimeInfo: ReturnType<typeof readRuntimeInfo> }): void };
   /** Isolated tests can supply a private pane service. Production uses attach-only discovery and physical exit proof. */
@@ -222,7 +223,7 @@ export class RuntimeClient {
     this.runtimeInfo = { ...info, capabilities: [...info.capabilities.filter(name => options.credentialProfilesRoot || name !== RUNTIME_CREDENTIAL_CAPABILITY), ...(options.managedUpdate ? [RUNTIME_MANAGED_UPDATE_CAPABILITY] : []), ...(this.updateStatus ? [RUNTIME_UPDATE_STATUS_CAPABILITY] : [])] };
     // Remote account operations need the profile folder, and a way to run the Windows CLI (native Windows, or a test's own). `cli-install` also needs an installer.
     const remote = !!options.credentialProfilesRoot && (process.platform === "win32" || !!options.remoteAccounts);
-    this.runtimeInfo = { ...this.runtimeInfo, capabilities: this.runtimeInfo.capabilities.filter(name => (name === REMOTE_SIGNIN_CAPABILITY || name === MODEL_REFRESH_CAPABILITY) ? remote : (name === CLI_INSTALL_CAPABILITY || name === CLI_UPDATE_CAPABILITY) ? remote && !!(options.remoteAccounts?.installer || nativeInstallSupported()) : true) };
+    this.runtimeInfo = { ...this.runtimeInfo, capabilities: this.runtimeInfo.capabilities.filter(name => (name === REMOTE_SIGNIN_CAPABILITY || name === MODEL_REFRESH_CAPABILITY || runtimeSignInCapabilities().includes(name)) ? remote : (name === CLI_INSTALL_CAPABILITY || name === CLI_UPDATE_CAPABILITY) ? remote && !!(options.remoteAccounts?.installer || nativeInstallSupported()) : true) };
     this.bridge = options.bridge ?? new WindowsCliBridge(nativeWindowsTransport, join(options.store.directory, WINDOWS_CLI_INVENTORY_FILE));
   }
   private report(text: string): void { this.options.report?.(text); }
@@ -592,6 +593,8 @@ export class RuntimeClient {
       models: extra?.models ?? ((cli, directory, authorized) => refreshNativeModels({cli,directory,authorized,environment:extra?.environment?.() ?? nativeCliEnvironment()})),
       status: (cli, directory) => this.statusOf(cli, directory),
       find: extra?.find ?? ((cli) => findCli(cli)),
+      // The computer's own login of a CLI that has no profile (the registry's `authStatus` command, by its exit code): the lookup of the CLI is the same one a test or the install work may supply.
+      defaultStatus: extra?.defaultStatus ?? (cli => probeDefaultLogin(cli, extra?.find ? id => extra.find!(id as typeof cli) : undefined)),
       environment: extra?.environment ?? (() => nativeCliEnvironment()),
       runLogout: extra?.runLogout ?? ((executable, args, env) => runLogoutProcess(executable, args, env)),
       inUse: name => this.profileInUse(name), inUseNow: name => this.profileInUseNow(name), report: text => this.report(text),

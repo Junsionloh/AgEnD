@@ -12,12 +12,14 @@
  * Only the fleet's local admin session reaches this (web-api.ts checks it before the body is read and again after it). Nothing here keeps or logs a URL, a code,
  * the Runtime's output, a path or an e-mail address; an error from a computer is its own refusal sentence (bounded, no control characters) or one of ours.
  */
-import { MACHINE_ACCOUNT_CLIS, type MachineAccountsInput, type MachineReadOnlyReason } from "./accounts-view.js";
+import { MACHINE_ACCOUNT_CLIS, type MachineAccountsInput, type MachineDefaultLogin, type MachineReadOnlyReason } from "./accounts-view.js";
+import { versionAtLeast } from "./backend-availability.js";
+import { hostFacts, isRuntimeDefaultLoginCli, runtimeDefaultLoginIds, runtimeSignInCapability, type RuntimeDefaultLoginCli } from "./cli-registry.js";
 import { inventoryProbed } from "./windows-cli.js";
 import { validCredentialProfileName, type CredentialProfileStatus } from "./runtime-credential-profiles.js";
 import type { RuntimeMachine } from "./runtime-protocol.js";
 import type { AccountCaller } from "./runtime-signin-transport.js";
-import type { MachineRefusal } from "./machine-signins.js";
+import type { MachineRefusal, MachineSignInBackend } from "./machine-signins.js";
 
 /** Who asked, as the computer's audit log records them (`admin:<handle>`), and as the fleet log names them. */
 export interface MachineActor { id: string; actor: string }
@@ -34,6 +36,8 @@ export interface MachineAccountsDeps {
   agents(machineId: string): ReadonlyArray<{ name: string; profile: string | null }>;
   /** A dashboard sign-in for this computer and profile is running or not shown gone. */
   signingIn(machineId: string, profile: string): boolean;
+  /** Agents that run on this computer and use this CLI (by name). For a CLI without profiles (Antigravity). */
+  cliAgents?(machineId: string, backend: string): string[];
   /** The fleet log. Names and ids only. */
   log(entry: { machine: string; machineName: string; profile: string; by: string; action: "added" | "add_checked" | "removed" | "signed_out"; outcome: "ok" | "refused"; reason?: string }): void;
   now?(): number;
@@ -58,6 +62,11 @@ interface PendingChange { at: number | undefined; removed: Set<string>; signedOu
 
 export class MachineAccounts {
   private readonly changes = new Map<string, PendingChange>();
+  /**
+   * A computer's own login of a CLI that has no profile (cli-registry.ts: `runtime.signIn.profile === "none"`; Antigravity), signed in a moment ago from here, kept only until that computer's next inventory arrives (as `changes` does for a profile): the inventory the page reads
+   * is the last explicit detection, which agy is never re-run for on a read, so it would say "not signed in" for a login that has just been made.
+   */
+  private readonly defaultLogins = new Map<string, { at: number | undefined; loggedIn: boolean }>();   // by `machine\0cli`
   private readonly switchCache = new Map<string, { at: number; on: boolean | null }>();
   private readonly switchReads = new Map<string, Promise<boolean | null>>();
   constructor(private readonly deps: MachineAccountsDeps) {}
@@ -96,6 +105,27 @@ export class MachineAccounts {
   }
   private static capable(machine: RuntimeMachine): boolean { return machine.runtimeInfo?.capabilities.includes("remote-signin") === true; }
   private static claude(machine: RuntimeMachine) { return machine.inventory?.clis.find(row => row.id === "claude-code"); }
+  /**
+   * This Runtime can sign that CLI's own login in: it reports `signin-<id>` (derived from the registry, runtimeSignInCapability). A Runtime that only has `remote-signin` would refuse the
+   * request, so it is not offered.
+   */
+  private static signInCapable(machine: RuntimeMachine, cli: RuntimeDefaultLoginCli): boolean { return machine.runtimeInfo?.capabilities.includes(runtimeSignInCapability(cli)) === true; }
+  private static cliRow(machine: RuntimeMachine, cli: string) { return machine.inventory?.clis.find(row => row.id === cli); }
+  /** What a computer last reported about its own login of a CLI without profiles, with a login made from here since then applied. `unknown` when it has not said. */
+  reportedDefault(machineId: string, backend: RuntimeDefaultLoginCli): "valid" | "invalid" | "unknown" {
+    const machine = this.deps.machine(machineId);
+    if (!machine) return "unknown";
+    const key = `${machineId}\0${backend}`, note = this.defaultLogins.get(key);
+    if (note && machine.inventoryUpdatedAt === note.at) return note.loggedIn ? "valid" : "invalid";
+    if (note) this.defaultLogins.delete(key);                                        // a newer inventory is the truth
+    const row = MachineAccounts.cliRow(machine, backend);
+    return row?.authenticated === true ? "valid" : row?.authenticated === false ? "invalid" : "unknown";
+  }
+  /** A sign-in of this computer's own login finished from here: until its next inventory, the page shows it as signed in. */
+  noteDefaultLogin(machineId: string, backend: MachineSignInBackend, loggedIn: boolean): void {
+    if (!isRuntimeDefaultLoginCli(backend)) return;
+    this.defaultLogins.set(`${machineId}\0${backend}`, { at: this.deps.machine(machineId)?.inventoryUpdatedAt, loggedIn });
+  }
 
   /** Each approved computer, for the Accounts view. Reads the switches of the online ones in parallel, each bounded. */
   async list(): Promise<MachineAccountsInput[]> {
@@ -109,10 +139,23 @@ export class MachineAccounts {
         const on = await this.switchOn(machine.id, false);
         readOnlyReason = on === null ? "switch_unreadable" : on ? undefined : "accounts_off";
       }
+      // What holds for the whole computer, before any one CLI's own reason is added: a default-login row has its own (a CLI too old for its sign-in command, a Runtime without it).
+      const computerReason = readOnlyReason;
       const cli = MachineAccounts.claude(machine);
       if (!readOnlyReason && inventoryProbed(machine.inventory) && (!cli || cli.path === null)) readOnlyReason = "not_installed";
       const report = machine.inventory?.credentialProfiles;
-      return { id: machine.id, name: machine.name, online, ...(readOnlyReason ? { readOnlyReason } : {}),
+      // The computer's own login of each CLI that has no profile (the registry's `runtime.signIn.profile === "none"`: Antigravity), shown where the computer has the CLI (or an agent there uses
+      // it): one row, no profiles. Never started to ask: the state is the last detection's.
+      const defaultLogins: Record<string, MachineDefaultLogin> = {};
+      for (const id of runtimeDefaultLoginIds()) {
+        const row = MachineAccounts.cliRow(machine, id), agents = this.deps.cliAgents?.(machine.id, id) ?? [];
+        if (!row?.path && !agents.length) continue;
+        const reason: MachineDefaultLogin["readOnlyReason"] = computerReason
+          ?? (!MachineAccounts.signInCapable(machine, id) ? "runtime_old" : row?.path && !versionAtLeast(row.version, hostFacts(id, "structuredSignIn")?.minVersion) ? "cli_old" : !row?.path && inventoryProbed(machine.inventory) ? "cli_missing" : undefined);
+        const state = this.reportedDefault(machine.id, id);
+        defaultLogins[id] = { loggedIn: state === "valid" ? true : state === "invalid" ? false : null, ...(reason ? { readOnlyReason: reason } : {}), agents: [...agents] };
+      }
+      return { id: machine.id, name: machine.name, online, ...(readOnlyReason ? { readOnlyReason } : {}), ...(Object.keys(defaultLogins).length ? { defaultLogins } : {}),
         profiles: this.profilesOf(machine).map(p => ({ name: p.name, loggedIn: p.loggedIn, ...(p.identity ? { identity: p.identity } : {}), ...(p.created !== undefined ? { created: p.created } : {}) })),
         ...(report?.default ? { defaultProfile: report.default } : {}),
         ...(cli ? { defaultLogin: { loggedIn: cli.authenticated, ...(cli.identity ? { identity: cli.identity } : {}) } } : {}),
@@ -124,11 +167,12 @@ export class MachineAccounts {
    * Whether a request to this computer can be made now, and if not why: the computer is known and online, its Runtime reports `remote-signin`, and its owner turned
    * `accounts` on (asked of the computer itself, not cached). Null: it can.
    */
-  async readiness(machineId: string): Promise<MachineRefusal | null> {
+  async readiness(machineId: string, backend?: MachineSignInBackend): Promise<MachineRefusal | null> {
     const machine = this.deps.machine(machineId);
     if (!machine || (machine.status !== "online" && machine.status !== "offline")) return "machine_unknown";
     if (machine.status !== "online") return "machine_offline";
     if (!MachineAccounts.capable(machine)) return "machine_unsupported";
+    if (isRuntimeDefaultLoginCli(backend) && !MachineAccounts.signInCapable(machine, backend)) return "machine_unsupported";
     const on = await this.switchOn(machineId, true);
     return on === null ? "machine_unreachable" : on ? null : "machine_accounts_off";
   }
@@ -216,7 +260,7 @@ export class MachineAccounts {
 }
 
 /** The agents of a fleet that run on a computer and the profile each names, from the fleet's own configuration. Pure. */
-export function machineAgents(instances: Record<string, { runtime?: string; machine_id?: string; backend?: string }> | undefined, machineId: string, profileOf: (name: string) => string | null, defaultBackend = "claude-code"): Array<{ name: string; profile: string | null }> {
-  return Object.keys(instances ?? {}).sort().filter(name => { const config = instances![name]!; return config.runtime === "windows" && config.machine_id === machineId && (config.backend ?? defaultBackend) === "claude-code"; })
+export function machineAgents(instances: Record<string, { runtime?: string; machine_id?: string; backend?: string }> | undefined, machineId: string, profileOf: (name: string) => string | null, defaultBackend = "claude-code", backend = "claude-code"): Array<{ name: string; profile: string | null }> {
+  return Object.keys(instances ?? {}).sort().filter(name => { const config = instances![name]!; return config.runtime === "windows" && config.machine_id === machineId && (config.backend ?? defaultBackend) === backend; })
     .map(name => ({ name, profile: profileOf(name) }));
 }
