@@ -100,7 +100,8 @@ export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, change
   const el = (tag, text, parent = root) => { const node = doc.createElement(tag); if (text) node.textContent = text; parent.append(node); return node; };
   // An error is kept as its code, so it is said again in the other language when that changes.
   const errorText = code => machine && SIGNIN_STRINGS.en["error_machine_" + code] ? tr("error_machine_" + code) : SIGNIN_STRINGS.en["error_" + code] ? tr("error_" + code) : tr("error");
-  const name = backend => backend === "antigravity" ? tr("antigravity") : NAMES[backend] || backend;
+  // Antigravity is "(console fallback)" on the first-run list only; in Settings → Accounts (a dialog, or a computer's own sign-in) it signs in here, so it is just its name.
+  const name = backend => backend === "antigravity" && !(dialog || machine) ? tr("antigravity") : NAMES[backend] || backend;
   const choiceName = choice => CHOICES[choice] ?? tr("choice_" + choice);
   const phaseName = phase => SIGNIN_STRINGS.en["phase_" + phase] ? tr("phase_" + phase) : phase.replaceAll("_", " ");
   const button = (parent, label, action) => { const b = el("button", label, parent); b.type = "button"; b.disabled = busy; b.onclick = action; return b; };

@@ -84,7 +84,7 @@ describe("this host's Antigravity row", () => {
   it("the dialog offers Sign in for Antigravity (the first-run list keeps it on the console fallback) and posts a start for it", async () => {
     await p.mount(h(S.BrowserSignInDialog, { backend: "antigravity", onClose: () => {} })); await settle(12);
     const d = dialog() ?? p.root;
-    expect(text(d)).toContain("Sign-in needed"); expect(text(d)).not.toContain("console fallback, or sign in later");
+    expect(text(d)).toContain("Sign-in needed"); expect(text(d)).not.toContain("console fallback, or sign in later"); expect(text(d.querySelector("section h3"))).toBe("Antigravity");
     await btn(d, "Sign in").onclick(); await settle(8);
     const start = calls.find(c => c.method === "POST" && c.url.startsWith("/ui/browser-backend-signins"))!;
     expect(start.url).toBe("/ui/browser-backend-signins"); expect(start.body).toEqual({ operation: "start", backend: "antigravity", relogin: false });
@@ -151,7 +151,7 @@ describe("a computer's Antigravity login", () => {
     expect(text(d)).toContain("Sign in Antigravity on Desk PC");
     expect(text(d)).toContain("This replaces the Antigravity sign-in of the Windows user on that computer");
     expect(text(d)).not.toContain("agend-runtime login"); expect(text(d)).not.toContain("account “"); expect(text(d)).not.toContain("Sign in later");
-    expect(text(d)).toContain("Sign-in needed");
+    expect(text(d)).toContain("Sign-in needed"); expect(text(d.querySelector("section h3"))).toBe("Antigravity");   // not "(console fallback)": it signs in here
     i18n.setLang("zh-TW", { store: false }); await mountDialog();
     expect(text(dialog() ?? p.root)).toContain("在 Desk PC 登入 Antigravity");
   });
