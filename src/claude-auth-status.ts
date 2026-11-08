@@ -145,4 +145,3 @@ export function parseAntigravityToken(text: unknown): AccountIdentity | undefine
   const maskedEmail = mask((file as { [key: string]: unknown })[AGY_EMAIL_KEY]);
   return maskedEmail ? { maskedEmail } : undefined;
 }
-

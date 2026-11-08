@@ -108,4 +108,3 @@ export function runtimeDefaultLoginIds(): RuntimeDefaultLoginCli[] { return runt
  */
 export function runtimeSignInCapability(id: RuntimeDefaultLoginCli): string { return `signin-${id}`; }
 export function runtimeSignInCapabilities(): string[] { return runtimeDefaultLoginIds().map(runtimeSignInCapability); }
-
