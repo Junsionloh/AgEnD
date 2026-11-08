@@ -85,6 +85,7 @@ describe("this host's Antigravity row", () => {
     await p.mount(h(S.BrowserSignInDialog, { backend: "antigravity", onClose: () => {} })); await settle(12);
     const d = dialog() ?? p.root;
     expect(text(d)).toContain("Sign-in needed"); expect(text(d)).not.toContain("console fallback, or sign in later"); expect(text(d.querySelector("section h3"))).toBe("Antigravity");
+    expect(text(d)).not.toContain("Use console fallback");      // chat's /login agy is declined, so there is no console fallback to offer for it
     await btn(d, "Sign in").onclick(); await settle(8);
     const start = calls.find(c => c.method === "POST" && c.url.startsWith("/ui/browser-backend-signins"))!;
     expect(start.url).toBe("/ui/browser-backend-signins"); expect(start.body).toEqual({ operation: "start", backend: "antigravity", relogin: false });

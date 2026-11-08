@@ -266,7 +266,7 @@ export function BrowserSignInDialog({ backend, profile, backends, onClose }) {
   const account = backend ? `${cliLabel(backend)} · ${profile || tn("defaultAccount")}` : "";
   return html`<${Dialog} title=${backends ? tn("listTitle") : tn("title", account)} onClose=${close} actions=${actions}>
     <div class="signin-browser" ref=${root}></div>
-    ${single ? html`<p class="note"><button type="button" class="btn btn-sm btn-ghost" onClick=${() => fallback(backend)}>${tn("consoleFallback")}</button></p>` : null}
+    ${single && backend !== "antigravity" ? html`<p class="note"><button type="button" class="btn btn-sm btn-ghost" onClick=${() => fallback(backend)}>${tn("consoleFallback")}</button></p>` : null}
   </${Dialog}>`;
 }
 
