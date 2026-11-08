@@ -14,7 +14,7 @@ import { RUNTIME_CREDENTIAL_CAPABILITY, credentialLoginRequired, credentialProfi
   assertCredentialProfileName, assertCredentialProfileCli, type CredentialProfileCli, type CredentialProfileReport } from "./runtime-credential-profiles.js";
 import { RuntimeClientStore, runtimeJobDigest, validateRuntimeServer, type RuntimeCredentials, type RuntimeStoredJob } from "./runtime-client-store.js";
 import { RUNTIME_ROTATE_PATH, RUNTIME_REINSTALL_CLOSE_PREFIX, runtimeClaimFingerprint, RUNTIME_ENROLL_HELLO_PATH, RUNTIME_ENROLL_PATH, RUNTIME_ENROLL_TOKEN_PATTERN, RUNTIME_SERVER_FINGERPRINT_PATTERN, RUNTIME_ENROLL_REFUSALS,
-  runtimeEnrollHelloMessage, runtimeEnrollGrantMessage, verifyRuntimeServerProof, type RuntimeEnrollRefusal } from "./runtime-protocol.js";
+  runtimeEnrollHelloMessage, verifyRuntimeServerProof, runtimeEnrollTokenId, newRuntimeEnrollEphemeral, runtimeEnrollChannel, sealRuntimeEnroll, openRuntimeEnroll, type RuntimeEnrollRefusal } from "./runtime-protocol.js";
 import { readRuntimeInfo } from "./runtime-build-info.js";
 import { ProcessNotConfirmedEnded, RemoteAccounts, type RemoteAccountsDeps, type RemoteInstaller } from "./runtime-remote-accounts.js";
 import { isCreatedProfile } from "./runtime-profile-ownership.js";
@@ -927,9 +927,11 @@ export function describeEnrollRefusal(reason: unknown): string { return ENROLL_R
 /**
  * AGEND-110: joins this computer to AgEnD with the one-time token from the install command. No pairing code and no approval step: the token is the
  * authorisation, and it could only come from an administrator's signed-in AgEnD page.
- * Order matters. The server first proves it is the AgEnD the command pinned (an Ed25519 signature over a fresh nonce, whose key must hash to the
- * pinned fingerprint); only then is the token sent. A server that cannot prove it never sees the token. The reply that carries the new credential
- * is signed too, over this request's nonce, and is checked before anything is saved. The token is used once and is not kept anywhere here.
+ * Order matters, and nothing secret goes out in the clear. (1) The server proves it is the AgEnD the command pinned: an Ed25519 signature, by the key whose
+ * fingerprint is in the command, over a fresh nonce AND a fresh X25519 key it made for this request. (2) Only then is the token sent, sealed (AES-256-GCM under a
+ * key from X25519 with that fresh key) so that only the server that holds the fresh private key can read it: a relay that forwards step 1 to the real server gets a
+ * valid proof and still cannot read the token. (3) The answer carrying the new credential is sealed under the other direction's key, so the relay cannot read it or
+ * forge one; it is opened and checked before anything is saved. The token is used once and is not kept anywhere here.
  */
 export async function enrollRuntime(input: { server: string; token: string; fingerprint: string; name: string; store: RuntimeClientStore; signal?: AbortSignal; report?: (text: string) => void }): Promise<RuntimeCredentials> {
   const server = validateRuntimeServer(input.server);
@@ -937,25 +939,30 @@ export async function enrollRuntime(input: { server: string; token: string; fing
   if (!RUNTIME_SERVER_FINGERPRINT_PATTERN.test(input.fingerprint)) throw new Error("The server fingerprint in this install command is not valid (it is 64 hexadecimal characters). " + ENROLL_NEXT);
   if (!input.name.trim() || input.name.length > 100) throw new Error("Enter a valid machine name");
   input.store.assertCanPair();
-  const nonce = randomBytes(24).toString("hex");
+  const nonce = randomBytes(24).toString("hex"), tid = runtimeEnrollTokenId(input.token);   // tid: the token's non-secret id, only so AgEnD can rate-limit this token's own traffic apart from everyone else's
   // Something that is not an AgEnD answering (an HTML page, an old AgEnD without this route) is the same failure as a wrong fingerprint: the token stays unsent.
-  const hello = await post(server, RUNTIME_ENROLL_HELLO_PATH, { nonce }, input.signal).catch((error: unknown) => {
+  const hello = await post(server, RUNTIME_ENROLL_HELLO_PATH, { nonce, tid }, input.signal).catch((error: unknown) => {
     if (error instanceof Error && /^Invalid runtime pairing response$|is too large$/.test(error.message)) return { status: 0, data: {} as Record<string, unknown> };
     throw error;
   });
   if (hello.status === 429) throw new Error("AgEnD is receiving too many requests from this address. Wait a minute, then run the same command again; the one-time token was NOT sent.");
-  if (hello.status !== 200 || !verifyRuntimeServerProof(input.fingerprint, hello.data.publicKey, hello.data.signature, runtimeEnrollHelloMessage(nonce))) {
+  const ephemeral = hello.data.ephemeral;
+  let helloMessage: Buffer | null = null; try { helloMessage = typeof ephemeral === "string" ? runtimeEnrollHelloMessage(nonce, ephemeral) : null; } catch { helloMessage = null; }
+  if (hello.status !== 200 || typeof ephemeral !== "string" || !helloMessage || !verifyRuntimeServerProof(input.fingerprint, hello.data.publicKey, hello.data.signature, helloMessage)) {
     throw new Error(`The AgEnD at ${server.origin} did not prove it is the AgEnD this install command was made for (its server fingerprint differs from the one in the command). The one-time token was NOT sent. Check the address; if it is right, ${ENROLL_NEXT.replace(/^Open/, "open")}`);
   }
   input.report?.(`AgEnD server verified (fingerprint ${input.fingerprint.slice(0, 16)}…).`);
-  const granted = await post(server, RUNTIME_ENROLL_PATH, { token: input.token, fingerprint: input.fingerprint, nonce, name: input.name.trim(), platform: process.platform, hostname: hostname() }, input.signal);
+  const mine = newRuntimeEnrollEphemeral(), channel = runtimeEnrollChannel(mine.privateKey, ephemeral, nonce, tid, ephemeral, mine.publicKey);
+  const request = sealRuntimeEnroll(channel.requestKey, channel.context, "request", Buffer.from(JSON.stringify({ token: input.token, fingerprint: input.fingerprint, name: input.name.trim(), platform: process.platform, hostname: hostname() }), "utf8"));
+  const granted = await post(server, RUNTIME_ENROLL_PATH, { nonce, tid, clientKey: mine.publicKey, ...request }, input.signal);
   if (granted.status !== 201) {
     if ([400, 403, 409].includes(granted.status) && typeof granted.data.reason === "string") throw new Error(describeEnrollRefusal(granted.data.reason));
     throw new Error(granted.status === 429 ? "AgEnD is receiving too many requests from this address; wait a minute, then run the same command again." : `Joining AgEnD was refused (HTTP ${granted.status}). ${ENROLL_NEXT}`);
   }
-  const { machineId, credential, signature } = granted.data;
-  if (granted.data.status !== "enrolled" || typeof machineId !== "string" || !/^[a-f0-9-]{36}$/i.test(machineId) || typeof credential !== "string" || !/^[A-Za-z0-9._-]{16,256}$/.test(credential)
-    || !verifyRuntimeServerProof(input.fingerprint, hello.data.publicKey, signature, runtimeEnrollGrantMessage(nonce, machineId, credential))) {
+  const opened = openRuntimeEnroll(channel.replyKey, channel.context, "reply", granted.data.box);
+  let grant: Record<string, unknown> = {}; try { grant = opened ? JSON.parse(opened.toString("utf8")) as Record<string, unknown> : {}; } catch { grant = {}; }
+  const { machineId, credential } = grant;
+  if (!opened || grant.status !== "enrolled" || typeof machineId !== "string" || !/^[a-f0-9-]{36}$/i.test(machineId) || typeof credential !== "string" || !/^[A-Za-z0-9._-]{16,256}$/.test(credential)) {
     throw new Error(`AgEnD's answer could not be verified, so nothing was saved on this computer. The token may have been used up: ${ENROLL_NEXT.replace(/^Open/, "open")} If a computer with this name shows up connected-but-never-online in Settings, revoke it there.`);
   }
   const credentials = { server: server.origin, machineId, credential, name: input.name.trim() };

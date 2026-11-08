@@ -1,18 +1,19 @@
 import { createServer, IncomingMessage, ServerResponse, type Server } from "node:http";
 import { Readable } from "node:stream";
 import { once } from "node:events";
-import { generateKeyPairSync, createHash, sign } from "node:crypto";
+import { generateKeyPairSync, createHash, randomBytes, sign } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { WebSocket } from "ws";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RuntimeCoordinator, type RuntimeEnrollmentAuditEntry } from "../src/runtime-coordinator.js";
+import { RuntimeCoordinator, maskedSource, type RuntimeEnrollmentAuditEntry } from "../src/runtime-coordinator.js";
+import { enrolledRuntimeNotice } from "../src/runtime-enroll-notice.js";
 import { handleRuntimeRequest, type RuntimeApiContext } from "../src/runtime-api.js";
 import { ENROLL_IDENTITY_FILE, ENROLL_TTL_MS, generateEnrollToken, hashEnrollToken, loadRuntimeServerIdentity } from "../src/runtime-enrollment.js";
 import { RuntimeClientStore } from "../src/runtime-client-store.js";
 import { describeEnrollRefusal, enrollRuntime } from "../src/runtime-client.js";
-import { RUNTIME_ENROLL_PATH, RUNTIME_ENROLL_HELLO_PATH, RUNTIME_ENROLL_TOKEN_PATTERN, runtimeEnrollGrantMessage, runtimeEnrollHelloMessage, runtimeServerFingerprint, verifyRuntimeServerProof } from "../src/runtime-protocol.js";
+import { RUNTIME_ENROLL_PATH, RUNTIME_ENROLL_HELLO_PATH, RUNTIME_ENROLL_TOKEN_PATTERN, runtimeEnrollHelloMessage, runtimeEnrollTokenId, runtimeServerFingerprint, verifyRuntimeServerProof, newRuntimeEnrollEphemeral, runtimeEnrollChannel, sealRuntimeEnroll, openRuntimeEnroll } from "../src/runtime-protocol.js";
 
 /**
  * AGEND-110: one-time install-command tokens. The server only keeps a hash, the token works once and for 15 minutes, a new token (or a revoke) ends
@@ -29,7 +30,25 @@ async function listen(h: RuntimeCoordinator, log: string[] = []) {
   return `http://127.0.0.1:${address.port}`;
 }
 const nonce = (): string => "ab".repeat(16);
-function enrollInput(h: RuntimeCoordinator, token: string, extra: Record<string, unknown> = {}) { return { token, fingerprint: h.serverFingerprint(), nonce: nonce(), name: "Desk", platform: "win32", ...extra }; }
+function enrollInput(h: RuntimeCoordinator, token: string, extra: Record<string, unknown> = {}) { return { token, fingerprint: h.serverFingerprint(), name: "Desk", platform: "win32", ...extra }; }
+async function postJson(base: string, path: string, body: unknown, headers: Record<string, string> = {}) {
+  const response = await fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
+  return { status: response.status, body: await response.json() as Record<string, unknown> };
+}
+/**
+ * What a Runtime does, by hand, so the public routes can be driven without the client: hello, check the proof, seal the request to the fresh key, send it, open the
+ * sealed answer. `options.tid` overrides the id sent (to test the rate buckets); `options.nonce` the nonce.
+ */
+async function sealedEnroll(base: string, fields: Record<string, unknown>, options: { nonce?: string; tid?: string } = {}) {
+  const token = typeof fields.token === "string" ? fields.token : "", id = options.tid ?? (token.startsWith("agend_enroll_") ? runtimeEnrollTokenId(token) : "0".repeat(16)), n = options.nonce ?? randomBytes(24).toString("hex");
+  const hello = await postJson(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: n, tid: id });
+  if (hello.status !== 200) return { hello, answer: hello, opened: undefined as undefined | Record<string, unknown> };
+  const ephemeral = String(hello.body.ephemeral), mine = newRuntimeEnrollEphemeral(), channel = runtimeEnrollChannel(mine.privateKey, ephemeral, n, id, ephemeral, mine.publicKey);
+  const box = sealRuntimeEnroll(channel.requestKey, channel.context, "request", Buffer.from(JSON.stringify(fields), "utf8"));
+  const answer = await postJson(base, RUNTIME_ENROLL_PATH, { nonce: n, tid: id, clientKey: mine.publicKey, ...box });
+  const opened = answer.status === 201 ? JSON.parse(openRuntimeEnroll(channel.replyKey, channel.context, "reply", answer.body.box)!.toString("utf8")) as Record<string, unknown> : undefined;
+  return { hello, answer, opened };
+}
 /** Every file under a folder, as text, so "the token is nowhere on disk" can be checked for the whole data and profile folders. */
 function everyFile(dir: string): string[] {
   const out: string[] = [];
@@ -63,10 +82,11 @@ describe("the token and the server identity", () => {
     expect(readFileSync(join(dir, ENROLL_IDENTITY_FILE), "utf8")).toBe("{\"version\":2}");
   });
   it("signs a nonce so the key's fingerprint and the signature can both be checked, and nothing else passes", () => {
-    const identity = loadRuntimeServerIdentity(home()), message = runtimeEnrollHelloMessage(nonce()), signature = identity.signature(message);
+    const key = newRuntimeEnrollEphemeral().publicKey, identity = loadRuntimeServerIdentity(home()), message = runtimeEnrollHelloMessage(nonce(), key), signature = identity.signature(message);
     expect(verifyRuntimeServerProof(identity.fingerprint, identity.publicKey, signature, message)).toBe(true);
     expect(verifyRuntimeServerProof("0".repeat(64), identity.publicKey, signature, message)).toBe(false);                           // another fingerprint
-    expect(verifyRuntimeServerProof(identity.fingerprint, identity.publicKey, signature, runtimeEnrollHelloMessage("cd".repeat(16)))).toBe(false); // another nonce
+    expect(verifyRuntimeServerProof(identity.fingerprint, identity.publicKey, signature, runtimeEnrollHelloMessage("cd".repeat(16), key))).toBe(false); // another nonce
+    expect(verifyRuntimeServerProof(identity.fingerprint, identity.publicKey, signature, runtimeEnrollHelloMessage(nonce(), newRuntimeEnrollEphemeral().publicKey))).toBe(false); // another fresh key: the signature covers it
     expect(verifyRuntimeServerProof(identity.fingerprint, identity.publicKey, "AAAA", message)).toBe(false);
     for (const hostile of [undefined, 1, "", "!!!", "x".repeat(300)]) expect(verifyRuntimeServerProof(identity.fingerprint, hostile, signature, message)).toBe(false);
     // a different key that someone made to look right still fails the fingerprint pin
@@ -168,7 +188,7 @@ describe("issuing, using, expiring and revoking a token", () => {
       ["used", b.id, undefined, used.machineId], ["issued", c.id, ACTOR, undefined], ["revoked", c.id, ACTOR, undefined], ["rejected", a.id, undefined, undefined]]);
     expect(seen.at(-1)).toMatchObject({ reason: "revoked" });
     const stored = JSON.parse(readFileSync(join(homes[0], "runtime-machines.json"), "utf8")).enrollmentAudit as Array<Record<string, unknown>>;
-    expect(stored.map(entry => entry.event)).toEqual(["issued", "superseded", "issued", "used", "issued", "revoked"]);   // a refused try is logged only
+    expect(stored.map(entry => entry.event)).toEqual(["issued", "superseded", "issued", "used", "issued", "revoked", "rejected"]);   // a refusal on a known token is in the trail too
     const everything = JSON.stringify([seen, stored]);
     for (const token of [a.token, b.token, c.token]) { expect(everything).not.toContain(token); expect(everything).not.toContain(hashEnrollToken(token)); }
     expect(everything).not.toContain(used.credential);
@@ -202,7 +222,7 @@ describe("issuing, using, expiring and revoking a token", () => {
   });
   it("validates the request closely: unknown fields, a malformed token or fingerprint, a bad name or platform", () => {
     const h = hub(), { token } = h.createEnrollment(ACTOR);
-    for (const bad of [{ extra: 1 }, { token: "agend_enroll_short" }, { fingerprint: "ZZ" }, { nonce: "xyz" }, { name: " " }, { name: "a\nb" }, { platform: "linux" }, { hostname: "x\ny" }])
+    for (const bad of [{ extra: 1 }, { nonce: "ab".repeat(16) }, { token: "agend_enroll_short" }, { fingerprint: "ZZ" }, { name: " " }, { name: "a\nb" }, { platform: "linux" }, { hostname: "x\ny" }])
       expect(() => h.enroll(enrollInput(h, token, bad))).toThrow(/Invalid runtime enrollment request/);
     expect(() => h.enroll("nope")).toThrow(/Invalid runtime enrollment request/);
     expect(h.listEnrollments()[0].status).toBe("unused");
@@ -229,37 +249,71 @@ describe("issuing, using, expiring and revoking a token", () => {
 });
 
 describe("the public routes", () => {
-  async function post(base: string, path: string, body: unknown) {
-    const response = await fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    return { status: response.status, body: await response.json() as Record<string, unknown> };
-  }
-  it("answers hello with a signature over the caller's nonce and spends nothing", async () => {
+  const post = postJson;
+  it("answers hello with the identity key, a fresh X25519 key and a signature that covers the nonce and that key; it spends nothing", async () => {
     const h = hub(), base = await listen(h), { token } = h.createEnrollment(ACTOR);
-    const answer = await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: nonce() });
+    const answer = await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: nonce(), tid: runtimeEnrollTokenId(token) });
     expect(answer.status).toBe(200);
-    expect(verifyRuntimeServerProof(h.serverFingerprint(), answer.body.publicKey, answer.body.signature, runtimeEnrollHelloMessage(nonce()))).toBe(true);
-    expect(h.listEnrollments()[0].status).toBe("unused"); expect(token).toBeTruthy();
+    expect(verifyRuntimeServerProof(h.serverFingerprint(), answer.body.publicKey, answer.body.signature, runtimeEnrollHelloMessage(nonce(), String(answer.body.ephemeral)))).toBe(true);
+    expect(h.listEnrollments()[0].status).toBe("unused");
     expect((await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: "short" })).status).toBe(400);
     expect((await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: nonce(), extra: 1 })).status).toBe(400);
+    expect((await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: "cd".repeat(16), tid: "ZZ" })).status).toBe(400);
   });
-  it("enrolls over HTTP, signs the grant for this request, and then refuses the same token with a reason", async () => {
+  it("gives every hello its own fresh key (a key is never reused), and refuses a nonce that was already asked", async () => {
+    const h = hub(), base = await listen(h), first = await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: nonce() }), second = await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: "cd".repeat(16) });
+    expect(first.body.ephemeral).not.toBe(second.body.ephemeral);
+    expect((await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: nonce() })).status).toBe(400);               // the same nonce again: not a second key for the same exchange
+  });
+  it("enrolls over HTTP with the request and the answer sealed, and then refuses the same token with a reason", async () => {
     const h = hub(), base = await listen(h), { token } = h.createEnrollment(ACTOR);
-    const first = await post(base, RUNTIME_ENROLL_PATH, enrollInput(h, token));
-    expect(first.status).toBe(201); expect(first.body).toMatchObject({ status: "enrolled" });
-    expect(verifyRuntimeServerProof(h.serverFingerprint(), loadRuntimeServerIdentity(homes[0]).publicKey, first.body.signature, runtimeEnrollGrantMessage(nonce(), String(first.body.machineId), String(first.body.credential)))).toBe(true);
-    const second = await post(base, RUNTIME_ENROLL_PATH, enrollInput(h, token));
-    expect(second.status).toBe(403); expect(second.body).toMatchObject({ reason: "used" }); expect(JSON.stringify(second.body)).not.toContain(token);
+    const first = await sealedEnroll(base, enrollInput(h, token));
+    expect(first.answer.status).toBe(201); expect(Object.keys(first.answer.body)).toEqual(["box"]);                // nothing in the clear but the box
+    expect(first.opened).toMatchObject({ status: "enrolled" }); expect(String(first.opened!.credential)).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(first.answer.body)).not.toContain(String(first.opened!.credential)); expect(JSON.stringify(first.answer.body)).not.toContain(String(first.opened!.machineId));
+    const second = await sealedEnroll(base, enrollInput(h, token));
+    expect(second.answer.status).toBe(403); expect(second.answer.body).toMatchObject({ reason: "used" }); expect(JSON.stringify(second.answer.body)).not.toContain(token);
   });
   it("gives every refusal its status and reason, and an unknown token only the generic 'invalid'", async () => {
     let now = 1_000_000; const h = hub({ now: () => now }), base = await listen(h);
     const a = h.createEnrollment(ACTOR); now += ENROLL_TTL_MS;
-    expect(await post(base, RUNTIME_ENROLL_PATH, enrollInput(h, a.token))).toMatchObject({ status: 403, body: { reason: "expired" } });
+    expect((await sealedEnroll(base, enrollInput(h, a.token))).answer).toMatchObject({ status: 403, body: { reason: "expired" } });
     const b = h.createEnrollment(ACTOR); h.revokeEnrollment(b.id, ACTOR);
-    expect(await post(base, RUNTIME_ENROLL_PATH, enrollInput(h, b.token))).toMatchObject({ status: 403, body: { reason: "revoked" } });
+    expect((await sealedEnroll(base, enrollInput(h, b.token))).answer).toMatchObject({ status: 403, body: { reason: "revoked" } });
     const c = h.createEnrollment(ACTOR);
-    expect(await post(base, RUNTIME_ENROLL_PATH, enrollInput(h, c.token, { fingerprint: "1".repeat(64) }))).toMatchObject({ status: 403, body: { reason: "mismatch" } });
-    expect(await post(base, RUNTIME_ENROLL_PATH, enrollInput(h, generateEnrollToken()))).toMatchObject({ status: 400, body: { reason: "invalid" } });
-    expect(await post(base, RUNTIME_ENROLL_PATH, { nope: 1 })).toMatchObject({ status: 400, body: { reason: "invalid" } });
+    expect((await sealedEnroll(base, enrollInput(h, c.token, { fingerprint: "1".repeat(64) }))).answer).toMatchObject({ status: 403, body: { reason: "mismatch" } });
+    expect((await sealedEnroll(base, enrollInput(h, generateEnrollToken()))).answer).toMatchObject({ status: 400, body: { reason: "invalid" } });
+  });
+  it("refuses a request that is not sealed to the key it was given: no hello first, a replay, a box from another exchange, a tampered box, a changed id", async () => {
+    const h = hub(), base = await listen(h), { token } = h.createEnrollment(ACTOR), tid = runtimeEnrollTokenId(token);
+    const mine = newRuntimeEnrollEphemeral();
+    expect((await post(base, RUNTIME_ENROLL_PATH, { nonce: nonce(), tid, clientKey: mine.publicKey, iv: "A".repeat(16), ciphertext: "A".repeat(60) })).status).toBe(400);   // never said hello
+    // a replay of a request that was accepted
+    const key = newRuntimeEnrollEphemeral(), hello = await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: "cd".repeat(16), tid }), ephemeral = String(hello.body.ephemeral);
+    const channel = runtimeEnrollChannel(key.privateKey, ephemeral, "cd".repeat(16), tid, ephemeral, key.publicKey), box = sealRuntimeEnroll(channel.requestKey, channel.context, "request", Buffer.from(JSON.stringify(enrollInput(h, token))));
+    const request = { nonce: "cd".repeat(16), tid, clientKey: key.publicKey, ...box };
+    expect((await post(base, RUNTIME_ENROLL_PATH, request)).status).toBe(201);
+    expect((await post(base, RUNTIME_ENROLL_PATH, request)).status).toBe(400); expect(h.listMachines()).toHaveLength(1);
+    // a tampered box, a box sealed for the other direction, a changed tid: each is refused and spends the session (and not the token)
+    const t2 = h.createEnrollment(ACTOR), id2 = runtimeEnrollTokenId(t2.token);
+    for (const tamper of ["flip", "direction", "tid"] as const) {
+      const n = randomBytes(24).toString("hex"), hi = await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: n, tid: id2 }), eph = String(hi.body.ephemeral), mk = newRuntimeEnrollEphemeral();
+      const ch = runtimeEnrollChannel(mk.privateKey, eph, n, id2, eph, mk.publicKey);
+      let sealed = sealRuntimeEnroll(ch.requestKey, ch.context, tamper === "direction" ? "reply" : "request", Buffer.from(JSON.stringify(enrollInput(h, t2.token))));
+      if (tamper === "flip") sealed = { ...sealed, ciphertext: (sealed.ciphertext[0] === "A" ? "B" : "A") + sealed.ciphertext.slice(1) };
+      const answer = await post(base, RUNTIME_ENROLL_PATH, { nonce: n, tid: tamper === "tid" ? runtimeEnrollTokenId(token) : id2, clientKey: mk.publicKey, ...sealed });
+      expect(answer.status, tamper).toBe(400);
+    }
+    expect(h.listEnrollments()[0]).toMatchObject({ id: t2.id, status: "unused" }); expect(h.listMachines()).toHaveLength(1);
+  });
+  it("refuses a request whose fresh key has aged out (two minutes) and drops old sessions", async () => {
+    let now = 1_000_000; const h = hub({ now: () => now }), base = await listen(h), { token } = h.createEnrollment(ACTOR);
+    const hello = await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: nonce() }); expect(hello.status).toBe(200);
+    now += 2 * 60_000 + 1;
+    const mine = newRuntimeEnrollEphemeral(), ephemeral = String(hello.body.ephemeral), channel = runtimeEnrollChannel(mine.privateKey, ephemeral, nonce(), "0".repeat(16), ephemeral, mine.publicKey);
+    const box = sealRuntimeEnroll(channel.requestKey, channel.context, "request", Buffer.from(JSON.stringify(enrollInput(h, token))));
+    expect((await post(base, RUNTIME_ENROLL_PATH, { nonce: nonce(), tid: "0".repeat(16), clientKey: mine.publicKey, ...box })).status).toBe(400);
+    expect(h.listEnrollments()[0].status).toBe("unused");
   });
   it("is POST-only, takes no query, and refuses a browser (an Origin or a cookie)", async () => {
     const h = hub(), base = await listen(h), { token } = h.createEnrollment(ACTOR);
@@ -269,16 +323,31 @@ describe("the public routes", () => {
     expect((await fetch(base + RUNTIME_ENROLL_HELLO_PATH, { method: "POST", headers: { Cookie: "a=b" }, body: JSON.stringify({ nonce: nonce() }) })).status).toBe(403);
     expect(h.listEnrollments()[0].status).toBe("unused");
   });
-  it("gives the identity check its own rate bucket, so invalid pairing traffic behind one proxy address cannot starve it", async () => {
+  it("keeps the identity check of a real token out of the shared address bucket: flooding the address does not lock a real installer out", async () => {
+    const h = hub(), base = await listen(h), { token } = h.createEnrollment(ACTOR), tid = runtimeEnrollTokenId(token);
+    // everyone behind one proxy address, and an id that names no token, share the address bucket (120 a minute); spend it
+    let statuses: number[] = []; for (let i = 0; i < 125; i++) statuses.push((await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: randomBytes(24).toString("hex"), tid: "f".repeat(16) })).status);
+    expect(statuses.slice(0, 120).every(status => status === 200)).toBe(true); expect(statuses.at(-1)).toBe(429);
+    expect((await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: randomBytes(24).toString("hex") })).status).toBe(429);              // no id: the address bucket
+    // a hello that names a real token has that token's own bucket: still answered, and its enroll works
+    const real = await sealedEnroll(base, enrollInput(h, token));
+    expect(real.hello.status).toBe(200); expect(real.answer.status).toBe(201);
+    // that bucket is limited too (30 a minute), so one token cannot flood either
+    statuses = []; for (let i = 0; i < 33; i++) statuses.push((await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: randomBytes(24).toString("hex"), tid })).status);
+    expect(statuses.slice(0, 29).every(status => status === 200)).toBe(true); expect(statuses.at(-1)).toBe(429);
+  });
+  it("does the same for the enroll request: invalid traffic on the address bucket does not stop a real token's request", async () => {
     const h = hub(), base = await listen(h);
     for (let i = 0; i < 31; i++) await post(base, "/runtime/v1/pair", { code: "NOPE", name: "x", platform: "win32" });
     expect((await post(base, "/runtime/v1/pair", { code: "NOPE", name: "x", platform: "win32" })).status).toBe(429);       // the shared invalid bucket is spent
-    expect((await post(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: nonce() })).status).toBe(200);                                // and a real installer's identity check still works
+    const { token } = h.createEnrollment(ACTOR), real = await sealedEnroll(base, enrollInput(h, token));
+    expect(real.answer.status).toBe(201);
   });
   it("rate-limits a token that keeps being refused", async () => {
     const h = hub(), base = await listen(h), { id, token } = h.createEnrollment(ACTOR); h.revokeEnrollment(id, ACTOR);
-    const statuses: number[] = []; for (let i = 0; i < 40; i++) statuses.push((await post(base, RUNTIME_ENROLL_PATH, enrollInput(h, token))).status);
-    expect(statuses.slice(0, 30).every(status => status === 403)).toBe(true); expect(statuses.at(-1)).toBe(429);
+    const statuses: number[] = []; for (let i = 0; i < 40; i++) statuses.push((await sealedEnroll(base, enrollInput(h, token))).answer.status);
+    // each attempt is a hello (the token's own bucket, 30 a minute) then an enroll (also 30 a minute): 30 refusals with a reason, then 429
+    expect(statuses.filter(status => status === 403)).toHaveLength(30); expect(statuses.at(-1)).toBe(429);
   });
 });
 
@@ -370,20 +439,75 @@ describe("the Runtime joining with a token (enrollRuntime)", () => {
     await expect(enrollRuntime({ server: base, token, fingerprint: "a".repeat(64), name: "Desk", store: storeDir() })).rejects.toThrow(/NOT sent/);
     expect(seenBodies.join("")).not.toContain(token);
   });
-  it("refuses a grant that is not signed for this request, and saves nothing", async () => {
+  it("refuses an answer that was not sealed under this exchange's key (a forged or swapped grant), and saves nothing", async () => {
     const h = hub(), identity = loadRuntimeServerIdentity(homes[0]);
     const proxy = createServer((req, res) => {
       const chunks: Buffer[] = []; req.on("data", chunk => chunks.push(chunk)); req.on("end", () => {
         const body = JSON.parse(Buffer.concat(chunks).toString());
-        if (req.url === RUNTIME_ENROLL_HELLO_PATH) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ publicKey: identity.publicKey, signature: identity.signature(runtimeEnrollHelloMessage(body.nonce)) })); return; }
-        // a grant signed for a DIFFERENT credential: a replay or a swap
+        if (req.url === RUNTIME_ENROLL_HELLO_PATH) {                                // a properly signed hello (this stands in for the real server)
+          const mine = newRuntimeEnrollEphemeral(); res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ publicKey: identity.publicKey, ephemeral: mine.publicKey, signature: identity.signature(runtimeEnrollHelloMessage(body.nonce, mine.publicKey)) })); return;
+        }
+        // an answer sealed under some other key: what anyone who cannot do the key agreement can send
         res.writeHead(201, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ status: "enrolled", machineId: "11111111-2222-4333-8444-555555555555", credential: "c".repeat(64), signature: identity.signature(runtimeEnrollGrantMessage(body.nonce, "11111111-2222-4333-8444-555555555555", "d".repeat(64))) }));
+        res.end(JSON.stringify({ box: sealRuntimeEnroll(randomBytes(32), "whatever", "reply", Buffer.from(JSON.stringify({ status: "enrolled", machineId: "11111111-2222-4333-8444-555555555555", credential: "c".repeat(64) }))) }));
       });
     });
     servers.push(proxy); proxy.listen(0, "127.0.0.1"); await once(proxy, "listening"); const base = `http://127.0.0.1:${(proxy.address() as { port: number }).port}`, store = storeDir();
     await expect(enrollRuntime({ server: base, token: generateEnrollToken(), fingerprint: identity.fingerprint, name: "Desk", store })).rejects.toThrow(/could not be verified, so nothing was saved/);
     expect(store.credentials()).toBeNull(); expect(h).toBeTruthy();
+  });
+  describe("a relay between the Runtime and the real server (a server that took over the address, with a valid certificate)", () => {
+    /** The relay forwards every request to the real server and keeps a copy of everything that passes through it, both ways. */
+    async function relay(real: string, tamper?: (url: string, body: Record<string, unknown>, answer: { status: number; body: Record<string, unknown> }) => void) {
+      const seen = { requests: [] as string[], answers: [] as string[] };
+      const server = createServer((req, res) => {
+        const chunks: Buffer[] = []; req.on("data", chunk => chunks.push(chunk)); req.on("end", () => {
+          const raw = Buffer.concat(chunks).toString(); seen.requests.push(`${req.url} ${raw}`);
+          void fetch(real + req.url, { method: req.method, headers: { "Content-Type": "application/json" }, body: raw }).then(async forwarded => {
+            const answer = { status: forwarded.status, body: await forwarded.json() as Record<string, unknown> };
+            tamper?.(req.url ?? "", JSON.parse(raw), answer);
+            const text = JSON.stringify(answer.body); seen.answers.push(`${req.url} ${text}`);
+            res.writeHead(answer.status, { "Content-Type": "application/json" }); res.end(text);
+          });
+        });
+      });
+      servers.push(server); server.listen(0, "127.0.0.1"); await once(server, "listening");
+      return { base: `http://127.0.0.1:${(server.address() as { port: number }).port}`, seen };
+    }
+    it("reads neither the token nor the credential: a relay that forwards the identity check to the real server gets a valid proof and still cannot read what follows", async () => {
+      const h = hub(), real = await listen(h), { token } = h.createEnrollment(ACTOR), { base, seen } = await relay(real), store = storeDir();
+      const credentials = await enrollRuntime({ server: base, token, fingerprint: h.serverFingerprint(), name: "Desk", store });   // it completes: a faithful relay cannot stop it, only watch it
+      const requests = seen.requests.join("\n"), answers = seen.answers.join("\n");
+      // what the relay captured: the token and the credential are NOT in it, in any encoding it could try
+      for (const needle of [token, token.slice("agend_enroll_".length), Buffer.from(token).toString("base64"), Buffer.from(token).toString("hex"), credentials.credential, Buffer.from(credentials.credential).toString("base64"), credentials.machineId]) {
+        expect(requests).not.toContain(needle); expect(answers).not.toContain(needle);
+      }
+      const captured = requests.includes(token) || answers.includes(credentials.credential);
+      expect(captured).toBe(false);                                                // the reviewer's scenario: before the fix this was true
+      expect(requests).not.toMatch(/Desk/);                                        // not even the computer's name or hostname
+      expect(store.credentials()?.credential).toBe(credentials.credential);
+    });
+    it("cannot replay what it captured: the accepted request, sent again, is refused and adds no computer", async () => {
+      const h = hub(), real = await listen(h), { token } = h.createEnrollment(ACTOR), { base, seen } = await relay(real);
+      await enrollRuntime({ server: base, token, fingerprint: h.serverFingerprint(), name: "Desk", store: storeDir() });
+      const captured = seen.requests.find(entry => entry.startsWith(`${RUNTIME_ENROLL_PATH} `))!.slice(RUNTIME_ENROLL_PATH.length + 1);
+      const replay = await postJson(real, RUNTIME_ENROLL_PATH, JSON.parse(captured));
+      expect(replay.status).toBe(400); expect(h.listMachines()).toHaveLength(1);
+    });
+    it("cannot swap in a key of its own: a hello whose fresh key was replaced fails the signature, so the Runtime stops and the token is never sent", async () => {
+      const h = hub(), real = await listen(h), { token } = h.createEnrollment(ACTOR);
+      const { base, seen } = await relay(real, (url, _body, answer) => { if (url === RUNTIME_ENROLL_HELLO_PATH) answer.body.ephemeral = newRuntimeEnrollEphemeral().publicKey; });
+      await expect(enrollRuntime({ server: base, token, fingerprint: h.serverFingerprint(), name: "Desk", store: storeDir() })).rejects.toThrow(/did not prove.*NOT sent/s);
+      expect(seen.requests.filter(entry => entry.startsWith(`${RUNTIME_ENROLL_PATH} `))).toEqual([]); expect(seen.requests.join("")).not.toContain(token);
+      expect(h.listEnrollments()[0].status).toBe("unused");
+    });
+    it("cannot read or alter the answer either: a flipped byte in the sealed answer is refused, and nothing is saved", async () => {
+      const h = hub(), real = await listen(h), { token } = h.createEnrollment(ACTOR), store = storeDir();
+      const { base } = await relay(real, (url, _body, answer) => { if (url === RUNTIME_ENROLL_PATH) { const box = answer.body.box as { ciphertext: string }; box.ciphertext = (box.ciphertext[0] === "A" ? "B" : "A") + box.ciphertext.slice(1); } });
+      await expect(enrollRuntime({ server: base, token, fingerprint: h.serverFingerprint(), name: "Desk", store })).rejects.toThrow(/could not be verified, so nothing was saved/);
+      expect(store.credentials()).toBeNull();
+    });
   });
   it("turns each refusal into one plain sentence that names the next step (open Settings, generate again), without the token", async () => {
     let now = 1_000_000; const h = hub({ now: () => now }), base = await listen(h), fingerprint = h.serverFingerprint(), store = storeDir();
@@ -418,5 +542,102 @@ describe("the Runtime joining with a token (enrollRuntime)", () => {
     // the credential file holds the machine credential and the address only
     expect(Object.keys(JSON.parse(readFileSync(join(store.directory, "connection.json"), "utf8"))).sort()).toEqual(["credential", "machineId", "name", "server"]);
     expect(createHash("sha256").update(token).digest("hex")).toMatch(/^[a-f0-9]{64}$/);
+  });
+});
+
+describe("the audit trail: refusals, where requests came from, throttling", () => {
+  const trail = (dir: string): Array<Record<string, unknown>> => JSON.parse(readFileSync(join(dir, "runtime-machines.json"), "utf8")).enrollmentAudit;
+  it("keeps a refusal on a known token in the persisted trail, with its reason", () => {
+    const dir = home(), h = hub({}, dir), used = h.createEnrollment(ACTOR); h.enroll(enrollInput(h, used.token));
+    expect(() => h.enroll(enrollInput(h, used.token))).toThrow(/already used/);
+    const revoked = h.createEnrollment(ACTOR); h.revokeEnrollment(revoked.id, ACTOR); expect(() => h.enroll(enrollInput(h, revoked.token))).toThrow(/revoked/);
+    expect(() => h.enroll(enrollInput(h, h.createEnrollment(ACTOR).token, { fingerprint: "9".repeat(64) }))).toThrow(/different AgEnD/);
+    expect(trail(dir).filter(entry => entry.event === "rejected").map(entry => [String(entry.enrollmentId).slice(0, 8), entry.reason])).toEqual([[used.id.slice(0, 8), "used"], [revoked.id.slice(0, 8), "revoked"], [expect.any(String), "mismatch"]]);
+  });
+  it("does not record an unknown token one by one: fifty guesses add nothing to the trail", () => {
+    const dir = home(), h = hub({}, dir); h.createEnrollment(ACTOR); const before = trail(dir).length;
+    for (let i = 0; i < 50; i++) expect(() => h.enroll(enrollInput(h, generateEnrollToken()))).toThrow(/not valid/);
+    expect(trail(dir)).toHaveLength(before);
+  });
+  it("stores where a use or a refusal came from only masked, and nothing for loopback", () => {
+    const dir = home(), h = hub({}, dir);
+    expect(maskedSource("203.0.113.77")).toBe("203.0.x.x"); expect(maskedSource("::ffff:198.51.100.9")).toBe("198.51.x.x"); expect(maskedSource("2001:db8:abcd:12::1")).toBe("2001:db8:x:x");
+    for (const quiet of [undefined, "", "127.0.0.1", "::1", "::ffff:127.0.0.1", "garbage", "fe80::"]) expect(maskedSource(quiet), String(quiet)).toBeUndefined();
+    const a = h.createEnrollment(ACTOR); h.enroll(enrollInput(h, a.token), { remote: "203.0.113.77" });
+    expect(() => h.enroll(enrollInput(h, a.token), { remote: "2001:db8:abcd:12::1" })).toThrow(/already used/);
+    const b = h.createEnrollment(ACTOR); h.enroll(enrollInput(h, b.token), { remote: "127.0.0.1" });
+    const entries = trail(dir);
+    expect(entries.filter(entry => entry.event === "used").map(entry => entry.source)).toEqual(["203.0.x.x", undefined]);
+    expect(entries.find(entry => entry.event === "rejected")?.source).toBe("2001:db8:x:x");
+    expect(JSON.stringify(entries)).not.toMatch(/203\.0\.113|198\.51\.100|abcd:12|::1/);                        // a full address is never kept
+  });
+  it("writes one throttling summary a minute when an enrollment bucket starts refusing, however many requests follow", async () => {
+    let now = 1_000_000; const dir = home(), h = hub({ now: () => now }, dir), base = await listen(h);
+    for (let i = 0; i < 80; i++) await postJson(base, RUNTIME_ENROLL_PATH, { nonce: randomBytes(24).toString("hex"), tid: "f".repeat(16), clientKey: newRuntimeEnrollEphemeral().publicKey, iv: "A".repeat(16), ciphertext: "A".repeat(40) });
+    expect(trail(dir).filter(entry => entry.event === "throttled")).toEqual([{ at: now, event: "throttled", scope: "enroll" }]);   // 30 answered "invalid", 50 throttled, one entry (loopback: no source)
+    now += 61_000;
+    await postJson(base, RUNTIME_ENROLL_PATH, { nonce: randomBytes(24).toString("hex"), tid: "f".repeat(16), clientKey: newRuntimeEnrollEphemeral().publicKey, iv: "A".repeat(16), ciphertext: "A".repeat(40) });   // the window moved on: a new window, a new bucket
+    for (let i = 0; i < 30; i++) await postJson(base, RUNTIME_ENROLL_PATH, { nonce: randomBytes(24).toString("hex"), tid: "f".repeat(16), clientKey: newRuntimeEnrollEphemeral().publicKey, iv: "A".repeat(16), ciphertext: "A".repeat(40) });
+    expect(trail(dir).filter(entry => entry.event === "throttled")).toHaveLength(2);
+    const log = JSON.stringify(trail(dir)); expect(log).not.toContain("ffffffff");
+  });
+  it("reports hello flooding the same way, and the persisted trail still loads after a restart", async () => {
+    const dir = home(), h = hub({}, dir), base = await listen(h);
+    for (let i = 0; i < 125; i++) await postJson(base, RUNTIME_ENROLL_HELLO_PATH, { nonce: randomBytes(24).toString("hex") });
+    expect(trail(dir).filter(entry => entry.event === "throttled")).toEqual([expect.objectContaining({ scope: "hello" })]);
+    h.close(); hubs.pop(); expect(() => hub({}, dir)).not.toThrow();
+  });
+  it("hands every entry, including a refusal and a throttling, to the log hook", async () => {
+    const seen: RuntimeEnrollmentAuditEntry[] = [], h = hub({ audit: entry => seen.push(entry) }), { token } = h.createEnrollment(ACTOR);
+    h.enroll(enrollInput(h, token)); expect(() => h.enroll(enrollInput(h, token))).toThrow();
+    expect(seen.map(entry => entry.event)).toEqual(["issued", "used", "rejected"]);
+  });
+});
+
+describe("a token cannot be spent twice at once, and only an administrator makes one", () => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
+  beforeEach(() => { Object.defineProperty(process, "platform", { value: "win32" }); });
+  afterEach(() => { Object.defineProperty(process, "platform", platform); });
+  it("lets exactly one of 25 concurrent HTTP requests with the same token succeed", async () => {
+    const h = hub(), base = await listen(h), { token } = h.createEnrollment(ACTOR);
+    const results = await Promise.all(Array.from({ length: 25 }, () => sealedEnroll(base, enrollInput(h, token, { name: "Racer" }))));
+    const statuses = results.map(result => result.answer.status).sort();
+    expect(statuses.filter(status => status === 201)).toHaveLength(1); expect(statuses.filter(status => status === 403)).toHaveLength(24);
+    expect(results.filter(result => result.answer.status === 403).every(result => (result.answer.body as { reason?: string }).reason === "used")).toBe(true);
+    expect(h.listMachines()).toHaveLength(1); expect(h.listEnrollments()[0].status).toBe("used");
+  });
+  it("lets exactly one of 25 concurrent clients win, through the real enrollRuntime", async () => {
+    const h = hub(), base = await listen(h), { token } = h.createEnrollment(ACTOR);
+    const stores = Array.from({ length: 25 }, () => { const dir = mkdtempSync(join(tmpdir(), "agend-runtime-enroll-race-")); homes.push(dir); return new RuntimeClientStore(dir); });
+    const outcomes = await Promise.allSettled(stores.map(store => enrollRuntime({ server: base, token, fingerprint: h.serverFingerprint(), name: "Racer", store })));
+    expect(outcomes.filter(outcome => outcome.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.filter(outcome => outcome.status === "rejected").every(outcome => /already used/.test(String((outcome as PromiseRejectedResult).reason?.message)))).toBe(true);
+    expect(stores.filter(store => store.credentials() !== null)).toHaveLength(1); expect(h.listMachines()).toHaveLength(1);
+  });
+});
+
+describe("the owner is told when a computer joins with a token", () => {
+  it("names the computer, its host, the token id and how to revoke it, and nothing else of the token", () => {
+    const h = hub(), seen: RuntimeEnrollmentAuditEntry[] = [], watched = hub({ audit: entry => seen.push(entry) }), issued = watched.createEnrollment(ACTOR);
+    const granted = watched.enroll(enrollInput(watched, issued.token, { name: "Desk-01", hostname: "DESK-01.corp" })), used = seen.find(entry => entry.event === "used")!;
+    const text = enrolledRuntimeNotice(used, watched.machine(granted.machineId))!;
+    expect(text).toContain("Desk-01"); expect(text).toContain("DESK-01.corp"); expect(text).toContain(issued.id.slice(0, 8)); expect(text).toContain(granted.machineId.slice(0, 8));
+    expect(text).toMatch(/Settings → Runtime → Desk-01 → Revoke connection/); expect(text).toMatch(/no approval step/); expect(text).not.toContain(issued.token); expect(text).not.toContain(granted.credential);
+    expect(h).toBeTruthy();
+  });
+  it("says nothing for any other event, or for a computer that is gone", () => {
+    const h = hub(), seen: RuntimeEnrollmentAuditEntry[] = [], watched = hub({ audit: entry => seen.push(entry) }), issued = watched.createEnrollment(ACTOR);
+    expect(seen.map(entry => enrolledRuntimeNotice(entry, { name: "x", hostname: "y" }))).toEqual([null]);                      // "issued"
+    const granted = watched.enroll(enrollInput(watched, issued.token)); expect(enrolledRuntimeNotice(seen.at(-1)!, null)).toBeNull(); expect(granted.machineId).toBeTruthy(); expect(h).toBeTruthy();
+  });
+  it("cuts a computer's own words to plain characters, so a leaked command cannot put a mention, a link or markup in the owner's chat", () => {
+    const entry: RuntimeEnrollmentAuditEntry = { at: 1, event: "used", enrollmentId: "11111111-2222-4333-8444-555555555555", machineId: "99999999-2222-4333-8444-555555555555" };
+    const text = enrolledRuntimeNotice(entry, { name: "@everyone [click](https://evil.example/x) `rm -rf`", hostname: "<b>host</b>\nNEW LINE ".repeat(10) })!;
+    expect(text).not.toMatch(/@|https?:|\[|\]|`|<|>|\n.*NEW LINE/); expect(text.split("\n")).toHaveLength(1);
+    expect(enrolledRuntimeNotice(entry, { name: "", hostname: undefined })).toContain("?");
+  });
+  it("is wired into the fleet: a `used` entry reaches the fleet's notice dispatch, and a failure there never changes the join", () => {
+    const source = readFileSync("src/fleet-manager.ts", "utf8");
+    expect(source).toMatch(/if\(entry\.event==="used"\)try\{[\s\S]{0,400}enrolledRuntimeNotice\(entry,[\s\S]{0,200}this\.notifyFleetError\(text,\{throttle:false\}\)[\s\S]{0,200}catch\(error\)/);
   });
 });

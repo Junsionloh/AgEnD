@@ -382,7 +382,9 @@
         $enrollToken = $null; $enrollFingerprint = $null
         $rawToken = $agendEnroll; $rawFingerprint = $agendFingerprint
         foreach ($scopeName in 1, 'Global') { foreach ($varName in 'agendEnroll', 'agendFingerprint') { try { Set-Variable -Name $varName -Value $null -Scope $scopeName -ErrorAction Stop } catch { } } }
-        if (-not [string]::IsNullOrWhiteSpace([string]$rawToken)) {
+        # A variable that is not there, or is $null (what the page's command and this script leave behind), is "no token". One that holds anything else, an empty or
+        # blank string included, is a token that was meant to be there and is not valid: refused, never quietly turned into the pairing-code route.
+        if ($null -ne $rawToken) {
             if (-not (Test-AgendEnrollToken $rawToken)) {
                 Write-Problem 'The one-time token in this install command is not valid (it may have been copied incompletely). Nothing was installed.'
                 Write-Host 'Open AgEnD Settings -> Runtime -> Connect a computer, generate a new install command there and run it again.'

@@ -1,5 +1,5 @@
 /** Durable machine registration and outbound-client transport; never starts a remote shell. */
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual, type KeyObject } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -20,8 +20,9 @@ import { validatePaneMcpBody, type PaneMcpBody } from "./runtime-pane-mcp-protoc
 import { validateRuntimePaneRequest, validateRuntimePaneSnapshot, validateRuntimePaneShutdown, type RuntimePaneRequest, type RuntimePaneSnapshot } from "./runtime-pane-protocol.js";
 import { withNativePaneVerification } from "./runtime-pane-native.js";
 import { ENROLL_TTL_MS, enrollTokenMatches, generateEnrollToken, hashEnrollToken, isEnrollToken, loadRuntimeServerIdentity, type RuntimeServerIdentity } from "./runtime-enrollment.js";
-import { RUNTIME_CLAIM_PATH, RUNTIME_CONNECT_PATH, RUNTIME_MAX_FRAME_BYTES, RUNTIME_PAIR_PATH, RUNTIME_ROTATE_PATH, RUNTIME_ENROLL_PATH, RUNTIME_ENROLL_HELLO_PATH, RUNTIME_SERVER_FINGERPRINT_PATTERN, runtimeEnrollHelloMessage, runtimeEnrollGrantMessage,
-  type RuntimeEnrollRefusal, type RuntimeEnrollHelloResult, type RuntimeEnrollResult,
+import { RUNTIME_CLAIM_PATH, RUNTIME_CONNECT_PATH, RUNTIME_MAX_FRAME_BYTES, RUNTIME_PAIR_PATH, RUNTIME_ROTATE_PATH, RUNTIME_ENROLL_PATH, RUNTIME_ENROLL_HELLO_PATH, RUNTIME_SERVER_FINGERPRINT_PATTERN, RUNTIME_ENROLL_TID_PATTERN, RUNTIME_ENROLL_REFUSALS, runtimeEnrollHelloMessage,
+  newRuntimeEnrollEphemeral, runtimeEnrollChannel, sealRuntimeEnroll, openRuntimeEnroll, runtimeEnrollTokenId,
+  type RuntimeEnrollRefusal, type RuntimeEnrollHelloResult, type RuntimeEnrollGrant, type RuntimeEnrollBox,
   runtimeFingerprintFromHash, parseRuntimeInfo, RUNTIME_PROTOCOL_VERSION, runtimeInfoCompatible, RUNTIME_REINSTALL_CLOSE_REASON,
   type RuntimeInfo, type RuntimeMachine, type RuntimeOperation, type RuntimePairing, type RuntimePairResult, type RuntimeClaimResult,
   type RuntimeRunPayload, type RuntimeServerMessage, isRuntimeRemoteOperation, parseRuntimeRemotePayload, type RuntimeRemoteOperation, type RuntimeRemotePayloads } from "./runtime-protocol.js";
@@ -117,8 +118,27 @@ export interface RuntimeEnrollmentView { id: string; status: "unused" | "used" |
 /** Returned once, when the token is issued; the page keeps it in memory only. */
 export interface RuntimeEnrollment { id: string; token: string; fingerprint: string; createdAt: number; expiresAt: number }
 /** The permanent record of what happened to tokens. No token, no hash, no address: who (an opaque handle), what, which token id and, for a use, which computer. */
-export interface RuntimeEnrollmentAuditEntry { at: number; event: "issued" | "used" | "revoked" | "superseded" | "rejected"; enrollmentId: string; actor?: string; machineId?: string; reason?: RuntimeEnrollRefusal }
-const PERSISTED_AUDIT_EVENTS = ["issued", "used", "revoked", "superseded"];
+export interface RuntimeEnrollmentAuditEntry {
+  at: number; event: "issued" | "used" | "revoked" | "superseded" | "rejected" | "throttled";
+  /** Absent only for "throttled": requests that name no known token are summarised, never listed one by one. */
+  enrollmentId?: string; actor?: string; machineId?: string; reason?: RuntimeEnrollRefusal;
+  /** Where a use, a refusal or a throttling came from, masked (`203.0.x.x`); absent for loopback, which is every client behind a local proxy and says nothing. */
+  source?: string; scope?: "enroll" | "hello";
+}
+/** Every event is kept in the journal's bounded trail; a refusal on a known token and a throttling summary are kept too. */
+const PERSISTED_AUDIT_EVENTS = ["issued", "used", "revoked", "superseded", "rejected", "throttled"];
+const SOURCE_PATTERN = /^[0-9a-fx.:]{1,45}$/;
+/** An address for the trail with its host part hidden (IPv4 keeps two octets, IPv6 two groups); nothing for loopback or an unknown address. */
+export function maskedSource(address: string | undefined): string | undefined {
+  if (!address || loopback(address)) return undefined;
+  const v4 = /^(?:::ffff:)?(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/i.exec(address);
+  if (v4) return `${v4[1]}.${v4[2]}.x.x`;
+  const groups = address.split("%")[0].toLowerCase().split(":").filter(Boolean).slice(0, 2);
+  return groups.length === 2 && groups.every(group => /^[0-9a-f]{1,4}$/.test(group)) ? `${groups.join(":")}:x:x` : undefined;
+}
+const HELLO_TTL_MS = 2 * 60_000, HELLO_CAP = 512, THROTTLE_SUMMARY_MS = 60_000;
+/** What the public handler tells `enroll`: where the request came from (only ever stored masked). */
+export interface RuntimeEnrollContext { remote?: string }
 interface CommandRecord {
   id: string; machineId: string; operation: RuntimeOperation; digest: string; payload: unknown;
   createdAt: number; state: "pending" | "accepted" | "failed" | "uncertain";
@@ -184,6 +204,9 @@ export class RuntimeCoordinator {
   private readonly heartbeat: NodeJS.Timeout;
   private closed = false;
   private identityValue?: RuntimeServerIdentity;
+  /** `enroll-hello` sessions: the fresh private key made for one request, kept in memory only for two minutes and spent by its one `enroll` (or dropped). Keyed by the caller's nonce. */
+  private readonly hellos = new Map<string, { privateKey: KeyObject; ephemeral: string; tid: string; expiresAt: number }>();
+  private readonly throttledAt = new Map<string, number>();
   constructor(private readonly home: string, private readonly options: RuntimeCoordinatorOptions = {}) {
     mkdirSync(home, { recursive: true, mode: 0o700 });
     this.path = join(home, "runtime-machines.json");
@@ -214,8 +237,11 @@ export class RuntimeCoordinator {
         || !Number.isFinite(row.createdAt) || !Number.isFinite(row.expiresAt) || !text(row.createdBy, 64)
         || row.usedAt !== undefined && !Number.isFinite(row.usedAt) || row.revokedAt !== undefined && !Number.isFinite(row.revokedAt) || row.machineId !== undefined && !UUID.test(String(row.machineId)))
       || new Set(this.state.enrollments.map(row => row.id)).size !== this.state.enrollments.length
-      || this.state.enrollmentAudit.some(row => !record(row) || !Number.isFinite(row.at) || !PERSISTED_AUDIT_EVENTS.includes(String(row.event)) || !UUID.test(String(row.enrollmentId))
-        || row.actor !== undefined && !text(row.actor, 64) || row.machineId !== undefined && !UUID.test(String(row.machineId)))
+      || this.state.enrollmentAudit.some(row => !record(row) || !Number.isFinite(row.at) || !PERSISTED_AUDIT_EVENTS.includes(String(row.event))
+        || (row.event === "throttled" ? row.enrollmentId !== undefined : !UUID.test(String(row.enrollmentId)))
+        || row.actor !== undefined && !text(row.actor, 64) || row.machineId !== undefined && !UUID.test(String(row.machineId))
+        || row.reason !== undefined && !(RUNTIME_ENROLL_REFUSALS as readonly unknown[]).includes(row.reason) || row.source !== undefined && !SOURCE_PATTERN.test(String(row.source))
+        || row.scope !== undefined && row.scope !== "enroll" && row.scope !== "hello")
       || this.state.pairings.some(row => !record(row) || !UUID.test(String(row.id)) || !/^[a-f0-9]{64}$/.test(row.codeHash) || !Number.isFinite(row.expiresAt))
       || this.state.commands.some(row => !record(row) || !text(row.id, 128) || !UUID.test(String(row.machineId)) || !/^[a-f0-9]{64}$/.test(row.digest)
         || !["probe", "workspace", "run", "cancel", "reconcile", "recover"].includes(row.operation)
@@ -327,39 +353,80 @@ export class RuntimeCoordinator {
     return this.listEnrollments().find(view => view.id === id)!;
   }
   /**
-   * Step 1 of joining with a token: the server signs the Runtime's fresh nonce with its enrollment key, so the Runtime can compare the key's fingerprint
-   * with the one in its command BEFORE it sends the token. Anyone can ask; the answer is public by design and spends nothing.
+   * Step 1 of joining with a token. The server makes a fresh X25519 key for this request and signs the caller's nonce together with it, using its enrollment key. The
+   * Runtime checks that key against the fingerprint in its command and, if it matches, seals the token to the fresh key. Anyone can ask; the answer is public by
+   * design and spends nothing, but the private half of the fresh key never leaves this process, so only this server can read what is sent next. A relay that
+   * forwards this call to the real server gets the real server's valid answer and still cannot read the token or the credential that follow.
    */
   enrollHello(input: unknown): RuntimeEnrollHelloResult {
-    if (!record(input) || Object.keys(input).some(key => key !== "nonce") || typeof input.nonce !== "string") throw new RuntimeEnrollError("invalid", "Invalid runtime enrollment request");
-    let message: Buffer; try { message = runtimeEnrollHelloMessage(input.nonce); } catch { throw new RuntimeEnrollError("invalid", "Invalid runtime enrollment request"); }
-    const identity = this.identity(); return { publicKey: identity.publicKey, signature: identity.signature(message) };
+    const invalid = (): never => { throw new RuntimeEnrollError("invalid", "Invalid runtime enrollment request"); };
+    if (!record(input) || Object.keys(input).some(key => key !== "nonce" && key !== "tid") || typeof input.nonce !== "string" || input.tid !== undefined && (typeof input.tid !== "string" || !RUNTIME_ENROLL_TID_PATTERN.test(input.tid))) return invalid();
+    const now = this.now();
+    for (const [nonce, entry] of this.hellos) if (entry.expiresAt <= now) this.hellos.delete(nonce);
+    if (this.hellos.has(input.nonce)) return invalid();                         // a nonce is used once: it cannot be re-asked to get a second key for the same exchange
+    const ephemeral = newRuntimeEnrollEphemeral();
+    let message: Buffer; try { message = runtimeEnrollHelloMessage(input.nonce, ephemeral.publicKey); } catch { return invalid(); }
+    while (this.hellos.size >= HELLO_CAP) this.hellos.delete(this.hellos.keys().next().value as string);
+    this.hellos.set(input.nonce, { privateKey: ephemeral.privateKey, ephemeral: ephemeral.publicKey, tid: (input.tid as string | undefined) ?? "", expiresAt: now + HELLO_TTL_MS });
+    const identity = this.identity(); return { publicKey: identity.publicKey, ephemeral: ephemeral.publicKey, signature: identity.signature(message) };
   }
   /**
-   * Step 2: spends the token. The computer is created already approved (the token IS the approval: it could only come from an authorised
-   * administrator's page) and gets its credential in this reply, which the server also signs so a forged or replayed answer is refused. Every refusal
-   * says why in one closed word; a token that is unknown to the server says only "invalid".
+   * Step 2 as the Runtime sends it: the request is sealed to the fresh key that `enrollHello` made for this nonce (X25519, HKDF-SHA256, AES-256-GCM). The key is
+   * spent by this call, whatever happens, so a request cannot be replayed. A box that does not open, a nonce that was never asked for or has aged out are all "invalid".
+   * The answer is sealed under the other direction's key: nobody between the Runtime and this server can read the credential or forge the answer.
    */
-  enroll(input: unknown): RuntimeEnrollResult {
-    if (!record(input) || Object.keys(input).some(key => !["token", "fingerprint", "nonce", "name", "platform", "hostname"].includes(key)) || !isEnrollToken(input.token)
-      || typeof input.fingerprint !== "string" || !RUNTIME_SERVER_FINGERPRINT_PATTERN.test(input.fingerprint) || typeof input.nonce !== "string" || !/^[a-f0-9]{32,64}$/.test(input.nonce)
+  enrollSealed(input: unknown, context: RuntimeEnrollContext = {}): { box: RuntimeEnrollBox } {
+    const invalid = (): never => { throw new RuntimeEnrollError("invalid", "Invalid runtime enrollment request"); };
+    if (!record(input) || Object.keys(input).some(key => !["nonce", "tid", "clientKey", "iv", "ciphertext"].includes(key)) || typeof input.nonce !== "string" || typeof input.tid !== "string" || !RUNTIME_ENROLL_TID_PATTERN.test(input.tid)
+      || typeof input.clientKey !== "string") return invalid();
+    const entry = this.hellos.get(input.nonce); this.hellos.delete(input.nonce);
+    if (!entry || entry.expiresAt <= this.now() || entry.tid !== "" && entry.tid !== input.tid) return invalid();
+    let channel; try { channel = runtimeEnrollChannel(entry.privateKey, input.clientKey, input.nonce, input.tid, entry.ephemeral, input.clientKey); } catch { return invalid(); }
+    const plain = openRuntimeEnroll(channel.requestKey, channel.context, "request", { iv: input.iv, ciphertext: input.ciphertext });
+    if (!plain) return invalid();
+    let fields: unknown; try { fields = JSON.parse(plain.toString("utf8")); } catch { return invalid(); }
+    if (record(fields) && typeof fields.token === "string" && isEnrollToken(fields.token) && runtimeEnrollTokenId(fields.token) !== input.tid) return invalid();
+    const grant = this.enroll(fields, context);
+    return { box: sealRuntimeEnroll(channel.replyKey, channel.context, "reply", Buffer.from(JSON.stringify(grant), "utf8")) };
+  }
+  /**
+   * Spends the token. The computer is created already approved (the token IS the approval: it could only come from an authorised administrator's page) and gets its
+   * credential in the grant. Every refusal says why in one closed word; a token that is unknown to the server says only "invalid". Called with the opened request.
+   */
+  enroll(input: unknown, context: RuntimeEnrollContext = {}): RuntimeEnrollGrant {
+    if (!record(input) || Object.keys(input).some(key => !["token", "fingerprint", "name", "platform", "hostname"].includes(key)) || !isEnrollToken(input.token)
+      || typeof input.fingerprint !== "string" || !RUNTIME_SERVER_FINGERPRINT_PATTERN.test(input.fingerprint)
       || !text(input.name, 100) || !input.name.trim() || input.platform !== "win32" || input.hostname !== undefined && !text(input.hostname, 255)) throw new RuntimeEnrollError("invalid", "Invalid runtime enrollment request");
-    const token = input.token, now = this.now(), identity = this.identity();
+    const token = input.token, now = this.now(), identity = this.identity(), source = maskedSource(context.remote);
     const row = this.state.enrollments!.find(candidate => enrollTokenMatches(token, candidate.tokenHash));
     if (!row) throw new RuntimeEnrollError("invalid", "Install-command token is not valid");
-    const refuse = (reason: RuntimeEnrollRefusal, message: string): never => { this.audit({ at: now, event: "rejected", enrollmentId: row.id, reason }); throw new RuntimeEnrollError(reason, message); };
+    const refuse = (reason: RuntimeEnrollRefusal, message: string): never => {
+      // A refusal on a KNOWN token goes in the trail (a token that is not known is only counted, by the throttling summary). Not being able to save it never changes the answer.
+      const entry: RuntimeEnrollmentAuditEntry = { at: now, event: "rejected", enrollmentId: row.id, reason, ...(source ? { source } : {}) }, undo = this.trail(entry);
+      try { this.save(); } catch { undo(); }
+      this.audit(entry); throw new RuntimeEnrollError(reason, message);
+    };
     if (row.usedAt !== undefined) refuse("used", "Install-command token was already used");
     if (row.revokedAt !== undefined) refuse("revoked", "Install-command token was revoked");
     if (row.expiresAt <= now) refuse("expired", "Install-command token expired");
     if (input.fingerprint !== identity.fingerprint || row.fingerprint !== identity.fingerprint) refuse("mismatch", "Install-command token is for a different AgEnD");
     if (this.state.machines.length >= 256 || this.state.machines.filter(machine => machine.machine.status !== "revoked").length >= 64) refuse("limit", "Runtime machine limit reached");
-    const machineId = randomUUID(), credential = secret(), entry: RuntimeEnrollmentAuditEntry = { at: now, event: "used", enrollmentId: row.id, machineId };
+    const machineId = randomUUID(), credential = secret(), entry: RuntimeEnrollmentAuditEntry = { at: now, event: "used", enrollmentId: row.id, machineId, ...(source ? { source } : {}) };
     const machine: MachineRecord = { machine: { id: machineId, name: (input.name as string).trim(), platform: "win32", ...(input.hostname ? { hostname: input.hostname as string } : {}), status: "offline", createdAt: now, approvedAt: now,
       generation: 0, enrolledVia: "install-command", enrollmentId: row.id }, credentialHash: hash(credential) };
     row.usedAt = now; row.machineId = machineId; this.state.machines.push(machine); const undo = this.trail(entry);
     try { this.save(); } catch (error) { delete row.usedAt; delete row.machineId; this.state.machines.pop(); undo(); throw error; }
     this.audit(entry); this.emit({ type: "machine", machineId });
-    return { status: "enrolled", machineId, credential, signature: identity.signature(runtimeEnrollGrantMessage(input.nonce, machineId, credential)) };
+    return { status: "enrolled", machineId, credential };
+  }
+  /** One summary in the trail per bucket and minute when an enrollment-related bucket starts refusing: what is throttled names no known token, so it is counted, not listed. */
+  private noteThrottled(key: string, scope: "enroll" | "hello", remote: string | undefined): void {
+    const now = this.now(), last = this.throttledAt.get(key);
+    if (last !== undefined && now - last < THROTTLE_SUMMARY_MS) return;
+    this.throttledAt.set(key, now); while (this.throttledAt.size > 256) this.throttledAt.delete(this.throttledAt.keys().next().value as string);
+    const source = maskedSource(remote), entry: RuntimeEnrollmentAuditEntry = { at: now, event: "throttled", scope, ...(source ? { source } : {}) }, undo = this.trail(entry);
+    try { this.save(); } catch { undo(); }
+    this.audit(entry);
   }
   pair(input: unknown): RuntimePairResult {
     if (!record(input) || Object.keys(input).some(k => !["code", "name", "platform", "hostname"].includes(k))
@@ -418,14 +485,14 @@ export class RuntimeCoordinator {
     if (path === RUNTIME_ROTATE_PATH) {
       const row = this.credentialOwner(req.headers.authorization);
       if (row) return `rotate:${row.machine.id}`;
-    } else if (path === RUNTIME_ENROLL_HELLO_PATH) {
-      // Its own bucket: it signs a nonce for anyone and spends nothing, and must neither be starved by invalid pairing traffic behind a proxy nor starve it.
-      return `enroll-hello:${req.socket.remoteAddress ?? "unknown"}`;
     } else if (record(input)) {
-      if (path === RUNTIME_ENROLL_PATH && isEnrollToken(input.token)) {
-        const row = this.state.enrollments!.find(row => enrollTokenMatches(input.token as string, row.tokenHash));
-        if (row) return `enroll:${row.id}`;
+      // A request that names an existing token by its non-secret id (the first 64 bits of its SHA-256) is that token's own traffic: it gets that token's bucket, so
+      // nobody who floods the address bucket (every client behind a local proxy shares one address) can keep a real installer out. The id reveals nothing of the token.
+      if ((path === RUNTIME_ENROLL_PATH || path === RUNTIME_ENROLL_HELLO_PATH) && typeof input.tid === "string" && RUNTIME_ENROLL_TID_PATTERN.test(input.tid)) {
+        const row = this.state.enrollments!.find(row => row.tokenHash.startsWith(input.tid as string));
+        if (row) return `${path === RUNTIME_ENROLL_PATH ? "enroll" : "hello-id"}:${row.id}`;
       }
+      if (path === RUNTIME_ENROLL_HELLO_PATH) return `enroll-hello:${req.socket.remoteAddress ?? "unknown"}`;
       if (path === RUNTIME_PAIR_PATH && text(input.code, 32)) {
         const code = input.code.replaceAll("-", "").toUpperCase();
         const row = this.state.pairings.find(row => row.expiresAt > this.now() && equal(code, row.codeHash));
@@ -463,13 +530,16 @@ export class RuntimeCoordinator {
       if (this.closed) { answer(403, { error: "Runtime coordinator is closed" }); return; }
       const key = this.requestRateKey(url.pathname, value, req);
       charged = true;
-      if (!this.rate(key, key.startsWith("claim:") || key.startsWith("enroll-hello:") ? 120 : 30)) { answer(429, { error: "Too many runtime pairing requests" }); return; }
+      if (!this.rate(key, key.startsWith("claim:") || key.startsWith("enroll-hello:") ? 120 : 30)) {
+        if (url.pathname === RUNTIME_ENROLL_PATH || url.pathname === RUNTIME_ENROLL_HELLO_PATH) this.noteThrottled(key, url.pathname === RUNTIME_ENROLL_PATH ? "enroll" : "hello", req.socket.remoteAddress);
+        answer(429, { error: "Too many runtime pairing requests" }); return;
+      }
       if (url.pathname === RUNTIME_ROTATE_PATH) {
         if (!this.credentialOwner(req.headers.authorization)) { answer(401, { error: "Runtime credential was refused" }); return; }
         answer(200, this.rotateCredential(req.headers.authorization, value)); return;
       }
       if (url.pathname === RUNTIME_ENROLL_HELLO_PATH) { answer(200, this.enrollHello(value)); return; }
-      if (url.pathname === RUNTIME_ENROLL_PATH) { answer(201, this.enroll(value)); return; }
+      if (url.pathname === RUNTIME_ENROLL_PATH) { answer(201, this.enrollSealed(value, { remote: req.socket.remoteAddress })); return; }
       if (url.pathname === RUNTIME_PAIR_PATH) answer(201, this.pair(value));
       else { const result = this.claim(value); answer(result.status === "pending" ? 202 : 200, result); }
     }).catch((error: unknown) => {

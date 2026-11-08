@@ -724,13 +724,19 @@ process.stdout.write("RECORDER-CONNECT-RAN\\n");process.exitCode=Number(process.
       expect(staleRun.status, staleRun.out).toBe(0);                       // install only, nothing failed: 0, whatever the session's $LASTEXITCODE was
     });
     it("refuses a malformed token or fingerprint BEFORE installing or downloading anything, exit 1, and does not print it", async () => {
-      for (const [token, fingerprint, said] of [["agend_enroll_short", FP, "one-time token in this install command is not valid"], [TOKEN.toUpperCase(), FP, "one-time token in this install command is not valid"],
+      for (const [token, fingerprint, said] of [["", FP, "one-time token in this install command is not valid"], ["   ", FP, "one-time token in this install command is not valid"], ["agend_enroll_short", FP, "one-time token in this install command is not valid"], [TOKEN.toUpperCase(), FP, "one-time token in this install command is not valid"],
         [TOKEN + "x", FP, "one-time token in this install command is not valid"], [TOKEN, "nope", "server fingerprint in this install command is missing or not valid"], [TOKEN, "", "server fingerprint in this install command is missing or not valid"],
         [TOKEN, FP.toUpperCase(), "server fingerprint in this install command is missing or not valid"]] as const) {
         const s = scratch(), r = await run(s, { T_PRESET: `$agendEnroll = '${token}'; $agendFingerprint = '${fingerprint}'`, T_MARK: s.marker });
         expect(r.code, `${token} ${fingerprint}\n${r.out}`).toBe(1); expect(r.out).toContain(said); expect(r.out).toContain("generate a new install command");
         expect(recorded(s)).toBeUndefined(); expect(existsSync(s.install)).toBe(false); expect(seen).toEqual([`GET ${RUNTIME_INSTALL_SCRIPT_PATH}`]);
         if (token.length > 20) expect(r.out).not.toContain(token);
+      }
+    });
+    it("treats a variable that is not there, or is $null (what the page's command leaves behind), as no token; only an empty or blank one is an error", async () => {
+      for (const preset of ["$agendEnroll = $null; $agendFingerprint = $null", "$agendEnroll = $null"]) {
+        const s = scratch(), r = await run(s, { T_PRESET: preset, T_MARK: s.marker });
+        expect(r.code, `${preset}\n${r.out}`).toBe(0); expect(recorded(s)).toBeUndefined(); expect(r.out).toContain("not an interactive console"); expect(r.out).not.toContain("one-time token");
       }
     });
     it("without a token it is exactly the AGEND-107 behaviour: no console, no connection, the manual command is printed", async () => {
