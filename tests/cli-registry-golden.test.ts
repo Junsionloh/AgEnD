@@ -11,8 +11,8 @@ import { FIRST_RUN_BACKENDS, capsOf } from "/ui/js/cli-caps.js";
 import { SIGN_OUT_CLIS } from "/ui/js/accounts-manage.js";
 import { installerSignInBackends } from "/ui/js/backend-signin.js";
 import { INSTALL_CLIS } from "/ui/js/runtime-cli-install.js";
-import { hostFacts, hostIds, hostIdsByRank, runtimeFacts, runtimeIds, runtimeProviderIds } from "../src/cli-registry.js";
-import { ACCOUNT_CLIS, MACHINE_ACCOUNT_CLIS, PROFILE_CLIS } from "../src/accounts-view.js";
+import { hostFacts, hostIds, hostIdsByRank, runtimeDefaultLoginIds, runtimeFacts, runtimeIds, runtimeProviderIds, runtimeSignInCapabilities } from "../src/cli-registry.js";
+import { ACCOUNT_CLIS, MACHINE_ACCOUNT_CLIS, MACHINE_DEFAULT_LOGIN_CLIS, PROFILE_CLIS } from "../src/accounts-view.js";
 import { SIGN_OUT } from "../src/accounts-signout.js";
 import { ONBOARDING_BACKENDS } from "../src/backend-signin-pending.js";
 import { CHAT_PROFILE_LOGIN_BACKENDS, CREDENTIAL_HOMES } from "../src/backend/credential-profile.js";
@@ -34,7 +34,10 @@ describe("host lists, as they were", () => {
     expect([...MACHINE_ACCOUNT_CLIS]).toEqual(["claude-code"]);
     expect(hostIdsByRank("accountCard")).toEqual(["claude-code", "codex", "kiro-cli", "antigravity", "grok", "muse"]);
     expect(hostIds("namedAccounts")).toEqual(["claude-code", "codex", "kiro-cli"]);
-    expect(runtimeIds("accountRows")).toEqual(["claude-code"]);
+    // AGEND-113: a paired computer also has a row for Antigravity's OWN login (no named accounts there), signed in from the Accounts page.
+    expect(runtimeIds("accountRows")).toEqual(["claude-code", "antigravity"]);
+    expect([...MACHINE_DEFAULT_LOGIN_CLIS]).toEqual(["antigravity"]);
+    expect(Object.fromEntries(runtimeIds("accountRows").map(id => [id, runtimeFacts(id, "accountRows")!.defaultRow]))).toEqual({ "claude-code": "read-only", "antigravity": "sign-in" });
   });
 
   it("chat's /login names", () => {
@@ -61,15 +64,25 @@ describe("host lists, as they were", () => {
       "antigravity": ["agy", "models"], "grok": ["grok", "models"], "muse": null, "opencode": ["opencode", "auth", "list"],
     });
     expect(Object.fromEntries(CLI_IDS.map(id => [id, hostFacts(id, "authCheck")?.argv ?? null]))).toEqual(Object.fromEntries(CLI_IDS.map(id => [id, probe(id)])));
-    expect(CLI_IDS.filter(authIdentitySupported)).toEqual(["claude-code"]);
-    expect(hostIds("identity")).toEqual(["claude-code"]);
+    expect(CLI_IDS.filter(authIdentitySupported)).toEqual(["claude-code", "antigravity"]);
+    expect(hostIds("identity")).toEqual(["claude-code", "antigravity"]);
+    // Where the account comes from: Claude's status command; Antigravity's token file, ONE field of it (`id_token_email`), never anything else.
+    expect(Object.fromEntries(hostIds("identity").map(id => [id, hostFacts(id, "identity")]))).toEqual({
+      "claude-code": { support: "yes", source: "status-command" }, "antigravity": { support: "yes", source: "token-file", field: "id_token_email" },
+    });
   });
 
   it("the structured sign-in's CLIs and exact commands, and the first-run page's", () => {
-    expect([...STRUCTURED_SIGNIN_BACKENDS]).toEqual(["kiro-cli", "claude-code", "codex"]);
-    expect(hostIdsByRank("structuredSignIn")).toEqual(["kiro-cli", "claude-code", "codex"]);
+    // AGEND-113: Antigravity is driven too (`agy acp --login`, agy 1.5.0 and later), though the first-run page below still only names its console command.
+    expect([...STRUCTURED_SIGNIN_BACKENDS]).toEqual(["kiro-cli", "claude-code", "codex", "antigravity"]);
+    expect(hostIdsByRank("structuredSignIn")).toEqual(["kiro-cli", "claude-code", "codex", "antigravity"]);
     expect(Object.fromEntries(hostIdsByRank("structuredSignIn").map(id => [id, hostFacts(id, "structuredSignIn")!.argv]))).toEqual({
-      "kiro-cli": ["kiro-cli", "login"], "claude-code": ["claude", "auth", "login"], "codex": ["codex", "login", "--device-auth"],
+      "kiro-cli": ["kiro-cli", "login"], "claude-code": ["claude", "auth", "login"], "codex": ["codex", "login", "--device-auth"], "antigravity": ["agy", "acp", "--login"],
+    });
+    // How each ends and is read: only Antigravity prints no success line (exit 0 AND `agy models`), reads its screen with a table of its own, and takes the address too.
+    expect(Object.fromEntries(hostIdsByRank("structuredSignIn").map(id => { const f = hostFacts(id, "structuredSignIn")!; return [id, [f.ends, f.screen, f.answer, f.minVersion ?? null]]; }))).toEqual({
+      "kiro-cli": ["success-line", "login-flow", "code", null], "claude-code": ["success-line", "login-flow", "code", null], "codex": ["success-line", "login-flow", "code", null],
+      "antigravity": ["exit-code", "own", "code-or-address", "1.5.0"],
     });
     expect([...ONBOARDING_BACKENDS]).toEqual(["kiro-cli", "claude-code", "codex", "antigravity"]);
     expect(hostIdsByRank("firstRunSignIn")).toEqual(["kiro-cli", "claude-code", "codex", "antigravity"]);
@@ -151,13 +164,18 @@ describe("the Windows Runtime's lists, as they were", () => {
   });
 
   it("the sign-ins a computer runs for the dashboard, the variable that points a CLI at a profile, and the CLIs the Runtime installs", () => {
-    expect(RUNTIME_SIGNIN_CLIS).toEqual({ "claude-code": ["claude", "auth", "login"] });
+    expect(RUNTIME_SIGNIN_CLIS).toEqual({ "claude-code": ["claude", "auth", "login"], "antigravity": ["agy", "acp", "--login"] });
     expect(Object.isFrozen(RUNTIME_SIGNIN_CLIS)).toBe(true);
     expect(CREDENTIAL_PROFILE_CLIS).toEqual({ "claude-code": "CLAUDE_CONFIG_DIR" });
     expect(Object.keys(INSTALLABLE_CLIS)).toEqual(["claude-code", "codex"]);
     expect(runtimeIds("install")).toEqual(["claude-code", "codex"]);
-    expect(runtimeIds("signIn")).toEqual(["claude-code"]);
+    expect(runtimeIds("signIn")).toEqual(["claude-code", "antigravity"]);
     expect(runtimeFacts("claude-code", "signIn")).toMatchObject({ argv: ["claude", "auth", "login"], profile: "named" });
+    // The one sign-in with no profile (the computer's OWN login, which signing in REPLACES): Antigravity only, and the Runtime says so with `signin-<id>`.
+    expect(runtimeFacts("antigravity", "signIn")).toMatchObject({ argv: ["agy", "acp", "--login"], profile: "none" });
+    expect(runtimeDefaultLoginIds()).toEqual(["antigravity"]);
+    expect(runtimeSignInCapabilities()).toEqual(["signin-antigravity"]);
+    expect(runtimeFacts("antigravity", "authStatus")).toMatchObject({ argv: ["models"], source: "model-listing" });
     expect(runtimeIds("identity")).toEqual(["claude-code"]);
     expect(runtimeIds("usage")).toEqual([]);
   });
@@ -173,8 +191,11 @@ describe("the dashboard scripts' lists, as they were", () => {
   });
 
   it("the structured sign-in controls are used for these CLIs, and for a named account only for these", () => {
-    expect(ids(c => c.structuredSignIn).sort()).toEqual(["claude-code", "codex", "kiro-cli"]);
+    expect(ids(c => c.structuredSignIn).sort()).toEqual(["antigravity", "claude-code", "codex", "kiro-cli"]);
     expect(ids(c => c.structuredNamedSignIn)).toEqual(["claude-code"]);
+    expect(ids(c => c.runtimeDefaultLogin)).toEqual(["antigravity"]);
+    expect(ids(c => c.codeHint)).toEqual(["antigravity"]);
+    expect(ids(c => c.chatSignIn)).toEqual(["claude-code", "codex", "kiro-cli", "grok"]);
   });
 
   it("the first-run page accepts these ids in its address, and no others", () => {
