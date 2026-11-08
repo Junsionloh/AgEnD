@@ -170,6 +170,22 @@ describe("a computer's Antigravity login", () => {
   });
 });
 
+describe("the code box for Antigravity", () => {
+  it("says to paste only the code, not the page's address; Claude's code box has no such line, and a refused entry has a plain message", async () => {
+    const { mountStructuredSignIns, SIGNIN_STRINGS } = await import("/ui/js/structured-signin.js");
+    const root = p.document.createElement("div"); p.document.body.appendChild(root);
+    const snapshot = (backend: string) => ({ selected: [backend], pending: [backend], skipped: [], states: { [backend]: "invalid" }, ready: false,
+      login: { id: "a".repeat(32), backend, revision: 3, phase: "code", url: "https://example.com/x", canAct: true, mine: true } });
+    for (const [backend, expected] of [["antigravity", true], ["claude-code", false]] as const) {
+      const cards = mountStructuredSignIns(root, { endpoint: "/ui/x", lang: () => "en", dialog: true, focus: backend, fetcher: async () => ({ ok: true, status: 200, json: async () => snapshot(backend) }) });
+      await settle(8);
+      expect(text(root).includes("Paste only the code the page shows, not the page's address."), backend).toBe(expected);
+      cards.dispose();
+    }
+    for (const lang of ["en", "zh-TW"] as const) for (const key of ["codeOnly", "error_signin_action_invalid"]) expect(SIGNIN_STRINGS[lang][key], `${lang} ${key}`).toBeTruthy();
+  });
+});
+
 describe("the page's words and colours", () => {
   it("every string of the new dialog and rows is in both languages", () => {
     const keys = ["titleDefault", "leadDefault", "confirmTitle", "confirm", "confirmLabel"];

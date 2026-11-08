@@ -18,6 +18,8 @@ export const SIGNIN_STRINGS = {
     error_cleanup_failed: "The login process could not be confirmed closed. Close it on the host and restart setup before retrying.",
     error_signin_cleanup_failed: "The login process could not be confirmed closed. Close it on the host and restart setup before retrying.",
     error_signin_action_stale: "That prompt changed or was already answered. Refresh its status; do not submit it again.",
+    error_signin_action_invalid: "That is not a valid entry. Check it and try again.",
+    codeOnly: "Paste only the code the page shows, not the page's address.",
     error_signin_console_only: "This backend uses the explicit console fallback.",
     error_backend_signin_local_only: "Backend sign-in is available only on this computer. Use the local setup page, or sign in later.",
     error_signin_session_expired: "This setup session has ended. Reopen setup on the host.",
@@ -54,6 +56,8 @@ export const SIGNIN_STRINGS = {
     error_cleanup_failed: "無法確認登入程序已關閉。請在主機上關閉它，並重新開始設定後再試。",
     error_signin_cleanup_failed: "無法確認登入程序已關閉。請在主機上關閉它，並重新開始設定後再試。",
     error_signin_action_stale: "這個畫面已改變或已回答過。請重新整理狀態，不要再送一次。",
+    error_signin_action_invalid: "這不是有效的輸入。請檢查後再試一次。",
+    codeOnly: "只貼上頁面顯示的代碼，不要貼網址。",
     error_signin_console_only: "這個後端使用主控台備援。",
     error_backend_signin_local_only: "後端登入只能在這台電腦上進行。請使用本機的設定頁，或稍後登入。",
     error_signin_session_expired: "這個設定工作階段已結束。請在主機上重新開啟設定。",
@@ -152,6 +156,7 @@ export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, change
           const label = el("label", tr("field_" + login.phase), card);
           const input = el("input", null, label); input.type = login.phase === "code" ? "password" : "text"; input.autocomplete = "off"; input.spellcheck = false;
           input.setAttribute("aria-label", label.textContent); input.disabled = busy;
+          if (login.phase === "code" && backend === "antigravity") el("small", tr("codeOnly"), card);   // `agy acp --login` takes the code; a pasted page address is refused (the driver and the Runtime both check)
           button(card, tr("submit", phaseName(login.phase)), () => { const value = input.value; input.value = ""; void perform({ operation: "input", id: login.id, revision: login.revision, action: { kind: login.phase, value } }); });
         }
         if (["method", "code", "start_url", "region"].includes(login.phase) && !login.canAct) el("p", tr("answerSent"), card);
