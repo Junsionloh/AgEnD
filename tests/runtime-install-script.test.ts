@@ -96,6 +96,9 @@ describe("install.ps1 template", () => {
     const fn = extractPsFunction(template, "Test-AgendInteractive");
     expect(fn).toContain("[Console]::IsInputRedirected -or [Console]::IsOutputRedirected");
     expect(fn).toMatch(/\$Host\.Name -match 'ISE'/); expect(fn).toContain("[Environment]::GetCommandLineArgs()"); expect(fn).toContain("'\\A[-/]noni'");
+    // the usual CI variables count too (an agent on a pseudo-terminal), read like $agendNoConnect: set and not 0, false, no or off
+    for (const name of ["CI", "GITHUB_ACTIONS", "TF_BUILD", "BUILD_BUILDID", "JENKINS_URL"]) expect(fn).toContain(`'${name}'`);
+    expect(fn).toContain("Test-AgendSwitch ([Environment]::GetEnvironmentVariable($name))");
     // in doubt it answers false, never "interactive"
     expect(fn).toMatch(/catch \{ return \$false \}/);
     // the decision is one pure function with a fixed order, called with the console answer, and $agendNoConnect is read only by Test-AgendSwitch

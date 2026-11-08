@@ -567,6 +567,18 @@ process.stdout.write("RECORDER-CONNECT-RAN\\n");process.exitCode=Number(process.
         expect(r.out, flag).toContain(`connect --server "${origin()}"`);
       }
     });
+    it.skipIf(!hasScript)("never connects on a pseudo-terminal when a usual CI variable is set (an AI agent or CI step gives PowerShell a console): it installs only and prints the manual command", async () => {
+      for (const name of ["CI", "GITHUB_ACTIONS", "TF_BUILD", "BUILD_BUILDID", "JENKINS_URL", "GITLAB_CI", "CIRCLECI", "BUILDKITE", "TEAMCITY_VERSION"]) {
+        const s = scratch(), r = await runInteractive(s, { T_MARK: s.marker, [name]: "true" });
+        expect(r.code, `${name}\n${r.out}`).toBe(0); expect(recorded(s), name).toBeUndefined();
+        expect(r.out, name).toContain("not an interactive console"); expect(r.out, name).toContain(`connect --server "${origin()}"`); expect(r.out, name).not.toContain("connecting this computer");
+      }
+      // the variable's own value is read like $agendNoConnect: empty, 0, false, no and off mean "not set", so a person who has CI=false still connects
+      for (const value of ["", "0", "false", "no", "off"]) {
+        const s = scratch(), r = await runInteractive(s, { T_MARK: s.marker, CI: value });
+        expect(r.code, `CI=${value}\n${r.out}`).toBe(0); expect(recorded(s)?.argv, `CI=${value}\n${r.out}`).toEqual(["connect", "--connection-dir", entryOf(s)]);
+      }
+    });
     it.skipIf(!hasScript)("a repair run, a failed install and an entry that could not be written never connect", async () => {
       const repair = scratch(), a = await runInteractive(repair, { T_MARK: repair.marker, AGEND_RUNTIME_REPAIR: "1", AGEND_RUNTIME_NO_PATH: "" });
       expect(a.code, a.out).toBe(0); expect(recorded(repair)).toBeUndefined(); expect(existsSync(join(repair.install, "connect"))).toBe(false); expect(a.out).not.toContain("connecting this computer");

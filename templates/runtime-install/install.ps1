@@ -26,7 +26,7 @@
 #   6. Leaves a reconnect entry for this AgEnD under <install folder>\connect\<server>: agend-server.json (only the public address, never
 #      a credential or a pairing code) and the same connect-agend.bat the ZIP has, so the next connection is a double-click.
 #   7. Connects, in this same window, when - and only when - this is an interactive console (stdin and stdout are the console, not
-#      -NonInteractive, not the ISE) and $agendNoConnect is not set. It runs the Runtime's own `connect --connection-dir`, the logic
+#      -NonInteractive, not the ISE, no usual CI variable such as CI or GITHUB_ACTIONS set) and $agendNoConnect is not set. It runs the Runtime's own `connect --connection-dir`, the logic
 #      connect-agend.bat uses: a new profile asks for the one-time pairing code, shows the fingerprint and waits for your approval in
 #      AgEnD; a profile already paired to this AgEnD just reconnects; one paired to another AgEnD gets its own profile and that pairing is
 #      left alone. The code is typed into the terminal by a person: the Runtime accepts it from nothing else, so this script never sees it.
@@ -67,13 +67,19 @@
         return -not ($text -eq '' -or $text -in '0', 'false', 'no', 'off')
     }
     # True only at a real, interactive console. The pairing code is typed by a person and the Runtime reads it from nothing else, so a
-    # redirected stdin or stdout (an AI agent, CI, a pipeline), -NonInteractive (any abbreviation of it) and the ISE (no console for a child
-    # process) are all "not interactive". When in doubt it answers false: the cost is one command to run by hand, never a hung window.
+    # redirected stdin or stdout (an AI agent, CI, a pipeline), -NonInteractive (any abbreviation of it), the ISE (no console for a child
+    # process) and a CI environment variable (CI, GITHUB_ACTIONS, TF_BUILD, ...: an agent on a pseudo-terminal) are all "not interactive". When in
+    # doubt it answers false: the cost is one command to run by hand, never a hung window.
     function Test-AgendInteractive {
         try {
             if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) { return $false }
             if ([string]$Host.Name -match 'ISE') { return $false }
             foreach ($arg in [Environment]::GetCommandLineArgs()) { if ($arg -match '\A[-/]noni') { return $false } }
+            # An AI agent or CI step that gives PowerShell a pseudo-terminal looks interactive from in here, but nobody is there to type a pairing code. The usual
+            # CI variables say so: any of them set (and not 0, false, no or off, the same reading as $agendNoConnect) means "not interactive".
+            foreach ($name in 'CI', 'GITHUB_ACTIONS', 'TF_BUILD', 'BUILD_BUILDID', 'JENKINS_URL', 'GITLAB_CI', 'CIRCLECI', 'BUILDKITE', 'TEAMCITY_VERSION') {
+                if (Test-AgendSwitch ([Environment]::GetEnvironmentVariable($name))) { return $false }
+            }
             return $true
         } catch { return $false }
     }

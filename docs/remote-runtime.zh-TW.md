@@ -26,7 +26,7 @@
 
 | 執行的地方 | 腳本的行為 |
 |---|---|
-| 互動式主控台（stdin 與 stdout 都是主控台，不是 `-NonInteractive`，也不是 PowerShell ISE），而且沒有設定 `$agendNoConnect` | 在那個視窗接著連線。它執行 Runtime 自己的 `connect --connection-dir`，邏輯與 ZIP 的 `connect-agend.bat` 相同：**新的 profile** 會要求輸入配對碼、顯示指紋、等待你核准，之後在前景執行；**已配對到這台 AgEnD** 的 profile 直接重連，不再要求配對碼；已配對到**另一台 AgEnD** 的電腦會另開獨立的 profile，原本的配對不受影響。 |
+| 互動式主控台（stdin 與 stdout 都是主控台，不是 `-NonInteractive`，也不是 PowerShell ISE，也沒有設定常見的 CI 環境變數 `CI`、`GITHUB_ACTIONS`、`TF_BUILD`、`BUILD_BUILDID`、`JENKINS_URL`、`GITLAB_CI`、`CIRCLECI`、`BUILDKITE`、`TEAMCITY_VERSION`（空值、`0`、`false`、`no`、`off` 不算）），而且沒有設定 `$agendNoConnect` | 在那個視窗接著連線。它執行 Runtime 自己的 `connect --connection-dir`，邏輯與 ZIP 的 `connect-agend.bat` 相同：**新的 profile** 會要求輸入配對碼、顯示指紋、等待你核准，之後在前景執行；**已配對到這台 AgEnD** 的 profile 直接重連，不再要求配對碼；已配對到**另一台 AgEnD** 的電腦會另開獨立的 profile，原本的配對不受影響。 |
 | 其他情況：AI agent、CI、被管線串接、`powershell -NonInteractive`、輸入或輸出被導向，或 `$agendNoConnect = 1` | 只安裝。印出下一步要執行的確切指令（`agend-runtime connect --server "…"`），說明配對碼要由人在互動終端機輸入，結束時 exit code 為 0。 |
 
 配對碼仍然只能在互動式終端機輸入，不接受指令參數、環境變數或檔案，所以腳本無法代為傳遞，也看不到它。指紋比對與 AgEnD 的核准都沒有改變。`$agend` 只當成伺服器位址使用，沿用原本的來源檢查（HTTPS，或僅限本機的 HTTP；不得含帳密、路徑、查詢或片段）。
