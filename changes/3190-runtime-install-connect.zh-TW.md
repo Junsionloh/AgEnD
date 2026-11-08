@@ -1,0 +1,4 @@
+---
+section: Changed
+---
+- **Windows 一行安裝現在連線也一起完成。** 貼上「設定 → Runtime → 連接電腦」裡的 Windows（PowerShell）指令後，會安裝 Runtime，並在同一個視窗接著連線那台電腦；不用再打第二個 `agend-runtime connect`。在互動式主控台裡，它的做法與 ZIP 的 `connect-agend.bat` 相同：新的 profile 會要求輸入頁面上的一次性配對碼、顯示指紋，再等你在 AgEnD 核准；已配對到這台 AgEnD 的 profile 直接重連，不要求配對碼；已配對到另一台 AgEnD 的電腦會另開獨立的 profile，原本的配對不受影響。其他情況（AI agent、CI、被管線串接、`powershell -NonInteractive`，或設定了 `CI`、`GITHUB_ACTIONS` 等常見 CI 環境變數的偽終端機）或設定了 `$agendNoConnect = 1` 時，只安裝，印出下一步要執行的確切 `agend-runtime connect --server "…"` 指令，並以 0 結束。安裝程式也會在 `%LOCALAPPDATA%\agend-runtime\connect\<server>` 留下重連入口（只含公開位址的 `agend-server.json` 與 `connect-agend.bat`），下次雙擊即可；`agend-runtime` 新增 `--connection-dir DIRECTORY` 來使用這種資料夾。安裝腳本仍是被頁面雜湊固定的同一份位元組，配對碼仍然只在互動式終端機輸入，指紋比對與核准都沒有改變。頁面上保留（預設收合的）手動指令（只安裝、連線）給 AI agent 或腳本使用。這取代了先前「安裝指令不會連線」的說法。

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { page, settle, h, type AppPage } from "./helpers/app-harness.js";
 import { fire } from "./helpers/mini-dom.js";
 
-let p:AppPage, Panel:any, Create:any, catalog:any, windowsCatalog:any, windowsInventory:any, models:any, app:any, routes:any, connectCommand:any, installCommand:any, windowsConnectCommand:any;
+let p:AppPage, Panel:any, Create:any, catalog:any, windowsCatalog:any, windowsInventory:any, models:any, app:any, routes:any, connectCommand:any, installCommand:any, installOnlyCommand:any, windowsConnectCommand:any;
 const originalFetch=globalThis.fetch;
 const idA="12345678-1234-4321-abcd-123456789012", idB="22345678-1234-4321-abcd-123456789012";
 const requests:Array<{path:string;body:any}>=[];
@@ -44,7 +44,7 @@ beforeAll(async()=>{
   const {setLang}=await import("/assets/app-i18n.js");setLang("en",{store:false});
   catalog=await import("/ui/js/runtime-catalog.js");models=await import("/ui/js/settings-catalog.js");app=await import("/assets/app-store.js");
   windowsCatalog=await import("/ui/js/windows-cli-catalog.js");
-  const runtimeUi=await import("/ui/js/panel-runtimes.js");Panel=runtimeUi.RuntimesPanel;connectCommand=runtimeUi.runtimeConnectCommand;installCommand=runtimeUi.runtimeInstallCommand;windowsConnectCommand=runtimeUi.runtimeWindowsConnectCommand;Create=(await import("/ui/js/panel-fleet.js")).CreateInstanceDialog;routes=await import("/assets/app-route.js");
+  const runtimeUi=await import("/ui/js/panel-runtimes.js");Panel=runtimeUi.RuntimesPanel;connectCommand=runtimeUi.runtimeConnectCommand;installCommand=runtimeUi.runtimeInstallCommand;installOnlyCommand=runtimeUi.runtimeInstallOnlyCommand;windowsConnectCommand=runtimeUi.runtimeWindowsConnectCommand;Create=(await import("/ui/js/panel-fleet.js")).CreateInstanceDialog;routes=await import("/assets/app-route.js");
 });
 beforeEach(()=>{requests.length=0;enabled=true;installerMode="ok";machines=[machine(idA,"Desktop"),machine(idB,"Laptop","pending")];windowsInventory={home:"C:\\Test",hostname:"WINDOWS-DESK",probedAt:1,clis:[cli()]};windowsCatalog.forgetWindowsCliCatalog();catalog.forgetRuntimeCatalog();models.forgetCatalogs();app.appStore.set({windowsCli:false});});
 afterEach(async()=>{await p.unmount();catalog.forgetRuntimeCatalog();vi.restoreAllMocks();});
@@ -293,22 +293,49 @@ describe("remote machine UI",()=>{
     });
     it("shows the install and connect commands with the confirmed address, no code, no ZIP step, and no account option",async()=>{
       await open("runtime-windows-commands");
-      expect(stepTitles()).toEqual(["AgEnD address","Install the Runtime","Connect that computer","Return here to approve"]);
-      expect(commands()).toEqual([`[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; $agend = 'http://localhost'; $s = $null; $h = $null; $s = (iwr "$agend/runtime/install.ps1" -UseBasicParsing).Content; $h = (-join ([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($s)) | % { $_.ToString('x2') })); if ($s -and $h -eq '${SCRIPT_SHA}') { iex $s } else { Write-Host 'install.ps1 could not be verified against the hash on the AgEnD page (a certificate or download error above is the usual cause: trust this AgEnD certificate, or use the ZIP; otherwise reload the page and copy the command again)' -ForegroundColor Red; throw 'install.ps1 was not run' }`,'agend-runtime connect --server "http://localhost"']);
+      expect(stepTitles()).toEqual(["AgEnD address","Paste the command into PowerShell","Enter the pairing code when the window asks","Return here to approve"]);
+      // the pinned command first, then the two manual commands (install only, connect) in the collapsed block for an AI agent or a script
+      expect(commands()).toEqual([installCommand("http://localhost",SCRIPT_SHA),installOnlyCommand("http://localhost",SCRIPT_SHA),'agend-runtime connect --server "http://localhost"']);
+      expect(commands()[0]).toContain(`if ($s -and $h -eq '${SCRIPT_SHA}') { iex $s }`);expect(commands()[0]).not.toContain("agendNoConnect");
+      expect(commands()[1]).toBe(`$agendNoConnect = 1; ${commands()[0]}; $agendNoConnect = $null`);
+      const manual=p.root.querySelector(".runtime-install-panel details.runtime-manual-command");
+      expect(manual.querySelector("summary").textContent).toBe("Manual commands (for an AI agent or a script)");expect(manual.hasAttribute("open")).toBe(false);
+      expect(manual.querySelectorAll(".runtime-command-card")).toHaveLength(2);expect(manual.textContent).toContain("Install only (does not connect)");
+      expect(manual.textContent).toContain("cannot be put in a command or a variable");
+      // the main steps no longer say the command does not connect: it installs and then asks for the code in that window
+      const panelText=p.root.querySelector(".runtime-install-panel").textContent, installHint=p.root.querySelectorAll(".runtime-pairing .runtime-step")[1].querySelector(".note").textContent;
+      expect(installHint).not.toMatch(/does not connect|not connect, pair|won't connect/i);expect(installHint).toContain("connects that computer in the same window");
+      expect(panelText).toContain("When the PowerShell window asks for the one-time pairing code");expect(panelText).toContain("connect-agend.bat");
       // The hash the command checks is on the page, and it came from the administrator-only endpoint, not from the script's own response.
       expect(p.root.querySelector(".runtime-installer-hash code").textContent).toBe(SCRIPT_SHA);
       expect(requests.filter(item=>item.path==="/ui/runtimes/installer")).toHaveLength(1);
       expect(requests.some(item=>item.path.includes("install.ps1"))).toBe(false);
-      expect(p.root.querySelector(".runtime-bundle-download")).toBeNull();expect(p.root.textContent).not.toContain("connect-agend.bat");
+      expect(p.root.querySelector(".runtime-bundle-download")).toBeNull();expect(p.root.textContent).not.toContain("Double-click connect-agend.bat there");   // (the reconnect hint names the file; the ZIP's step does not appear here)
       expect(commands().join(" ")).not.toContain("PAIR-TEST-CODE");expect(p.root.querySelector(".runtime-pair-code").value).toBe("PAIR-TEST-CODE");
       // The multi-account option and its flags are not part of this feature.
       expect(p.root.textContent).not.toMatch(/another Claude account|claude-config-dir|--profile/i);expect(p.root.querySelectorAll('.runtime-pairing input[type=checkbox]')).toHaveLength(0);
       expect(p.root.textContent).toContain("never put in the command");expect(p.root.textContent).toContain("22.14");
     });
+    it.each([
+      ["en",["Paste the command into PowerShell","Enter the pairing code when the window asks"],"connects that computer in the same window","When the PowerShell window asks for the one-time pairing code","Manual commands (for an AI agent or a script)","Install only (does not connect)"],
+      ["zh-TW",["在 PowerShell 貼上指令","視窗提示時輸入配對碼"],"在同一個視窗直接連線那台電腦","PowerShell 視窗要求一次性配對碼時","手動指令（給 AI 或腳本使用）","只安裝（不連線）"],
+    ] as const)("describes the one pasted command in %s: paste, type the code when asked, approve; the old 'does not connect / run the connect command' wording is gone",async(lang,titles,hint,codeHint,manual,installOnly)=>{
+      const i18n=await import("/assets/app-i18n.js");i18n.setLang(lang,{store:false});
+      try{
+        await p.mount(h(Panel,{navKey:`runtime-windows-copy-${lang}`}));await settle(8);button(lang==="en" ? "Connect a computer" : "連接電腦").click();await settle(8);
+        expect(stepTitles().slice(1,3)).toEqual(titles);
+        const text=p.root.querySelector(".runtime-install-panel").textContent;
+        expect(text).toContain(hint);expect(text).toContain(codeHint);expect(text).toContain(manual);expect(text).toContain(installOnly);
+        expect(text).toContain("connect-agend.bat");   // the reconnect hint: double-click it next time
+        expect(p.root.textContent).not.toMatch(/not connect, pair|then run the connect command there|再在那裡執行連線指令|不會連線、不會配對/);   // (the manual "Install only (does not connect)" label is deliberate)
+        // the connection guide above the steps says the same thing: one pasted command, the code typed when asked
+        expect(p.root.querySelector("details.runtime-connect-guide").textContent).toContain(lang==="en" ? "installs the Runtime and connects it in the same window" : "它會安裝 Runtime 並在同一個視窗直接連線");
+      }finally{i18n.setLang("en",{store:false});}
+    });
     it("rewrites both commands when the address changes, and shows neither for an unsafe one",async()=>{
       await open("runtime-windows-address");
       await setServer("https://fleet.example.test:10443");
-      expect(commands()).toEqual([installCommand("https://fleet.example.test:10443",SCRIPT_SHA),'agend-runtime connect --server "https://fleet.example.test:10443"']);
+      expect(commands()).toEqual([installCommand("https://fleet.example.test:10443",SCRIPT_SHA),installOnlyCommand("https://fleet.example.test:10443",SCRIPT_SHA),'agend-runtime connect --server "https://fleet.example.test:10443"']);
       expect(commands()[0]).toContain("$agend = 'https://fleet.example.test:10443'");expect(commands()[0]).toContain(`$h -eq '${SCRIPT_SHA}'`);
       for(const bad of ["http://192.168.1.20:19280","https://user:password@fleet.example.test","https://fleet.example.test/path","https://fleet.example.test/?x=1","https://fleet.example.test'; calc; '"]){
         await setServer(bad);expect(commands(),bad).toEqual([]);expect(p.root.querySelector('.runtime-pairing [role="alert"]').textContent).toContain("Enter an HTTPS origin");
@@ -320,7 +347,7 @@ describe("remote machine UI",()=>{
       expect(p.root.querySelector(".runtime-installer-error").textContent).toContain("cannot offer the installer");expect(p.root.querySelector(".runtime-installer-hash")).toBeNull();
       expect(p.root.querySelector(".runtime-install-panel").textContent).not.toMatch(/\birm\b/);
       installerMode="ok";button("Try again").click();await settle(8);
-      expect(commands()).toHaveLength(2);expect(commands()[0]).toBe(installCommand("http://localhost",SCRIPT_SHA));expect(p.root.querySelector(".runtime-installer-error")).toBeNull();
+      expect(commands()).toHaveLength(3);expect(commands()[0]).toBe(installCommand("http://localhost",SCRIPT_SHA));expect(commands()[1]).toBe(installOnlyCommand("http://localhost",SCRIPT_SHA));expect(p.root.querySelector(".runtime-installer-error")).toBeNull();
     });
     it("tells the administrator what to do on a TLS error or a restricted PowerShell, and never suggests turning checks off",async()=>{
       await open("runtime-windows-tls");
@@ -344,18 +371,18 @@ describe("remote machine UI",()=>{
       try{
         await open("runtime-windows-copy");
         const copy=(index:number)=>p.root.querySelectorAll(".runtime-command-row .btn")[index];
-        copy(0).click();await settle(6);copy(1).click();await settle(6);
-        expect(written).toEqual(commands());expect(copy(1).textContent).toContain("Copied");
+        copy(0).click();await settle(6);copy(1).click();await settle(6);copy(2).click();await settle(6);
+        expect(written).toEqual(commands());expect(copy(2).textContent).toContain("Copied");
       }finally{Object.defineProperty(globalThis.navigator,"clipboard",{value:undefined,configurable:true});}
     });
     it("keeps the existing waiting behaviour: the code card waits, the flow moves on once the install command is copied, and to approval when a computer asks",async()=>{
       Object.defineProperty(globalThis.navigator,"clipboard",{value:{writeText:async()=>{}},configurable:true});
       try{
         machines=[machine(idA,"Desktop")];await open("runtime-windows-waiting");
-        expect(p.root.querySelector('.runtime-step[aria-current="step"] h4').textContent).toBe("Install the Runtime");
+        expect(p.root.querySelector('.runtime-step[aria-current="step"] h4').textContent).toBe("Paste the command into PowerShell");
         expect(p.root.querySelector(".runtime-pair-card .runtime-pair-status").textContent).toContain("Waiting for the computer to connect");
         p.root.querySelectorAll(".runtime-command-row .btn")[0].click();await settle(6);
-        expect(p.root.querySelector('.runtime-step[aria-current="step"] h4').textContent).toBe("Connect that computer");
+        expect(p.root.querySelector('.runtime-step[aria-current="step"] h4').textContent).toBe("Enter the pairing code when the window asks");
       }finally{Object.defineProperty(globalThis.navigator,"clipboard",{value:undefined,configurable:true});}
       expect(requests.filter(item=>item.path==="/ui/runtimes").length).toBeGreaterThan(0);
     });
@@ -486,8 +513,10 @@ describe("machine snapshot boundary",()=>{
     expect(installCommand("https://runtime.example.com:443",SCRIPT_SHA)).toContain("$agend = 'https://runtime.example.com'; $s = $null; $h = $null; $s = (iwr \"$agend/runtime/install.ps1\" -UseBasicParsing).Content;");
     expect(installCommand("http://localhost:19280",SCRIPT_SHA)).toContain("$agend = 'http://localhost:19280';");
     expect(windowsConnectCommand("https://runtime.example.com:443")).toBe('agend-runtime connect --server "https://runtime.example.com"');
+    // the install-only command is the same pinned command with the switch around it, and nothing else
+    expect(installOnlyCommand("https://runtime.example.com:443",SCRIPT_SHA)).toBe(`$agendNoConnect = 1; ${installCommand("https://runtime.example.com:443",SCRIPT_SHA)}; $agendNoConnect = $null`);
     for(const bad of ["http://192.168.1.2:19280","https://user:password@example.com","https://example.com/?x=$(calc)","https://$(calc)","https://example.com/path","https://example.com;calc","https://exa'mple.com","https://example.com/'; calc; '","",undefined as any]){
-      expect(installCommand(bad,SCRIPT_SHA),String(bad)).toBe("");expect(windowsConnectCommand(bad),String(bad)).toBe("");
+      expect(installCommand(bad,SCRIPT_SHA),String(bad)).toBe("");expect(installOnlyCommand(bad,SCRIPT_SHA),String(bad)).toBe("");expect(windowsConnectCommand(bad),String(bad)).toBe("");
     }
     for(const good of ["https://runtime.example.com","https://[fd7a:115c::1]:8445","http://127.0.0.1:19280"]){
       const text=installCommand(good,SCRIPT_SHA);
@@ -499,7 +528,7 @@ describe("machine snapshot boundary",()=>{
       expect(text).not.toMatch(/\n|SkipCertificateCheck|ServerCertificateValidationCallback|Set-ExecutionPolicy|-ExecutionPolicy|setx|\|\s*iex/i);
     }
     // The command needs the server's hash: without a valid one there is no command to copy (never an unpinned fallback).
-    for(const bad of ["",undefined,null,"A".repeat(64),"abc","g".repeat(64),`${SCRIPT_SHA}'; calc; '`])expect(installCommand("https://runtime.example.com",bad as any),String(bad)).toBe("");
+    for(const bad of ["",undefined,null,"A".repeat(64),"abc","g".repeat(64),`${SCRIPT_SHA}'; calc; '`]){expect(installCommand("https://runtime.example.com",bad as any),String(bad)).toBe("");expect(installOnlyCommand("https://runtime.example.com",bad as any),String(bad)).toBe("");}
   });
   it("coalesces reads and keeps the last good snapshot after a network failure, clearing it on lost authorization",async()=>{
     let resolve!:(value:any)=>void;let count=0;let mode="pending";

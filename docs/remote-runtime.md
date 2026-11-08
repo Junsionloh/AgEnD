@@ -67,19 +67,31 @@ The ZIP download from Settings requires an administrator session on the local da
 
 ## One-line install (Windows PowerShell)
 
-**Settings → Runtime → Connect a computer → Windows (PowerShell)** shows two commands with the address you confirmed in step 1. Run the first on the other Windows computer, in PowerShell, as the Windows user whose CLIs are installed. No administrator rights are needed.
+**Settings → Runtime → Connect a computer → Windows (PowerShell)** shows one command with the address you confirmed in step 1. Paste it into PowerShell on the other Windows computer, as the Windows user whose CLIs are installed. No administrator rights are needed.
 
 ```powershell
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; $agend = 'https://your-agend-host'; $s = $null; $h = $null; $s = (iwr "$agend/runtime/install.ps1" -UseBasicParsing).Content; $h = (-join ([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($s)) | % { $_.ToString('x2') })); if ($s -and $h -eq '<sha256 shown on the page>') { iex $s } else { Write-Host 'install.ps1 could not be verified against the hash on the AgEnD page (a certificate or download error above is the usual cause: trust this AgEnD certificate, or use the ZIP; otherwise reload the page and copy the command again)' -ForegroundColor Red; throw 'install.ps1 was not run' }
 ```
 
-The page fills in your address and the SHA-256 of `install.ps1`. The command downloads the script, hashes the bytes it received, compares that with the hash on the page, and runs the script **only if they are equal**. It prints the next command and does **not** connect and does **not** pair:
+The page fills in your address and the SHA-256 of `install.ps1`. The command downloads the script, hashes the bytes it received, compares that with the hash on the page, and runs the script **only if they are equal**. The script then installs the Runtime and, **in the same window**, connects that computer: it asks for the one-time pairing code shown on the page, shows the **Pairing fingerprint**, and waits for your approval in AgEnD exactly as in [First connection](#first-connection). There is no second command to type. The pairing code is typed into the window when it asks, never put in the command.
+
+What happens after the install depends on where the command runs:
+
+| Where it runs | What the script does |
+|---|---|
+| An interactive console (stdin and stdout are the console, not `-NonInteractive`, not the PowerShell ISE, none of the usual CI variables `CI`, `GITHUB_ACTIONS`, `TF_BUILD`, `BUILD_BUILDID`, `JENKINS_URL`, `GITLAB_CI`, `CIRCLECI`, `BUILDKITE`, `TEAMCITY_VERSION` set to anything but empty, `0`, `false`, `no` or `off`) and `$agendNoConnect` is not set | Connects, in that window. It runs the Runtime's own `connect --connection-dir`, which is the logic of the ZIP's `connect-agend.bat`: a **new profile** asks for the pairing code, shows the fingerprint, waits for your approval and then keeps running in the foreground; a profile **already paired to this AgEnD** reconnects without asking for a code; a computer already paired to **another AgEnD** gets its own profile and the existing pairing is left alone. |
+| Anywhere else: an AI agent, CI, a pipeline, `powershell -NonInteractive`, redirected input or output, or `$agendNoConnect = 1` | Only installs. It prints the exact command to run next (`agend-runtime connect --server "…"`), says that a person has to type the pairing code in an interactive terminal, and ends with exit code 0. |
+
+The pairing code is still accepted only from an interactive terminal, never from a command argument, an environment variable or a file, so the script cannot pass it on and never sees it. Fingerprint comparison and the approval in AgEnD are unchanged. `$agend` is used only as the server address, after the same origin check as before (HTTPS, or HTTP only for this computer; no credentials, path, query or fragment).
+
+**For an AI agent or a script**, the page keeps **Manual commands** (collapsed) with two lines. The first only installs (it sets `$agendNoConnect = 1` for that command and clears it again afterwards, so it does not stay set in the window and quietly turn a later paste into an install-only one); the second connects and has to be run by a person in an interactive terminal. An agent should run the first, then hand the second to a person:
 
 ```powershell
+$agendNoConnect = 1; <the same install command>; $agendNoConnect = $null
 agend-runtime connect --server "https://your-agend-host"
 ```
 
-The one-time pairing code is typed into that terminal when it asks, never put in either command. Then compare the **Pairing fingerprint** and approve the computer in AgEnD exactly as in [First connection](#first-connection). The ZIP flow is unchanged and remains under **Other install methods (ZIP)**.
+**Reconnecting.** Next to the Runtime the installer leaves a reconnect entry for this AgEnD, `%LOCALAPPDATA%\agend-runtime\connect\<host>-<port>-<hash>\`, holding `agend-server.json` (only the public server address, never a credential or a pairing code) and the same `connect-agend.bat` the ZIP has, and it prints where. Double-click it to reconnect; a saved profile reconnects without asking for the code. Each AgEnD gets a folder of its own, so two AgEnDs on one computer never overwrite each other's entry. The batch file calls `agend-runtime.cmd connect --connection-dir <its own folder>` (so it follows `current.txt` to the newest installed Runtime). `--connection-dir DIRECTORY` makes the Runtime read the address from `DIRECTORY\agend-server.json` and pick the profile as the ZIP's `connect-agend.bat` does (the default profile while it is unpaired or paired to this AgEnD, otherwise a separate `profiles\<host>-<port>`); it works with `connect`, `run`, `status`, `rotate` and `disconnect`, and cannot be combined with `--server`. If the install folder's name contains `%` or `^` (a batch file's `call` would misread it) no entry is written and the script falls back to printing the connect command. A repair run (`AGEND_RUNTIME_REPAIR=1`, used by the update flow) writes no entry and never connects.
 
 ### Why the command pins the script
 
@@ -99,7 +111,7 @@ The script and the Runtime archive come from the same server over the same TLS c
 3. Computes the archive's SHA-256 itself and compares it with the checksum written inside the installer script. On a mismatch it stops before anything is unpacked.
 4. Unpacks into `%LOCALAPPDATA%\agend-runtime\<version>+<build>`, **beside** any version already there. `<build>` is the first 8 characters of the archive's SHA-256, because one version number can cover more than one build.
 5. Points `agend-runtime` at it (below), and adds `%LOCALAPPDATA%\agend-runtime\bin` to **your user PATH**.
-6. Prints the connect command.
+6. Writes the reconnect entry (above), then connects in the same window when it is an interactive console and `$agendNoConnect` is not set; otherwise prints the connect command. The Runtime is started **after** the install lock is released, because a running Runtime takes that lock to update itself.
 
 **Versions side by side.** An existing folder is never deleted or replaced, because it may be the Runtime that is running right now (a running Windows program holds its files). The install folder is named `<version>+<build>`, so a newer AgEnD's Runtime, and a different build of the same version number, each add a new folder beside the old ones; running the same build's command again finds its own folder and only repoints `agend-runtime`. Nobody has to delete a folder by hand to update. `bin\agend-runtime.cmd` is written once and never changes: it starts the version named in the one-line file `bin\current.txt`, and the install swaps that file in with an atomic replace only **after** the new version is whole. So `agend-runtime` starts either the old or the new version, never a half-installed one, and a batch file that is running is never rewritten. The shim starts with `setlocal DisableDelayedExpansion`, so a `!` in the install folder (an accepted `AGEND_RUNTIME_INSTALL_DIR` can contain one) is kept even when cmd.exe runs with delayed expansion on (`/V:ON` or the DelayedExpansion registry setting). A Runtime that is already running keeps its own version until you stop it (Ctrl+C) and start it again with `agend-runtime run`. If a failure happens before the switch, `current.txt` still names the working version. **Earlier folders are not removed by this installer** (one of them may be running); clearing old ones comes with the update and uninstall commands in a later phase. Until then they stay, and you can delete one yourself once no Runtime uses it. The one case the script refuses is a folder that already carries this build's own name but does not hold it, which only happens if it was changed by hand or left incomplete: it is left alone, and the script says so.
 
@@ -111,6 +123,7 @@ Optional variables, set in the same PowerShell window before the command:
 
 | Variable | Effect |
 |---|---|
+| `$agendNoConnect = 1` | Install only: do not connect, even in an interactive window. Any value except empty, `0`, `false`, `no` and `off` counts as set; it stays set in that window until you clear it with `$agendNoConnect = $null`. |
 | `AGEND_RUNTIME_NO_PATH=1` | Leave PATH alone. The final message then shows the full path of `agend-runtime.cmd` to run. |
 | `AGEND_RUNTIME_INSTALL_DIR=D:\agend` | Install under this folder (a full drive path) instead of `%LOCALAPPDATA%\agend-runtime`. |
 

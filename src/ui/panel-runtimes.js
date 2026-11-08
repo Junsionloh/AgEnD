@@ -11,7 +11,7 @@ import { confirmedWrite } from "./settings-confirm.js";
 import { CliProductMark, cliLabel } from "./cli-picker.js";
 import { WindowsCliPanel } from "./panel-windows-cli.js";
 import { useRuntimeCatalog } from "./runtime-catalog.js";
-import { runtimeConnectCommand, runtimeInstallCommand, runtimeWindowsConnectCommand } from "./runtime-commands.js";
+import { runtimeConnectCommand, runtimeInstallCommand, runtimeInstallOnlyCommand, runtimeWindowsConnectCommand } from "./runtime-commands.js";
 import { RuntimeUpdateNotice, runtimeUpdateText, runtimeFreshInstallCommand } from "./runtime-update-status.js";
 import { credentialProfileView, credentialProfileState } from "./credential-profile-select.js";
 import { identityText } from "./account-identity.js";
@@ -58,7 +58,7 @@ register("machines", {
     guide:"How another PC connects", guideAddress:"1. Give this fleet an HTTPS address the other PC can reach. Recommended: Tailscale Serve, run on this computer (on Windows, if AgEnD runs in WSL). Then use the https://….ts.net address it prints:",
     guideSsh:"Or: an SSH tunnel, opened on the other PC (replace user@this-computer with your SSH sign-in for this computer). Then use http://localhost:{0}:", guideFunnel:"Never use Tailscale Funnel: it puts this fleet on the internet.",
     guideLan:"A plain http:// address on your network (such as http://192.168.1.20) is refused: it would send the pairing code unencrypted.",
-    guidePair:"2. Click Connect a computer, install the Runtime on the other PC with the PowerShell command it shows (or download the ZIP instead), then run the connect command there.", guideApprove:"3. When that PC asks to join, approve it here.",
+    guidePair:"2. Click Connect a computer, then paste the PowerShell command it shows on the other PC: it installs the Runtime and connects it in the same window, and asks for the pairing code from this page (or download the ZIP instead, extract it there and double-click its connect file).", guideApprove:"3. When that PC asks to join, approve it here.",
     turnOff:"Turn off",
   },
   "zh-TW": {
@@ -85,11 +85,11 @@ register("machines", {
     guide:"另一台電腦如何連線", guideAddress:"1. 讓另一台電腦能用 HTTPS 位址連到這個 Fleet。建議在這台電腦上執行 Tailscale Serve（若 AgEnD 在 WSL 中執行，請在 Windows 上執行），再使用它顯示的 https://….ts.net 位址：",
     guideSsh:"或：在另一台電腦上開啟 SSH 通道（把 user@this-computer 換成你登入這台電腦的 SSH 帳號），再使用 http://localhost:{0}：", guideFunnel:"請勿使用 Tailscale Funnel：它會把這個 Fleet 公開到網際網路。",
     guideLan:"網路上的一般 http:// 位址（例如 http://192.168.1.20）會被拒絕：配對碼會以未加密的方式傳送。",
-    guidePair:"2. 按「連接電腦」，在另一台電腦用頁面顯示的 PowerShell 指令安裝 Runtime（或改為下載 ZIP），再在那裡執行連線指令。", guideApprove:"3. 那台電腦要求加入時，在這裡核准它。",
+    guidePair:"2. 按「連接電腦」，在另一台電腦貼上頁面顯示的 PowerShell 指令：它會安裝 Runtime 並在同一個視窗直接連線，提示時輸入這一頁的配對碼（或改為下載 ZIP，在那裡解壓縮後雙擊裡面的連線檔）。", guideApprove:"3. 那台電腦要求加入時，在這裡核准它。",
     turnOff:"關閉此功能",
   },
 });
-export { runtimeConnectCommand, runtimeInstallCommand, runtimeWindowsConnectCommand };
+export { runtimeConnectCommand, runtimeInstallCommand, runtimeInstallOnlyCommand, runtimeWindowsConnectCommand };
 export const machineText = (key,...values) => t(`machines.${key}`,...values);
 register("machines", {
   en: { computersTitle:"Computers and CLIs", firstConnection:"Connecting for the first time?", stepDownload:"Download the Runtime", stepRun:"Run it on another computer", stepApprove:"Return here to approve", connectionNote:"Each computer keeps its own CLI sign-ins.", fleetScope:"Entire fleet", nativeWindows:"Native Windows", nativeHint:"CLIs and existing sign-ins on this computer's Windows installation.", inventoryHint:"Open diagnostics to inspect CLI availability and sign-ins." },
@@ -121,8 +121,9 @@ register("machines", {
 });
 register("machines", {
   en: { installMethod:"Install method", tabWindows:"Windows (PowerShell)", tabZip:"Other install methods (ZIP)",
-    stepInstall:"Install the Runtime", stepInstallHint:"Paste this into PowerShell on the other Windows computer. It downloads install.ps1 from this AgEnD, checks it against the SHA-256 below and only then runs it. The installer verifies the Runtime's own checksum and installs it for your Windows user only, next to any version already there (nothing already installed is deleted). It does not connect, pair or need administrator rights. Windows Node.js 22.14 or newer is required; if it is missing, the command only tells you how to get it.",
-    stepConnect:"Connect that computer", stepConnectHint:"Run this in the same PowerShell window (or open a new one). It asks for the one-time pairing code on the right, shows a pairing fingerprint, then waits for your approval here. The code is typed there, never put in the command.",
+    stepInstall:"Paste the command into PowerShell", stepInstallHint:"Paste this into PowerShell on the other Windows computer. It downloads install.ps1 from this AgEnD, checks it against the SHA-256 below and only then runs it. The installer verifies the Runtime's own checksum, installs it for your Windows user only (next to any version already there; nothing already installed is deleted; no administrator rights needed) and then connects that computer in the same window. Windows Node.js 22.14 or newer is required; if it is missing, the command only tells you how to get it.",
+    stepConnect:"Enter the pairing code when the window asks", stepConnectHint:"When the PowerShell window asks for the one-time pairing code, type the code on the right. It then shows a pairing fingerprint and waits for your approval here. The code is typed there, never put in the command. A computer that is already paired to this AgEnD reconnects without asking for a code. To reconnect later, double-click connect-agend.bat in the install folder (the installer prints where it is).",
+    manualCommands:"Manual commands (for an AI agent or a script)", manualCommandsHint:"When no person is at an interactive PowerShell window (an AI agent, a script, CI), run these two commands instead. The first only installs and prints the next command; the second connects, and a person has to type the pairing code in an interactive terminal.", installOnlyCommand:"Install only (does not connect)", manualCodeNote:"The pairing code cannot be put in a command or a variable. An AI agent should run the first command, then hand the second to a person.",
     installCommand:"Install command", connectCommand:"Connect command", copyCommand:"Copy command", commandCopied:"Copied",
     installerHash:"The command checks install.ps1 against this SHA-256 before it runs anything:", installerLoading:"Preparing the installer hash…",
     installerUnavailable:"This AgEnD cannot offer the installer (for example its Runtime files were not built), so there is no install command. Use Other install methods (ZIP).", installerRetry:"Try again",
@@ -131,8 +132,9 @@ register("machines", {
     needsReinstall:"This computer's Runtime is not compatible with this AgEnD, so it cannot connect or run work. Run the install command from Connect a computer on that computer again: it installs the matching Runtime next to the old one, and the pairing is kept.",
     zipTabHint:"Prefer not to run a command? Download the ZIP here, move it to the other computer and extract it." },
   "zh-TW": { installMethod:"安裝方式", tabWindows:"Windows（PowerShell）", tabZip:"其他安裝方式（ZIP）",
-    stepInstall:"安裝 Runtime", stepInstallHint:"在另一台 Windows 電腦的 PowerShell 貼上這行指令。它會從這台 AgEnD 下載 install.ps1，先用下方的 SHA-256 檢查，相符才執行。安裝程式會再驗證 Runtime 自己的校驗碼，並只為你的 Windows 使用者安裝，放在既有版本旁邊（不會刪除任何已安裝的東西）；不會連線、不會配對，也不需要系統管理員權限。需要 Windows Node.js 22.14 以上；若沒有，指令只會告訴你怎麼取得。",
-    stepConnect:"連接那台電腦", stepConnectHint:"在同一個 PowerShell 視窗（或新開一個）執行。它會要求輸入右側的一次性配對碼、顯示配對指紋，然後等待你在這裡核准。配對碼是在那裡輸入的，不會寫進指令。",
+    stepInstall:"在 PowerShell 貼上指令", stepInstallHint:"在另一台 Windows 電腦的 PowerShell 貼上這行指令。它會從這台 AgEnD 下載 install.ps1，先用下方的 SHA-256 檢查，相符才執行。安裝程式會再驗證 Runtime 自己的校驗碼，並只為你的 Windows 使用者安裝，放在既有版本旁邊（不會刪除任何已安裝的東西，也不需要系統管理員權限），接著在同一個視窗直接連線那台電腦。需要 Windows Node.js 22.14 以上；若沒有，指令只會告訴你怎麼取得。",
+    stepConnect:"視窗提示時輸入配對碼", stepConnectHint:"PowerShell 視窗要求一次性配對碼時，輸入右側這組配對碼。接著它會顯示配對指紋，並等待你在這裡核准。配對碼是在那裡輸入的，不會寫進指令。已配對到這台 AgEnD 的電腦不會再要求配對碼，直接重連。之後要重連，請雙擊安裝資料夾裡的 connect-agend.bat（安裝程式會印出它的位置）。",
+    manualCommands:"手動指令（給 AI 或腳本使用）", manualCommandsHint:"如果不是由人在互動式 PowerShell 視窗操作（AI agent、腳本、CI），請改用這兩行。第一行只安裝並印出下一步指令；第二行負責連線，必須由人在互動式終端機輸入配對碼。", installOnlyCommand:"只安裝（不連線）", manualCodeNote:"配對碼不能放進指令或變數。AI agent 請執行第一行，再把第二行交給人。",
     installCommand:"安裝指令", connectCommand:"連線指令", copyCommand:"複製指令", commandCopied:"已複製",
     installerHash:"指令會先用這個 SHA-256 檢查 install.ps1，相符才會執行任何東西：", installerLoading:"正在準備安裝程式雜湊…",
     installerUnavailable:"這台 AgEnD 無法提供安裝程式（例如缺少 Runtime 檔案），所以沒有安裝指令。請改用「其他安裝方式（ZIP）」。", installerRetry:"重試",
@@ -366,7 +368,7 @@ export function RuntimesPanel({navKey}) {
   const copyCode=async() => {
     try {await navigator.clipboard.writeText(pairing.code);if(!lease.current())return;setCopied(true);lease.timeout(() => setCopied(false),2000);}catch { /* the code is on screen to copy by hand */ }
   };
-  const command=runtimeConnectCommand(server), installCommand=runtimeInstallCommand(server,installer.sha), windowsConnectCommand=runtimeWindowsConnectCommand(server);
+  const command=runtimeConnectCommand(server), installCommand=runtimeInstallCommand(server,installer.sha), installOnlyCommand=runtimeInstallOnlyCommand(server,installer.sha), windowsConnectCommand=runtimeWindowsConnectCommand(server);
   const copyCommand=async(key,text) => {
     try {await navigator.clipboard.writeText(text);if(!lease.current())return;setCopiedCommand(key);if(key === "install")setInstallCopied(true);lease.timeout(() => setCopiedCommand(""),2000);}catch { /* the command is on screen to copy by hand */ }
   };
@@ -407,8 +409,9 @@ export function RuntimesPanel({navKey}) {
       ${step(2,machineText("stepInstall"),html`<p class="note">${machineText("stepInstallHint")}</p>
         ${installer.status === "loading" || installer.status === "idle" ? html`<${Skeleton} lines=${3} label=${machineText("installerLoading")} />` : null}
         ${installer.status === "error" ? html`<p class="runtime-installer-error" role="alert">${machineText("installerUnavailable")} <button type="button" class="btn btn-ghost btn-sm" onClick=${() => void loadInstaller()}>${machineText("installerRetry")}</button></p>` : null}
-        ${installCommand ? html`${commandCard("install",machineText("installCommand"),installCommand)}<p class="note runtime-installer-hash">${machineText("installerHash")} <code>${installer.sha}</code></p><p class="note">${machineText("tlsHelp")}</p><p class="note">${machineText("restrictedHelp")}</p>` : null}`)}
-      ${step(3,machineText("stepConnect"),html`<p class="note">${machineText("stepConnectHint")}</p>${windowsConnectCommand ? commandCard("connect",machineText("connectCommand"),windowsConnectCommand) : null}`)}
+        ${installCommand ? html`${commandCard("install",machineText("installCommand"),installCommand)}<p class="note runtime-installer-hash">${machineText("installerHash")} <code>${installer.sha}</code></p><p class="note">${machineText("tlsHelp")}</p><p class="note">${machineText("restrictedHelp")}</p>` : null}
+        ${windowsConnectCommand ? html`<details class="runtime-manual-command"><summary>${machineText("manualCommands")}</summary><p class="note">${machineText("manualCommandsHint")}</p>${installOnlyCommand ? commandCard("install-only",machineText("installOnlyCommand"),installOnlyCommand) : null}${commandCard("connect",machineText("connectCommand"),windowsConnectCommand)}<p class="note">${machineText("manualCodeNote")}</p></details>` : null}`)}
+      ${step(3,machineText("stepConnect"),html`<p class="note">${machineText("stepConnectHint")}</p>`)}
       ${approveStep}`;
   const zipSteps=html`${addressStep}
       ${step(2,machineText("stepDownload"),html`<p class="note">${machineText("stepZipHint")}</p>${download()}${downloadedFor ? html`<p class="note" role="status">${machineText("downloadedFor",downloadedFor)}</p>` : null}`)}
