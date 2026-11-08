@@ -39,6 +39,7 @@
 import { claudeLoginScreenActive } from "./backend/claude-code.js";
 import { agyLoginScreenActive } from "./backend/antigravity.js";
 import { identityOf, parseClaudeAuthStatus, type AccountIdentity } from "./claude-auth-status.js";
+import { readAntigravityIdentity } from "./antigravity-identity.js";
 
 export interface AuthCheck {
   /** argv of a cheap, LLM-token-free status probe (5s timeout). */
@@ -385,8 +386,15 @@ async function runAuthCheckProcess(argv: string[], timeoutMs: number, env?: Reco
  * backend nothing is run and nothing is shown. The output is parsed and dropped here: it is never logged or kept, and what is returned is masked.
  */
 const AUTH_IDENTITY = new Map<string, (output: string) => AccountIdentity | undefined>([["claude-code", output => identityOf(parseClaudeAuthStatus(output))]]);
-export function authIdentitySupported(backend: string): boolean { return AUTH_IDENTITY.has(backend); }
+/**
+ * AGEND-113: Antigravity's account is not in any command's output: it is the masked `id_token_email` of agy's own token file, read locally (antigravity-identity.ts). It has no `authCheck`
+ * run for it (nothing is started and nothing leaves this machine); the caller asks only for a sign-in the host already shows as signed in.
+ */
+const FILE_IDENTITY = new Map<string, (env?: Record<string, string>) => AccountIdentity | undefined>([["antigravity", env => readAntigravityIdentity({ ...process.env, ...(env ?? {}) })]]);
+export function authIdentitySupported(backend: string): boolean { return AUTH_IDENTITY.has(backend) || FILE_IDENTITY.has(backend); }
 export async function checkAuthIdentity(backend: string, env?: Record<string, string>): Promise<AccountIdentity | undefined> {
+  const fromFile = FILE_IDENTITY.get(backend);
+  if (fromFile) { try { return fromFile(env); } catch { return undefined; } }
   const parse = AUTH_IDENTITY.get(backend), check = LOGIN_FLOWS[backend]?.authCheck;
   if (!parse || !check) return undefined;
   const run = authCheckRunnerOverride ?? runAuthCheckProcess;

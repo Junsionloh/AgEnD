@@ -37,7 +37,12 @@ export const MACHINE_ACCOUNT_CLIS: ReadonlySet<string> = new Set(["claude-code"]
  * is one per Windows user and no named profiles (no + Add account, no Sign out, no Remove): the card has one row per computer, and signing it in changes that computer's own Antigravity login.
  */
 export const MACHINE_DEFAULT_LOGIN_CLIS: ReadonlySet<string> = new Set(["antigravity"]);
-export interface AccountUsage { percent: number; resetsAt?: string; windowMs?: number; stale?: boolean }
+/**
+ * AGEND-113: the quota a window belongs to, when a provider has several (Antigravity: "Gemini" and "Claude & others", each with its own 5h and weekly limit). `labelI18n` is the usage panel's
+ * own reference (its words are the panel's, in both languages); `label` is the fallback. Only the shape and bounds below are passed on: whatever else a vendor's text carries is dropped.
+ */
+export interface AccountUsagePool { label: string; labelI18n?: { key: string; args?: string[] } }
+export interface AccountUsage { percent: number; resetsAt?: string; windowMs?: number; stale?: boolean; /** Present only when the provider has more than one pool: which one this window is. */ pool?: AccountUsagePool }
 export interface AccountRow {
   scope: AccountScope;
   backend: string;
@@ -226,6 +231,39 @@ export function profilesOnDisk(dataDir: string, backend: string): string[] {
 }
 
 const TWO_DAYS = 2 * 86_400_000;
+/** The pool of a metric, in the bounded form a page may be sent: a short label, and the panel's own word reference (`usage.metric.*`, up to three short string arguments). Else none. */
+function poolOf(metric: Record<string, unknown>): AccountUsagePool | undefined {
+  const pool = metric.pool;
+  if (!pool || typeof pool !== "object" || Array.isArray(pool)) return undefined;
+  const { label, labelI18n } = pool as { label?: unknown; labelI18n?: unknown };
+  if (typeof label !== "string" || !label.trim() || label.length > 64) return undefined;
+  const ref = labelI18n && typeof labelI18n === "object" && !Array.isArray(labelI18n) ? labelI18n as { key?: unknown; args?: unknown } : null;
+  const args = ref && Array.isArray(ref.args) ? ref.args : [];
+  const ok = ref && typeof ref.key === "string" && /^usage\.metric\.[a-z_]{1,48}$/.test(ref.key) && args.length <= 3 && args.every(a => typeof a === "string" && a.length <= 64);
+  return { label: label.trim(), ...(ok ? { labelI18n: { key: ref!.key as string, ...(args.length ? { args: args as string[] } : {}) } } : {}) };
+}
+/**
+ * One window per pool, then the pool whose window is the most used: the one that will run out first is the one worth showing. A provider with a single pool (or none) is read as it always was
+ * and carries no pool; with several, the chosen window says which one it is. Ties keep the first, so the answer does not flicker between equal pools.
+ */
+function pickWindow(provider: { metrics?: ReadonlyArray<Record<string, unknown>>; stale?: boolean }, accept: (m: Record<string, unknown>) => boolean,
+  better: (a: Record<string, unknown>, b: Record<string, unknown>) => boolean): AccountUsage | undefined {
+  const bests = new Map<string, Record<string, unknown>>();
+  for (const m of provider.metrics ?? []) {
+    if (!accept(m)) continue;
+    const key = poolOf(m)?.label ?? "";
+    const best = bests.get(key);
+    if (!best || better(m, best)) bests.set(key, m);
+  }
+  if (!bests.size) return undefined;
+  let chosen: Record<string, unknown> | undefined;
+  for (const m of bests.values()) if (!chosen || (m.used as number) > (chosen.used as number)) chosen = m;
+  // "Has several pools" is a fact about the provider, not about this window: a pool whose 5h window is missing or has reset is still a pool, and the one shown is named all the same.
+  const pools = new Set<string>();
+  for (const m of provider.metrics ?? []) if (m.scope !== "model" && m.type === "percent" && typeof m.windowMs === "number") { const label = poolOf(m)?.label; if (label !== undefined) pools.add(label); }
+  const pool = pools.size > 1 ? poolOf(chosen!) : undefined;
+  return { ...usageOf(chosen!, provider), ...(pool ? { pool } : {}) };
+}
 const usageOf = (m: Record<string, unknown>, provider: { stale?: boolean }): AccountUsage => {
   const resetsAt = typeof m.resetsAt === "string" ? m.resetsAt : undefined;
   return { percent: Math.max(0, Math.min(100, Math.round(m.used as number))), windowMs: m.windowMs as number, ...(resetsAt ? { resetsAt } : {}), ...(provider.stale ? { stale: true } : {}) };
@@ -234,30 +272,24 @@ const usageOf = (m: Record<string, unknown>, provider: { stale?: boolean }): Acc
 /**
  * The usage row's weekly metric: the percent metric whose window is closest to a week (at least two days). From a
  * usage payload's providers (ProviderUsage), by the provider id the usage panel gives a backend (and `:<profile>`).
+ * A provider with several pools (Antigravity: Gemini, Claude & others) gives the pool whose weekly window is the most used, and says which one (`pool`): see `pickWindow`.
  */
 export function weeklyUsage(provider: { metrics?: ReadonlyArray<Record<string, unknown>>; stale?: boolean } | undefined): AccountUsage | undefined {
   if (!provider || !Array.isArray(provider.metrics)) return undefined;
   const WEEK = 7 * 86_400_000;
-  let best: Record<string, unknown> | undefined;
-  for (const m of provider.metrics) {
-    if (m.scope === "model" || m.type !== "percent" || typeof m.used !== "number" || typeof m.windowMs !== "number" || m.windowMs < TWO_DAYS) continue;
-    if (!best || Math.abs((m.windowMs as number) - WEEK) < Math.abs((best.windowMs as number) - WEEK)) best = m;
-  }
-  return best ? usageOf(best, provider) : undefined;
+  return pickWindow(provider,
+    m => m.scope !== "model" && m.type === "percent" && typeof m.used === "number" && typeof m.windowMs === "number" && m.windowMs >= TWO_DAYS,
+    (a, b) => Math.abs((a.windowMs as number) - WEEK) < Math.abs((b.windowMs as number) - WEEK));
 }
 
 /**
  * AGEND-101: the usage row's short window ("5h"): the percent metric whose window is under two days — the shortest one when
  * there are several — as the usage panel's compact line picks it (`compactSlots`). Never a per-model quota, and never a
- * window that has reset since the read (its percent would be the old window's). Same shape as `weeklyUsage`.
+ * window that has reset since the read (its percent would be the old window's). Same shape as `weeklyUsage`, and for a provider with several pools the most used pool's, named.
  */
 export function shortUsage(provider: { metrics?: ReadonlyArray<Record<string, unknown>>; stale?: boolean } | undefined): AccountUsage | undefined {
   if (!provider || !Array.isArray(provider.metrics)) return undefined;
-  let best: Record<string, unknown> | undefined;
-  for (const m of provider.metrics) {
-    if (m.scope === "model" || m.type !== "percent" || typeof m.used !== "number" || m.resetPassed) continue;
-    if (typeof m.windowMs !== "number" || !(m.windowMs > 0) || m.windowMs >= TWO_DAYS) continue;
-    if (!best || (m.windowMs as number) < (best.windowMs as number)) best = m;
-  }
-  return best ? usageOf(best, provider) : undefined;
+  return pickWindow(provider,
+    m => m.scope !== "model" && m.type === "percent" && typeof m.used === "number" && !m.resetPassed && typeof m.windowMs === "number" && m.windowMs > 0 && m.windowMs < TWO_DAYS,
+    (a, b) => (a.windowMs as number) < (b.windowMs as number));
 }

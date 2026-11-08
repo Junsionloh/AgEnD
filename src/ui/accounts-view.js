@@ -17,6 +17,7 @@ import { Dialog } from "/assets/ui-dialog.js";
 import { Skeleton } from "/assets/ui-states.js";
 import { CliProductMark, cliLabel } from "./cli-picker.js";
 import { identityText } from "./account-identity.js";
+import "/assets/view-strings.js";   // the usage panel's own words (`view.usage.metric.*`): a pool's name is said in them, in both languages
 import { openSignIn, refreshSignIn, signInStore } from "./backend-signin.js";
 import { toast } from "/assets/ui-toast.js";
 import { shellStore } from "/assets/app-shell.js";
@@ -32,7 +33,7 @@ register("accounts", {
     state_not_installed: "not installed", state_too_old: "too old",
     usedBy: "used by {0}", usedByNone: "used by no agent", agents: "{0} agents", agent: "1 agent", channels: "{0} ClassicBot rooms", channel: "1 ClassicBot room",
     fleetDefaultTag: "fleet default", resets: "resets {0}", resetsIn: "resets in {0}",
-    usageLabel: "Usage", winHours: "{0}h", winDays: "{0}d", winWeek: "7d", winStale: "(stale)",
+    usageLabel: "Usage", winHours: "{0}h", winDays: "{0}d", winWeek: "7d", winStale: "(stale)", pool: "most used: {0}",
     signIn: "Sign in", signInAgain: "Sign in again", hostCommand: "Sign in on the host", hostCommandHint: "Run this in a terminal on the host running AgEnD.",
     updateHint: "{0} needs a newer version before it can be signed in from here. Update it on the host:",
     moveHere: "Move agents here", moveTitle: "Move agents to {0}", moveLead: "Choose the {0} agents that should use {1}. Each restarts on it when you Save:",
@@ -64,7 +65,7 @@ register("accounts", {
     state_not_installed: "未安裝", state_too_old: "版本太舊",
     usedBy: "使用者：{0}", usedByNone: "沒有 Agent 使用", agents: "{0} 個 Agent", agent: "1 個 Agent", channels: "{0} 個 ClassicBot 房間", channel: "1 個 ClassicBot 房間",
     fleetDefaultTag: "Fleet 預設", resets: "{0} 重置", resetsIn: "{0} 後重置",
-    usageLabel: "用量", winHours: "{0}h", winDays: "{0}天", winWeek: "本週", winStale: "（未更新）",
+    usageLabel: "用量", winHours: "{0}h", winDays: "{0}天", winWeek: "本週", winStale: "（未更新）", pool: "用量最高：{0}",
     signIn: "登入", signInAgain: "重新登入", hostCommand: "在主機上登入", hostCommandHint: "請在執行 AgEnD 的主機終端機執行。",
     updateHint: "{0} 需要更新到較新的版本，才能從這裡登入。請在主機上更新：",
     moveHere: "移入 Agent", moveTitle: "把 Agent 移到 {0}", moveLead: "選擇要改用 {1} 的 {0} Agent。按「儲存」後，各自會以它重新啟動：",
@@ -170,6 +171,19 @@ const winLabel = (u, fallback = "") => {
   const d = Math.round(h / 24);
   return d >= 6 && d <= 8 ? tx("winWeek") : tx("winDays", d);
 };
+/**
+ * AGEND-113: the pool a window is (Antigravity: "Gemini", "Claude & others"), in the page's language from the usage panel's own reference (`labelI18n`), else the label the server sent. Text only;
+ * a reference that does not name a `usage.metric.*` word is not looked up.
+ */
+function poolName(pool) {
+  if (!pool || typeof pool.label !== "string") return "";
+  const ref = pool.labelI18n;
+  if (ref && typeof ref.key === "string" && /^usage\.metric\.[a-z_]+$/.test(ref.key)) {
+    const key = `view.${ref.key}`, word = t(key);
+    if (word && word !== key) return (Array.isArray(ref.args) ? ref.args : []).reduce((text, value, i) => text.split(`{${i}}`).join(String(value)), word);
+  }
+  return pool.label;
+}
 /** One window of the usage block: its name, a meter, the percent (amber from 70%, red from 90%) and when it resets. A grid row of four fixed columns, so rows stack aligned. */
 function UsageWindow({ u, kind }) {
   const p = Math.max(0, Math.min(100, Math.round(Number(u.percent) || 0)));
@@ -181,7 +195,8 @@ function UsageWindow({ u, kind }) {
   // The spaces between the cells are not drawn (a grid ignores whitespace between its items); they keep the text readable where it is copied or read as text.
   return html`<div class=${`s-usage-win is-${kind}${level}`}><span class="s-usage-win-lbl">${winLabel(u, kind === "weekly" ? tx("winWeek") : "")}</span>${" "}
     <progress class="s-usage-meter" max="100" value=${p} aria-hidden="true"></progress>${" "}
-    <span class="s-usage-win-pct">${p}%</span>${" "}<span class="s-usage-win-reset" title=${exact || null}>${reset}</span>${" "}</div>`;
+    <span class="s-usage-win-pct">${p}%</span>${" "}<span class="s-usage-win-reset" title=${exact || null}>${reset}</span>${" "}
+    ${u.pool ? html`<small class="s-usage-win-pool">${tx("pool", poolName(u.pool))}</small>` : null}</div>`;
 }
 
 /**

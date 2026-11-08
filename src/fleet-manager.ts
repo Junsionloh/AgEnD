@@ -314,7 +314,7 @@ import { envFileKeys } from "./token-env-name.js";
 import { discordGeneralChannelId } from "./discord-general.js";
 import { parseEnvText } from "./env-file.js";
 import { isDisallowedIntentsError, isRejectedTokenError } from "./discord-permissions.js";
-import { filterUsageProviders, formatDiscordUsageActivity, getUsageSnapshot, handleUsageRequest, isUsagePath, setCapacityLookup, usageProviderIdForBackend } from "./usage/usage-api.js";
+import { filterUsageProviders, formatDiscordUsageActivity, getUsageSnapshot, handleUsageRequest, isUsagePath, refreshUsageAfterSignIn, setCapacityLookup, usageProviderIdForBackend } from "./usage/usage-api.js";
 import { LOGIN_FLOWS, checkAuthStatus, checkAuthIdentity, authIdentitySupported, LOGIN_BACKEND_ALIASES, type LoginFlow, type AuthCheckResult } from "./login-flows.js";
 import type { AccountIdentity } from "./claude-auth-status.js";
 import { LoginSession } from "./login-manager.js";
@@ -20015,6 +20015,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         if (event.phase === "done") {
           this.forgetSignInIdentities();   // a sign-in may be a different account now
           this.keepAliveAfterSignIn(event.backend, null);   // its file changed, whoever is watching: a "needs sign-in" left from before is no longer the answer
+          this.usageAfterSignIn();   // the usage read before this sign-in is not this account's
         }
         this.needsYou?.poke();
         if (!this.browserSignInOwnerCurrent(owner)) return;
@@ -20051,6 +20052,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         if (event.phase === "done") {
           this.forgetSignInIdentities();   // a sign-in may be a different account now
           this.keepAliveAfterSignIn(event.backend, event.profile);
+          this.usageAfterSignIn();
         }
         this.needsYou?.poke();
         if (!this.browserSignInOwnerCurrent(owner)) return;
@@ -20208,6 +20210,16 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     let machines: Awaited<ReturnType<MachineAccounts["list"]>> = [];
     if (remoteRuntimeEnabled()) { try { machines = await this.machineAccounts.list(); } catch (err) { this.logger.debug({ err: (err as Error).message }, "Computer accounts not read"); } }
     return buildAccountsView({ targets, diskProfiles, agents, classic, fleetDefaults, usage, shortUsage: shortWindow, keepAlive, machines });
+  }
+
+  /**
+   * AGEND-113: a dashboard sign-in just finished: read the usage once more now (the panel's own forced read, so its 30-second floor and Retry-After hold), instead of showing what was read
+   * before it for up to five minutes, and tell the pages to read their view again when something really was fetched. Never awaited, never allowed to fail the sign-in's follow-up.
+   */
+  private usageAfterSignIn(): void {
+    try {
+      void refreshUsageAfterSignIn(() => broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"))).catch(() => {});
+    } catch { /* the usage shows itself within its own cache time */ }
   }
 
   /**
