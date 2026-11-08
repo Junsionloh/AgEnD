@@ -15,6 +15,7 @@ const bool: Check = v => typeof v === "boolean" ? null : "a boolean";
 const int: Check = v => Number.isInteger(v) && (v as number) >= 0 ? null : "a whole number, 0 or more";
 const words = (min: number): Check => v => Array.isArray(v) && v.length >= min && v.every(w => typeof w === "string" && w !== "") ? null : `a list of ${min === 0 ? "" : "at least one "}non-empty strings`;
 const oneOf = (...allowed: string[]): Check => v => typeof v === "string" && allowed.includes(v) ? null : `one of ${allowed.join(", ")}`;
+const version: Check = v => typeof v === "string" && /^\d+(?:\.\d+){0,3}$/.test(v) ? null : "a version such as 1.5.0"
 const envName: Check = v => typeof v === "string" && /^[A-Z][A-Z0-9_]*$/.test(v) ? null : "an environment variable name";
 const orNull = (inner: Check): Check => v => v === null ? null : inner(v);
 /** An update command carries exactly one `{version}`: the server fills it with the audited release, so a command that has none could not be pinned. */
@@ -30,25 +31,25 @@ const FACTS: Readonly<Record<CapabilityPath, Readonly<Record<string, Check>>>> =
   "host.update": { binary: text, command: text, "release?": oneOf("latest-unaudited") },
   "host.chatLogin": { aliases: words(0), mode: oneOf("device-code", "paste-code", "menu", "declined", "install-only") },
   "host.dashboardSignIn": { named: bool },
-  "host.structuredSignIn": { argv: words(1), rank: int, named: bool },
+  "host.structuredSignIn": { argv: words(1), rank: int, named: bool, ends: oneOf("success-line", "exit-code"), screen: oneOf("login-flow", "own"), answer: oneOf("code", "code-or-address"), "minVersion?": version },
   "host.firstRunSignIn": { mode: oneOf("browser", "console"), rank: int },
   "host.authCheck": { argv: words(1) },
-  "host.identity": { source: oneOf("status-command") },
+  "host.identity": { source: oneOf("status-command", "token-file"), "field?": text },
   "host.namedAccounts": { env: envName, home: oneOf("relocate-home", "redirect-files"), carry: oneOf("carries", "keeps", "handover") },
   "host.signOut": { binary: text, args: words(1) },
   "host.keepAlive": {},
   "host.accountCard": { rank: int },
-  "host.usage": { providerId: text, name: text, rank: int, profileRows: bool },
+  "host.usage": { providerId: text, name: text, rank: int, profileRows: bool, pools: oneOf("single", "several") },
   "runtime.provider": {
     name: text, company: text, binaryNames: words(1), supports: supportsShape, readOnlySupport: bool, permission: oneOf("os-sandbox", "read-tools", "native-policy"),
     permissionNote: text, promptTransport: oneOf("stdin-text", "stdin-json", "file"), modelProbe: orNull(words(1)), "reason?": text, rank: int,
   },
   "runtime.install": { kind: oneOf("npm", "download"), pin: oneOf("audited", "integrity") },
   "runtime.update": { kind: oneOf("pinned", "latest-unaudited") },
-  "runtime.signIn": { argv: words(1), profile: oneOf("named") },
+  "runtime.signIn": { argv: words(1), profile: oneOf("named", "none") },
   "runtime.namedAccounts": { env: envName },
-  "runtime.accountRows": {},
-  "runtime.authStatus": { argv: words(1) },
+  "runtime.accountRows": { defaultRow: oneOf("read-only", "sign-in") },
+  "runtime.authStatus": { argv: words(1), source: oneOf("own-command", "model-listing") },
   "runtime.identity": {},
   "runtime.usage": {},
 };
@@ -160,15 +161,32 @@ function checkDependencies(specs: Record<string, unknown>, ids: readonly string[
     need(id, "host.update", "host.install", "an update is the vendor's installer or updater taken to a release; what has no install has nothing to update");
     need(id, "runtime.update", "runtime.install", "an update is the pinned install over an older copy");
     need(id, "host.structuredSignIn", "host.authCheck", "the sign-in is confirmed by the CLI's own status probe");
-    need(id, "host.identity", "host.authCheck", "the account is read from the same status answer");
+    if (yesFactsOf(specs, id, "host.identity")?.source === "status-command" && !has(id, "host.authCheck")) problems.push(`${id}: host.identity reads the status command's answer, but host.authCheck is not "yes"`);
+    if (yesFactsOf(specs, id, "host.identity")?.source === "token-file" && !(typeof yesFactsOf(specs, id, "host.identity")?.field === "string")) problems.push(`${id}: host.identity reads a token file but names no \`field\``);
+    if (yesFactsOf(specs, id, "host.identity")?.source === "status-command" && yesFactsOf(specs, id, "host.identity")?.field !== undefined) problems.push(`${id}: host.identity has a \`field\` but reads the status command`);
     need(id, "host.keepAlive", "host.namedAccounts", "it reads and renews a credential home");
     need(id, "host.dashboardSignIn", "host.chatLogin", "the dashboard runs the chat login's command");
     if (yesFactsOf(specs, id, "host.dashboardSignIn")?.named === true && !has(id, "host.namedAccounts")) problems.push(`${id}: host.dashboardSignIn says named accounts can be signed in, but host.namedAccounts is not "yes"`);
     if (yesFactsOf(specs, id, "host.firstRunSignIn")?.mode === "browser" && !has(id, "host.structuredSignIn")) problems.push(`${id}: host.firstRunSignIn offers browser controls, but host.structuredSignIn is not "yes"`);
     if (yesFactsOf(specs, id, "host.usage")?.profileRows === true && !has(id, "host.namedAccounts")) problems.push(`${id}: host.usage has rows for named accounts, but host.namedAccounts is not "yes"`);
-    need(id, "runtime.signIn", "runtime.namedAccounts", "a computer's sign-in is a named account's");
+    const signIn = yesFactsOf(specs, id, "runtime.signIn"), rows = yesFactsOf(specs, id, "runtime.accountRows");
+    if (signIn?.profile === "named" && !has(id, "runtime.namedAccounts")) problems.push(`${id}: runtime.signIn is a named account's, but runtime.namedAccounts is not "yes"`);
+    // A sign-in with no profile REPLACES the computer's own login: it is only set up as that, with a row to sign it in from, a way to tell it worked, and the command the server launches (the Runtime maps the launch by exact argv).
+    if (signIn?.profile === "none") {
+      if (rows?.defaultRow !== "sign-in") problems.push(`${id}: runtime.signIn has no profile (the computer's own login), so runtime.accountRows must say \`defaultRow: "sign-in"\``);
+      if (!has(id, "runtime.authStatus")) problems.push(`${id}: runtime.signIn has no profile, but runtime.authStatus is not "yes" (nothing says whether it worked)`);
+      if (has(id, "runtime.namedAccounts")) problems.push(`${id}: runtime.signIn has no profile, but runtime.namedAccounts is "yes"`);
+    }
+    if (rows?.defaultRow === "sign-in" && signIn?.profile !== "none") problems.push(`${id}: runtime.accountRows lets the computer's own login be signed in, but runtime.signIn is not a sign-in with no profile`);
+    const hostSignIn = yesFactsOf(specs, id, "host.structuredSignIn");
+    if (signIn && hostSignIn && JSON.stringify(signIn.argv) !== JSON.stringify(hostSignIn.argv)) problems.push(`${id}: runtime.signIn launches ${JSON.stringify(signIn.argv)}, host.structuredSignIn ${JSON.stringify(hostSignIn.argv)} (the server maps a launch to the Runtime's sign-in by its exact argv)`);
+    if (signIn?.profile === "none" && !hostSignIn) problems.push(`${id}: runtime.signIn has no profile, but host.structuredSignIn is not "yes" (the dashboard drives both with the same dialog)`);
     need(id, "runtime.accountRows", "runtime.authStatus", "a row shows the sign-in state from that probe");
-    need(id, "runtime.accountRows", "runtime.namedAccounts", "the rows are the computer's named accounts");
+    if (rows?.defaultRow === "read-only" && !has(id, "runtime.namedAccounts")) problems.push(`${id}: runtime.accountRows shows the computer's named accounts, but runtime.namedAccounts is not "yes"`);
+    const status = yesFactsOf(specs, id, "runtime.authStatus"), provider = yesFactsOf(specs, id, "runtime.provider");
+    if (status?.source === "model-listing" && JSON.stringify(status.argv) !== JSON.stringify(provider?.modelProbe)) problems.push(`${id}: runtime.authStatus is the model listing, so its argv must be runtime.provider.modelProbe`);
+    const usage = yesFactsOf(specs, id, "host.usage");
+    if (usage?.pools === "several" && usage.profileRows === true) problems.push(`${id}: host.usage has several quota pools and rows for named accounts; an Accounts row shows one pool per window, so that is not set up yet`);
     need(id, "runtime.identity", "runtime.authStatus", "the account is read from the same status answer");
     need(id, "runtime.install", "runtime.provider", "what is not run is not installed");
     if (yesFactsOf(specs, id, "runtime.provider")?.supports && (yesFactsOf(specs, id, "runtime.provider")!.supports as { execution?: boolean }).execution === false && has(id, "runtime.signIn")) problems.push(`${id}: runtime.signIn is "yes" for a provider the Runtime does not run`);

@@ -68,12 +68,12 @@ export function runtimeCap<K extends keyof RuntimeCapabilities>(id: unknown, key
 }
 /** The facts of a supported capability, or null when the CLI is unknown or does not support it. */
 export function hostFacts<K extends keyof HostCapabilities>(id: unknown, key: K): Extract<HostCapabilities[K], { support: "yes" }> | null {
-  const cap = hostCap(id, key);
-  return cap && (cap as { support: string }).support === "yes" ? cap as unknown as Extract<HostCapabilities[K], { support: "yes" }> : null;
+  const cap: unknown = hostCap(id, key);   // (as `unknown`: the compiler cannot narrow the union of every capability's facts when `key` is generic)
+  return cap !== null && isYes(cap as Cap) ? cap as Extract<HostCapabilities[K], { support: "yes" }> : null;
 }
 export function runtimeFacts<K extends keyof RuntimeCapabilities>(id: unknown, key: K): Extract<RuntimeCapabilities[K], { support: "yes" }> | null {
-  const cap = runtimeCap(id, key);
-  return cap && isYes(cap as Cap) ? cap as Extract<RuntimeCapabilities[K], { support: "yes" }> : null;
+  const cap: unknown = runtimeCap(id, key);
+  return cap !== null && isYes(cap as Cap) ? cap as Extract<RuntimeCapabilities[K], { support: "yes" }> : null;
 }
 
 type RankedHost = { [K in keyof HostCapabilities]: Extract<HostCapabilities[K], { support: "yes" }> extends { rank: number } ? K : never }[keyof HostCapabilities];
@@ -94,3 +94,18 @@ export function hostIdsByRank(key: RankedHost): CliId[] {
 export function runtimeProviderIds(): CliId[] {
   return runtimeIds("provider").sort((a, b) => runtimeFacts(a, "provider")!.rank - runtimeFacts(b, "provider")!.rank);
 }
+
+/**
+ * AGEND-113: the CLIs a Runtime signs in as the computer's OWN login, with no profile (`runtime.signIn.profile === "none"`; Antigravity). Signing in REPLACES that Windows user's login, so
+ * this is the one list the Runtime and the server both ask before they allow a sign-in or a status check without a profile: nothing else is hand-written.
+ */
+export type RuntimeDefaultLoginCli = { [I in CliId]: typeof CLI_SPECS[I]["runtime"]["signIn"] extends { readonly support: "yes"; readonly profile: "none" } ? I : never }[CliId];
+export function isRuntimeDefaultLoginCli(id: unknown): id is RuntimeDefaultLoginCli { return runtimeFacts(id, "signIn")?.profile === "none"; }
+export function runtimeDefaultLoginIds(): RuntimeDefaultLoginCli[] { return runtimeIds("signIn").filter(isRuntimeDefaultLoginCli); }
+/**
+ * What a Runtime reports (in its capabilities) for a CLI it can sign in as the computer's own login: `signin-<id>`, derived from the registry (never written out per CLI). A Runtime
+ * built before that CLI's spec says `none` does not report it, and the server does not offer the sign-in to it. Named-profile sign-ins stay behind the one `remote-signin` capability.
+ */
+export function runtimeSignInCapability(id: RuntimeDefaultLoginCli): string { return `signin-${id}`; }
+export function runtimeSignInCapabilities(): string[] { return runtimeDefaultLoginIds().map(runtimeSignInCapability); }
+

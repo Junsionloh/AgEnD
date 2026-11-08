@@ -28,6 +28,14 @@ export interface UiCliCaps {
   runtimeUpdate: boolean;
   /** AGEND-153: that update is the named exception — it goes to the vendor's newest release, which AgEnD has not audited (`runtime.update.kind: "latest-unaudited"`); the page labels it so. */
   runtimeUpdateLatest: boolean;
+  /** A Runtime signs it in as the COMPUTER'S OWN login (no profile; `runtime.signIn.profile === "none"`): the page asks before it changes that login. */
+  runtimeDefaultLogin: boolean;
+  /** The oldest CLI that has the structured sign-in's command (`host.structuredSignIn.minVersion`), for the words that say "too old"; null: any. */
+  structuredMinVersion: string | null;
+  /** `/login <name>` in chat runs a flow for it (`host.chatLogin`'s mode is not `declined` or `install-only`): the older dialog can sign it in, so a "console fallback" is offered. */
+  chatSignIn: boolean;
+  /** The CLI's own prompt also accepts the page's address, which AgEnD's code box refuses: the box says to paste the code alone (`host.structuredSignIn.answer`). */
+  codeHint: boolean;
 }
 
 export function uiCliCaps(): Record<CliId, UiCliCaps> {
@@ -44,6 +52,10 @@ export function uiCliCaps(): Record<CliId, UiCliCaps> {
       runtimeUpdate: runtimeFacts(id, "update") !== null,
       runtimeUpdateLatest: runtimeFacts(id, "update")?.kind === "latest-unaudited",
       runtimeName: runtimeFacts(id, "install") ? runtimeFacts(id, "provider")?.name ?? null : null,
+      runtimeDefaultLogin: runtimeFacts(id, "signIn")?.profile === "none",
+      codeHint: structured?.answer === "code-or-address",
+      structuredMinVersion: structured?.minVersion ?? null,
+      chatSignIn: ["device-code", "paste-code", "menu"].includes(hostFacts(id, "chatLogin")?.mode ?? ""),
     };
     return [id, caps] as const;
   })) as Record<CliId, UiCliCaps>;
