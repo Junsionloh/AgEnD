@@ -1,0 +1,36 @@
+# Captured output (Windows 10.0.26200, Node v22.21.0; the bundle's directory is shown as <bundle>)
+
+## node bundle-scan.mjs, before then after
+== Windows Node v22.21.0, Microsoft Windows NT 10.0.26200.0: before
+bundle: 63 JavaScript modules listed in bundle-manifest.json
+scan: 1 relative import(s) the bundle does not carry:
+  transcript-records.js -> ./workspace-follow-records.js
+load: 6 module(s) fail with ERR_MODULE_NOT_FOUND:
+  runtime-pane-service.js: ERR_MODULE_NOT_FOUND, cannot find module '<bundle>/dist/workspace-follow-records.js'
+  runtime-pane-host.js: ERR_MODULE_NOT_FOUND, cannot find module '<bundle>/dist/workspace-follow-records.js'
+  runtime-pane-transcript.js: ERR_MODULE_NOT_FOUND, cannot find module '<bundle>/dist/workspace-follow-records.js'
+  runtime-pane-quota-history.js: ERR_MODULE_NOT_FOUND, cannot find module '<bundle>/dist/workspace-follow-records.js'
+  transcript-records.js: ERR_MODULE_NOT_FOUND, cannot find module '<bundle>/dist/workspace-follow-records.js'
+  runtime-pane-process.js: ERR_MODULE_NOT_FOUND, cannot find module '<bundle>/dist/workspace-follow-records.js'
+exit=1
+== Windows Node v22.21.0, Microsoft Windows NT 10.0.26200.0: after
+bundle: 65 JavaScript modules listed in bundle-manifest.json
+scan: every relative import is in the bundle
+load: no module fails with ERR_MODULE_NOT_FOUND
+exit=0
+
+## start-pane-service.ps1, before then after
+== before
+pane host did not start: the process exited with code 1 before writing its descriptor
+== after
+pane host started: process alive, descriptor written (state files: 2)
+
+## node dist\runtime-pane-service.js (before): the error
+    throw new ERR_MODULE_NOT_FOUND(
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '<bundle>\dist\workspace-follow-records.js' imported from <bundle>\dist\transcript-records.js
+    at finalizeResolution (node:internal/modules/esm/resolve:274:11)
+    at moduleResolve (node:internal/modules/esm/resolve:859:10)
+    at defaultResolve (node:internal/modules/esm/resolve:983:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:731:20)
+    at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)
+    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)
