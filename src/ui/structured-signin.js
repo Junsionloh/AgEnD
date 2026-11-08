@@ -129,7 +129,9 @@ export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, change
       const card = el("section"); card.dataset.backend = backend;
       el("h3", name(backend), card);
       const state = view.states[backend], pending = view.pending.includes(backend), skipped = view.skipped.includes(backend);
-      el("p", tr(skipped ? "skipped" : state === "valid" ? "valid" : state === "not_installed" ? "notInstalled" : state === "console_only" ? "consoleOnly" : "needed"), card);
+      // AGEND-113: Antigravity is "console only" on the first-run list, but Settings → Accounts (`dialog`, or a computer's own sign-in) signs it in with `agy acp --login`: there it is a sign-in that is needed.
+      const agyHere = backend === "antigravity" && (dialog || machine);
+      el("p", tr(skipped ? "skipped" : state === "valid" ? "valid" : state === "not_installed" ? "notInstalled" : state === "console_only" && !agyHere ? "consoleOnly" : "needed"), card);
       const login = view.login?.backend === backend ? view.login : null;
       const active = login && login.phase !== "done" && !(login.phase === "failed" && login.reason);
       if (active) {
@@ -155,7 +157,7 @@ export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, change
         button(card, tr("cancel"), () => perform({ operation: "cancel" }));
       } else {
         if (login?.reason && login.reason !== "cancelled") el("p", errorText(login.reason), card);
-        const usable = !["antigravity"].includes(backend) && state !== "not_installed";
+        const usable = (backend !== "antigravity" || agyHere) && state !== "not_installed";
         if (usable) button(card, tr(state === "valid" ? "signInAgain" : "signIn"), async () => {
           const relogin = state === "valid";
           // Only Kiro signs its existing account out first; for the others a new sign-in simply replaces the login. Asked in the dashboard's own dialog when it gave one.

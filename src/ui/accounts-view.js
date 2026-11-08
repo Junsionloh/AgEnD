@@ -34,6 +34,7 @@ register("accounts", {
     fleetDefaultTag: "fleet default", resets: "resets {0}", resetsIn: "resets in {0}",
     usageLabel: "Usage", winHours: "{0}h", winDays: "{0}d", winWeek: "7d", winStale: "(stale)",
     signIn: "Sign in", signInAgain: "Sign in again", hostCommand: "Sign in on the host", hostCommandHint: "Run this in a terminal on the host running AgEnD.",
+    updateHint: "{0} needs a newer version before it can be signed in from here. Update it on the host:",
     moveHere: "Move agents here", moveTitle: "Move agents to {0}", moveLead: "Choose the {0} agents that should use {1}. Each restarts on it when you Save:",
     carry_claude: "Claude Code carries its conversation over.", carry_codex: "Codex keeps its conversation.", carry_kiro: "Kiro starts a new conversation, with a handover.",
     moveNone: "Every {0} agent already uses this account.", moveStage: "Stage", cancel: "Cancel", current: "now: {0}",
@@ -48,6 +49,9 @@ register("accounts", {
     why_not_installed: "Claude Code is not installed on {0}. Install it from Settings → Runtime.",
     why_not_created: "This account was not created by AgEnD's Runtime, so it can only be handled on {0}.",
     why_default_login: "This is the Windows user's own sign-in on {0}. It is never changed from here: add an account instead.",
+    why_cli_old: "Antigravity on {0} is too old to sign in from here (it needs 1.5.0 or newer). Update it on that computer.",
+    why_cli_missing: "Antigravity is not installed on {0}.",
+    machineOneLogin: "Antigravity keeps one sign-in per computer. Signing in here replaces the one on {0}.",
     acctLabel: "Account", acctInherit: "Fleet default ({0})", acctInheritDefault: "Fleet default (default sign-in)", acctNotSignedIn: "{0} — not signed in",
     acctHint: "Changing the account restarts the agent. A signed-out account can't be chosen: sign it in under Accounts first.",
     acctDefaultBlocked: "This fleet's default for {0} is “{1}”, so an agent follows it unless it names another account.",
@@ -62,6 +66,7 @@ register("accounts", {
     fleetDefaultTag: "Fleet 預設", resets: "{0} 重置", resetsIn: "{0} 後重置",
     usageLabel: "用量", winHours: "{0}h", winDays: "{0}天", winWeek: "本週", winStale: "（未更新）",
     signIn: "登入", signInAgain: "重新登入", hostCommand: "在主機上登入", hostCommandHint: "請在執行 AgEnD 的主機終端機執行。",
+    updateHint: "{0} 需要更新到較新的版本，才能從這裡登入。請在主機上更新：",
     moveHere: "移入 Agent", moveTitle: "把 Agent 移到 {0}", moveLead: "選擇要改用 {1} 的 {0} Agent。按「儲存」後，各自會以它重新啟動：",
     carry_claude: "Claude Code 會帶著對話過去。", carry_codex: "Codex 保留原本的對話。", carry_kiro: "Kiro 會開新對話並附上交接。",
     moveNone: "所有 {0} Agent 都已經使用這個帳號。", moveStage: "加入待儲存", cancel: "取消", current: "目前：{0}",
@@ -76,6 +81,9 @@ register("accounts", {
     why_not_installed: "{0} 上沒有安裝 Claude Code。請從「設定 → Runtime」安裝。",
     why_not_created: "這個帳號不是 AgEnD 的 Runtime 建立的，只能在 {0} 上處理。",
     why_default_login: "這是 {0} 上 Windows 使用者自己的登入，永遠不會從這裡更改：請改用新增帳號。",
+    why_cli_old: "{0} 上的 Antigravity 版本太舊，無法從這裡登入（需要 1.5.0 或更新）。請在那台電腦上更新它。",
+    why_cli_missing: "{0} 上沒有安裝 Antigravity。",
+    machineOneLogin: "Antigravity 每台電腦只能有一個登入。在這裡登入會取代 {0} 上現有的登入。",
     acctLabel: "帳號", acctInherit: "Fleet 預設（{0}）", acctInheritDefault: "Fleet 預設（預設登入）", acctNotSignedIn: "{0}——尚未登入",
     acctHint: "更換帳號會重新啟動 Agent。尚未登入的帳號不能選，請先在「帳號」登入。",
     acctDefaultBlocked: "這個 Fleet 的 {0} 預設帳號是「{1}」，Agent 除非指定其他帳號，否則會使用它。",
@@ -390,6 +398,8 @@ function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, ope
       ${stale ? html`<small class="s-usage-stale">${tx("winStale")}</small>` : null}
     </div>` : null}
     ${why ? html`<p class="note s-account-why">${why}</p>` : null}
+    ${machine && row.backend === "antigravity" && row.signIn && !readOnly ? html`<p class="note s-account-why">${tx("machineOneLogin", machine.name)}</p>` : null}
+    ${!readOnly && !machine && !row.signIn && row.update && row.state !== "too_old" ? html`<p class="note s-account-why">${tx("updateHint", cliLabel(row.backend))} <code>${row.update}</code></p>` : null}
     ${!readOnly && !row.signIn && row.hostCommand ? html`<details class="s-host-cli-help"><summary>${machine ? tx("machineCommand") : tx("hostCommand")}</summary><p class="note">${machine ? tx("machineCommandHint", machine.name) : tx("hostCommandHint")}</p><p class="s-host-cli-command"><code>${row.hostCommand}</code></p></details>` : null}
     ${!readOnly && row.keepAlive && (!row.scope || row.scope.kind === "host") ? html`<${KeepAliveControl} row=${row} onSaved=${() => refreshAccounts({ fresh: true })} />` : null}
   </div>`;

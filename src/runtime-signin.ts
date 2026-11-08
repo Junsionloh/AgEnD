@@ -5,6 +5,9 @@
  *  - The server sends a CLI id, a profile NAME and a method, never an argv, a command, a path or an environment. This module builds the
  *    command itself (`claude auth login`), sets `CLAUDE_CONFIG_DIR` to the profile's own folder, uses pipes (no terminal) and `BROWSER=true`
  *    so nothing opens on an unattended computer.
+ *  - The one exception to "a named profile": Antigravity (`agy acp --login`, Google OAuth). Its Windows login lives in the Credential Manager under one fixed
+ *    name, so there is no profile folder to sign into: the sign-in is the computer's own default login, with no profile name. The callers (runtime-remote-accounts.ts)
+ *    open that for Antigravity only, behind the same local `accounts` switch, one sign-in at a time, the ten-minute timeout, the start-rate limit and the audit record.
  *  - `capture()` is NOT the CLI's output. The raw output stays in this process, is bounded, and is reduced to lines of a closed table: the
  *    sign-in URL (https, an allowed host), the code prompt, and the outcome, each in its fixed form. Everything else is dropped, so an
  *    e-mail address in a success line (`Logged in as ...`) reaches the server as `Login successful`.
@@ -24,6 +27,14 @@ import { linkableLoginUrl } from "./login-url.js";
 
 /** What the Claude Code sign-in is. The server's `LOGIN_FLOWS["claude-code"]` carries the same argv and patterns; a test pins that they agree. */
 export const CLAUDE_LOGIN_ARGV = Object.freeze(["auth", "login"] as const);
+/**
+ * What the Antigravity sign-in is: `agy acp --login` ("Log in with Google interactively, then exit", agy >= 1.5.0). The server's structured sign-in launches the same words on the host,
+ * and `RUNTIME_SIGNIN_CLIS` maps them to the CLI id the server sends here; a test pins that they agree. A subscription (Google OAuth) sign-in only: no project, no API key.
+ */
+export const AGY_LOGIN_ARGV = Object.freeze(["acp", "--login"] as const);
+/** The CLIs this module signs in. Claude Code only ever signs a NAMED profile in; Antigravity only ever the computer's own default login (it has no profile folder on Windows). */
+export type SignInCli = "claude-code" | "antigravity";
+export const DEFAULT_LOGIN_CLI = "antigravity" as const;
 export const CLAUDE_LOGIN_METHOD_FLAGS = Object.freeze({ subscription: "--claudeai", console: "--console" } as const);
 export type SignInMethod = keyof typeof CLAUDE_LOGIN_METHOD_FLAGS;
 export const SIGNIN_TTL_MS = 10 * 60_000;
@@ -41,6 +52,17 @@ export const REDUCED_CODE_PROMPT = "Paste code here if prompted >";
 export const REDUCED_SUCCESS = "Login successful";
 export const REDUCED_REJECTED = "Login failed: Request failed with status code 400";
 export const REDUCED_INVALID_CODE = "Invalid code";
+/**
+ * The Antigravity screen's closed vocabulary. `agy acp --login` prints (measured with agy 1.5.3, the same through pipes and a terminal): "Open this link in a browser to log in with Google:",
+ * a blank line and the link on its own line, then "Then paste the authorization code, or the full URL of the page you land on, and press Enter:". It prints no success line that has been
+ * seen (success is the process ending with exit 0 and `agy models` working, never a word on the screen), "login cancelled: ..." when no code was entered, and "couldn't log in: ..." when
+ * the code was refused. The reduced screen has exactly these four forms and nothing else of the CLI's text. Each form is also a line the CLI itself writes (the link on the sentence's own
+ * line, the prompt as printed, the two endings cut to their first words), so reducing a reduced screen changes nothing: the server reads it once more, as the table says.
+ */
+export const REDUCED_AGY_URL_PREFIX = "Open this link in a browser to log in with Google: ";
+export const REDUCED_AGY_CODE_PROMPT = "Then paste the authorization code, or the full URL of the page you land on, and press Enter:";
+export const REDUCED_AGY_REJECTED = "couldn't log in";
+export const REDUCED_AGY_CANCELLED = "login cancelled";
 
 /** A refusal with our own text: no URL, code, output or path in it. */
 export class SignInRefusal extends Error { constructor(message: string, readonly reason: "busy" | "rate_limited" | "invalid_request" | "timeout" | "failed") { super(message); this.name = "SignInRefusal"; } }
@@ -74,11 +96,44 @@ export function reduceClaudeLoginScreen(raw: string): string {
 }
 const PROMPT_PREFIX = /^Paste code here if prompted >\s*/;
 /** https, an allowed host, no credentials, bounded, printable ASCII after parsing; returns the parsed form. */
-function checkedLoginUrl(text: string): string | undefined {
+function checkedLoginUrl(text: string, cli: SignInCli = "claude-code"): string | undefined {
   if (text.length > MAX_URL) return undefined;
-  let href: string; try { href = new URL(text).href; } catch { return undefined; }
-  return href.length <= MAX_URL && /^https:\/\/[\x21-\x7e]+$/.test(href) && linkableLoginUrl("claude-code", href) ? href : undefined;
+  let parsed: URL; try { parsed = new URL(text); } catch { return undefined; }
+  const href = parsed.href;
+  // Antigravity's sign-in page is Google's account chooser, on exactly this host (not a subdomain, not another port).
+  if (cli === "antigravity" && (parsed.hostname.toLowerCase() !== "accounts.google.com" || parsed.port)) return undefined;
+  return href.length <= MAX_URL && /^https:\/\/[\x21-\x7e]+$/.test(href) && linkableLoginUrl(cli, href) ? href : undefined;
 }
+/**
+ * Antigravity's closed table: the sign-in link (https, `accounts.google.com` only, on the line after the sentence or on its own line), the code prompt when it is the last line, and
+ * "Login failed" / "Login cancelled" for the two endings `agy acp --login` words. Nothing else is kept, so no account name or path in the CLI's text can reach the server.
+ */
+export function reduceAgyLoginScreen(raw: string): string {
+  const lines = raw.replace(ANSI, "").replace(/\r/g, "\n").split("\n").map(line => line.trim()).filter(Boolean);
+  let url: string | undefined, outcome: string | undefined, announced = false;
+  for (const line of lines) {
+    if (line.length > MAX_LINE) continue;
+    if (/^Open this link in a browser to log in with Google:?$/.test(line)) { announced = true; continue; }
+    // The link is the line that follows the sentence (or the sentence's own line, in case a later agy joins them); only what follows the sentence is taken as the link.
+    const inline = /^Open this link in a browser to log in with Google:\s*(https:\/\/[\x21-\x7e]+)$/.exec(line);
+    const alone = announced ? /^(https:\/\/[\x21-\x7e]+)$/.exec(line) : null;
+    const candidate = inline?.[1] ?? alone?.[1];
+    if (candidate) { announced = false; const href = checkedLoginUrl(candidate, "antigravity"); if (href) url = href; continue; }
+    announced = false;
+    if (/^login cancelled\b/i.test(line)) outcome = REDUCED_AGY_CANCELLED;
+    else if (/^couldn't log in\b/i.test(line)) outcome = REDUCED_AGY_REJECTED;
+  }
+  if (outcome) return `${outcome}\n`;
+  const last = lines[lines.length - 1];
+  const asking = last !== undefined && /^Then paste the authorization code\b.*press Enter:$/.test(last);
+  return `${url ? `${REDUCED_AGY_URL_PREFIX}${url}\n` : ""}${asking ? `${REDUCED_AGY_CODE_PROMPT}\n` : ""}`;
+}
+/** The closed table of one CLI's sign-in screen. */
+export function reduceLoginScreen(cli: SignInCli, raw: string): string {
+  return cli === "antigravity" ? reduceAgyLoginScreen(raw) : reduceClaudeLoginScreen(raw);
+}
+/** The line of the reduced screen that means "type the code now", per CLI. */
+export function reducedCodePrompt(cli: SignInCli): string { return cli === "antigravity" ? REDUCED_AGY_CODE_PROMPT : REDUCED_CODE_PROMPT; }
 
 /**
  * What the server's driver sends for a code: `\x15` (clears a prefilled prompt), the code, `\r`. Anything else (menu keys, a second line,
@@ -97,6 +152,8 @@ export interface SignInLaunch {
   args: readonly string[];
   env: NodeJS.ProcessEnv;
   method: SignInMethod;
+  /** Which CLI's sign-in this is (default Claude Code). Antigravity's is `acp --login` under the computer's own login, so `method` does not apply to it. */
+  cli?: SignInCli;
 }
 export type SignInSpawn = (command: string, args: readonly string[], options: SpawnOptions) => ChildProcess;
 export interface SignInDeps { spawn?: SignInSpawn; now?: () => number; ttlMs?: number; scratchRoot?: string; kill?: (child: ChildProcess) => void; /** How long close() waits for the child's `close` after killing it (default 5 s). */ closeWaitMs?: number; /** The ten minutes ran out: the owner records it, and this ends the attempt. */ onTimeout?: () => void }
@@ -125,12 +182,15 @@ export class RuntimeSignIn {
   private readonly timer: ReturnType<typeof setTimeout>;
   private readonly gone: Promise<void>;
   private markGone!: () => void;
+  /** Which CLI this attempt signs in: it decides the command, the screen's table and how a code is ended. */
+  readonly cli: SignInCli;
   constructor(launch: SignInLaunch, private readonly deps: SignInDeps = {}) {
+    this.cli = launch.cli ?? "claude-code";
     this.gone = new Promise(done => { this.markGone = done; });
     this.scratch = mkdtempSync(join(deps.scratchRoot ?? tmpdir(), "agend-signin-"));
     try {
       const child = this.child = (deps.spawn ?? (guardedSpawn as unknown as SignInSpawn))(launch.command,
-        [...launch.args, ...CLAUDE_LOGIN_ARGV, CLAUDE_LOGIN_METHOD_FLAGS[launch.method]],
+        [...launch.args, ...(this.cli === "antigravity" ? AGY_LOGIN_ARGV : [...CLAUDE_LOGIN_ARGV, CLAUDE_LOGIN_METHOD_FLAGS[launch.method]])],
         { cwd: this.scratch, env: { ...launch.env, BROWSER: "true" }, shell: false, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
       const take = (chunk: Buffer | string): void => { this.raw = (this.raw + chunk.toString()).slice(-MAX_RAW); };
       child.stdout?.on("data", take); child.stderr?.on("data", take);
@@ -143,7 +203,7 @@ export class RuntimeSignIn {
     this.timer = setTimeout(() => { if (deps.onTimeout) deps.onTimeout(); else void this.close().catch(() => {}); }, deps.ttlMs ?? SIGNIN_TTL_MS); this.timer.unref?.();
   }
   /** The reduced screen: lines of the closed table only. */
-  capture(): string { return reduceClaudeLoginScreen(this.raw); }
+  capture(): string { return reduceLoginScreen(this.cli, this.raw); }
   status(): { alive: boolean; exitCode?: number } { return this.exited ? { alive: false, ...(this.exited.code !== null ? { exitCode: this.exited.code } : {}) } : { alive: !!this.child }; }
   /**
    * Everything that can be refused about a code without sending it: its form, the attempt being over, a code already written, the prompt not showing.
@@ -153,14 +213,15 @@ export class RuntimeSignIn {
     const code = checkedSignInInput(input);
     if (this.closeRun || this.exited || !this.child?.stdin?.writable) throw new SignInRefusal("This sign-in has ended", "invalid_request");
     if (this.codeWritten) throw new SignInRefusal("A sign-in takes one code", "invalid_request");
-    if (!this.capture().endsWith(`${REDUCED_CODE_PROMPT}\n`)) throw new SignInRefusal("This sign-in is not asking for a code", "invalid_request");
+    if (!this.capture().endsWith(`${reducedCodePrompt(this.cli)}\n`)) throw new SignInRefusal("This sign-in is not asking for a code", "invalid_request");
     return code;
   }
   /** One code, only while the code prompt is the screen. */
   async write(input: unknown): Promise<void> {
     const code = this.assertWritable(input);
     this.codeWritten = true;
-    await new Promise<void>((done, fail) => this.child!.stdin!.write(`${code}\r`, error => error ? fail(error) : done()));
+    // Claude reads its code raw and takes a carriage return; `agy acp --login` reads a line from a pipe, which ends with a line feed.
+    await new Promise<void>((done, fail) => this.child!.stdin!.write(`${code}${this.cli === "antigravity" ? "\n" : "\r"}`, error => error ? fail(error) : done()));
   }
   /**
    * Ends exactly this child, removes the scratch folder, and resolves only when the child is gone; rejects when that cannot be shown. A failed

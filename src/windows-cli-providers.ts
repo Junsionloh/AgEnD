@@ -346,6 +346,9 @@ export function parseNativeAuthResult(cli: NativeProviderId, ok: boolean, output
   }
   // The one reader of `claude auth status` (also the host's authCheck and the account identity): see claude-auth-status.ts.
   if (cli === "claude-code") return parseClaudeAuthStatus(output).loggedIn;
+  // Antigravity: the answer of `agy models`. Signed in lists models and exits 0; signed out exits 1 saying "Please sign in to view available models" (agy 1.5.3). A failure that does not say so
+  // (the network, a timeout) is unknown.
+  if (cli === "antigravity") return ok && output.trim() ? true : !ok && /\bplease sign in\b/i.test(output) ? false : null;
   return null;
 }
 

@@ -11,20 +11,29 @@
  *  - `close()`: ends exactly the sign-in this transport started and answers only when the Runtime says it is gone (or that it is no longer running).
  *  - `checkAuth` (`runtimeCheckAuth`): the CLI's own `auth status` for that profile on the computer, as a masked identity; text alone is never success.
  *
+ * Antigravity (AGEND-113) is the one CLI with no profile: its login on Windows is one entry in the Credential Manager, so its sign-in is the computer's own default login. For it
+ * `profile` is absent from the options and from the frames (`{cli, method, actor}`), and `accounts.check` is asked as `{cli}`. Every other CLI still needs the profile NAME.
+ *
  * Nothing from a reply is logged here, and errors are fixed words: a URL, a code, output or an e-mail address cannot travel in one.
  */
 import type { StructuredSignInLaunch, StructuredSignInTransport } from "./structured-signin.js";
 import type { AuthCheckResult } from "./login-flows.js";
 import { parseAccountIdentity, type AccountIdentity } from "./claude-auth-status.js";
-import { reduceClaudeLoginScreen } from "./runtime-signin.js";
+import { DEFAULT_LOGIN_CLI, reduceLoginScreen, type SignInCli } from "./runtime-signin.js";
 import { validCredentialProfileName } from "./runtime-credential-profiles.js";
 import type { RuntimeRemoteOperation, RuntimeRemotePayloads } from "./runtime-protocol.js";
 
 /** Sends one `account.request` to a computer (`RuntimeCoordinator.callAccount`) and gives back its reply. */
 export type AccountCaller = <K extends RuntimeRemoteOperation>(machineId: string, operation: K, payload: RuntimeRemotePayloads[K], timeoutMs?: number) => Promise<unknown>;
 
-/** The sign-ins a computer can run for the dashboard: the CLI's id, and the exact argv `StructuredSignIn` launches for it. Only subscription sign-ins (the Runtime refuses Console). */
-export const RUNTIME_SIGNIN_CLIS: Readonly<Record<string, readonly string[]>> = Object.freeze({ "claude-code": Object.freeze(["claude", "auth", "login"]) });
+/**
+ * The sign-ins a computer can run for the dashboard: the CLI's id, and the exact argv `StructuredSignIn` launches for it. Only subscription sign-ins (the Runtime refuses Console).
+ * Antigravity's is `agy acp --login` (agy >= 1.5.0), a Google-account sign-in of the computer's own default login (no profile).
+ */
+export const RUNTIME_SIGNIN_CLIS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  "claude-code": Object.freeze(["claude", "auth", "login"]),
+  [DEFAULT_LOGIN_CLI]: Object.freeze(["agy", "acp", "--login"]),
+});
 const MAX_SCREEN = 16 * 1024;
 const SESSION_ID = /^[a-f0-9]{32}$/;
 /** What the Runtime says when a sign-in it is asked about is not (or no longer) the one it is running: the child is gone, which is what `close()` must prove. */
@@ -40,8 +49,8 @@ const record = (value: unknown): value is Record<string, unknown> => !!value && 
 
 export interface RuntimeSignInTransportOptions {
   machineId: string;
-  /** The credential profile NAME on that computer. */
-  profile: string;
+  /** The credential profile NAME on that computer. Absent exactly for Antigravity's default login. */
+  profile?: string;
   /** The name the computer's audit log records for the person who asked (`admin:<handle>`). */
   actor: string;
   call: AccountCaller;
@@ -50,6 +59,7 @@ export interface RuntimeSignInTransportOptions {
 export function createRuntimeSignInTransport(options: RuntimeSignInTransportOptions): StructuredSignInTransport {
   const { machineId, profile, actor, call } = options;
   let sessionId: string | null = null;
+  let started: SignInCli = "claude-code";
   let closed = false;
   const guard = (signal?: AbortSignal): void => { if (closed || signal?.aborted) throw new Error("signin_cancelled"); };
   const live = (): string => { if (!sessionId) throw new Error("signin_not_started"); return sessionId; };
@@ -57,8 +67,11 @@ export function createRuntimeSignInTransport(options: RuntimeSignInTransportOpti
     async start(spec: StructuredSignInLaunch, signal: AbortSignal): Promise<void> {
       guard(signal);
       const cli = cliOf(spec.argv);
-      if (!cli || spec.logoutArgv || spec.profile !== profile || !validCredentialProfileName(profile)) throw new Error("signin_unsupported");
-      const answer = await call(machineId, "signin.start", { cli, profile, method: "subscription", actor });
+      // A named profile for every CLI but Antigravity, which has none (a profile for it would be ignored by the Runtime, and the default login would change under a name that means nothing).
+      const bare = cli === DEFAULT_LOGIN_CLI;
+      if (!cli || spec.logoutArgv || (bare ? spec.profile !== undefined || profile !== undefined : spec.profile !== profile || !validCredentialProfileName(profile))) throw new Error("signin_unsupported");
+      const answer = await call(machineId, "signin.start", bare ? { cli, method: "subscription", actor } : { cli, profile: profile!, method: "subscription", actor });
+      started = bare ? DEFAULT_LOGIN_CLI : "claude-code";
       const id = record(answer) ? answer.sessionId : undefined;
       if (typeof id !== "string" || !SESSION_ID.test(id)) throw new Error("signin_protocol");
       sessionId = id;                                 // from here the Runtime holds a child: close() must end it, whatever happens next
@@ -70,7 +83,7 @@ export function createRuntimeSignInTransport(options: RuntimeSignInTransportOpti
       const screen = record(answer) ? answer.screen : undefined;
       if (typeof screen !== "string" || screen.length > MAX_SCREEN) throw new Error("signin_protocol");
       // The closed table again, on this side: only the URL (https, an allowed host), the code prompt and the fixed outcome lines survive.
-      return reduceClaudeLoginScreen(screen);
+      return reduceLoginScreen(started, screen);
     },
     async status(): Promise<{ alive: boolean; exitCode?: number }> {
       guard();
@@ -100,6 +113,17 @@ export function createRuntimeSignInTransport(options: RuntimeSignInTransportOpti
       sessionId = null;
     },
   };
+}
+
+/**
+ * Antigravity's own login on a computer (`agy models` by its exit code, read on that computer): signed in, signed out, or unknown. No identity: agy's answer has no account in it and
+ * nothing is shown. Any reply that is not exactly true or false is unknown.
+ */
+export async function runtimeDefaultLoginStatus(call: AccountCaller, machineId: string, cli: typeof DEFAULT_LOGIN_CLI = DEFAULT_LOGIN_CLI): Promise<{ state: AuthCheckResult }> {
+  let answer: unknown;
+  try { answer = await call(machineId, "accounts.check", { cli }); } catch { return { state: "unknown" }; }
+  if (!record(answer) || ![true, false, null].includes(answer.loggedIn as boolean | null)) return { state: "unknown" };
+  return { state: answer.loggedIn === true ? "valid" : answer.loggedIn === false ? "invalid" : "unknown" };
 }
 
 /** The CLI's own `auth status` for one profile on a computer: signed in (masked identity), signed out, or unknown. A profile with no folder yet is signed out. */

@@ -76,12 +76,13 @@ export type RuntimeSignInMethod = "subscription" | "console";
 export interface RuntimeSwitchStates { accounts: { on: boolean; until?: number }; install: { on: boolean; until?: number } }
 export interface RuntimeRemotePayloads {
   "accounts.switches": Record<string, never>;
-  "signin.start": { cli: string; profile: string; method: RuntimeSignInMethod; actor: string };
+  /** `profile` is a credential profile NAME, and is absent exactly for Antigravity's default sign-in (the Runtime checks that pairing: a CLI that has profiles needs one, Antigravity has none). */
+  "signin.start": { cli: string; profile?: string; method: RuntimeSignInMethod; actor: string };
   "signin.capture": { sessionId: string };
   "signin.status": { sessionId: string };
   "signin.write": { sessionId: string; input: string };
   "signin.close": { sessionId: string };
-  "accounts.check": { cli: string; profile: string };
+  "accounts.check": { cli: string; profile?: string };
   "accounts.signout": { cli: string; profile: string; actor: string };
   "accounts.remove": { cli: string; profile: string; actor: string };
   "cli.install": { cli: string; actor: string };
@@ -90,6 +91,8 @@ const REMOTE_KEYS: { [K in RuntimeRemoteOperation]: readonly (keyof RuntimeRemot
   "accounts.switches": [], "signin.start": ["cli", "profile", "method", "actor"], "signin.capture": ["sessionId"], "signin.status": ["sessionId"], "signin.write": ["sessionId", "input"],
   "signin.close": ["sessionId"], "accounts.check": ["cli", "profile"], "accounts.signout": ["cli", "profile", "actor"], "accounts.remove": ["cli", "profile", "actor"], "cli.install": ["cli", "actor"],
 };
+/** Fields that may be left out of a payload, per operation. Only `profile` of a sign-in start and of a status check (Antigravity's default login has none). */
+const REMOTE_OPTIONAL: { [K in RuntimeRemoteOperation]?: readonly string[] } = { "signin.start": ["profile"], "accounts.check": ["profile"] };
 /**
  * Closed check of a remote-operation payload: exactly the fields listed, each a short string of its own shape, and nothing else. The error names
  * the field, never its value (a rejected payload could carry a code). The CLI id and profile name are checked again, in full, where they are used.
@@ -101,6 +104,7 @@ export function parseRuntimeRemotePayload<K extends RuntimeRemoteOperation>(oper
   for (const key of Object.keys(input)) if (!allowed.includes(key)) return fail("unknown field");
   for (const key of allowed) {
     const value = input[key];
+    if (value === undefined && !Object.hasOwn(input, key) && REMOTE_OPTIONAL[operation]?.includes(key)) continue;   // a field left out, not one set to something else
     if (typeof value !== "string") return fail(key);
     const pattern = key === "cli" ? /^[a-z][a-z0-9-]{0,31}$/ : key === "profile" ? /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/ : key === "actor" ? /^[A-Za-z0-9._:-]{1,64}$/
       : key === "sessionId" ? /^[a-f0-9]{32}$/ : key === "method" ? /^(?:subscription|console)$/ : undefined;

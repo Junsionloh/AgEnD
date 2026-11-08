@@ -1127,12 +1127,15 @@ function handleBrowserBackendSignIns(req: IncomingMessage, res: ServerResponse, 
   // `?backend=<cli>&profile=<name>` addresses them for a named account on THIS host (profile-signins.ts). Nothing else is accepted in the query, and both are checked
   // in full before anything else happens.
   const keys = [...url.searchParams.keys()];
-  let target: { machine: string; profile: string } | null = null;
+  let target: { machine: string; profile?: string; backend?: "antigravity" } | null = null;
   let account: { backend: string; profile: string } | null = null;
   if (keys.length) {
     const machine = url.searchParams.get("machine"), backend = url.searchParams.get("backend"), profile = url.searchParams.get("profile");
     const shape = keys.length === 2 && new Set(keys).size === 2 && profile && validCredentialProfileName(profile);
-    if (shape && machine && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(machine) && !backend) target = { machine, profile };
+    const computer = !!machine && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(machine);
+    if (shape && computer && !backend) target = { machine: machine!, profile };
+    // AGEND-113: `?machine=<id>&backend=antigravity` is that computer's own Antigravity login: no profile in the address (it has none), and nothing but these two keys.
+    else if (keys.length === 2 && new Set(keys).size === 2 && computer && backend === "antigravity" && !profile) target = { machine: machine!, backend: "antigravity" };
     else if (shape && backend === "claude-code" && !machine) account = { backend, profile };
     else { json(res, 404, { error: "not_found" }); return true; }
   }
@@ -1148,9 +1151,9 @@ function handleBrowserBackendSignIns(req: IncomingMessage, res: ServerResponse, 
         if (!permitWebContinuation(req, res, ctx)) return;
         if (who() !== owner) { json(res, 409, { error: "signin_session_expired" }); return; }
         let body: unknown; try { body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { json(res, 400, { error: "sign_in_json" }); return; }
-        // Only what a computer's sign-in can do: start (Claude Code, subscription: the Runtime builds the command), answer a prompt, cancel, read again.
+        // Only what a computer's sign-in can do: start (Claude Code or Antigravity, subscription: the Runtime builds the command; the address says which one), answer a prompt, cancel, read again.
         const parsed = z.discriminatedUnion("operation", [
-          z.strictObject({ operation: z.literal("start"), backend: z.literal("claude-code"), relogin: z.boolean().optional() }),
+          z.strictObject({ operation: z.literal("start"), backend: z.literal(target.backend ?? "claude-code"), relogin: z.boolean().optional() }),
           z.strictObject({ operation: z.literal("input"), id: z.string().regex(/^[0-9a-f]{32}$/), revision: z.number().int().nonnegative(), action: z.discriminatedUnion("kind", [
             z.strictObject({ kind: z.literal("method"), choice: z.string().max(32) }),
             z.strictObject({ kind: z.enum(["code", "start_url", "region"]), value: z.string().max(4096) }),
@@ -1197,7 +1200,7 @@ function handleBrowserBackendSignIns(req: IncomingMessage, res: ServerResponse, 
       let body: unknown; try { body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { json(res, 400, { error: "sign_in_json" }); return; }
       const parsed = z.discriminatedUnion("operation", [
         z.strictObject({ operation: z.literal("select"), backends: z.array(z.enum(["kiro-cli", "claude-code", "codex", "antigravity"])).max(4) }),
-        z.strictObject({ operation: z.literal("start"), backend: z.enum(["kiro-cli", "claude-code", "codex"]), relogin: z.boolean().optional() }),
+        z.strictObject({ operation: z.literal("start"), backend: z.enum(["kiro-cli", "claude-code", "codex", "antigravity"]), relogin: z.boolean().optional() }),
         z.strictObject({ operation: z.literal("input"), id: z.string().regex(/^[0-9a-f]{32}$/), revision: z.number().int().nonnegative(), action: z.discriminatedUnion("kind", [
           z.strictObject({ kind: z.literal("method"), choice: z.string().max(32) }),
           z.strictObject({ kind: z.enum(["code", "start_url", "region"]), value: z.string().max(4096) }),

@@ -1,5 +1,5 @@
 /** Shared pre-fleet/dashboard orchestration. Contains no fleet or HTTP authority. */
-import { StructuredSignIn, structuredSignInSupported, type StructuredBackend,
+import { StructuredSignIn, structuredSignInStartable, structuredSignInSupported, type StructuredBackend,
   type SignInAction, type StructuredSignInTransport, type StructuredSignInView } from "./structured-signin.js";
 import { LoginWindowLock } from "./login-window-lock.js";
 import type { AuthCheckResult } from "./login-flows.js";
@@ -14,6 +14,11 @@ export interface BrowserBackendSignInDeps {
   checkAuth(backend: StructuredBackend): Promise<AuthCheckResult>;
   checkConsoleAuth?(): Promise<AuthCheckResult>;
   transport(backend: StructuredBackend): StructuredSignInTransport;
+  /**
+   * AGEND-113: Antigravity may be STARTED here (`agy acp --login`, from Settings → Accounts). The first-run checklist does not set this, so there it stays "console only" as #2599 left it:
+   * `refresh` reads its state through `checkConsoleAuth` either way.
+   */
+  antigravity?: boolean;
   lock?: LoginWindowLock;
   changed?(event: { backend: StructuredBackend; phase: string; reason?: string }, owner: object, launched: boolean): void;
 }
@@ -114,7 +119,8 @@ export class BrowserBackendSignIns {
   }
   async begin(owner: object, backend: string, relogin = false): Promise<BrowserBackendSignInSnapshot> {
     if (!this.current(owner)) throw new Error("signin_session_expired");
-    if (!structuredSignInSupported(backend) || !this.record.selected.includes(backend)) throw new Error("signin_console_only");
+    // AGEND-113: Antigravity can be started where the host says so (Settings → Accounts), though the checklist keeps it "console only" (`refresh` below still reads it through `checkConsoleAuth`).
+    if (!(structuredSignInSupported(backend) || (this.deps.antigravity === true && structuredSignInStartable(backend))) || !this.record.selected.includes(backend)) throw new Error("signin_console_only");
     if (this.run?.session.view(this.run.owner).reason === "cleanup_failed") throw new Error("signin_cleanup_failed");
     if (this.run && !this.terminal(this.run)) return this.snapshot(owner); // refresh/double click joins
     const session = new StructuredSignIn(backend, owner, {

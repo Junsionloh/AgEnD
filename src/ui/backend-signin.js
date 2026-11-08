@@ -174,7 +174,7 @@ export function installerSignInBackends(search) {
  * The server's `CHAT_PROFILE_LOGIN_BACKENDS` (a login screen that was checked under a relocated home); a named kiro or codex account is not signed in from the dashboard at
  * all (its row has no Sign in button), and the older dialog is what says so, with the command to run on the machine.
  */
-const STRUCTURED_BACKENDS = ["kiro-cli", "claude-code", "codex"];
+const STRUCTURED_BACKENDS = ["kiro-cli", "claude-code", "codex", "antigravity"];   // AGEND-113: Antigravity's `agy acp --login`, from Settings → Accounts (the first-run list keeps it on the console fallback)
 const STRUCTURED_PROFILE_BACKENDS = ["claude-code"];
 /** One named account's sign-in controls on this host (the same endpoint as the default account's, addressed by `?backend=&profile=`). */
 export const profileSignInEndpoint = (backend, profile) => `/ui/browser-backend-signins?backend=${encodeURIComponent(backend)}&profile=${encodeURIComponent(profile)}`;

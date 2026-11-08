@@ -71,6 +71,16 @@ export function versionBelow(a: string, b: string): boolean {
   return false;
 }
 
+/**
+ * AGEND-113: `agy acp --login` ("Log in with Google interactively, then exit") exists from agy 1.5.0. The dashboard signs Antigravity in with it, so an agy below this (or one whose version
+ * is not known) keeps "Sign in on the host" and is told to update. Not a MIN_SUPPORTED_VERSION: an older agy still runs agents, it only cannot be signed in from the page.
+ */
+export const AGY_LOGIN_MIN_VERSION = "1.5.0";
+export function agyLoginSupported(version: string | null | undefined): boolean {
+  const found = typeof version === "string" ? /(\d+(?:\.\d+)+)/.exec(version) : null;
+  return !!found && !versionBelow(found[1]!, AGY_LOGIN_MIN_VERSION);
+}
+
 /** The state for what the probes answered. Pure. */
 export function availabilityState(a: { installed: boolean | null; version: string | null; auth: AuthState; minVersion: string | null }): AvailabilityState {
   if (a.installed === false) return "not_installed";

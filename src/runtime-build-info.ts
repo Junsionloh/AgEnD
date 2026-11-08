@@ -7,7 +7,7 @@ import { RUNTIME_PANE_MODULES } from "./runtime-pane-assets.js";
 import { RUNTIME_PROTOCOL_VERSION, validRuntimeVersion, type RuntimeInfo } from "./runtime-protocol.js";
 import { RUNTIME_CREDENTIAL_CAPABILITY } from "./runtime-credential-profiles.js";
 import { ACCOUNT_IDENTITY_CAPABILITY } from "./claude-auth-status.js";
-import { CLI_INSTALL_CAPABILITY, REMOTE_SIGNIN_CAPABILITY } from "./runtime-remote-setup.js";
+import { CLI_INSTALL_CAPABILITY, REMOTE_SIGNIN_CAPABILITY, SIGNIN_ANTIGRAVITY_CAPABILITY } from "./runtime-remote-setup.js";
 import { nativeInstallSupported } from "./runtime-cli-install.js";
 
 export const RUNTIME_BUNDLE_MODULES = Object.freeze([
@@ -32,7 +32,7 @@ export function runtimeCodeBuildId(version: string, modules: ReadonlyArray<reado
 /** Missing package metadata stays unknown; the coordinator's version is never substituted. */
 export function readRuntimeInfo(options: { moduleDirectory?: string; packagePath?: string; panes?: boolean; /** The Runtime has its own CLI installer (native Windows). */ install?: boolean } = {}): RuntimeInfo {
   const directory = options.moduleDirectory ?? dirname(fileURLToPath(import.meta.url));
-  const result: RuntimeInfo = { protocolVersions: [RUNTIME_PROTOCOL_VERSION], capabilities: ["exec", "mcp", ...((options.panes ?? process.platform === "win32") ? ["panes"] : []), RUNTIME_CREDENTIAL_CAPABILITY, ACCOUNT_IDENTITY_CAPABILITY, REMOTE_SIGNIN_CAPABILITY,
+  const result: RuntimeInfo = { protocolVersions: [RUNTIME_PROTOCOL_VERSION], capabilities: ["exec", "mcp", ...((options.panes ?? process.platform === "win32") ? ["panes"] : []), RUNTIME_CREDENTIAL_CAPABILITY, ACCOUNT_IDENTITY_CAPABILITY, REMOTE_SIGNIN_CAPABILITY, SIGNIN_ANTIGRAVITY_CAPABILITY,
     // Claimed only when this Runtime has an installer (native Windows x64): AgEnD must not offer an install to one that cannot do it.
     ...((options.install ?? nativeInstallSupported()) ? [CLI_INSTALL_CAPABILITY] : [])] };
   try {

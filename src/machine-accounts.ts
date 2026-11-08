@@ -12,12 +12,14 @@
  * Only the fleet's local admin session reaches this (web-api.ts checks it before the body is read and again after it). Nothing here keeps or logs a URL, a code,
  * the Runtime's output, a path or an e-mail address; an error from a computer is its own refusal sentence (bounded, no control characters) or one of ours.
  */
-import { MACHINE_ACCOUNT_CLIS, type MachineAccountsInput, type MachineReadOnlyReason } from "./accounts-view.js";
+import { MACHINE_ACCOUNT_CLIS, type MachineAccountsInput, type MachineDefaultLogin, type MachineReadOnlyReason } from "./accounts-view.js";
+import { agyLoginSupported } from "./backend-availability.js";
+import { SIGNIN_ANTIGRAVITY_CAPABILITY } from "./runtime-remote-setup.js";
 import { inventoryProbed } from "./windows-cli.js";
 import { validCredentialProfileName, type CredentialProfileStatus } from "./runtime-credential-profiles.js";
 import type { RuntimeMachine } from "./runtime-protocol.js";
 import type { AccountCaller } from "./runtime-signin-transport.js";
-import type { MachineRefusal } from "./machine-signins.js";
+import type { MachineRefusal, MachineSignInBackend } from "./machine-signins.js";
 
 /** Who asked, as the computer's audit log records them (`admin:<handle>`), and as the fleet log names them. */
 export interface MachineActor { id: string; actor: string }
@@ -34,6 +36,8 @@ export interface MachineAccountsDeps {
   agents(machineId: string): ReadonlyArray<{ name: string; profile: string | null }>;
   /** A dashboard sign-in for this computer and profile is running or not shown gone. */
   signingIn(machineId: string, profile: string): boolean;
+  /** Agents that run on this computer and use this CLI (by name). For a CLI without profiles (Antigravity). */
+  cliAgents?(machineId: string, backend: string): string[];
   /** The fleet log. Names and ids only. */
   log(entry: { machine: string; machineName: string; profile: string; by: string; action: "added" | "add_checked" | "removed" | "signed_out"; outcome: "ok" | "refused"; reason?: string }): void;
   now?(): number;
@@ -58,6 +62,11 @@ interface PendingChange { at: number | undefined; removed: Set<string>; signedOu
 
 export class MachineAccounts {
   private readonly changes = new Map<string, PendingChange>();
+  /**
+   * A computer's own Antigravity login, signed in a moment ago from here, kept only until that computer's next inventory arrives (as `changes` does for a profile): the inventory the page reads
+   * is the last explicit detection, which agy is never re-run for on a read, so it would say "not signed in" for a login that has just been made.
+   */
+  private readonly defaultLogins = new Map<string, { at: number | undefined; loggedIn: boolean }>();
   private readonly switchCache = new Map<string, { at: number; on: boolean | null }>();
   private readonly switchReads = new Map<string, Promise<boolean | null>>();
   constructor(private readonly deps: MachineAccountsDeps) {}
@@ -96,6 +105,24 @@ export class MachineAccounts {
   }
   private static capable(machine: RuntimeMachine): boolean { return machine.runtimeInfo?.capabilities.includes("remote-signin") === true; }
   private static claude(machine: RuntimeMachine) { return machine.inventory?.clis.find(row => row.id === "claude-code"); }
+  /** AGEND-113: this Runtime can sign Antigravity's default login in. A Runtime that only has `remote-signin` would refuse the request, so it is not offered. */
+  private static agyCapable(machine: RuntimeMachine): boolean { return machine.runtimeInfo?.capabilities.includes(SIGNIN_ANTIGRAVITY_CAPABILITY) === true; }
+  private static agy(machine: RuntimeMachine) { return machine.inventory?.clis.find(row => row.id === "antigravity"); }
+  /** What a computer last reported about its own Antigravity login, with a login made from here since then applied. `unknown` when it has not said. */
+  reportedDefault(machineId: string, backend: "antigravity"): "valid" | "invalid" | "unknown" {
+    const machine = this.deps.machine(machineId);
+    if (!machine) return "unknown";
+    const note = this.defaultLogins.get(machineId);
+    if (note && machine.inventoryUpdatedAt === note.at) return note.loggedIn ? "valid" : "invalid";
+    if (note) this.defaultLogins.delete(machineId);                                  // a newer inventory is the truth
+    const row = MachineAccounts.agy(machine);
+    return row?.authenticated === true ? "valid" : row?.authenticated === false ? "invalid" : "unknown";
+  }
+  /** A sign-in of this computer's Antigravity login finished from here: until its next inventory, the page shows it as signed in. */
+  noteDefaultLogin(machineId: string, backend: MachineSignInBackend, loggedIn: boolean): void {
+    if (backend !== "antigravity") return;
+    this.defaultLogins.set(machineId, { at: this.deps.machine(machineId)?.inventoryUpdatedAt, loggedIn });
+  }
 
   /** Each approved computer, for the Accounts view. Reads the switches of the online ones in parallel, each bounded. */
   async list(): Promise<MachineAccountsInput[]> {
@@ -109,10 +136,21 @@ export class MachineAccounts {
         const on = await this.switchOn(machine.id, false);
         readOnlyReason = on === null ? "switch_unreadable" : on ? undefined : "accounts_off";
       }
+      // What holds for the whole computer, before any one CLI's own reason is added: Antigravity's row has its own (a CLI too old for `acp --login`, a Runtime without it).
+      const computerReason = readOnlyReason;
       const cli = MachineAccounts.claude(machine);
       if (!readOnlyReason && inventoryProbed(machine.inventory) && (!cli || cli.path === null)) readOnlyReason = "not_installed";
       const report = machine.inventory?.credentialProfiles;
-      return { id: machine.id, name: machine.name, online, ...(readOnlyReason ? { readOnlyReason } : {}),
+      // AGEND-113: Antigravity's own login on this computer, shown where the computer has the CLI (or an agent there uses it): one row, no profiles. Never started to ask: the state is the last detection's.
+      const agy = MachineAccounts.agy(machine), agyAgents = this.deps.cliAgents?.(machine.id, "antigravity") ?? [];
+      const defaultLogins: Record<string, MachineDefaultLogin> = {};
+      if (agy?.path || agyAgents.length) {
+        const agyReason: MachineDefaultLogin["readOnlyReason"] = computerReason
+          ?? (!MachineAccounts.agyCapable(machine) ? "runtime_old" : agy?.path && !agyLoginSupported(agy.version) ? "cli_old" : !agy?.path && inventoryProbed(machine.inventory) ? "cli_missing" : undefined);
+        const state = this.reportedDefault(machine.id, "antigravity");
+        defaultLogins.antigravity = { loggedIn: state === "valid" ? true : state === "invalid" ? false : null, ...(agyReason ? { readOnlyReason: agyReason } : {}), agents: [...agyAgents] };
+      }
+      return { id: machine.id, name: machine.name, online, ...(readOnlyReason ? { readOnlyReason } : {}), ...(Object.keys(defaultLogins).length ? { defaultLogins } : {}),
         profiles: this.profilesOf(machine).map(p => ({ name: p.name, loggedIn: p.loggedIn, ...(p.identity ? { identity: p.identity } : {}), ...(p.created !== undefined ? { created: p.created } : {}) })),
         ...(report?.default ? { defaultProfile: report.default } : {}),
         ...(cli ? { defaultLogin: { loggedIn: cli.authenticated, ...(cli.identity ? { identity: cli.identity } : {}) } } : {}),
@@ -124,11 +162,12 @@ export class MachineAccounts {
    * Whether a request to this computer can be made now, and if not why: the computer is known and online, its Runtime reports `remote-signin`, and its owner turned
    * `accounts` on (asked of the computer itself, not cached). Null: it can.
    */
-  async readiness(machineId: string): Promise<MachineRefusal | null> {
+  async readiness(machineId: string, backend?: MachineSignInBackend): Promise<MachineRefusal | null> {
     const machine = this.deps.machine(machineId);
     if (!machine || (machine.status !== "online" && machine.status !== "offline")) return "machine_unknown";
     if (machine.status !== "online") return "machine_offline";
     if (!MachineAccounts.capable(machine)) return "machine_unsupported";
+    if (backend === "antigravity" && !MachineAccounts.agyCapable(machine)) return "machine_unsupported";
     const on = await this.switchOn(machineId, true);
     return on === null ? "machine_unreachable" : on ? null : "machine_accounts_off";
   }
@@ -216,7 +255,7 @@ export class MachineAccounts {
 }
 
 /** The agents of a fleet that run on a computer and the profile each names, from the fleet's own configuration. Pure. */
-export function machineAgents(instances: Record<string, { runtime?: string; machine_id?: string; backend?: string }> | undefined, machineId: string, profileOf: (name: string) => string | null, defaultBackend = "claude-code"): Array<{ name: string; profile: string | null }> {
-  return Object.keys(instances ?? {}).sort().filter(name => { const config = instances![name]!; return config.runtime === "windows" && config.machine_id === machineId && (config.backend ?? defaultBackend) === "claude-code"; })
+export function machineAgents(instances: Record<string, { runtime?: string; machine_id?: string; backend?: string }> | undefined, machineId: string, profileOf: (name: string) => string | null, defaultBackend = "claude-code", backend = "claude-code"): Array<{ name: string; profile: string | null }> {
+  return Object.keys(instances ?? {}).sort().filter(name => { const config = instances![name]!; return config.runtime === "windows" && config.machine_id === machineId && (config.backend ?? defaultBackend) === backend; })
     .map(name => ({ name, profile: profileOf(name) }));
 }

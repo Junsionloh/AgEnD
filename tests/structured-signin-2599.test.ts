@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { StructuredSignIn, structuredSignInPrompt, structuredSignInSupported,
+import { StructuredSignIn, structuredSignInPrompt, structuredSignInStartable, structuredSignInSupported,
   type StructuredBackend, type SignInAction, type StructuredSignInTransport } from "../src/structured-signin.js";
 import { LoginWindowLock } from "../src/login-window-lock.js";
 import { LOGIN_FLOWS } from "../src/login-flows.js";
@@ -40,11 +40,15 @@ function harness(backend: StructuredBackend = "codex", lock = new LoginWindowLoc
 }
 
 describe("#2599 structured login: parser", () => {
-  it("supports only the three approved dedicated login commands; agy is still remote-unsupported", () => {
+  it("the first-run checklist supports only the three approved dedicated login commands; agy is still remote-unsupported there and in chat", () => {
     expect(["kiro-cli", "claude-code", "codex"].map(structuredSignInSupported)).toEqual([true, true, true]);
     for (const backend of ["antigravity", "grok", "codex login; sh", "CLAUDE", "toString"]) expect(structuredSignInSupported(backend)).toBe(false);
-    expect(() => harness("antigravity" as StructuredBackend)).toThrow("structured_signin_unsupported");
-    expect(LOGIN_FLOWS.antigravity.remoteLogin).toBe("unsupported");
+    // AGEND-113: the driver itself can run Antigravity's `agy acp --login` (Settings → Accounts), and nothing else beyond the checklist's three.
+    expect(structuredSignInStartable("antigravity")).toBe(true);
+    for (const backend of ["grok", "codex login; sh", "CLAUDE", "toString", "opencode"]) expect(structuredSignInStartable(backend)).toBe(false);
+    expect(() => harness("grok" as StructuredBackend)).toThrow("structured_signin_unsupported");
+    expect(() => harness("antigravity")).not.toThrow();
+    expect(LOGIN_FLOWS.antigravity.remoteLogin).toBe("unsupported");   // chat's /login agy is unchanged
     expect(dashboardSignInSupported("antigravity")).toBe(false);
   });
   it("uses the captured Kiro menu, its current highlight, and the captured Claude account menu", () => {

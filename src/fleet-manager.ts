@@ -131,7 +131,7 @@ import { getEffectiveInstanceDefaults, loadFleetConfig, loadRawFleetConfig, load
 import { EventLog } from "./event-log.js";
 import { binaryProbe } from "./binary-probe.js";
 import { deletePlannedTopic, planInstanceTopicDelete, topicDestination, topicMustStay, type InstanceTopicPlan, type TopicDeleteOutcome, type TopicOwnership } from "./instance-topic-delete.js";
-import { AVAILABILITY_STALE_MS, BackendAvailabilityStore, hostAvailabilityProbes, findExecutableIn, resolveBackendBinary, type AvailabilityProbes, type BackendAvailability } from "./backend-availability.js";
+import { AVAILABILITY_STALE_MS, BackendAvailabilityStore, agyLoginSupported, hostAvailabilityProbes, findExecutableIn, resolveBackendBinary, type AvailabilityProbes, type BackendAvailability } from "./backend-availability.js";
 import { classifySqliteOpenError } from "./sqlite-open-errors.js";
 import { OutboxOpenError } from "./outbox-open-error.js";
 import { AdapterWorld } from "./adapter-world.js";
@@ -339,7 +339,7 @@ import { LoginWindowLock } from "./login-window-lock.js";
 import { BrowserBackendSignIns } from "./browser-backend-signins.js";
 import { createStructuredSignInTransport } from "./structured-signin-transport.js";
 import { ONBOARDING_BACKENDS, readPendingBackendSignIns } from "./backend-signin-pending.js";
-import { structuredSignInSupported } from "./structured-signin.js";
+import { structuredSignInStartable, structuredSignInSupported } from "./structured-signin.js";
 import { handleSettingsRequest, type RawConfigPatch } from "./settings-api.js";
 import type { SettingsChangeAuthority } from "./settings-authority.js";
 import { setLocale, detectLocale, getLocale, t } from "./locale.js";
@@ -19958,12 +19958,15 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       call: (id, operation, payload, timeoutMs) => this.runtimeCoordinator().callAccount(id, operation, payload, timeoutMs),
       current: owner => this.browserSignInOwnerCurrent(owner),
       reported: (id, profile) => this.machineAccounts.profileState(id, profile),
-      readiness: id => this.machineAccounts.readiness(id),
+      reportedDefault: (id, backend) => this.machineAccounts.reportedDefault(id, backend),
+      readiness: (id, backend) => this.machineAccounts.readiness(id, backend),
       actor: owner => { const handle = (owner as SessionRecord).handle; return typeof handle === "string" && /^[a-f0-9]{16}$/.test(handle) ? `admin:${handle}` : null; },
       changed: (event, owner) => {
-        // Safe fields only: the computer, the profile name, a phase and a fixed reason. Never a URL, a code, output or an e-mail address.
-        this.logger.info({ machine: event.machine, profile: event.profile, phase: event.phase, ...(event.reason ? { reason: event.reason } : {}), by: (owner as SessionRecord).label },
+        // Safe fields only: the computer, the CLI, the profile name (none for Antigravity's default login), a phase and a fixed reason. Never a URL, a code, output or an e-mail address.
+        this.logger.info({ machine: event.machine, backend: event.backend, ...(event.profile ? { profile: event.profile } : {}), phase: event.phase, ...(event.reason ? { reason: event.reason } : {}), by: (owner as SessionRecord).label },
           "Computer account sign-in from Settings → Accounts");
+        // The page reads the computer's last detection (agy is never run for a read): a login made just now is remembered until the next one.
+        if (event.phase === "done") this.machineAccounts.noteDefaultLogin(event.machine, event.backend, true);
         broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"));
         this.needsYou?.poke();
       },
@@ -19978,6 +19981,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       machines: () => remoteRuntimeEnabled() ? this.runtimeCoordinator().listMachines() : [],
       agents: id => machineAgents(this.fleetConfig?.instances, id, name => { try { return nativeCredentialProfile(this.fleetConfig?.instances[name]) ?? null; } catch { return null; } }, this.fleetConfig?.defaults?.backend ?? "claude-code"),
       signingIn: (id, profile) => this.machineSignInsInstance?.signingIn(id, profile) ?? false,
+      cliAgents: (id, backend) => machineAgents(this.fleetConfig?.instances, id, () => null, this.fleetConfig?.defaults?.backend ?? "claude-code", backend).map(agent => agent.name),
       log: entry => this.logger.info(entry, entry.outcome === "ok" ? "Computer account changed from Settings → Accounts" : "Computer account change refused"),
     });
   }
@@ -20003,6 +20007,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       },
       checkAuth: backend => checkAuthStatus(LOGIN_FLOWS[backend]!.authCheck!),
       checkConsoleAuth: () => checkAuthStatus(LOGIN_FLOWS.antigravity!.authCheck!),
+      antigravity: true,   // AGEND-113: Settings → Accounts signs Antigravity in with `agy acp --login` (the first-run page's own instance does not)
       transport: () => createStructuredSignInTransport(),
       changed: (event, owner, launched) => {
         try { this.eventLog?.insert("login", "browser_backend_signin", event); } catch { /* safe metadata only */ }
@@ -20553,12 +20558,18 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     for (const row of this.backendAvailabilityRows()) {
       const flow = LOGIN_FLOWS[row.backend];
       const install = BACKEND_INSTALLATION_INFO[row.backend]?.install;
+      // AGEND-113: Antigravity is signed in with `agy acp --login` (agy >= 1.5.0). Chat's /login for it stays declined (`remoteLogin: "unsupported"`); the dashboard's structured
+      // sign-in is the only caller. An agy that is older, or whose version is not known, keeps "Sign in on the host" and is told to update.
+      const agyBrowser = row.backend === "antigravity" && row.state !== "not_installed" && structuredSignInStartable("antigravity");
+      const agySignIn = agyBrowser && agyLoginSupported(row.version);
+      // Told to update only when the version is KNOWN to be older: a version that was not read yet is not "too old".
+      const agyUpdate = agyBrowser && !agySignIn && typeof row.version === "string" && /\d/.test(row.version);
       out.push({
         // Not installed or too old: signing in would not help — the row says how to install (or update) it instead.
-        backend: row.backend, state: row.state, signIn: row.state !== "not_installed" && row.state !== "too_old" && dashboardSignInSupported(row.backend),
-        ...(flow?.remoteLogin === "unsupported" ? { hostCommand: flow.command } : {}),
+        backend: row.backend, state: row.state, signIn: row.state !== "not_installed" && row.state !== "too_old" && (agyBrowser ? agySignIn : dashboardSignInSupported(row.backend)),
+        ...(flow?.remoteLogin === "unsupported" && !agySignIn ? { hostCommand: flow.command } : {}),
         ...(row.state === "not_installed" && install ? { install } : {}),
-        ...(row.state === "too_old" && install ? { update: install } : {}),
+        ...((row.state === "too_old" || agyUpdate) && install ? { update: install } : {}),
         ...(this.signInIdentity(row.backend) ? { identity: this.signInIdentity(row.backend) } : {}),
       });
     }

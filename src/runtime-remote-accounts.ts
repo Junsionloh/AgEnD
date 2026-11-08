@@ -16,7 +16,7 @@ import { CredentialProfileRefusal, credentialProfileCaseClash, credentialProfile
   type CredentialProfileCli } from "./runtime-credential-profiles.js";
 import { ProfileOwnershipRefusal, createRuntimeProfile, deleteProfileBackups, removeOwnedProfile, requireOwnedProfile, withIsolatedOwnedProfile, type OwnedProfileOptions } from "./runtime-profile-ownership.js";
 import { AuditLog, RemoteSetupRefusal, readRemoteSwitches, requireRemoteSwitch, validAuditActor, type AuditAction, type AuditEntry, type AuditReason, type RemoteSwitchName } from "./runtime-remote-setup.js";
-import { ProcessNotConfirmedEnded, RuntimeSignIn, RuntimeSignInSlot, SignInRefusal, type SignInDeps, type SignInMethod } from "./runtime-signin.js";
+import { DEFAULT_LOGIN_CLI, ProcessNotConfirmedEnded, RuntimeSignIn, RuntimeSignInSlot, SignInRefusal, type SignInCli, type SignInDeps, type SignInMethod } from "./runtime-signin.js";
 import { isRuntimeRemoteOperation, parseRuntimeRemotePayload, type RuntimeRemoteOperation, type RuntimeRemotePayloads, type RuntimeSwitchStates } from "./runtime-protocol.js";
 
 /** What a CLI the server may name stands for here: the CLI's program, its sign-in, and its environment variable. */
@@ -43,7 +43,12 @@ export interface RemoteAccountsDeps {
   now?: () => number;
   /** `claude auth status` under a profile folder, read by the shared parser. */
   status(cli: CredentialProfileCli, directory: string): Promise<RemoteStatusAnswer>;
-  find(cli: CredentialProfileCli): Promise<RemoteCliExecutable | null>;
+  find(cli: CredentialProfileCli | typeof DEFAULT_LOGIN_CLI): Promise<RemoteCliExecutable | null>;
+  /**
+   * Antigravity's own login on this computer (`agy models`, by its exit code; never a login, never an e-mail address): true, false, or null when it could not be asked. Absent: this Runtime
+   * cannot say, and a check answers "unknown". Asked only when an administrator's request says so (agy is never started on a timer or a read).
+   */
+  defaultStatus?(cli: typeof DEFAULT_LOGIN_CLI): Promise<boolean | null>;
   /** The Windows CLI environment (an allowlist), to which the profile's variable is added here. */
   environment(): NodeJS.ProcessEnv;
   /** `claude auth logout` for a profile, with the profile's variable in `env`. Output is discarded by the caller. Resolves with the exit code. */
@@ -95,7 +100,8 @@ function reasonOf(error: unknown): AuditReason {
 }
 const NEEDS_ACCOUNTS: readonly RuntimeRemoteOperation[] = ["signin.start", "signin.capture", "signin.status", "signin.write", "accounts.check", "accounts.signout", "accounts.remove"];
 
-interface Meta { id: string; actor: string; cli: CredentialProfileCli; profile: string; signedIn?: boolean }
+/** `profile` is absent for Antigravity's sign-in: the computer's own default login (there is no profile folder for it). */
+interface Meta { id: string; actor: string; cli: SignInCli; profile?: string; signedIn?: boolean }
 /** The least time between two sign-outs or removes of one profile. It only slows a server that keeps asking; the switch and its time window are what bound the risk. */
 export const PROFILE_OP_MIN_GAP_MS = 5_000;
 const SUBSCRIPTION_ONLY = "Signing in with an Anthropic Console account is not supported from AgEnD, because that sign-in is kept outside the profile's folder. On that computer run: agend-runtime login claude-code NAME";
@@ -333,7 +339,53 @@ export class RemoteAccounts {
     return actor;
   }
 
-  private async startSignIn(input: { cli: string; profile: string; method: SignInMethod; actor: string }, ctx: Ctx): Promise<{ sessionId: string }> {
+  /**
+   * The one place that says which sign-in a request is. Antigravity (and only Antigravity) signs the computer's own default login in, with no profile name; every other CLI
+   * signs a NAMED profile this Runtime created in, and a request without one is refused. A named profile for Antigravity is refused too: it has no profile folder on Windows
+   * (its login is one entry in the Credential Manager), so the name would be silently ignored and the default login changed.
+   */
+  private async startSignIn(input: { cli: string; profile?: string; method: SignInMethod; actor: string }, ctx: Ctx): Promise<{ sessionId: string }> {
+    if (input.cli === DEFAULT_LOGIN_CLI) return this.startDefaultSignIn(input, ctx);
+    if (input.profile === undefined) { this.actorOf(input.actor); this.cliOf(input.cli); throw new RemoteSetupRefusal("A sign-in names the credential profile it is for", "invalid_request"); }
+    return this.startProfileSignIn({ ...input, profile: input.profile }, ctx);
+  }
+  /** Common to both: the child is the Runtime's work while it lives, so the update fence waits for it; the watch ends it if the switch goes off. */
+  private holdSignIn(session: RuntimeSignIn, ctx: Ctx): Promise<void> | void {
+    // The sign-in is the Runtime's work for as long as its child lives: the update fence waits for it. If the Runtime stopped or the connection went
+    // while the child was being started, it is ended at once, over the same path as any other end.
+    try { if (!ctx.alive()) throw new RemoteSetupRefusal(NOT_AVAILABLE, "failed"); this.hold = this.deps.enter?.() ?? null; }
+    catch (error) { return this.endSignIn(session.id, "closed").catch(() => {}).then(() => { throw error; }); }
+    this.watchSwitch(session.id);
+  }
+  /**
+   * AGEND-113: Antigravity's default login. `agy acp --login` under the Windows user's own login, with no profile, no folder and no ownership record: the one exception to "named
+   * profiles only", and only for this CLI. Everything else is the same as a profile's sign-in, because it is the same `audited` path: the local `accounts` switch, one sign-in at a
+   * time on this computer (`exclusive` and the slot), the start-rate limit, the ten-minute timeout and the switch watch, and a record in `audit.jsonl` before and after.
+   */
+  private async startDefaultSignIn(input: { cli: string; profile?: string; method: SignInMethod; actor: string }, ctx: Ctx): Promise<{ sessionId: string }> {
+    const actor = this.actorOf(input.actor);
+    let executable: RemoteCliExecutable | null = null;
+    return this.audited("signin", "accounts", actor, { cli: DEFAULT_LOGIN_CLI }, ctx, {
+      exclusive: "signin-start",
+      check: async () => {
+        if (input.profile !== undefined) throw new ProfileOwnershipRefusal("Antigravity has one sign-in per computer, so it has no named accounts", "invalid_request");
+        // A Google account (subscription) only: no Google Cloud project, no API key.
+        if (input.method !== "subscription") throw new ProfileOwnershipRefusal("Only a Google account sign-in is supported for Antigravity from AgEnD", "unsupported");
+        await this.settleEndedSignIn(); this.slot.check();
+        executable = await this.deps.find(DEFAULT_LOGIN_CLI);
+        if (!executable) throw new SignInRefusal("Antigravity is not installed on this computer", "failed");
+      },
+      run: async () => {
+        const session = await this.slot.start(() => { this.gate(ctx, "accounts"); return new RuntimeSignIn({ command: executable!.command, args: executable!.args, method: "subscription", cli: DEFAULT_LOGIN_CLI,
+          env: this.deps.environment() }, { ...this.deps.signIn, now: this.deps.now, onTimeout: () => { this.endWithRetry(session.id, "timeout"); } }); });
+        this.meta = { id: session.id, actor, cli: DEFAULT_LOGIN_CLI };
+        await this.holdSignIn(session, ctx);
+        return { sessionId: session.id };
+      },
+      openEnded: true,
+    });
+  }
+  private async startProfileSignIn(input: { cli: string; profile: string; method: SignInMethod; actor: string }, ctx: Ctx): Promise<{ sessionId: string }> {
     const actor = this.actorOf(input.actor), cli = this.cliOf(input.cli);
     let executable: RemoteCliExecutable | null = null;
     // A sign-in begins by creating the profile when it is new: this is "Add account". The record says so. Nothing is created until every refusal
@@ -367,11 +419,7 @@ export class RemoteAccounts {
           env: withCredentialProfile(this.deps.environment(), cli, directory) }, { ...this.deps.signIn, now: this.deps.now,
           onTimeout: () => { this.endWithRetry(session.id, "timeout"); } }); });
         this.meta = { id: session.id, actor, cli, profile: input.profile };
-        // The sign-in is the Runtime's work for as long as its child lives: the update fence waits for it. If the Runtime stopped or the connection went
-        // while the child was being started, it is ended at once, over the same path as any other end.
-        try { if (!ctx.alive()) throw new RemoteSetupRefusal(NOT_AVAILABLE, "failed"); this.hold = this.deps.enter?.() ?? null; }
-        catch (error) { await this.endSignIn(session.id, "closed").catch(() => {}); throw error; }
-        this.watchSwitch(session.id);
+        await this.holdSignIn(session, ctx);
         return { sessionId: session.id };
       },
       openEnded: true,
@@ -444,7 +492,31 @@ export class RemoteAccounts {
    * being changed is `busy`, and only `MAX_CONCURRENT_CHECKS` run at once on the computer (the slot is taken before anything is started, and given
    * back only when the last child of this check is done).
    */
-  private async check(input: { cli: string; profile: string }, ctx: Ctx): Promise<{ loggedIn: boolean | null; identity?: AccountIdentity }> {
+  private async check(input: { cli: string; profile?: string }, ctx: Ctx): Promise<{ loggedIn: boolean | null; identity?: AccountIdentity }> {
+    if (input.cli === DEFAULT_LOGIN_CLI) return this.checkDefault(input, ctx);
+    this.gate(ctx, "accounts");
+    this.cliOf(input.cli);
+    if (input.profile === undefined) throw new RemoteSetupRefusal("A check names the credential profile it is for", "invalid_request");
+    return this.checkProfile({ cli: input.cli, profile: input.profile }, ctx);
+  }
+  /**
+   * Antigravity's own login: `agy models` read by its exit code, nothing else (no e-mail, no plan). Not recorded, like a profile's check, and bounded the same way. Asked only
+   * because a person's request says so: the dashboard's page reads the last detection instead (agy is never started on a read).
+   */
+  private async checkDefault(input: { cli: string; profile?: string }, ctx: Ctx): Promise<{ loggedIn: boolean | null }> {
+    this.gate(ctx, "accounts");
+    if (input.profile !== undefined) throw new ProfileOwnershipRefusal("Antigravity has one sign-in per computer, so it has no named accounts", "invalid_request");
+    if (this.activeChecks >= MAX_CONCURRENT_CHECKS) throw new SignInRefusal("Other account checks are running on this computer; try again in a moment", "busy");
+    if (!this.deps.defaultStatus) return { loggedIn: null };
+    this.activeChecks++;
+    try {
+      const loggedIn = await this.deps.defaultStatus(DEFAULT_LOGIN_CLI);
+      this.gate(ctx, "accounts");
+      if (this.meta && this.meta.cli === DEFAULT_LOGIN_CLI) this.meta.signedIn = loggedIn === true;
+      return { loggedIn };
+    } finally { this.activeChecks--; }
+  }
+  private async checkProfile(input: { cli: string; profile: string }, ctx: Ctx): Promise<{ loggedIn: boolean | null; identity?: AccountIdentity }> {
     this.gate(ctx, "accounts");
     const cli = this.cliOf(input.cli), key = input.profile.toLowerCase();
     if (this.busy.has(key) || this.retained.has(key)) throw new SignInRefusal(`Another operation on "${input.profile}" is in progress; try again in a moment`, "busy");

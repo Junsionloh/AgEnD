@@ -19,6 +19,8 @@ import { atomicWriteFileSync } from "./atomic-write.js";
 /** Capabilities a Runtime reports. A capability says the Runtime can do it; the switches say whether it may, right now. */
 export const REMOTE_SIGNIN_CAPABILITY = "remote-signin";
 export const CLI_INSTALL_CAPABILITY = "cli-install";
+/** AGEND-113: this Runtime can sign Antigravity's default login in (`agy acp --login`, no profile). A Runtime with `remote-signin` but without this one would refuse the request, so AgEnD does not offer it. */
+export const SIGNIN_ANTIGRAVITY_CAPABILITY = "signin-antigravity";
 
 export const REMOTE_SWITCHES = ["accounts", "install"] as const;
 export type RemoteSwitchName = typeof REMOTE_SWITCHES[number];
