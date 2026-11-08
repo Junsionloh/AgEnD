@@ -131,6 +131,3 @@ button.s-account-used { cursor: pointer; }
 .s-account-machine-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding-bottom: 10px; border-bottom: 1px solid var(--ac-machine-line); }
 .s-account-machine-head .s-account-add { margin-left: auto; }
 .s-account-why { color: var(--text-2); font-size: var(--fs-xs); overflow-wrap: anywhere; }
-/* AGEND-113: a usage window with its quota pool named under it (Antigravity has two). The cell is one grid item of the usage block, as a bare window is. */
-.s-usage-cell { display: grid; gap: 2px; min-width: 0; }
-.s-usage-pool { min-width: 0; color: var(--text-3); font-size: var(--fs-xs); overflow-wrap: anywhere; }

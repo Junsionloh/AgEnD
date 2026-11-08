@@ -24,9 +24,20 @@ export function poolName(pool) {
   return pool.label;
 }
 
+/** This module's stylesheet, linked once (an older accounts.css has no rules for it). */
+function linkPoolCss(doc = typeof document !== "undefined" ? document : null) {
+  try {
+    if (!doc || !doc.head || doc.querySelector('link[data-accounts-usage-pool-css="1"]')) return;
+    const link = doc.createElement("link");
+    link.setAttribute("rel", "stylesheet"); link.setAttribute("href", "/assets/accounts-usage-pool.css"); link.setAttribute("data-accounts-usage-pool-css", "1");
+    doc.head.appendChild(link);
+  } catch { /* the caption still reads without it */ }
+}
+
 /** One window of the usage block (`Window`: the Accounts view's own component) and, when it has a pool, its name under it. A window with no pool is drawn exactly as before. */
 export function UsageCell({ u, kind, Window }) {
   if (!u || !u.pool) return html`<${Window} u=${u} kind=${kind} />`;
   const name = poolName(u.pool);
+  linkPoolCss();
   return html`<div class="s-usage-cell"><${Window} u=${u} kind=${kind} />${name ? html`<small class="s-usage-pool">${t("usagePool.mostUsed", name)}</small>` : null}</div>`;
 }
