@@ -68,8 +68,13 @@ describe("openSignIn routes a named account to the same dialog as the default on
     expect(shell.shellStore.get().dialog.Component).toBe(S.BrowserSignInDialog);
     expect(shell.shellStore.get().dialog.props).toEqual({ backend: "claude-code" });
   });
-  it("an unknown backend still opens the older dialog", () => {
+  it("a backend without a browser sign-in still opens the older dialog (Antigravity has one since AGEND-113: its default login opens the same dialog; a named account of it does not exist)", () => {
+    S.openSignIn({ backend: "grok" });
+    expect(shell.shellStore.get().dialog.Component).toBe(S.SignInDialog);
     S.openSignIn({ backend: "antigravity" });
+    expect(shell.shellStore.get().dialog.Component).toBe(S.BrowserSignInDialog);
+    expect(shell.shellStore.get().dialog.props).toEqual({ backend: "antigravity" });
+    S.openSignIn({ backend: "antigravity", profile: "x" });
     expect(shell.shellStore.get().dialog.Component).toBe(S.SignInDialog);
   });
 });
