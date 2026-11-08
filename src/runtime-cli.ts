@@ -159,7 +159,7 @@ export async function runtimeMain(argv = process.argv.slice(2), options: Runtime
     }
     process.stdout.write(`${what}: ${result.on ? "on" : "off"}${result.until !== undefined ? `, turns off by itself at ${new Date(result.until).toLocaleString()}` : ""}\n`);
     if (result.on) process.stdout.write(what === "accounts"
-      ? "AgEnD administrators can now add, sign in, sign out and remove Claude accounts that this Runtime creates on this computer. The sign-in stays on this computer, and anyone who can sign in to this Windows user can use it. Your own Claude sign-in is not touched.\n"
+      ? "AgEnD administrators can now add, sign in, sign out and remove Claude accounts that this Runtime creates on this computer. The sign-in stays on this computer, and anyone who can sign in to this Windows user can use it. Your own Claude sign-in is not touched. They can also sign Antigravity in with Google, which REPLACES this Windows user's own Antigravity sign-in: a computer has only one.\n"
       : "AgEnD administrators can now install the Claude Code and Codex versions that this Runtime's own list pins, into this Runtime's folder only.\n");
     return;
   }

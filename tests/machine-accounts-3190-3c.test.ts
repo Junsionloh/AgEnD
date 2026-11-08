@@ -49,7 +49,7 @@ describe("the rows under the machine scope", () => {
       expect(rows.find(r => r.profile === "work")!.scope, reason).toMatchObject({ readOnlyReason: reason });
       expect(rows.find(r => r.profile === "work")!.hostCommand).toBe("agend-runtime login claude-code work");
     }
-    expect(MACHINE_READ_ONLY_REASONS).toEqual(["offline", "runtime_old", "accounts_off", "switch_unreadable", "not_installed", "not_created", "default_login"]);
+    expect(MACHINE_READ_ONLY_REASONS).toEqual(["offline", "runtime_old", "accounts_off", "switch_unreadable", "not_installed", "not_created", "default_login", "cli_old", "cli_missing"]);
   });
   it("two computers are two groups; a computer with a profile of a case-variant name is matched in 'used by'; the default row is the fallback when no profile is the default", () => {
     const other = "99999999-2222-3333-4444-555555555555";

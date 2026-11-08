@@ -14,7 +14,7 @@
  */
 import { lstatSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { hostIds, hostIdsByRank, runtimeIds } from "./cli-registry.js";
+import { hostFacts, hostIds, hostIdsByRank, runtimeFacts, runtimeIds } from "./cli-registry.js";
 import type { AccountIdentity } from "./claude-auth-status.js";
 import type { SignInTarget } from "./web-backend-login.js";
 
@@ -29,11 +29,25 @@ export type AccountScope = { kind: "host" } | { kind: "machine"; id: string; nam
  * Why a computer's row cannot be changed from the dashboard. The first five are about the whole computer (every row carries one of them); the last two are about
  * one row. Codes, not sentences: the page words them in its own language, and shows the command to run on that computer.
  */
-export const MACHINE_READ_ONLY_REASONS = Object.freeze(["offline", "runtime_old", "accounts_off", "switch_unreadable", "not_installed", "not_created", "default_login"] as const);
+export const MACHINE_READ_ONLY_REASONS = Object.freeze(["offline", "runtime_old", "accounts_off", "switch_unreadable", "not_installed", "not_created", "default_login", "cli_old", "cli_missing"] as const);
 export type MachineReadOnlyReason = typeof MACHINE_READ_ONLY_REASONS[number];
-/** The CLIs a paired computer's accounts are shown for (cli-registry.ts: `runtime.accountRows`; Claude Code first, Codex waits for #3212 PR 4). */
-export const MACHINE_ACCOUNT_CLIS: ReadonlySet<string> = new Set(runtimeIds("accountRows"));
-export interface AccountUsage { percent: number; resetsAt?: string; windowMs?: number; stale?: boolean }
+/**
+ * The CLIs whose NAMED accounts a paired computer shows (and adds, signs out and removes): `runtime.accountRows` that also has `runtime.namedAccounts` (cli-registry.ts; Claude Code;
+ * Codex waits for #3212 PR 4).
+ */
+export const MACHINE_ACCOUNT_CLIS: ReadonlySet<string> = new Set(runtimeIds("accountRows").filter(id => runtimeFacts(id, "namedAccounts") !== null));
+/**
+ * AGEND-113: the CLIs whose DEFAULT login on a paired computer is signed in from the dashboard (cli-registry.ts: `runtime.accountRows.defaultRow === "sign-in"`). Antigravity keeps its Windows
+ * login in the Credential Manager under one fixed name, so there is one per Windows user and no named profiles (no + Add account, no Sign out, no Remove): the card has one row per
+ * computer, and signing it in changes that computer's own login.
+ */
+export const MACHINE_DEFAULT_LOGIN_CLIS: ReadonlySet<string> = new Set(runtimeIds("accountRows").filter(id => runtimeFacts(id, "accountRows")!.defaultRow === "sign-in"));
+/**
+ * AGEND-113: the quota a window belongs to, when a provider has several (Antigravity: "Gemini" and "Claude & others", each with its own 5h and weekly limit). `labelI18n` is the usage panel's
+ * own reference (its words are the panel's, in both languages); `label` is the fallback. Only the shape and bounds below are passed on: whatever else a vendor's text carries is dropped.
+ */
+export interface AccountUsagePool { label: string; labelI18n?: { key: string; args?: string[] } }
+export interface AccountUsage { percent: number; resetsAt?: string; windowMs?: number; stale?: boolean; /** Present only when the provider has more than one pool: which one this window is. */ pool?: AccountUsagePool }
 export interface AccountRow {
   scope: AccountScope;
   backend: string;
@@ -59,6 +73,9 @@ export interface AccountKeepAlive { enabled: boolean; fallback?: boolean; endsAt
 export interface AccountsCli { backend: string; profiles: boolean; installed: boolean; fleetDefault: string | null; agents: Array<{ name: string; profile: string | null }>; rows: AccountRow[] }
 export interface AccountsView { clis: AccountsCli[] }
 
+/** AGEND-113: a computer's own login of a CLI without profiles (see `MachineAccountsInput.defaultLogins`). */
+export interface MachineDefaultLogin { loggedIn: boolean | null; readOnlyReason?: Exclude<MachineReadOnlyReason, "not_created" | "default_login">; agents: string[] }
+
 /** One paired computer's accounts for the view, as its Runtime reported them (names, signed in or not, a masked identity) and what its owner allows. */
 export interface MachineAccountsInput {
   id: string;
@@ -72,6 +89,11 @@ export interface MachineAccountsInput {
   defaultProfile?: string;
   /** The Windows user's own Claude Code sign-in on that computer (`claude auth status`), as the Runtime reported it with its CLIs. */
   defaultLogin?: { loggedIn: boolean | null; identity?: AccountIdentity };
+  /**
+   * AGEND-113: a computer's own login of a CLI that has no profiles (Antigravity), when the computer has that CLI (or an agent there uses it). `readOnlyReason`: why it cannot be signed in from the
+   * dashboard (the whole-computer reasons, an older Runtime that cannot do it, or a CLI too old for `acp --login`); absent means it can. No identity: nothing is shown about which account it is.
+   */
+  defaultLogins?: Partial<Record<string, MachineDefaultLogin>>;
   /** Agents that run on this computer, and the profile each names (null: none, so the computer's default). */
   agents: ReadonlyArray<{ name: string; profile: string | null }>;
 }
@@ -132,6 +154,17 @@ function machineRows(backend: string, m: MachineAccountsInput): AccountRow[] {
   return rows;
 }
 
+/** AGEND-113: a computer's own login of a CLI without profiles: one row, signed in from the dashboard where the computer allows it. Pure. */
+function machineDefaultRow(backend: string, m: MachineAccountsInput): AccountRow | null {
+  const d = m.defaultLogins?.[backend];
+  if (!d) return null;
+  return {
+    scope: { kind: "machine", id: m.id, name: m.name, online: m.online, ...(d.readOnlyReason ? { readOnlyReason: d.readOnlyReason } : {}) },
+    backend, profile: null, state: stateOf(d.loggedIn), signIn: !d.readOnlyReason,
+    usedBy: { agents: sorted(d.agents), classic: [], fleetDefault: false },
+  };
+}
+
 /** Build the view. Pure. */
 export function buildAccountsView(input: AccountsInput): AccountsView {
   const clis: AccountsCli[] = [];
@@ -143,8 +176,9 @@ export function buildAccountsView(input: AccountsInput): AccountsView {
     // A CLI nobody uses and that is not installed is left out (its install lives in the backend list, not here).
     const installed = !!def && def.state !== "not_installed";
     const machines = MACHINE_ACCOUNT_CLIS.has(backend) ? input.machines ?? [] : [];
+    const defaultRows = MACHINE_DEFAULT_LOGIN_CLIS.has(backend) ? (input.machines ?? []).map(m => machineDefaultRow(backend, m)).filter((row): row is AccountRow => !!row) : [];
     const hostRelevant = installed || agents.length > 0 || classic.length > 0;
-    if (!hostRelevant && !machines.length) continue;
+    if (!hostRelevant && !machines.length && !defaultRows.length) continue;
     const rows: AccountRow[] = [];
     const usedBy = (profile: string | null) => ({
       agents: sorted(agents.filter(a => a.profile === profile).map(a => a.name)),
@@ -181,6 +215,7 @@ export function buildAccountsView(input: AccountsInput): AccountsView {
     }
     // A paired computer's rows come after the host's, each computer's together (the page groups them by scope).
     for (const m of machines) rows.push(...machineRows(backend, m));
+    rows.push(...defaultRows);
     clis.push({ backend, profiles: PROFILE_CLIS.has(backend), installed, fleetDefault, agents: agents.map(a => ({ name: a.name, profile: a.profile })), rows });
   }
   return { clis };
@@ -201,6 +236,48 @@ export function profilesOnDisk(dataDir: string, backend: string): string[] {
 }
 
 const TWO_DAYS = 2 * 86_400_000;
+/** The pool of a metric, in the bounded form a page may be sent: a short label, and the panel's own word reference (`usage.metric.*`, up to three short string arguments). Else none. */
+function poolOf(metric: Record<string, unknown>): AccountUsagePool | undefined {
+  const pool = metric.pool;
+  if (!pool || typeof pool !== "object" || Array.isArray(pool)) return undefined;
+  const { label, labelI18n } = pool as { label?: unknown; labelI18n?: unknown };
+  if (typeof label !== "string" || !label.trim() || label.length > 64) return undefined;
+  const ref = labelI18n && typeof labelI18n === "object" && !Array.isArray(labelI18n) ? labelI18n as { key?: unknown; args?: unknown } : null;
+  const args = ref && Array.isArray(ref.args) ? ref.args : [];
+  const ok = ref && typeof ref.key === "string" && /^usage\.metric\.[a-z_]{1,48}$/.test(ref.key) && args.length <= 3 && args.every(a => typeof a === "string" && a.length <= 64);
+  return { label: label.trim(), ...(ok ? { labelI18n: { key: ref!.key as string, ...(args.length ? { args: args as string[] } : {}) } } : {}) };
+}
+/**
+ * One window per pool, then the pool whose window is the most used: the one that will run out first is the one worth showing. A provider with a single pool (or none) is read as it always was
+ * and carries no pool; with several, the chosen window says which one it is. Ties keep the first, so the answer does not flicker between equal pools.
+ */
+function pickWindow(provider: { metrics?: ReadonlyArray<Record<string, unknown>>; stale?: boolean }, accept: (m: Record<string, unknown>) => boolean,
+  better: (a: Record<string, unknown>, b: Record<string, unknown>) => boolean): AccountUsage | undefined {
+  const bests = new Map<string, Record<string, unknown>>();
+  for (const m of provider.metrics ?? []) {
+    if (!accept(m)) continue;
+    const key = poolOf(m)?.label ?? "";
+    const best = bests.get(key);
+    if (!best || better(m, best)) bests.set(key, m);
+  }
+  if (!bests.size) return undefined;
+  let chosen: Record<string, unknown> | undefined;
+  for (const m of bests.values()) if (!chosen || (m.used as number) > (chosen.used as number)) chosen = m;
+  // "Has several pools" is a fact about the provider, not about this window: a pool whose 5h window is missing or has reset is still a pool, and the one shown is named all the same.
+  const pools = new Set<string>();
+  for (const m of provider.metrics ?? []) if (m.scope !== "model" && m.type === "percent" && typeof m.windowMs === "number") { const label = poolOf(m)?.label; if (label !== undefined) pools.add(label); }
+  const pool = pools.size > 1 ? poolOf(chosen!) : undefined;
+  return { ...usageOf(chosen!, provider), ...(pool ? { pool } : {}) };
+}
+/**
+ * A window's pool is shown only for a CLI whose spec says it has several (cli-registry.ts: `host.usage.pools === "several"`; Antigravity). The pick above names a pool whenever a payload's metrics
+ * carry two; this is where the registry decides whether that is meant, so a vendor adding a `pool` to another CLI's payload shows nothing new until its spec says so.
+ */
+export function usageWithPool(backend: string, usage: AccountUsage | undefined): AccountUsage | undefined {
+  if (!usage || !usage.pool || hostFacts(backend, "usage")?.pools === "several") return usage;
+  const { pool: _pool, ...rest } = usage;
+  return rest;
+}
 const usageOf = (m: Record<string, unknown>, provider: { stale?: boolean }): AccountUsage => {
   const resetsAt = typeof m.resetsAt === "string" ? m.resetsAt : undefined;
   return { percent: Math.max(0, Math.min(100, Math.round(m.used as number))), windowMs: m.windowMs as number, ...(resetsAt ? { resetsAt } : {}), ...(provider.stale ? { stale: true } : {}) };
@@ -212,16 +289,14 @@ const resetElapsed = (m: Record<string, unknown>, now: number): boolean => typeo
 /**
  * The usage row's weekly metric: the percent metric whose window is closest to a week (at least two days). From a
  * usage payload's providers (ProviderUsage), by the provider id the usage panel gives a backend (and `:<profile>`).
+ * A provider with several pools (Antigravity: Gemini, Claude & others) gives the pool whose weekly window is the most used, and says which one (`pool`): see `pickWindow`.
  */
 export function weeklyUsage(provider: { metrics?: ReadonlyArray<Record<string, unknown>>; stale?: boolean } | undefined): AccountUsage | undefined {
   if (!provider || !Array.isArray(provider.metrics)) return undefined;
   const WEEK = 7 * 86_400_000;
-  let best: Record<string, unknown> | undefined;
-  for (const m of provider.metrics) {
-    if (m.scope === "model" || m.type !== "percent" || typeof m.used !== "number" || typeof m.windowMs !== "number" || m.windowMs < TWO_DAYS) continue;
-    if (!best || Math.abs((m.windowMs as number) - WEEK) < Math.abs((best.windowMs as number) - WEEK)) best = m;
-  }
-  return best ? usageOf(best, provider) : undefined;
+  return pickWindow(provider,
+    m => m.scope !== "model" && m.type === "percent" && typeof m.used === "number" && typeof m.windowMs === "number" && m.windowMs >= TWO_DAYS,
+    (a, b) => Math.abs((a.windowMs as number) - WEEK) < Math.abs((b.windowMs as number) - WEEK));
 }
 
 /**
@@ -230,15 +305,11 @@ export function weeklyUsage(provider: { metrics?: ReadonlyArray<Record<string, u
  * window that has reset since the read (its percent would be the old window's): one already marked `resetPassed`, and one whose
  * `resetsAt` is not ahead of `now`. The usage snapshot is served unchanged inside its TTL and while it is revalidated, so a
  * window read just before it reset must not be projected after it. An expiry (`resetKind: "expiry"`) is not a reset and a
- * time that cannot be read says nothing, as `ageMetric` (usage-api.ts) has it. Same shape as `weeklyUsage`.
+ * time that cannot be read says nothing, as `ageMetric` (usage-api.ts) has it. Same shape as `weeklyUsage`, and for a provider with several pools the most used pool's, named.
  */
 export function shortUsage(provider: { metrics?: ReadonlyArray<Record<string, unknown>>; stale?: boolean } | undefined, now: number = Date.now()): AccountUsage | undefined {
   if (!provider || !Array.isArray(provider.metrics)) return undefined;
-  let best: Record<string, unknown> | undefined;
-  for (const m of provider.metrics) {
-    if (m.scope === "model" || m.type !== "percent" || typeof m.used !== "number" || m.resetPassed || resetElapsed(m, now)) continue;
-    if (typeof m.windowMs !== "number" || !(m.windowMs > 0) || m.windowMs >= TWO_DAYS) continue;
-    if (!best || (m.windowMs as number) < (best.windowMs as number)) best = m;
-  }
-  return best ? usageOf(best, provider) : undefined;
+  return pickWindow(provider,
+    m => m.scope !== "model" && m.type === "percent" && typeof m.used === "number" && !m.resetPassed && !resetElapsed(m, now) && typeof m.windowMs === "number" && m.windowMs > 0 && m.windowMs < TWO_DAYS,
+    (a, b) => (a.windowMs as number) < (b.windowMs as number));
 }

@@ -11,6 +11,7 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { randomBytes } from "node:crypto";
+import { runtimeFacts, type RuntimeDefaultLoginCli } from "./cli-registry.js";
 import { nativeUpdateGuard, boundNativeModelOptions, buildNativeInvocation, isNativeProviderId, nativeMcpServerConfig, nativeProvider, NATIVE_PROVIDER_IDS, parseNativeAuthResult, parseNativeModels, validateNativeMcpConnection, validateNativeModel, type NativeMcpLaunch, type NativeModelOption, type NativeProviderDescriptor, type NativeProviderId } from "./windows-cli-providers.js";
 import { claudeDocumentedModels } from "./model-catalog-defaults.js";
 import { identityOf, parseClaudeAuthStatus, type AccountIdentity } from "./claude-auth-status.js";
@@ -137,6 +138,32 @@ async function output(file: string, args: string[], timeout = 5000, env: NodeJS.
     const e = error as { stdout?: string; stderr?: string };
     return { ok: false, text: `${e.stdout ?? ""}\n${e.stderr ?? ""}`.trim() };
   }
+}
+/**
+ * AGEND-113: what a command ended with, as an exit code. `null` is "could not be asked" (it did not start, or ran out of time): never "signed out". Output is not returned at all, so
+ * nothing the CLI prints (an account name, a path) can travel with it.
+ */
+async function exitCodeOf(file: string, args: string[], timeout: number, env: NodeJS.ProcessEnv): Promise<number | null> {
+  try { await exec(file, args, { env, encoding: "utf8", timeout, maxBuffer: 64 * 1024, windowsHide: true, shell: false }); return 0; }
+  catch (error) {
+    const e = error as { code?: unknown; killed?: boolean };
+    return !e.killed && typeof e.code === "number" ? e.code : null;
+  }
+}
+/**
+ * A CLI's own login on this computer, for one whose login is the computer's (cli-registry.ts: `runtime.signIn.profile === "none"`; Antigravity): its registry `authStatus` command (`agy models`: a
+ * listing, never a login and never a model request) read by its exit code, as the host's `authCheck` reads it. Windows keeps that login in the Credential Manager under one fixed name, so there is
+ * one answer per Windows user and no profile to ask about. true = exit 0, false = the CLI said no, null = it could not be asked. Started only because an administrator's request asked (a
+ * sign-in's own checks): never on a timer or a read.
+ */
+export async function probeDefaultLogin(cli: RuntimeDefaultLoginCli, find: (id: NativeCliId) => Promise<NativeCliExecutable | null> = findCli,
+  run: (executable: NativeCliExecutable, args: string[], env: NodeJS.ProcessEnv) => Promise<number | null> = (entry, args, env) => exitCodeOf(entry.command, [...entry.args, ...args], 20_000, env)): Promise<boolean | null> {
+  const status = runtimeFacts(cli, "authStatus");
+  if (!status) return null;
+  const executable = await find(cli);
+  if (!executable) return null;
+  const code = await run(executable, [...nativeUpdateGuard(cli), ...status.argv], nativeCliEnvironment());
+  return code === null ? null : code === 0;
 }
 const NPM_CLI_TARGETS: Partial<Record<NativeCliId, readonly string[]>> = {
   codex: ["node_modules/@openai/codex/bin/codex.js"],
@@ -362,7 +389,9 @@ async function probeNativeCli(id: NativeCliId, options: NativeProbeOptions, incl
   const help = await nonempty(helpProbe.args);
   const auth = provider.authProbe ? await nonempty([...provider.authProbe]) : null;
   const listing = includeModels && provider.modelProbe ? await nonempty([...provider.modelProbe]) : null;
-  const authenticated = auth ? parseNativeAuthResult(id, auth.ok, auth.text) : null;
+  // A CLI whose registry `authStatus.source` is `model-listing` (Antigravity) has no status command, but the model listing it is asked for anyway says whether it is signed in: "Please sign in to view available models" with a failing exit. Read from that
+  // one answer (no extra process); a listing that fails for any other reason (the network) says nothing, and is never "signed out".
+  const authenticated = auth ? parseNativeAuthResult(id, auth.ok, auth.text) : runtimeFacts(id, "authStatus")?.source === "model-listing" && listing ? parseNativeAuthResult(id, listing.ok, listing.text) : null;
   // The same answer says which account it is (Claude Code only; an API key or a signed-out answer has none). Masked here, before it is stored or sent.
   const identity = id === "claude-code" && auth?.ok && authenticated === true ? identityOf(parseClaudeAuthStatus(auth.text)) : undefined;
   const compatible = help.ok && helpProbe.required.every(flag => help.text.includes(flag));
