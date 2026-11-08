@@ -50,6 +50,8 @@ export interface RigOptions {
   defaultProfile?: () => string | undefined;
   /** What the Runtime does when an operation changed its inventory (default: nothing is sent, as a Runtime that answers first). */
   changed?: RemoteAccountsDeps["changed"];
+  /** AGEND-113: what the Runtime does with the answer of a check of a CLI's own login (the bridge keeps it in its cached inventory). */
+  noteLogin?: RemoteAccountsDeps["noteLogin"];
   /** AGEND-113: this computer has Antigravity (agy.exe 1.5.3) in its inventory, and its Runtime offers `signin-antigravity`. */
   agy?: boolean | { version?: string; authenticated?: boolean | null; capability?: boolean };
 }
@@ -61,6 +63,7 @@ export function runtimeRig(options: RigOptions = {}) {
   let clock = Date.now();                                      // the Runtime's clock: it paces sign-in starts (5 s apart), so a test moves it
   const deps: RemoteAccountsDeps = { pairingDirectory: pairing, credentialRoot: root, now: () => clock, status: async () => answer, find: async cli => (cli === "antigravity" ? { path: "agy.exe", command: "agy.exe", args: [] } : { path: "claude.exe", command: "claude.exe", args: [] }), environment: () => ({ PATH: "p" }),
     defaultStatus: async () => agyAnswer,
+    ...(options.noteLogin ? { noteLogin: options.noteLogin } : {}),
     runLogout: options.runLogout ?? (async () => 0), inUse: () => undefined, inUseNow: () => undefined, defaultProfile: options.defaultProfile ?? (() => undefined), changed: options.changed ?? vi.fn(),
     ...(options.ownership ? { ownership: options.ownership } : {}),
     signIn: { scratchRoot: scratch(), spawn: (_c, args, spawnOptions) => { spawned.push({ args, env: spawnOptions.env }); const child = new FakeChild(); children.push(child); queueMicrotask(() => { child.say(args.includes("acp") ? AGY_SCREEN : `If the browser didn't open, visit: ${URL_OK}\nPaste code here if prompted > `); }); return child as unknown as ChildProcess; } } };
