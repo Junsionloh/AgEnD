@@ -65,6 +65,8 @@ export interface RuntimeBridge {
   releaseUnknown(id: string): void;
   /** Required positive physical proof for managed update. An old/injected bridge without it stays unavailable. */
   idleForUpdate?(): boolean;
+  /** AGEND-113: a sign-in check of a CLI's own login was just answered (yes or no): the cached inventory row says it from now on (windows-cli.ts `noteAuthenticated`). Absent: nothing is kept. */
+  noteAuthenticated?(id: string, authenticated: boolean): void;
 }
 interface Command { v: 1; type: "request"; id: string; operation: string; payload: Record<string, unknown> }
 interface PendingTool { accept(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }
@@ -595,6 +597,7 @@ export class RuntimeClient {
       find: extra?.find ?? ((cli) => findCli(cli)),
       // The computer's own login of a CLI that has no profile (the registry's `authStatus` command, by its exit code): the lookup of the CLI is the same one a test or the install work may supply.
       defaultStatus: extra?.defaultStatus ?? (cli => probeDefaultLogin(cli, extra?.find ? id => extra.find!(id as typeof cli) : undefined)),
+      noteLogin: (cli, loggedIn) => this.bridge.noteAuthenticated?.(cli, loggedIn),
       environment: extra?.environment ?? (() => nativeCliEnvironment()),
       runLogout: extra?.runLogout ?? ((executable, args, env) => runLogoutProcess(executable, args, env)),
       inUse: name => this.profileInUse(name), inUseNow: name => this.profileInUseNow(name), report: text => this.report(text),

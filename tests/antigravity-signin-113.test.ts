@@ -10,7 +10,7 @@
  *  - the server's side: the same `StructuredSignIn`, one target `{ machine, backend: "antigravity" }`, and rows the page reads.
  * Fixtures only (example.com); `agy` is never started.
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -24,7 +24,8 @@ import { AUDIT_FILE } from "../src/runtime-remote-setup.js";
 import { buildAccountsView } from "../src/accounts-view.js";
 import { versionAtLeast } from "../src/backend-availability.js";
 import { parseNativeAuthResult } from "../src/windows-cli-providers.js";
-import { probeDefaultLogin, probeNativeClis } from "../src/windows-cli-worker.js";
+import { probeDefaultLogin, probeNativeClis, withAuthenticated, type NativeCliRow } from "../src/windows-cli-worker.js";
+import { WindowsCliBridge } from "../src/windows-cli.js";
 import { LOGIN_FLOWS } from "../src/login-flows.js";
 import { hostFacts } from "../src/cli-registry.js";
 import { AGY_CODE, AGY_SCREEN, AGY_URL, ACTOR, FakeChild, ID, cleanScratch, runtimeRig, scratch, waitFor } from "./helpers/machine-runtime.js";
@@ -168,6 +169,23 @@ describe("the host's driver", () => {
     await h.session.poll();
     expect(h.view()).toMatchObject({ phase: "failed", reason: "auth_unconfirmed" }); expect(h.checkAuth.mock.calls.length).toBe(asked);
   });
+  it("a command that ended with no exit code at all (a signal, a closed window, a pane status that could not be read) is not 'signed in' either, even when an older login passes `agy models`", async () => {
+    const h = harness({ checkAuth: "valid" });
+    await h.session.start(true); await h.act(AGY_CODE);
+    const asked = h.checkAuth.mock.calls.length;
+    h.state.alive = false; h.state.exitCode = undefined;
+    await h.session.poll();
+    expect(h.view()).toMatchObject({ phase: "failed", reason: "auth_unconfirmed" }); expect(h.checkAuth.mock.calls.length).toBe(asked); expect(h.transport.close).toHaveBeenCalled();
+  });
+  it("while the command still runs nothing is checked, whatever the screen says: it ends by its exit code only", async () => {
+    const h = harness({ checkAuth: "valid" });
+    await h.session.start(true); await h.act(AGY_CODE);
+    const asked = h.checkAuth.mock.calls.length;
+    h.state.pane = `${AGY_PANE}\nLogin successful\n`;                 // not a line agy has been seen to print, and not one the reducer reads: even a success-looking line is no end
+    await h.session.poll();
+    expect(h.view().phase).not.toBe("done"); expect(h.view().phase).not.toBe("failed"); expect(h.checkAuth.mock.calls.length).toBe(asked);
+    await h.session.cancel();
+  });
   it("a code the provider refuses ends the attempt as the provider's refusal and reaps the process", async () => {
     const h = harness();
     await h.session.start(); await h.act(AGY_CODE);
@@ -190,6 +208,14 @@ describe("what the Runtime runs for Antigravity", () => {
       scratchRoot: scratch(), spawn: (command, args, options) => { spawned.push({ command, args, options }); const child = new FakeChild(); children.push(child); return child as never; } });
     return { attempt, child: children[0]!, spawned: spawned[0]! };
   };
+  it("reports an exit code only when the command gave one: a signal or a failure to start is `{ alive: false }` alone, so the server cannot take it for exit 0", () => {
+    const killed = signIn(); killed.child.emit("close", null, "SIGKILL");
+    expect(killed.attempt.status()).toEqual({ alive: false });
+    const clean = signIn(); clean.child.end(0);
+    expect(clean.attempt.status()).toEqual({ alive: false, exitCode: 0 });
+    const failed = signIn(); failed.child.end(1);
+    expect(failed.attempt.status()).toEqual({ alive: false, exitCode: 1 });
+  });
   it("builds the command itself: `agy.exe acp --login`, pipes (no terminal), no shell, no browser, in a scratch folder — and no Claude flag", () => {
     const { attempt, spawned } = signIn();
     expect(spawned.args).toEqual(["acp", "--login"]); expect(spawned.options).toMatchObject({ shell: false, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
@@ -351,6 +377,34 @@ describe("the computer's own Antigravity login, end to end against the Runtime's
     await waitFor(() => expect(empty.agyView()).toMatchObject({ phase: "failed", reason: "auth_unconfirmed" }));
     await empty.stop();
   });
+  it("a command the system ended without an exit code (killed by a signal, or closed) is not a sign-in either, even though `agy models` passes on an older login", async () => {
+    const f = runtimeRig({ agy: true });
+    f.agyAnswer(true);                                               // an older login is there, so the confirmed re-login is what starts it
+    await f.signIns.begin(f.owner, f.agyTarget, true);
+    await waitFor(() => expect(f.agyPhase()).toBe("code"));
+    const v = f.agyView()!; await f.signIns.input(f.owner, f.agyTarget, v.id, v.revision, { kind: "code", value: AGY_CODE });
+    const asked = f.sent.filter(s => s.operation === "accounts.check").length;
+    f.children[0]!.emit("close", null, "SIGKILL");                   // the Runtime's own child, ended by a signal: Node gives no code
+    await waitFor(() => expect(f.agyView()).toMatchObject({ phase: "failed", reason: "auth_unconfirmed" }));
+    expect(f.sent.filter(s => s.operation === "accounts.check").length).toBe(asked);   // the older login was never asked about
+    expect(f.signIns.busy(ID)).toBe(false);
+    await f.stop();
+  });
+  it("a check of the computer's own login that said yes or no is kept in the Runtime's inventory and re-sent before the answer; \"could not be asked\" changes nothing", async () => {
+    const noted: Array<[string, boolean]> = [], order: string[] = [];
+    const f = runtimeRig({ agy: true, noteLogin: (cli, loggedIn) => { noted.push([cli, loggedIn]); order.push("noted"); }, changed: () => { order.push("reported"); } });
+    f.agyAnswer(true);
+    expect(await f.call(ID, "accounts.check", { cli: "antigravity" })).toEqual({ loggedIn: true });
+    expect(noted).toEqual([["antigravity", true]]); expect(order).toEqual(["noted", "reported"]);   // the inventory carries it before the answer leaves
+    f.agyAnswer(false);
+    expect(await f.call(ID, "accounts.check", { cli: "antigravity" })).toEqual({ loggedIn: false });
+    expect(noted).toEqual([["antigravity", true], ["antigravity", false]]);
+    f.agyAnswer(null);
+    const before = [noted.length, order.length];
+    expect(await f.call(ID, "accounts.check", { cli: "antigravity" })).toEqual({ loggedIn: null });
+    expect([noted.length, order.length]).toEqual(before);
+    await f.stop();
+  });
   it("is refused with a reason before anything starts: the owner's switch off, an older Runtime, an offline computer — and by the Runtime itself, whatever the server asked", async () => {
     const off = runtimeRig({ agy: true, switchOn: false });
     await expect(off.signIns.begin(off.owner, off.agyTarget)).rejects.toThrow("machine_accounts_off"); expect(off.spawned).toHaveLength(0);
@@ -478,5 +532,50 @@ describe("Windows: Antigravity's own login on that computer", () => {
     expect(await detect({ ok: false, text: "dial tcp: lookup example.com: no such host" })).toMatchObject({ authenticated: null, runnable: true });
     expect(parseNativeAuthResult("antigravity", true, "")).toBeNull();
     expect(parseNativeAuthResult("antigravity", false, "")).toBeNull();
+  });
+});
+
+describe("the Runtime's cached inventory after a check of the computer's own login", () => {
+  const row = (over: Partial<NativeCliRow> = {}): NativeCliRow => ({ id: "antigravity", path: "C:\\agy\\agy.exe", version: "1.5.3", authenticated: null, runnable: true,
+    supports: { execution: true, resume: false, model: false, mcp: false }, readOnlySupport: false, permissionNote: "", models: [], ...over } as NativeCliRow);
+  const bridgeWith = (clis: NativeCliRow[]) => {
+    const file = join(scratch(), "windows-cli-inventory.json");
+    writeFileSync(file, JSON.stringify({ clis, home: "C:\\Users\\me", probedAt: 1_700_000_000_000 }));
+    const bridge = new WindowsCliBridge(async () => { throw new Error("no worker in this test"); }, file);
+    return { bridge, file, saved: () => JSON.parse(readFileSync(file, "utf8")) as { clis: NativeCliRow[]; probedAt: number } };
+  };
+  it("says yes from now on, in memory and in the file: a report of the cached inventory no longer brings back what was true before the sign-in", async () => {
+    const { bridge, saved } = bridgeWith([row(), row({ id: "codex", authenticated: true } as never)]);
+    bridge.noteAuthenticated("antigravity", true);
+    const probe = await bridge.probe();
+    expect(probe.clis.map(r => [r.id, r.authenticated])).toEqual([["antigravity", true], ["codex", true]]);
+    expect(probe.probedAt).toBe(1_700_000_000_000);                        // when it was detected is not changed
+    expect(saved().clis[0]!.authenticated).toBe(true);                     // a restarted Runtime reads the same
+  });
+  it("derives what follows from it the way a detection does: signed out is not runnable and says to sign in; yes lifts exactly that reason", async () => {
+    const { bridge } = bridgeWith([row({ authenticated: true }), row({ id: "codex", authenticated: false, runnable: false, reason: "Sign in to this Windows CLI before running a task" } as never),
+      row({ id: "grok", reason: "Update this Windows CLI", runnable: false, supports: { execution: false } as never } as never)]);
+    bridge.noteAuthenticated("antigravity", false);
+    bridge.noteAuthenticated("codex", true);
+    bridge.noteAuthenticated("grok", true);
+    const byId = Object.fromEntries((await bridge.probe()).clis.map(r => [r.id, r]));
+    expect(byId.antigravity).toMatchObject({ authenticated: false, runnable: false, reason: "Sign in to this Windows CLI before running a task" });
+    expect(byId.codex).toMatchObject({ authenticated: true, runnable: true }); expect(byId.codex).not.toHaveProperty("reason");
+    expect(byId.grok).toMatchObject({ authenticated: true, runnable: false, reason: "Update this Windows CLI" });   // another reason stays, and it is still not runnable
+  });
+  it("changes nothing for a CLI that was never detected, for no cache at all, or for the same answer (and writes no file for them)", async () => {
+    const same = bridgeWith([row({ authenticated: true })]);
+    const stamp = readFileSync(same.file, "utf8");
+    same.bridge.noteAuthenticated("antigravity", true); same.bridge.noteAuthenticated("grok", true);
+    expect(readFileSync(same.file, "utf8")).toBe(stamp);
+    const neverFile = join(scratch(), "never.json");
+    const never = new WindowsCliBridge(async () => { throw new Error("x"); }, neverFile);
+    never.noteAuthenticated("antigravity", true);
+    expect(existsSync(neverFile)).toBe(false); expect((await never.probe()).clis).toEqual([]);
+  });
+  it("is the same derivation the probe uses for a row", () => {
+    const signedOut = withAuthenticated(row({ authenticated: true }), false);
+    expect(signedOut.runnable).toBe(false); expect(withAuthenticated(signedOut, true)).toEqual(row({ authenticated: true }));   // and back, exactly
+    expect(withAuthenticated(row({ authenticated: true }), true)).toEqual(row({ authenticated: true }));
   });
 });

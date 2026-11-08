@@ -31,6 +31,19 @@ export interface NativeCliRow {
   /** Claude Code only: the masked e-mail and plan of the default sign-in, taken from the same `auth status` answer as `authenticated`. */
   identity?: AccountIdentity;
 }
+const SIGN_IN_FIRST = "Sign in to this Windows CLI before running a task";
+/**
+ * AGEND-113: a row with a newer word on its sign-in (a check the computer was just asked for, see `WindowsCliBridge.noteAuthenticated`). What follows from `authenticated` is derived again the way
+ * the probe derives it: runnable unless signed out, and the "sign in first" reason only for a row that has no other reason.
+ */
+export function withAuthenticated(row: NativeCliRow, authenticated: boolean): NativeCliRow {
+  if (row.authenticated === authenticated) return row;
+  const { reason, ...rest } = row;
+  const next: NativeCliRow = { ...rest, authenticated, runnable: row.supports.execution && authenticated !== false };
+  const kept = reason === SIGN_IN_FIRST ? undefined : reason;
+  const why = kept ?? (authenticated === false ? SIGN_IN_FIRST : undefined);
+  return why ? { ...next, reason: why } : next;
+}
 export interface NativeTaskInput { requestId: string; cli: NativeProviderId; cwd: string; prompt: string; sandbox: "read-only" | "workspace-write"; model?: string }
 
 const AGENT_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -479,7 +492,7 @@ async function probeNativeCli(id: NativeCliId, options: NativeProbeOptions, incl
   const versionText = versionAvailable ? version.text.split(/\r?\n/)[0].slice(0, 120) : null;
   const models = boundNativeModelOptions(!includeModels ? [] : listing?.ok ? parseNativeModels(id, listing.text) : (options.readModels ?? readNativeModels)(id, versionText));
   const reason = !versionAvailable ? "The Windows CLI version check returned no usable output" : !help.ok || !help.text.trim() ? "The Windows CLI help check returned no usable output" : !compatible ? "Update this Windows CLI: the installed version lacks the required headless JSON protocol"
-    : !provider.supports.execution ? provider.reason : authenticated === false ? "Sign in to this Windows CLI before running a task" : undefined;
+    : !provider.supports.execution ? provider.reason : authenticated === false ? SIGN_IN_FIRST : undefined;
   const row: NativeCliRow = {
     ...base, path: executable.path, version: versionText,
     authenticated, readOnlySupport, supports: { ...base.supports, execution: base.supports.execution && compatible && versionAvailable,

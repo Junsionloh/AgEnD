@@ -73,6 +73,8 @@ export interface RemoteAccountsDeps {
    * switch is still on and the request's connection still the live one. Without it (an install) the report is only started.
    */
   changed(authorized?: () => boolean): void | Promise<void>;
+  /** AGEND-113: a check of a CLI's own login (no profile: Antigravity) was answered with a yes or a no: the inventory's row for that CLI says it from now on. */
+  noteLogin?(cli: string, loggedIn: boolean): void;
   /** A CLI was installed: the caller detects again for real (not from its cache) and sends that inventory before this resolves. */
   installed?(authorized?: () => boolean): void | Promise<void>;
   /** Installs a CLI from the closed table and returns the version that landed. Absent: this Runtime cannot install (and does not claim to). */
@@ -548,6 +550,9 @@ export class RemoteAccounts {
       const loggedIn = await this.deps.defaultStatus(cli);
       this.gate(ctx, "accounts");
       if (this.meta && this.meta.cli === cli) this.meta.signedIn = loggedIn === true;
+      // A yes or a no is the newest word on this login: the Runtime's inventory carries it, and is re-sent BEFORE the answer (as for a profile's check), so that a later report of the cached
+      // inventory (a reconnect, another account's change) does not bring back what was true before. "Could not be asked" says nothing and changes nothing.
+      if (loggedIn !== null) { try { this.deps.noteLogin?.(cli, loggedIn); } catch { /* the answer is still given */ } await this.refreshed(ctx); }
       return { loggedIn };
     } finally { this.activeChecks--; }
   }
