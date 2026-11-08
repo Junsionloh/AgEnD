@@ -20,6 +20,7 @@ import { ErrorState, Skeleton } from "/assets/ui-states.js";
 import { CompactMeter } from "/assets/usage-meter.js";   // #3321: the Usage panel's meter, not a second one (its own module: a tab that kept an older usage-dialog.js still links)
 import { CliProductMark, cliLabel } from "./cli-picker.js";
 import { identityText } from "./account-identity.js";
+import { UsageCell } from "./usage-pool.js";   // AGEND-113: a window's quota pool, named (Antigravity)
 import { openSignIn, refreshSignIn, signInStore } from "./backend-signin.js";
 import { capsOf } from "./cli-caps.js";
 import { toast } from "/assets/ui-toast.js";
@@ -44,6 +45,7 @@ register("accounts", {
     fleetDefaultTag: "fleet default",
     usageLabel: "Usage", winHours: "{0}h", winDays: "{0}d", winWeek: "7d", winStale: "(stale)",
     signIn: "Connect", signInAgain: "Reconnect", hostCommand: "Connect from chat", hostCommandHint: "This row cannot be connected from the dashboard. Send /login in chat, or ask General.",
+    updateHint: "{0} needs a newer version before it can be connected from here. Update it on the host:",
     moveHere: "Move agents here", moveTitle: "Move agents to {0}", moveLead: "Choose the {0} agents that should use {1}. Each restarts on it when you Save:",
     carry_claude: "Claude Code carries its conversation over.", carry_codex: "Codex keeps its conversation.", carry_kiro: "Kiro starts a new conversation, with a handover.",
     moveNone: "Every {0} agent already uses this account.", moveStage: "Stage", cancel: "Cancel", current: "now: {0}",
@@ -58,6 +60,9 @@ register("accounts", {
     why_not_installed: "Claude Code is not installed on {0}. Install it from Settings → Runtime.",
     why_not_created: "This account was not created by AgEnD's Runtime, so it can only be handled on {0}.",
     why_default_login: "This is the Windows user's own connection on {0}. It is never changed from here: add an account instead.",
+    why_cli_old: "{1} on {0} is too old to connect from here (it needs {2} or newer). Update it on that computer.",
+    why_cli_missing: "{1} is not installed on {0}.",
+    machineOneLogin: "{1} keeps one connection per computer. Connecting here replaces the one on {0}.",
     acctLabel: "Account", acctInherit: "Fleet default ({0})", acctInheritDefault: "Fleet default (default connection)", acctNotSignedIn: "{0} — not connected",
     acctHint: "Changing the account restarts the agent. A disconnected account can't be chosen: connect it under Accounts first.",
     acctHintCreate: "The new agent connects with this account from its first start. A disconnected account can't be chosen: connect it under Accounts first.",
@@ -73,6 +78,7 @@ register("accounts", {
     fleetDefaultTag: "Fleet 預設",
     usageLabel: "用量", winHours: "{0}h", winDays: "{0}天", winWeek: "本週", winStale: "（未更新）",
     signIn: "連接", signInAgain: "重新連接", hostCommand: "從聊天連接", hostCommandHint: "這一列無法從儀表板連接。請在聊天傳 /login，或請 General。",
+    updateHint: "{0} 需要更新到較新的版本，才能從這裡連接。請在主機上更新：",
     moveHere: "移入 Agent", moveTitle: "把 Agent 移到 {0}", moveLead: "選擇要改用 {1} 的 {0} Agent。按「儲存」後，各自會以它重新啟動：",
     carry_claude: "Claude Code 會帶著對話過去。", carry_codex: "Codex 保留原本的對話。", carry_kiro: "Kiro 會開新對話並附上交接。",
     moveNone: "所有 {0} Agent 都已經使用這個帳號。", moveStage: "加入待儲存", cancel: "取消", current: "目前：{0}",
@@ -87,6 +93,9 @@ register("accounts", {
     why_not_installed: "{0} 上沒有安裝 Claude Code。請從「設定 → Runtime」安裝。",
     why_not_created: "這個帳號不是 AgEnD 的 Runtime 建立的，只能在 {0} 上處理。",
     why_default_login: "這是 {0} 上 Windows 使用者自己的連接，永遠不會從這裡更改：請改用新增帳號。",
+    why_cli_old: "{0} 上的 {1} 版本太舊，無法從這裡連接（需要 {2} 或更新）。請在那台電腦上更新它。",
+    why_cli_missing: "{0} 上沒有安裝 {1}。",
+    machineOneLogin: "{1} 每台電腦只能有一個連接。在這裡連接會取代 {0} 上現有的連接。",
     acctLabel: "帳號", acctInherit: "Fleet 預設（{0}）", acctInheritDefault: "Fleet 預設（預設連接）", acctNotSignedIn: "{0}——尚未連接",
     acctHint: "更換帳號會重新啟動 Agent。尚未連接的帳號不能選，請先在「帳號」連接。",
     acctHintCreate: "新 Agent 從第一次啟動就會使用這個帳號。尚未連接的帳號不能選，請先在「帳號」連接。",
@@ -97,7 +106,7 @@ register("accounts", {
 const tx = (k, ...v) => t(`accounts.${k}`, ...v);
 /** The reasons that apply to a whole computer (the heading says them once); the others belong to one row. A code a newer server sends that this page does not know is shown as it is. */
 const MACHINE_LEVEL = new Set(["offline", "runtime_old", "accounts_off", "switch_unreadable", "not_installed"]);
-const reasonText = (code, name) => { const key = `why_${code}`, text = tx(key, name); return text === `accounts.${key}` ? String(code) : text; };
+const reasonText = (code, name, ...more) => { const key = `why_${code}`, text = tx(key, name, ...more); return text === `accounts.${key}` ? String(code) : text; };
 /** This view's stylesheet, linked once (a tab opened before an upgrade has an app.css without these rules). */
 function linkAccountsCss(doc = typeof document !== "undefined" ? document : null) {
   try {
@@ -385,7 +394,7 @@ function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, ope
   // The week's usage and the short window's (the "5h"), as the server gives them; a CLI that reports one shows one.
   const windows = [row.shortUsage ? ["short", row.shortUsage] : null, row.usage ? ["weekly", row.usage] : null].filter(Boolean);
   const stale = windows.some(([, w]) => w.stale);
-  const why = machine && machine.readOnlyReason && !MACHINE_LEVEL.has(machine.readOnlyReason) ? reasonText(machine.readOnlyReason, machine.name) : "";
+  const why = machine && machine.readOnlyReason && !MACHINE_LEVEL.has(machine.readOnlyReason) ? reasonText(machine.readOnlyReason, machine.name, cliLabel(row.backend), (capsOf(row.backend) && capsOf(row.backend).structuredMinVersion) || "") : "";
   // Four layers in one box: the title bar (name, state, default tag · the buttons), the meta bar (who, used by), the usage block (5h and the week) and Keep sign-in alive as the box's foot.
   return html`<div class="s-row s-account-row" data-account=${row.profile || "default"}>
     <div class="s-account-title-bar">
@@ -407,13 +416,15 @@ function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, ope
       ${machine ? html`<small class="s-account-usage is-none" title=${tx("machineNoUsageHint")}>${tx("machineNoUsage")}</small>` : null}
     </div>
     ${windows.length ? html`<div class=${`s-account-usage${stale ? " is-stale" : ""}`} role="group" aria-label=${tx("usageLabel")}>
-      ${windows.map(([kind, w]) => html`<${UsageWindow} key=${kind} u=${w} kind=${kind} />`)}
+      ${windows.map(([kind, w]) => html`<${UsageCell} key=${kind} u=${w} kind=${kind} Window=${UsageWindow} />`)}
       ${stale ? html`<small class="s-usage-stale">${tx("winStale")}</small>` : null}
     </div>` : null}
     ${why ? html`<p class="note s-account-why">${why}</p>` : null}
     ${canInstall && !installRun ? html`<p class="note s-account-why">${hostInstallText("notInstalled")}</p>` : null}
     ${!machine && !row.profile && !readOnly ? html`<${VersionLine} row=${row} label=${cliLabel(row.backend)} blocked=${running} />` : null}
     ${!machine && !row.profile ? html`<${HostInstallRun} backend=${row.backend} label=${cliLabel(row.backend)} />` : null}
+    ${machine && capsOf(row.backend) && capsOf(row.backend).runtimeDefaultLogin && row.signIn && !readOnly ? html`<p class="note s-account-why">${tx("machineOneLogin", machine.name, cliLabel(row.backend))}</p>` : null}
+    ${!readOnly && !machine && !row.signIn && row.update && row.state !== "too_old" ? html`<p class="note s-account-why">${tx("updateHint", cliLabel(row.backend))} <code>${row.update}</code></p>` : null}
     ${!readOnly && !row.signIn && row.hostCommand ? html`<details class="s-host-cli-help"><summary>${machine ? tx("machineCommand") : tx("hostCommand")}</summary><p class="note">${machine ? tx("machineCommandHint", machine.name) : tx("hostCommandHint")}</p>${machine ? html`<p class="s-host-cli-command"><code>${row.hostCommand}</code></p>` : null}</details>` : null}
     ${!readOnly && row.keepAlive && row.state !== "not_installed" && (!row.scope || row.scope.kind === "host") ? html`<${KeepAliveControl} row=${row} onSaved=${() => refreshAccounts({ fresh: true })} />` : null}
   </div>`;

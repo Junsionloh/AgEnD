@@ -12,12 +12,14 @@ export const SIGNIN_STRINGS = {
     field_code: "Paste the authorization code", field_start_url: "Organization Start URL", field_region: "AWS region",
     phase_method: "method", phase_code: "authorization code", phase_start_url: "start URL", phase_region: "region", phase_authorization: "authorization",
     choice_organization: "Your organization", choice_subscription: "Claude subscription",
-    antigravity: "Antigravity (console fallback)",
+    consoleName: "{0} (console fallback)",
     error: "Could not connect the account. Check status, retry, or connect later.",
     error_unsupported_prompt: "This CLI screen is not supported. Cancel and use the console fallback.",
     error_cleanup_failed: "The login process could not be confirmed closed. Close it on the host and restart setup before retrying.",
     error_signin_cleanup_failed: "The login process could not be confirmed closed. Close it on the host and restart setup before retrying.",
     error_signin_action_stale: "That prompt changed or was already answered. Refresh its status; do not submit it again.",
+    error_signin_action_invalid: "That is not a valid entry. Check it and try again.",
+    codeOnly: "Paste only the code the page shows, not the page's address.",
     error_signin_console_only: "This backend uses the explicit console fallback.",
     error_backend_signin_local_only: "AI accounts can be connected only on this computer. Use the local setup page, or connect later.",
     error_signin_session_expired: "This setup session has ended. Reopen setup on the host.",
@@ -49,12 +51,14 @@ export const SIGNIN_STRINGS = {
     field_code: "貼上取得的授權碼", field_start_url: "組織的 Start URL", field_region: "AWS 區域",
     phase_method: "選擇方式", phase_code: "授權碼", phase_start_url: "Start URL", phase_region: "區域", phase_authorization: "授權",
     choice_organization: "你的組織", choice_subscription: "Claude 訂閱",
-    antigravity: "Antigravity（主控台備援）",
+    consoleName: "{0}（主控台備援）",
     error: "無法連接帳號。請檢查狀態、重試，或稍後連接。",
     error_unsupported_prompt: "不支援這個 CLI 畫面。請取消並改用主控台備援。",
     error_cleanup_failed: "無法確認登入程序已關閉。請在主機上關閉它，並重新開始設定後再試。",
     error_signin_cleanup_failed: "無法確認登入程序已關閉。請在主機上關閉它，並重新開始設定後再試。",
     error_signin_action_stale: "這個畫面已改變或已回答過。請重新整理狀態，不要再送一次。",
+    error_signin_action_invalid: "這不是有效的輸入。請檢查後再試一次。",
+    codeOnly: "只貼上頁面顯示的代碼，不要貼網址。",
     error_signin_console_only: "這個後端使用主控台備援。",
     error_backend_signin_local_only: "AI 帳號只能在這台電腦上連接。請使用本機的設定頁，或稍後連接。",
     error_signin_session_expired: "這個設定工作階段已結束。請在主機上重新開啟設定。",
@@ -97,7 +101,7 @@ const pageLang = doc => /^zh/i.test(doc?.documentElement?.lang || "") ? "zh-TW" 
  * `started` (run id → void): called with the id of the run a press of Sign in in THESE cards started (not one that was already running when they were drawn). The account dialog
  * keeps it, to end exactly that run when it closes.
  */
-export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, changed = () => {}, lang, machine = false, ask, dashboard = false, dialog = false, focus, started = () => {} } = {}) {
+export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, changed = () => {}, lang, machine = false, ask, dashboard = false, dialog = false, focus, started = () => {}, codeHint = () => false } = {}) {
   const doc = root.ownerDocument;
   let view = null, busy = false, disposed = false, timer = null, generation = 0, message = "", rendered = "";
   const language = () => (lang ? lang() : pageLang(doc)) === "zh-TW" ? "zh-TW" : "en";
@@ -105,7 +109,10 @@ export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, change
   const el = (tag, text, parent = root) => { const node = doc.createElement(tag); if (text) node.textContent = text; parent.append(node); return node; };
   // An error is kept as its code, so it is said again in the other language when that changes.
   const errorText = code => machine && SIGNIN_STRINGS.en["error_machine_" + code] ? tr("error_machine_" + code) : SIGNIN_STRINGS.en["error_" + code] ? tr("error_" + code) : tr("error");
-  const name = backend => backend === "antigravity" ? tr("antigravity") : NAMES[backend] || backend;
+  // `view.console`: the CLIs the first-run list only names the console command for (cli-registry.ts `host.firstRunSignIn.mode`). Such a CLI is "(console fallback)" on that list only; in Settings
+  // → Accounts (a dialog, or a computer's own sign-in) it signs in here, so it is just its name.
+  const consoleOnly = backend => !!view && Array.isArray(view.console) && view.console.includes(backend);
+  const name = backend => !(dialog || machine) && consoleOnly(backend) ? tr("consoleName", NAMES[backend] || backend) : NAMES[backend] || backend;
   const choiceName = choice => CHOICES[choice] ?? tr("choice_" + choice);
   const phaseName = phase => SIGNIN_STRINGS.en["phase_" + phase] ? tr("phase_" + phase) : phase.replaceAll("_", " ");
   const button = (parent, label, action) => { const b = el("button", label, parent); b.type = "button"; b.disabled = busy; b.onclick = action; return b; };
@@ -137,7 +144,8 @@ export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, change
       const card = el("section"); card.dataset.backend = backend;
       el("h3", name(backend), card);
       const state = view.states[backend], pending = view.pending.includes(backend), skipped = view.skipped.includes(backend);
-      el("p", tr(skipped ? "skipped" : state === "valid" ? "valid" : state === "not_installed" ? "notInstalled" : state === "console_only" ? "consoleOnly" : "needed"), card);
+      // "Console only" is the first-run list's word for a CLI it does not sign in; Settings → Accounts (`dialog`, or a computer's own sign-in) does, so there it is a sign-in that is needed.
+      el("p", tr(skipped ? "skipped" : state === "valid" ? "valid" : state === "not_installed" ? "notInstalled" : state === "console_only" && !(dialog || machine) ? "consoleOnly" : "needed"), card);
       const login = view.login?.backend === backend ? view.login : null;
       const active = login && login.phase !== "done" && !(login.phase === "failed" && login.reason);
       if (active) {
@@ -157,13 +165,16 @@ export function mountStructuredSignIns(root, { endpoint, fetcher = fetch, change
           const label = el("label", tr("field_" + login.phase), card);
           const input = el("input", null, label); input.type = login.phase === "code" ? "password" : "text"; input.autocomplete = "off"; input.spellcheck = false;
           input.setAttribute("aria-label", label.textContent); input.disabled = busy;
+          if (login.phase === "code" && codeHint(backend)) el("small", tr("codeOnly"), card);   // the CLI's own prompt also accepts the page's address; ours takes the code only (the driver and the Runtime both check)
           button(card, tr("submit", phaseName(login.phase)), () => { const value = input.value; input.value = ""; void perform({ operation: "input", id: login.id, revision: login.revision, action: { kind: login.phase, value } }); });
         }
         if (["method", "code", "start_url", "region"].includes(login.phase) && !login.canAct) el("p", tr("answerSent"), card);
         button(card, tr("cancel"), () => perform({ operation: "cancel" }));
       } else {
         if (login?.reason && login.reason !== "cancelled") el("p", errorText(login.reason), card);
-        const usable = !["antigravity"].includes(backend) && state !== "not_installed";
+        // A CLI the first-run list only names the console command for (`view.console`, from the registry's `host.firstRunSignIn`) has no button there; in Settings → Accounts (a dialog, or a
+        // computer's own sign-in) the caller has already chosen a CLI the registry says can be signed in, so it does.
+        const usable = (dialog || machine || !consoleOnly(backend)) && state !== "not_installed";
         // Ridge #3321 S01: the question names THIS card's CLI, and says what a sign-in again does to it — only Kiro signs out
         // first (logoutArgv); Claude Code and Codex sign in again over the account they have. The dashboard passes its own
         // in-app confirmation (`ask`); the setup page, which loads nothing else, keeps the browser's.
