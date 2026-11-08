@@ -179,17 +179,18 @@ describe("this host's Antigravity row: the account and the two quota pools", () 
     current = view([hostRow({ identity: { maskedEmail: "ad***@example.com" }, shortUsage: usage(GEMINI, 1, 5 * 3_600_000), usage: usage(CLAUDE_OTHERS, 39, 168 * 3_600_000) })]);
     await mount();
     expect(text(hostBox().querySelector(".s-account-identity"))).toBe("ad***@example.com");
-    const windows = [...hostBox().querySelectorAll(".s-usage-win")];
-    expect(windows.map((w: any) => [text(w.querySelector(".s-usage-win-lbl")), text(w.querySelector(".s-usage-win-pct")), text(w.querySelector(".s-usage-win-pool"))])).toEqual([
+    const windows = [...hostBox().querySelectorAll(".s-usage-cell")];
+    expect(windows.map((w: any) => [text(w.querySelector(".s-usage-win-lbl")), text(w.querySelector(".s-usage-win-pct")), text(w.querySelector(".s-usage-pool"))])).toEqual([
       ["5h", "1%", "most used: Gemini"], ["7d", "39%", "most used: Claude & others"]]);
     i18n.setLang("zh-TW", { store: false }); await p.unmount(); A.accountsStore.set({ loaded: false, failed: false, view: null }); await mount();
-    expect([...hostBox().querySelectorAll(".s-usage-win-pool")].map((w: any) => text(w))).toEqual(["用量最高：Gemini", "用量最高：Claude 與其他模型"]);
+    expect([...hostBox().querySelectorAll(".s-usage-pool")].map((w: any) => text(w))).toEqual(["用量最高：Gemini", "用量最高：Claude 與其他模型"]);
   });
   it("a window with no pool (Claude, Codex, or a provider with one pool) has no caption, and a reference the page does not know falls back to the label", async () => {
     current = view([hostRow({ shortUsage: usage(null, 11, 5 * 3_600_000), usage: usage({ label: "Some pool", labelI18n: { key: "usage.metric.does_not_exist" } }, 27, 168 * 3_600_000) })]);
     await mount();
-    const pools = [...hostBox().querySelectorAll(".s-usage-win")].map((w: any) => text(w.querySelector(".s-usage-win-pool")));
-    expect(pools).toEqual(["", "most used: Some pool"]);
+    expect(hostBox().querySelectorAll(".s-usage-cell").length).toBe(1);                     // only the window that has a pool is wrapped; the other is drawn as before
+    expect([...hostBox().querySelectorAll(".s-usage-pool")].map((w: any) => text(w))).toEqual(["most used: Some pool"]);
+    expect(hostBox().querySelectorAll(".s-usage-win").length).toBe(2);
   });
   it("the account line is the address alone: no plan is invented for Antigravity", async () => {
     current = view([hostRow({ identity: { maskedEmail: "ad***@example.com" } })]); await mount();
