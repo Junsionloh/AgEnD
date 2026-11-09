@@ -7,7 +7,7 @@
  * fails while it differs from what this function renders, and says how to regenerate it. (A file, not a request, so a page that has not finished loading
  * cannot be missing it, and the setup page's server needs no new route. Authorization is not here: the server still checks every request itself.)
  */
-import { CLI_IDS, hostFacts, hostIdsByRank, runtimeFacts, type CarryKind, type CliId } from "./cli-registry.js";
+import { CLI_IDS, hostFacts, hostIdsByRank, isRuntimeDefaultLoginCli, runtimeFacts, type CarryKind, type CliId } from "./cli-registry.js";
 
 /** What a page may ask of one CLI. */
 export interface UiCliCaps {
@@ -30,6 +30,8 @@ export interface UiCliCaps {
   runtimeName: string | null;
   /** A Runtime signs it in as the COMPUTER'S OWN login (no profile; `runtime.signIn.profile === "none"`): the page asks before it changes that login. */
   runtimeDefaultLogin: boolean;
+  /** A Runtime keeps NAMED accounts of it on a paired computer (`runtime.namedAccounts`; AGEND-124): an agent there can choose one, and the Accounts page adds, signs in and removes them under that computer's name. */
+  runtimeNamedAccounts: boolean;
   /** The oldest CLI that has the structured sign-in's command (`host.structuredSignIn.minVersion`), for the words that say "too old"; null: any. */
   structuredMinVersion: string | null;
   /** `/login <name>` in chat runs a flow for it (`host.chatLogin`'s mode is not `declined` or `install-only`): the older dialog can sign it in, so a "console fallback" is offered. */
@@ -52,7 +54,8 @@ export function uiCliCaps(): Record<CliId, UiCliCaps> {
       firstRunSignIn: hostFacts(id, "firstRunSignIn")?.mode ?? null,
       runtimeInstall: runtimeFacts(id, "install") !== null,
       runtimeName: runtimeFacts(id, "install") ? runtimeFacts(id, "provider")?.name ?? null : null,
-      runtimeDefaultLogin: runtimeFacts(id, "signIn")?.profile === "none",
+      runtimeDefaultLogin: isRuntimeDefaultLoginCli(id),
+      runtimeNamedAccounts: runtimeFacts(id, "namedAccounts") !== null,
       codeHint: structured?.answer === "code-or-address",
       structuredMinVersion: structured?.minVersion ?? null,
       chatSignIn: ["device-code", "paste-code", "menu"].includes(hostFacts(id, "chatLogin")?.mode ?? ""),

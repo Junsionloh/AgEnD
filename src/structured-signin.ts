@@ -141,7 +141,8 @@ export interface StructuredSignInTransport {
    * No interactive shell after exit. Abort/close must reap late-created resources. */
   start(spec: StructuredSignInLaunch, signal: AbortSignal): Promise<void>;
   capture(): Promise<string>;
-  status(): Promise<{ alive: boolean; exitCode?: number }>;
+  /** `isolated: false` (AGEND-124): the command ended, but the account's sign-in is not in the account's own folder (the CLI kept it somewhere shared), so it is not this account's. */
+  status(): Promise<{ alive: boolean; exitCode?: number; isolated?: false }>;
   /** Literal PTY input to this attempt's fixed login command, never shell interpolation. */
   write(input: string, signal: AbortSignal): Promise<void>;
   /** Confirm all this attempt's native resources are gone; reject if that cannot be proven. */
@@ -246,7 +247,10 @@ export class StructuredSignIn {
       await this.startInFlight;
       if (!this.current()) { await this.finish(this.lostReason()); return; }
       await this.poll();
-    } catch { await this.finish("transport_failed"); }
+    } catch (error) {
+      // A transport that was refused because the account's sign-in is not kept in the account's own folder (a Runtime's proof, AGEND-124) says so; nothing else of an error is read.
+      await this.finish(error instanceof Error && error.message === "not_isolated" ? "not_isolated" : "transport_failed");
+    }
   }
 
   view(who: object): StructuredSignInView {
@@ -293,6 +297,8 @@ export class StructuredSignIn {
         if (prompt.phase === "failed") { await this.finish(prompt.reason); return; }
         const status = await this.deps.transport.status();
         if (!this.current()) { await this.finish(this.lostReason()); return; }
+        // A named account whose command ended well but left no sign-in in the account's folder: the CLI did not keep it there, so it was kept in a store every folder shares.
+        if (status.isolated === false && !status.alive) { await this.finish("not_isolated"); return; }
         // A CLI whose sign-in ends by its exit code (Antigravity prints no success line): it has ended only when the command has, and only exit 0 is checked. No exit code at all (a signal, a closed
         // window, a pane status that could not be read) is not "signed in" either, because an older login is still there and would pass the check.
         const byExit = hostFacts(this.backend, "structuredSignIn")?.ends === "exit-code";

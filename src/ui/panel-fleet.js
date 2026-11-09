@@ -16,7 +16,7 @@ import { RuntimePicker, AgentDraftAssistant, NativeAgendToolsHint, tr } from "./
 import { CliPicker, cliLabel as productLabel } from "./cli-picker.js";
 import { useWindowsCliCatalog, WindowsCliDiscoveryStatus, detectionText } from "./windows-cli-catalog.js";
 import { useRuntimeCatalog } from "./runtime-catalog.js";
-import { ClaudeAccountSelect } from "./credential-profile-select.js";
+import { ClaudeAccountSelect, accountCli } from "./credential-profile-select.js";
 import { chatPath, fleetPath, FLEET_TABS, rememberFleetTab } from "/assets/app-route.js";
 import { Dialog } from "/assets/ui-dialog.js";
 import { Empty, ErrorState, Skeleton } from "/assets/ui-states.js";
@@ -557,7 +557,7 @@ export function CreateInstanceDialog({ onClose }) {
     if (windows) {
       const name = f.topic.trim() || f.dir.trim().replace(/[\\/]+$/, "").split(/[\\/]/).pop();
       if (!name) { toast(tr("required"),false); return null; }
-      return {runtime:"windows",...(nativeAdapter==="pane"?{native_adapter:"pane"}:{}),...(machineId ? {machineId} : {}),...(machineId && f.backend === "claude-code" && credentialProfile ? {credentialProfile} : {}),topic_name:name,backend:f.backend,...(f.model.trim() ? {model:f.model.trim()} : {}),...(f.dir.trim() ? {directory:f.dir.trim()} : {}),description:f.desc.trim(),systemPrompt:f.prompt.trim(),sandbox};
+      return {runtime:"windows",...(nativeAdapter==="pane"?{native_adapter:"pane"}:{}),...(machineId ? {machineId} : {}),...(machineId && accountCli(f.backend) && credentialProfile ? {credentialProfile} : {}),topic_name:name,backend:f.backend,...(f.model.trim() ? {model:f.model.trim()} : {}),...(f.dir.trim() ? {directory:f.dir.trim()} : {}),description:f.desc.trim(),systemPrompt:f.prompt.trim(),sandbox};
     }
     if (!f.dir.trim() && !f.topic.trim()) { toast(t("fleet.topicRequired"), false); return null; }
     const body = {};

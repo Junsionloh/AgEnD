@@ -21,8 +21,8 @@ import { StructuredSignIn, type SignInAction, type StructuredSignInView } from "
 import { LoginWindowLock } from "./login-window-lock.js";
 import type { AuthCheckResult } from "./login-flows.js";
 import { createRuntimeSignInTransport, runtimeAccountStatus, runtimeDefaultLoginStatus, type AccountCaller } from "./runtime-signin-transport.js";
-import { validCredentialProfileName } from "./runtime-credential-profiles.js";
-import { isRuntimeDefaultLoginCli, type RuntimeCliWith, type RuntimeDefaultLoginCli } from "./cli-registry.js";
+import { isCredentialProfileCli, validCredentialProfileName, type CredentialProfileCli } from "./runtime-credential-profiles.js";
+import { isRuntimeDefaultLoginCli, runtimeFacts, type RuntimeCliWith, type RuntimeDefaultLoginCli } from "./cli-registry.js";
 
 /**
  * The CLI a profile-addressed target means: an older page's address (`?machine=&profile=`) names no CLI, and a named profile is Claude Code's. Every CLI a computer can be signed in for is
@@ -34,7 +34,10 @@ export type MachineSignInBackend = RuntimeCliWith<"signIn">;
 export type MachineRefusal = "machine_unknown" | "machine_offline" | "machine_unsupported" | "machine_accounts_off" | "machine_unreachable"
   | "machine_profile_not_owned" | "machine_busy" | "invalid_machine_target";
 
-/** `{ machine, profile }` is a named Claude Code profile; `{ machine, backend: "antigravity" }` is that computer's default Antigravity login (and has no profile). */
+/**
+ * `{ machine, profile }` is a named Claude Code profile; `{ machine, backend: "antigravity" }` is that computer's default Antigravity login (and has no profile); `{ machine, backend: "antigravity", profile }`
+ * (AGEND-124) is a named Antigravity account of that computer.
+ */
 export interface MachineSignInTarget { machine: string; profile?: string; backend?: MachineSignInBackend }
 export interface MachineSignInSnapshot {
   selected: [MachineSignInBackend];
@@ -50,15 +53,15 @@ export interface MachineSignInDeps {
   call: AccountCaller;
   /** The signed-in local admin session is still the one that asked. */
   current(owner: object): boolean;
-  /** What that computer last reported about this profile (the inventory it sent, never asked again): whether it has the profile, if it is signed in, and whether its Runtime created it. */
-  reported(machineId: string, profile: string): { exists: boolean; state: AuthCheckResult; created: boolean };
+  /** What that computer last reported about this profile (the inventory it sent, never asked again): whether it has the profile, if it is signed in, and whether its Runtime created it. `backend`: the CLI the profile belongs to (default Claude Code). */
+  reported(machineId: string, profile: string, backend?: MachineSignInBackend): { exists: boolean; state: AuthCheckResult; created: boolean };
   /** What that computer last reported about its own default login of a CLI without profiles (Antigravity), from the inventory it sent; never asked again, so nothing is started on a read. */
   reportedDefault?(machineId: string, backend: RuntimeDefaultLoginCli): AuthCheckResult;
   /**
    * Whether a request to this computer can be made now (known, online, its Runtime reports `remote-signin` (and `signin-antigravity` for `backend` Antigravity), its owner's `accounts`
    * switch is on), else why not.
    */
-  readiness(machineId: string, backend?: MachineSignInBackend): Promise<MachineRefusal | null>;
+  readiness(machineId: string, backend?: MachineSignInBackend, named?: boolean): Promise<MachineRefusal | null>;
   /** The name the computer's audit log records for this person (`admin:<handle>`); null refuses. */
   actor(owner: object): string | null;
   /** Safe event only: a computer's id, a profile name, a phase and a fixed reason. Never a URL, code, output or e-mail. */
@@ -66,6 +69,7 @@ export interface MachineSignInDeps {
 }
 type Run = { owner: object; target: MachineSignInTarget & { backend: MachineSignInBackend }; session: StructuredSignIn; transport: ReturnType<typeof createRuntimeSignInTransport>; lock: LoginWindowLock };
 
+const isRuntimeSignInCli = (backend: unknown): backend is MachineSignInBackend => runtimeFacts(backend, "signIn") !== null;
 const same = (a: string | undefined, b: string | undefined): boolean => (a === undefined || b === undefined) ? a === b : a.toLowerCase() === b.toLowerCase();
 const backendOf = (target: MachineSignInTarget): MachineSignInBackend => target.backend ?? MACHINE_SIGNIN_BACKEND;
 /** The same sign-in: the same CLI and the same profile (both without one for Antigravity). */
@@ -87,20 +91,21 @@ export class MachineSignIns {
   private cleanupFailed(run: Run | undefined): boolean { return !!run && run.session.view(run.owner).reason === "cleanup_failed"; }
   private validTarget(target: MachineSignInTarget): void {
     if (!target || typeof target.machine !== "string" || !/^[a-f0-9-]{36}$/.test(target.machine)) throw new Error("invalid_machine_target");
-    // Claude Code: a named profile. Antigravity: no profile (its login is the computer's own). Never the other way round.
+    // A CLI with named accounts on a computer (Claude Code, Antigravity) takes a profile name; a CLI that also has the computer's own login (Antigravity) takes none for that. Never a profile that is not a valid name.
     const backend = target.backend ?? MACHINE_SIGNIN_BACKEND;
-    if (isRuntimeDefaultLoginCli(backend) ? target.profile !== undefined : backend !== MACHINE_SIGNIN_BACKEND || !validCredentialProfileName(target.profile)) throw new Error("invalid_machine_target");
+    if (!isRuntimeSignInCli(backend)) throw new Error("invalid_machine_target");
+    if (target.profile === undefined ? !isRuntimeDefaultLoginCli(backend) : !isCredentialProfileCli(backend) || !validCredentialProfileName(target.profile)) throw new Error("invalid_machine_target");
   }
   /** Everything that can be refused before anything starts, with its reason (a short call to the computer for its switch, and nothing else). */
   async preflight(owner: object, target: MachineSignInTarget): Promise<void> {
     this.validTarget(target);
     const backend = backendOf(target);
-    // A named profile must be one this Runtime created. The default Antigravity login has no profile and no owner: only the computer's own `accounts` switch (below) lets it be changed.
-    if (backend === MACHINE_SIGNIN_BACKEND) {
-      const known = this.deps.reported(target.machine, target.profile!);
+    // A named profile must be one this Runtime created. The computer's own login (Antigravity's default) has no profile and no owner: only the computer's own `accounts` switch (below) lets it be changed.
+    if (target.profile !== undefined) {
+      const known = this.deps.reported(target.machine, target.profile, backend);
       if (known.exists && !known.created) throw new Error("machine_profile_not_owned");
     }
-    const refusal = await this.deps.readiness(target.machine, backend);
+    const refusal = await this.deps.readiness(target.machine, backend, target.profile !== undefined);
     if (!this.current(owner)) throw new Error("signin_session_expired");
     if (refusal) throw new Error(refusal);
   }
@@ -114,7 +119,7 @@ export class MachineSignIns {
     const login = mine?.session.view(owner) ?? null;
     // After a finished sign-in the profile (or the computer's Antigravity login) is signed in, whatever the inventory (re-reported by the computer a moment later) still says.
     const state: AuthCheckResult = login?.phase === "done" ? "valid"
-      : isRuntimeDefaultLoginCli(backend) ? this.deps.reportedDefault?.(target.machine, backend) ?? "unknown" : this.deps.reported(target.machine, target.profile!).state;
+      : target.profile === undefined ? this.deps.reportedDefault?.(target.machine, backend as RuntimeDefaultLoginCli) ?? "unknown" : this.deps.reported(target.machine, target.profile, backend).state;
     return { selected: [backend], pending: state === "valid" ? [] : [backend], skipped: [], states: { [backend]: state },
       login, ready: this.terminal(mine), target: { machine: target.machine, ...(target.profile !== undefined ? { profile: target.profile } : {}), ...(isRuntimeDefaultLoginCli(backend) ? { backend } : {}) } };
   }
@@ -160,7 +165,7 @@ export class MachineSignIns {
     const transport = createRuntimeSignInTransport({ machineId: target.machine, ...(profile !== undefined ? { profile } : {}), actor, call: this.deps.call });
     const session: StructuredSignIn = new StructuredSignIn(backend, owner, {
       lock, current: () => this.current(owner), transport, ...(profile !== undefined ? { profile } : {}),
-      checkAuth: async () => (isRuntimeDefaultLoginCli(backend) ? await runtimeDefaultLoginStatus(this.deps.call, target.machine, backend) : await runtimeAccountStatus(this.deps.call, target.machine, profile!)).state,
+      checkAuth: async () => (profile === undefined ? await runtimeDefaultLoginStatus(this.deps.call, target.machine, backend as RuntimeDefaultLoginCli) : await runtimeAccountStatus(this.deps.call, target.machine, profile, backend as CredentialProfileCli)).state,
       changed: event => { this.deps.changed?.({ machine: target.machine, backend, ...(profile !== undefined ? { profile } : {}), phase: event.phase, ...(event.reason ? { reason: event.reason } : {}) }, owner, session.launched); },
     });
     const run: Run = { owner, target: { machine: target.machine, backend, ...(profile !== undefined ? { profile } : {}) }, session, transport, lock };
@@ -184,10 +189,15 @@ export class MachineSignIns {
     }
     return this.snapshot(owner, target);
   }
-  /** Whether a sign-in on this computer is running for this profile (Remove and Sign out refuse while it is). */
-  signingIn(machine: string, profile: string): boolean {
+  /** Whether a sign-in on this computer is running for this profile of this CLI (default Claude Code); Remove and Sign out refuse while it is. */
+  signingIn(machine: string, profile: string, backend: string = MACHINE_SIGNIN_BACKEND): boolean {
     const run = this.runs.get(machine);
-    return !!run && (!this.terminal(run) || this.cleanupFailed(run)) && run.target.backend === MACHINE_SIGNIN_BACKEND && same(run.target.profile, profile);
+    return !!run && (!this.terminal(run) || this.cleanupFailed(run)) && run.target.backend === backend && same(run.target.profile, profile);
+  }
+  /** A sign-in of this computer's OWN login of this CLI (no profile) is running or not shown gone: its Sign out refuses while it is. */
+  signingInDefault(machine: string, backend: string): boolean {
+    const run = this.runs.get(machine);
+    return !!run && (!this.terminal(run) || this.cleanupFailed(run)) && run.target.backend === backend && run.target.profile === undefined;
   }
   /** Any sign-in on this computer that is running or whose child was not shown gone. */
   busy(machine: string): boolean { const run = this.runs.get(machine); return !!run && (!this.terminal(run) || this.cleanupFailed(run)); }

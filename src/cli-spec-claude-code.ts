@@ -27,6 +27,7 @@ export const CLAUDE_CODE_SPEC = {
     install: yes({ kind: "npm" }),
     signIn: yes({ argv: ["claude", "auth", "login"], profile: "named" }),
     namedAccounts: yes({ env: "CLAUDE_CONFIG_DIR" }),
+    signOut: yes({ binary: "claude", args: ["auth", "logout"] }),
     accountRows: yes({ defaultRow: "read-only" }),
     authStatus: yes({ argv: ["auth", "status"], source: "own-command" }),
     identity: yes(),

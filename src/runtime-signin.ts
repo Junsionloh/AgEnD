@@ -5,9 +5,10 @@
  *  - The server sends a CLI id, a profile NAME and a method, never an argv, a command, a path or an environment. This module builds the
  *    command itself (`claude auth login`), sets `CLAUDE_CONFIG_DIR` to the profile's own folder, uses pipes (no terminal) and `BROWSER=true`
  *    so nothing opens on an unattended computer.
- *  - The one exception to "a named profile": Antigravity (`agy acp --login`, Google OAuth). Its Windows login lives in the Credential Manager under one fixed
- *    name, so there is no profile folder to sign into: the sign-in is the computer's own default login, with no profile name. The callers (runtime-remote-accounts.ts)
- *    open that for Antigravity only, behind the same local `accounts` switch, one sign-in at a time, the ten-minute timeout, the start-rate limit and the audit record.
+ *  - Antigravity (`agy acp --login`, Google OAuth) is signed in two ways. Its Windows login lives in the Credential Manager under one fixed name, so the sign-in with no
+ *    profile name is the computer's own default login (AGEND-113). A NAMED account (AGEND-124) is the same command with `--app_data_dir <folder>` and the registry's `pin` (so the
+ *    login is kept in that folder's file): the callers (runtime-remote-accounts.ts) first prove, with an empty scratch folder, that the pin holds. Both sit behind the same local
+ *    `accounts` switch, one sign-in at a time, the ten-minute timeout, the start-rate limit and the audit record.
  *  - `capture()` is NOT the CLI's output. The raw output stays in this process, is bounded, and is reduced to lines of a closed table: the
  *    sign-in URL (https, an allowed host), the code prompt, and the outcome, each in its fixed form. Everything else is dropped, so an
  *    e-mail address in a success line (`Logged in as ...`) reaches the server as `Login successful`.
@@ -160,6 +161,8 @@ export interface SignInLaunch {
   /** The CLI's own program (`findCli`), its leading arguments, and the environment already holding the profile's variable. */
   command: string;
   args: readonly string[];
+  /** The arguments that name a NAMED account for a CLI that is told it by an argument (Antigravity: `--app_data_dir <folder>`), put right after the program's own `args` and before the sign-in words. */
+  profileArgs?: readonly string[];
   env: NodeJS.ProcessEnv;
   method: SignInMethod;
   /** Which CLI's sign-in this is (default Claude Code). Antigravity's is `acp --login` under the computer's own login, so `method` does not apply to it. */
@@ -200,7 +203,7 @@ export class RuntimeSignIn {
     this.scratch = mkdtempSync(join(deps.scratchRoot ?? tmpdir(), "agend-signin-"));
     try {
       const child = this.child = (deps.spawn ?? (guardedSpawn as unknown as SignInSpawn))(launch.command,
-        [...launch.args, ...signInWords(this.cli), ...(BEHAVIOUR[this.cli].methodFlags ? [BEHAVIOUR[this.cli].methodFlags![launch.method]] : [])],
+        [...launch.args, ...(launch.profileArgs ?? []), ...signInWords(this.cli), ...(BEHAVIOUR[this.cli].methodFlags ? [BEHAVIOUR[this.cli].methodFlags![launch.method]] : [])],
         { cwd: this.scratch, env: { ...launch.env, BROWSER: "true" }, shell: false, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
       const take = (chunk: Buffer | string): void => { this.raw = (this.raw + chunk.toString()).slice(-MAX_RAW); };
       child.stdout?.on("data", take); child.stderr?.on("data", take);

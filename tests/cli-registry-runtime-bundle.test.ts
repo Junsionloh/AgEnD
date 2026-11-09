@@ -95,10 +95,10 @@ describe("an older Runtime and an older server still work with it", () => {
     const directory = mkdtempSync(join(tmpdir(), "agend-registry-info-"));
     try {
       expect(readRuntimeInfo({ moduleDirectory: directory, packagePath: join(directory, "missing.json"), panes: true, install: true })).toEqual({
-        protocolVersions: [1], capabilities: ["exec", "mcp", "panes", "credential-profiles", "account-identity", "remote-signin", "signin-antigravity", "cli-install"],
+        protocolVersions: [1], capabilities: ["exec", "mcp", "panes", "credential-profiles", "account-identity", "remote-signin", "signin-antigravity", "accounts-antigravity", "cli-install"],
       });
       expect(readRuntimeInfo({ moduleDirectory: directory, packagePath: join(directory, "missing.json"), panes: false, install: false }).capabilities)
-        .toEqual(["exec", "mcp", "credential-profiles", "account-identity", "remote-signin", "signin-antigravity"]);
+        .toEqual(["exec", "mcp", "credential-profiles", "account-identity", "remote-signin", "signin-antigravity", "accounts-antigravity"]);
       // The derived strings are what the registry says (AGEND-113), in the shape an older server's check accepts (runtime-protocol.ts: at most 16, `[a-z][a-z0-9_-]{0,31}`).
       expect(runtimeSignInCapabilities()).toEqual(runtimeDefaultLoginIds().map(id => `signin-${id}`));
       for (const name of runtimeSignInCapabilities()) expect(name).toMatch(/^[a-z][a-z0-9_-]{0,31}$/);

@@ -21,7 +21,7 @@ import type { AuthCheckResult } from "./login-flows.js";
 import { parseAccountIdentity, type AccountIdentity } from "./claude-auth-status.js";
 import { reduceLoginScreen, type SignInCli } from "./runtime-signin.js";
 import { isRuntimeDefaultLoginCli, runtimeFacts, runtimeIds, type RuntimeDefaultLoginCli } from "./cli-registry.js";
-import { validCredentialProfileName } from "./runtime-credential-profiles.js";
+import { isCredentialProfileCli, validCredentialProfileName, type CredentialProfileCli } from "./runtime-credential-profiles.js";
 import type { RuntimeRemoteOperation, RuntimeRemotePayloads } from "./runtime-protocol.js";
 
 /** Sends one `account.request` to a computer (`RuntimeCoordinator.callAccount`) and gives back its reply. */
@@ -40,6 +40,8 @@ const SESSION_ID = /^[a-f0-9]{32}$/;
 const NO_LONGER_RUNNING = /no longer running/i;
 /** What the Runtime says for a profile folder it does not have yet (a new account is created by its first sign-in): not signed in, not an error. */
 export const PROFILE_DOES_NOT_EXIST = /does not exist on this computer/i;
+/** What a Runtime's refusal begins with when it could not prove an account's sign-in stays in the account's own folder (runtime-remote-accounts.ts `proveIsolated`). */
+export const NOT_ISOLATED = /^not_isolated:/;
 
 function cliOf(argv: readonly string[]): string | null {
   for (const [cli, known] of Object.entries(RUNTIME_SIGNIN_CLIS)) if (argv.length === known.length && argv.every((word, index) => word === known[index])) return cli;
@@ -49,7 +51,7 @@ const record = (value: unknown): value is Record<string, unknown> => !!value && 
 
 export interface RuntimeSignInTransportOptions {
   machineId: string;
-  /** The credential profile NAME on that computer. Absent exactly for Antigravity's default login. */
+  /** The credential profile NAME on that computer. Absent for the computer's OWN login of a CLI that has one (Antigravity's default login). */
   profile?: string;
   /** The name the computer's audit log records for the person who asked (`admin:<handle>`). */
   actor: string;
@@ -67,10 +69,17 @@ export function createRuntimeSignInTransport(options: RuntimeSignInTransportOpti
     async start(spec: StructuredSignInLaunch, signal: AbortSignal): Promise<void> {
       guard(signal);
       const cli = cliOf(spec.argv);
-      // A named profile for every CLI but Antigravity, which has none (a profile for it would be ignored by the Runtime, and the default login would change under a name that means nothing).
-      const bare = isRuntimeDefaultLoginCli(cli);
-      if (!cli || spec.logoutArgv || (bare ? spec.profile !== undefined || profile !== undefined : spec.profile !== profile || !validCredentialProfileName(profile))) throw new Error("signin_unsupported");
-      const answer = await call(machineId, "signin.start", bare ? { cli, method: "subscription", actor } : { cli, profile: profile!, method: "subscription", actor });
+      // A request with a profile name is a NAMED account's (a CLI with named accounts on a computer); one without is the computer's OWN login, and only a CLI whose spec has one (Antigravity) may be signed in
+      // that way: it REPLACES that Windows user's login, so a CLI that needs a name is never signed in without one.
+      const bare = profile === undefined;
+      if (!cli || spec.logoutArgv || (bare ? !isRuntimeDefaultLoginCli(cli) || spec.profile !== undefined : spec.profile !== profile || !validCredentialProfileName(profile) || !isCredentialProfileCli(cli))) throw new Error("signin_unsupported");
+      let answer: unknown;
+      try { answer = await call(machineId, "signin.start", bare ? { cli, method: "subscription", actor } : { cli, profile: profile!, method: "subscription", actor }); }
+      catch (error) {
+        // The Runtime could not show that an account's sign-in stays in its own folder (it keeps one for every folder): nothing was started, and the dialog says that, not a generic failure.
+        if (error instanceof Error && NOT_ISOLATED.test(error.message)) throw new Error("not_isolated");
+        throw error;
+      }
       started = cli as SignInCli;
       const id = record(answer) ? answer.sessionId : undefined;
       if (typeof id !== "string" || !SESSION_ID.test(id)) throw new Error("signin_protocol");
@@ -86,11 +95,11 @@ export function createRuntimeSignInTransport(options: RuntimeSignInTransportOpti
       if (!started) throw new Error("signin_not_started");
       return reduceLoginScreen(started, screen);
     },
-    async status(): Promise<{ alive: boolean; exitCode?: number }> {
+    async status(): Promise<{ alive: boolean; exitCode?: number; isolated?: false }> {
       guard();
       const answer = await call(machineId, "signin.status", { sessionId: live() });
-      if (!record(answer) || typeof answer.alive !== "boolean" || (answer.exitCode !== undefined && !Number.isInteger(answer.exitCode))) throw new Error("signin_protocol");
-      return { alive: answer.alive, ...(answer.exitCode !== undefined ? { exitCode: answer.exitCode as number } : {}) };
+      if (!record(answer) || typeof answer.alive !== "boolean" || (answer.exitCode !== undefined && !Number.isInteger(answer.exitCode)) || (answer.isolated !== undefined && answer.isolated !== false)) throw new Error("signin_protocol");
+      return { alive: answer.alive, ...(answer.exitCode !== undefined ? { exitCode: answer.exitCode as number } : {}), ...(answer.isolated === false ? { isolated: false as const } : {}) };
     },
     async write(input: string, signal: AbortSignal): Promise<void> {
       guard(signal);
@@ -128,9 +137,9 @@ export async function runtimeDefaultLoginStatus(call: AccountCaller, machineId: 
 }
 
 /** The CLI's own `auth status` for one profile on a computer: signed in (masked identity), signed out, or unknown. A profile with no folder yet is signed out. */
-export async function runtimeAccountStatus(call: AccountCaller, machineId: string, profile: string): Promise<{ state: AuthCheckResult; identity?: AccountIdentity }> {
+export async function runtimeAccountStatus(call: AccountCaller, machineId: string, profile: string, cli: CredentialProfileCli = "claude-code"): Promise<{ state: AuthCheckResult; identity?: AccountIdentity }> {
   let answer: unknown;
-  try { answer = await call(machineId, "accounts.check", { cli: "claude-code", profile }); }
+  try { answer = await call(machineId, "accounts.check", { cli, profile }); }
   catch (error) { return { state: error instanceof Error && PROFILE_DOES_NOT_EXIST.test(error.message) ? "invalid" : "unknown" }; }
   if (!record(answer) || ![true, false, null].includes(answer.loggedIn as boolean | null)) return { state: "unknown" };
   if (answer.loggedIn !== true) return { state: answer.loggedIn === false ? "invalid" : "unknown" };

@@ -304,7 +304,10 @@ describe("the request's closed shape", () => {
       expect(() => parseRuntimeRemotePayload("signin.start", bad as never), JSON.stringify(bad)).toThrow(/Invalid signin.start request/);
     }
     expect(() => parseRuntimeRemotePayload("accounts.check", { cli: "antigravity", profile: undefined } as never)).toThrow(/profile/);
-    for (const operation of ["accounts.signout", "accounts.remove"] as const) expect(() => parseRuntimeRemotePayload(operation, { cli: "antigravity", actor: ACTOR } as never), operation).toThrow(/profile/);
+    // AGEND-124: a sign-out may leave the profile out (the computer's own login); a remove never.
+    expect(parseRuntimeRemotePayload("accounts.signout", { cli: "antigravity", actor: ACTOR })).toEqual({ cli: "antigravity", actor: ACTOR });
+    expect(() => parseRuntimeRemotePayload("accounts.signout", { cli: "antigravity", profile: undefined, actor: ACTOR } as never)).toThrow(/profile/);
+    expect(() => parseRuntimeRemotePayload("accounts.remove", { cli: "antigravity", actor: ACTOR } as never)).toThrow(/profile/);
   });
 });
 
@@ -423,18 +426,19 @@ describe("the computer's own Antigravity login, end to end against the Runtime's
       await expect(f.runtime.handle(operation, payload), `${operation} ${JSON.stringify(payload)}`).rejects.toThrow(pattern); expect(f.spawned.length).toBe(spawnedBefore);
     };
     await refused("signin.start", { cli: "claude-code", method: "subscription", actor: ACTOR }, /names the credential profile/);
-    await refused("signin.start", { cli: "codex", method: "subscription", actor: ACTOR }, /Only Claude Code accounts/);
-    await refused("signin.start", { cli: "kiro-cli", method: "subscription", actor: ACTOR }, /Only Claude Code accounts/);
-    await refused("signin.start", { cli: "codex", profile: "work", method: "subscription", actor: ACTOR }, /Only Claude Code accounts/);
-    await refused("signin.start", { cli: "antigravity", profile: "work", method: "subscription", actor: ACTOR }, /no named accounts/);
+    await refused("signin.start", { cli: "codex", method: "subscription", actor: ACTOR }, /Only Claude Code and Antigravity accounts/);
+    await refused("signin.start", { cli: "kiro-cli", method: "subscription", actor: ACTOR }, /Only Claude Code and Antigravity accounts/);
+    await refused("signin.start", { cli: "codex", profile: "work", method: "subscription", actor: ACTOR }, /Only Claude Code and Antigravity accounts/);
+    // AGEND-124: a named Antigravity account is possible, and refused here only because this Runtime cannot prove the folder keeps its own sign-in (no probe was given).
+    await refused("signin.start", { cli: "antigravity", profile: "work", method: "subscription", actor: ACTOR }, /could not be shown to keep this account's sign-in in its own folder/);
     await refused("signin.start", { cli: "antigravity", method: "console", actor: ACTOR }, /Only a subscription sign-in/);
     await refused("signin.start", { cli: "antigravity", method: "subscription", actor: "a b" }, /./);
     await refused("accounts.check", { cli: "claude-code" }, /names the credential profile/);
-    await refused("accounts.check", { cli: "codex" }, /Only Claude Code accounts/);
-    await refused("accounts.check", { cli: "antigravity", profile: "work" }, /no named accounts/);
-    // No sign-out and no remove for it: it has no profile to take out.
-    await refused("accounts.signout", { cli: "antigravity", profile: "work", actor: ACTOR }, /Only Claude Code accounts/);
-    await refused("accounts.remove", { cli: "antigravity", profile: "work", actor: ACTOR }, /Only Claude Code accounts/);
+    await refused("accounts.check", { cli: "codex" }, /Only Claude Code and Antigravity accounts/);
+    // A named account of it is this Runtime's own to check, sign out and remove (AGEND-124): one it never created is refused like any other.
+    await refused("accounts.check", { cli: "antigravity", profile: "work" }, /does not exist on this computer/);
+    await refused("accounts.signout", { cli: "antigravity", profile: "work", actor: ACTOR }, /does not exist on this computer/);
+    await refused("accounts.remove", { cli: "antigravity", profile: "work", actor: ACTOR }, /does not exist on this computer/);
     expect(existsSync(join(f.root, "claude-code", "work"))).toBe(true); expect(readdirSync(join(f.root))).not.toContain("antigravity");
     await f.stop();
   });
@@ -476,12 +480,13 @@ describe("the computer's own Antigravity login, end to end against the Runtime's
 describe("the Accounts rows for a computer's Antigravity login", () => {
   const view = async (f: ReturnType<typeof runtimeRig>) => buildAccountsView({ targets: [], diskProfiles: new Map(), agents: [], classic: [], fleetDefaults: new Map(), machines: await f.accounts.list() });
   const rowsOf = (v: ReturnType<typeof buildAccountsView>) => v.clis.find(c => c.backend === "antigravity")?.rows ?? [];
-  it("is one row under the computer's name, that can be signed in, with no profiles, Add, Sign out or Remove", async () => {
+  it("is one row under the computer's name, that can be signed in and out, with no profiles yet", async () => {
     const f = runtimeRig({ agy: true });
     const v = await view(f), cli = v.clis.find(c => c.backend === "antigravity")!;
     // AGEND-119: the HOST has named accounts of Antigravity (+ Add account on the card), a paired Windows computer does not: it has the one row for the computer's own login.
-    expect([cli.profiles, cli.machineProfiles]).toEqual([true, false]);
-    expect(cli.rows).toEqual([{ scope: { kind: "machine", id: ID, name: "Desk PC", online: true }, backend: "antigravity", profile: null, state: "unknown", signIn: true, usedBy: { agents: [], classic: [], fleetDefault: false } }]);
+    // AGEND-124: a computer has named accounts too (+ Add account under its name) and its own login can be signed out; with none yet, the card has the one row for the computer's own login.
+    expect([cli.profiles, cli.machineProfiles]).toEqual([true, true]);
+    expect(cli.rows).toEqual([{ scope: { kind: "machine", id: ID, name: "Desk PC", online: true, namedAccounts: true }, backend: "antigravity", profile: null, state: "unknown", signIn: true, signOutOwn: true, usedBy: { agents: [], classic: [], fleetDefault: false } }]);
     expect(JSON.stringify(v)).not.toMatch(/identity|email/i);
     await f.stop();
   });

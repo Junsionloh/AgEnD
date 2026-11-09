@@ -106,7 +106,7 @@ describe("what a Runtime reports about its profiles", () => {
   it("the Runtime's own report says which profiles it created (its record, not where the folder sits), and nothing about it when it is not told how to know", () => {
     const root = join(mkdtempSync(join(tmpdir(), "agend-3c-")), "credential-profiles"); roots.push(root);
     createRuntimeProfile(root, "claude-code", "ours"); ensureCredentialProfile(root, "claude-code", "by-hand");
-    const known = credentialProfileReport(root, undefined, name => isCreatedProfile(root, "claude-code", name));
+    const known = credentialProfileReport(root, undefined, (cli, name) => isCreatedProfile(root, cli, name));
     expect(known.profiles.map(p => [p.name, p.created])).toEqual([["by-hand", false], ["ours", true]]);
     expect(credentialProfileReport(root).profiles.every(p => !("created" in p))).toBe(true);
     expect(JSON.stringify(known)).not.toContain(root);

@@ -25,7 +25,11 @@ export const ACCOUNT_CLIS = Object.freeze(hostIdsByRank("accountCard"));
 export const PROFILE_CLIS: ReadonlySet<string> = new Set(hostIds("namedAccounts"));
 const PROFILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
-export type AccountScope = { kind: "host" } | { kind: "machine"; id: string; name: string; online: boolean; readOnlyReason?: string };
+/**
+ * `namedAccounts` (AGEND-124): on a computer's row of a CLI that has named accounts there besides Claude Code (Antigravity), whether that computer's Runtime takes a new one (an older one, or a CLI that is
+ * missing or too old, does not): the "+ Add account" under that computer's name follows it. Absent on every other row, and on a Claude Code row (as before).
+ */
+export type AccountScope = { kind: "host" } | { kind: "machine"; id: string; name: string; online: boolean; readOnlyReason?: string; namedAccounts?: boolean };
 /**
  * Why a computer's row cannot be changed from the dashboard. The first five are about the whole computer (every row carries one of them); the last two are about
  * one row. Codes, not sentences: the page words them in its own language, and shows the command to run on that computer.
@@ -64,6 +68,8 @@ export interface AccountUsageStale { cause: "expired" | "transient" | "error"; c
 export interface AccountUsage { groups: AccountUsageGroup[]; stale?: true; staleInfo?: AccountUsageStale }
 export interface AccountRow {
   scope: AccountScope;
+  /** AGEND-124: the computer's OWN login row of a CLI whose Runtime signs it out (Antigravity): the Sign out button is offered on it (never on Claude Code's, #3212 Q3). Only on such a row. */
+  signOutOwn?: true;
   backend: string;
   /** null: the CLI's default sign-in. */
   profile: string | null;
@@ -94,7 +100,7 @@ export interface AccountsCli { backend: string; profiles: boolean; machineProfil
 export interface AccountsView { clis: AccountsCli[] }
 
 /** AGEND-113: a computer's own login of a CLI without profiles (see `MachineAccountsInput.defaultLogins`). */
-export interface MachineDefaultLogin { loggedIn: boolean | null; readOnlyReason?: Exclude<MachineReadOnlyReason, "not_created" | "default_login">; agents: string[] }
+export interface MachineDefaultLogin { loggedIn: boolean | null; readOnlyReason?: Exclude<MachineReadOnlyReason, "not_created" | "default_login">; agents: string[]; /** The Runtime also signs it out and manages named accounts of the CLI (its `accounts-<id>` capability, AGEND-124). */ accounts?: true }
 
 /** One paired computer's accounts for the view, as its Runtime reported them (names, signed in or not, a masked identity) and what its owner allows. */
 export interface MachineAccountsInput {
@@ -105,6 +111,10 @@ export interface MachineAccountsInput {
   readOnlyReason?: Exclude<MachineReadOnlyReason, "not_created" | "default_login">;
   /** The profiles this computer reported. `created`: this Runtime made and recorded the folder; absent means a Runtime that does not report it. */
   profiles: ReadonlyArray<{ name: string; loggedIn: boolean | null; identity?: AccountIdentity; created?: boolean }>;
+  /** AGEND-124: the named accounts of the CLIs other than Claude Code (Antigravity), by CLI id, the agents that run there on each CLI, and the reason (if any) that CLI's named accounts cannot be changed from the dashboard. */
+  profilesByCli?: Readonly<Record<string, ReadonlyArray<{ name: string; loggedIn: boolean | null; identity?: AccountIdentity; created?: boolean }>>>;
+  agentsByCli?: Readonly<Record<string, ReadonlyArray<{ name: string; profile: string | null }>>>;
+  cliReasons?: Readonly<Record<string, Exclude<MachineReadOnlyReason, "not_created" | "default_login">>>;
   /** The pairing's default profile, when one is set; else agents without a profile use the Windows user's own sign-in. */
   defaultProfile?: string;
   /** The Windows user's own Claude Code sign-in on that computer (`claude auth status`), as the Runtime reported it with its CLIs. */
@@ -144,41 +154,51 @@ const key = (backend: string, profile: string | null) => `${backend}\0${profile 
 const sorted = (xs: Iterable<string>) => [...xs].sort((a, b) => a.localeCompare(b));
 
 const stateOf = (loggedIn: boolean | null): SignInTarget["state"] => loggedIn === true ? "usable" : loggedIn === false ? "not_signed_in" : "unknown";
-/** The rows of one computer: its default (the Windows user's own sign-in, never changed from here) and each reported profile. Pure. */
+/**
+ * The rows of one computer for a CLI that has named accounts there: for Claude Code its default (the Windows user's own sign-in, never changed from here) and each reported profile; for
+ * another CLI (Antigravity, AGEND-124) each reported profile only, because its own login is the separate row `machineDefaultRow` makes. Pure.
+ */
 function machineRows(backend: string, m: MachineAccountsInput): AccountRow[] {
-  const scope = (readOnlyReason?: MachineReadOnlyReason): AccountScope => ({ kind: "machine", id: m.id, name: m.name, online: m.online, ...(readOnlyReason ? { readOnlyReason } : {}) });
+  const claude = backend === "claude-code";
+  const profiles = claude ? m.profiles : m.profilesByCli?.[backend] ?? [];
+  const agents = claude ? m.agents : m.agentsByCli?.[backend] ?? [];
+  // Claude Code's rows carry the computer's own reason (it includes "no Claude Code there"); another CLI's carry theirs (`cliReasons`: the whole-computer reasons and that CLI's own), never Claude Code's absence.
+  const whole = claude ? m.readOnlyReason : undefined, cliReason = claude ? undefined : m.cliReasons?.[backend];
+  const scope = (readOnlyReason?: MachineReadOnlyReason): AccountScope => ({ kind: "machine", id: m.id, name: m.name, online: m.online, ...(readOnlyReason ? { readOnlyReason } : {}), ...(claude ? {} : { namedAccounts: !cliReason }) });
   const same = (a: string | null | undefined, b: string | null) => (a ?? null) !== null && (b ?? null) !== null && a!.toLowerCase() === b!.toLowerCase();
   const usedBy = (profile: string | null, fallback: boolean) => ({
-    agents: sorted(m.agents.filter(a => profile === null ? a.profile === null : same(a.profile, profile)).map(a => a.name)), classic: [] as string[], fleetDefault: fallback,
+    agents: sorted(agents.filter(a => profile === null ? a.profile === null : same(a.profile, profile)).map(a => a.name)), classic: [] as string[], fleetDefault: fallback,
   });
-  const hasDefault = !!m.defaultProfile && m.profiles.some(p => same(p.name, m.defaultProfile!));
-  const rows: AccountRow[] = [{
+  const hasDefault = claude && !!m.defaultProfile && profiles.some(p => same(p.name, m.defaultProfile!));
+  const rows: AccountRow[] = claude ? [{
     // Q3 (#3212): the Windows user's own sign-in is read-only here: no Sign in, Switch or Sign out. Add account and Move agents are the way.
-    scope: scope(m.readOnlyReason ?? "default_login"), backend, profile: null, state: stateOf(m.defaultLogin?.loggedIn ?? null), signIn: false,
+    scope: scope(whole ?? "default_login"), backend, profile: null, state: stateOf(m.defaultLogin?.loggedIn ?? null), signIn: false,
     ...(m.defaultLogin?.loggedIn === true && m.defaultLogin.identity ? { identity: m.defaultLogin.identity } : {}),
     usedBy: usedBy(null, !hasDefault),
-  }];
-  for (const p of [...m.profiles].sort((a, b) => a.name.localeCompare(b.name))) {
+  }] : [];
+  for (const p of [...profiles].sort((a, b) => a.name.localeCompare(b.name))) {
     // Only a profile this Runtime created may be signed in, out or removed from here; an older Runtime that does not say is treated as "not known to be ours".
-    const reason: MachineReadOnlyReason | undefined = m.readOnlyReason ?? (p.created === true ? undefined : "not_created");
+    const reason: MachineReadOnlyReason | undefined = whole ?? cliReason ?? (p.created === true ? undefined : "not_created");
     rows.push({
       scope: scope(reason), backend, profile: p.name, state: stateOf(p.loggedIn), signIn: !reason,
       ...(p.loggedIn === true && p.identity ? { identity: p.identity } : {}),
-      // What to run on that computer when the dashboard cannot do it: the person at that computer signs the profile in themselves.
-      ...(reason ? { hostCommand: `agend-runtime login ${backend} ${p.name}` } : {}),
+      // What to run on that computer when the dashboard cannot do it: the person at that computer signs the profile in themselves. (Only Claude Code has a command for that: an Antigravity account is signed in from here.)
+      ...(reason && claude ? { hostCommand: `agend-runtime login ${backend} ${p.name}` } : {}),
       usedBy: usedBy(p.name, hasDefault && same(m.defaultProfile, p.name)),
     });
   }
   return rows;
 }
 
-/** AGEND-113: a computer's own login of a CLI without profiles: one row, signed in from the dashboard where the computer allows it. Pure. */
+/** AGEND-113: a computer's own login of a CLI that has one: a row, signed in from the dashboard where the computer allows it (and, AGEND-124, signed out where its Runtime can). Pure. */
 function machineDefaultRow(backend: string, m: MachineAccountsInput): AccountRow | null {
   const d = m.defaultLogins?.[backend];
   if (!d) return null;
+  const namedAccounts = backend !== "claude-code" && MACHINE_ACCOUNT_CLIS.has(backend);
   return {
-    scope: { kind: "machine", id: m.id, name: m.name, online: m.online, ...(d.readOnlyReason ? { readOnlyReason: d.readOnlyReason } : {}) },
+    scope: { kind: "machine", id: m.id, name: m.name, online: m.online, ...(d.readOnlyReason ? { readOnlyReason: d.readOnlyReason } : {}), ...(namedAccounts ? { namedAccounts: !d.readOnlyReason && d.accounts === true } : {}) },
     backend, profile: null, state: stateOf(d.loggedIn), signIn: !d.readOnlyReason,
+    ...(d.accounts === true && !d.readOnlyReason ? { signOutOwn: true as const } : {}),
     usedBy: { agents: sorted(d.agents), classic: [], fleetDefault: false },
   };
 }
@@ -193,10 +213,13 @@ export function buildAccountsView(input: AccountsInput): AccountsView {
     const fleetDefault = PROFILE_CLIS.has(backend) ? input.fleetDefaults.get(backend) ?? null : null;
     // A CLI nobody uses and that is not installed is left out (its install lives in the backend list, not here).
     const installed = !!def && def.state !== "not_installed";
-    const machines = MACHINE_ACCOUNT_CLIS.has(backend) ? input.machines ?? [] : [];
-    const defaultRows = MACHINE_DEFAULT_LOGIN_CLIS.has(backend) ? (input.machines ?? []).map(m => machineDefaultRow(backend, m)).filter((row): row is AccountRow => !!row) : [];
+    // Each computer's rows for this CLI, together: the computer's own login (a CLI that has one) first, then its named accounts. A computer with none of them is left out.
+    const machineBlocks = (input.machines ?? []).map(m => {
+      const own = MACHINE_DEFAULT_LOGIN_CLIS.has(backend) ? machineDefaultRow(backend, m) : null;
+      return [...(own ? [own] : []), ...(MACHINE_ACCOUNT_CLIS.has(backend) ? machineRows(backend, m) : [])];
+    }).filter(block => block.length > 0);
     const hostRelevant = installed || agents.length > 0 || classic.length > 0;
-    if (!hostRelevant && !machines.length && !defaultRows.length) continue;
+    if (!hostRelevant && !machineBlocks.length) continue;
     const rows: AccountRow[] = [];
     const usedBy = (profile: string | null) => ({
       agents: sorted(agents.filter(a => a.profile === profile).map(a => a.name)),
@@ -231,8 +254,7 @@ export function buildAccountsView(input: AccountsInput): AccountsView {
       }
     }
     // A paired computer's rows come after the host's, each computer's together (the page groups them by scope).
-    for (const m of machines) rows.push(...machineRows(backend, m));
-    rows.push(...defaultRows);
+    for (const block of machineBlocks) rows.push(...block);
     clis.push({ backend, profiles: PROFILE_CLIS.has(backend), machineProfiles: MACHINE_ACCOUNT_CLIS.has(backend), installed, fleetDefault, agents: agents.map(a => ({ name: a.name, profile: a.profile })), rows });
   }
   return { clis };
