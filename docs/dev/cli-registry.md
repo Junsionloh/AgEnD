@@ -24,7 +24,7 @@ Plain data: strings, numbers, booleans and lists of them; no function, no RegExp
 | `host.signOut` | the CLI's own logout | `accounts-signout.ts` |
 | `host.keepAlive` | "Keep sign-in alive" | `signin-keepalive.ts` |
 | `host.accountCard` | a card on Settings → Accounts | — |
-| `host.usage` | a row in the usage panel (provider id, name, place); `pools`: one quota (`single`) or several that each have a 5h and a weekly window (`several`: an Accounts row shows, for each window, the most used pool and names it) | `USAGE_FETCHERS` in `usage/providers.ts`, `usageWithPool` in `accounts-view.ts` |
+| `host.usage` | a row in the usage panel (provider id, name, place); `pools`: one set of limits (`single`) or pools the CLI names in its own answer (`several`: an Accounts row has a block per pool, named); `windows`: the kinds of window it reports (`session`, `weekly`, `monthly`, `unwindowed`). An Accounts row shows every pool and every window the account reports, in the usage panel's order, and `tests/cli-registry-usage-shape.test.ts` fails when a real payload carries a kind the entry does not list | `USAGE_FETCHERS` in `usage/providers.ts`, `accountUsage` in `accounts-view.ts` |
 | `runtime.provider` | a Windows Runtime lists it and (if `supports.execution`) runs it | `windows-cli-worker.ts` |
 | `runtime.install` | the dashboard installs it from a pinned package | pins and signer in `runtime-cli-install.ts` |
 | `runtime.signIn` | the dashboard signs it in on that computer: a `named` profile this Runtime created, or `none`: the computer's OWN login (a CLI with one login per Windows user; signing in REPLACES it). A `none` is announced by a capability derived from the registry, `signin-<id>` | `runtime-signin.ts` (`BEHAVIOUR`) |

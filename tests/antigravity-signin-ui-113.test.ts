@@ -171,28 +171,55 @@ describe("a computer's Antigravity login", () => {
   });
 });
 
-describe("this host's Antigravity row: the account and the two quota pools", () => {
-  const usage = (pool: unknown, percent: number, windowMs: number) => ({ percent, windowMs, resetsAt: new Date(Date.now() + windowMs / 2).toISOString(), ...(pool ? { pool } : {}) });
+describe("this host's Antigravity row: the account and every quota pool with every window", () => {
+  const H = 3_600_000;
+  const win = (kind: string, percent: number, windowMs?: number) => ({ kind, percent, ...(windowMs ? { windowMs, resetsAt: new Date(Date.now() + windowMs / 2).toISOString() } : {}) });
   const CLAUDE_OTHERS = { label: "Claude & others", labelI18n: { key: "usage.metric.agy_claude_others" } };
   const GEMINI = { label: "Gemini", labelI18n: { key: "usage.metric.named", args: ["Gemini"] } };
-  it("shows the masked account, and each window says which pool it is (the most used one), in the page's language", async () => {
-    current = view([hostRow({ identity: { maskedEmail: "ad***@example.com" }, shortUsage: usage(GEMINI, 1, 5 * 3_600_000), usage: usage(CLAUDE_OTHERS, 39, 168 * 3_600_000) })]);
+  const ARGON = { label: "Gemini 4 Argon", labelI18n: { key: "usage.metric.named", args: ["Gemini 4 Argon"] } };
+  const POOLS = [{ pool: GEMINI, windows: [win("session", 0, 5 * H), win("weekly", 13, 168 * H)] }, { pool: CLAUDE_OTHERS, windows: [win("session", 0, 5 * H), win("weekly", 39, 168 * H)] }, { pool: ARGON, windows: [win("unwindowed", 1)] }];
+  const blocks = () => [...hostBox().querySelectorAll(".s-usage-group")].map((g: any) => ({ pool: text(g.querySelector(".s-usage-pool")), meters: [...g.querySelectorAll(".u-cm")].map((m: any) => [text(m.querySelector(".u-cm-tag")), text(m.querySelector(".u-cm-pct"))]) }));
+  it("shows the masked account and one block per pool with ALL of its windows — Gemini's week and Claude & others' 5h are there, not hidden — in the page's language", async () => {
+    current = view([hostRow({ identity: { maskedEmail: "ad***@example.com" }, usageGroups: POOLS })]);
     await mount();
     expect(text(hostBox().querySelector(".s-account-identity"))).toBe("ad***@example.com");
-    // (Which meter draws the window differs between the Accounts view's own and the Usage panel's shared one; the cell and its caption do not.)
-    const cells = [...hostBox().querySelectorAll(".s-usage-cell")].map((w: any) => text(w));
-    expect(cells).toHaveLength(2);
-    expect([/5h/.test(cells[0]), /1%/.test(cells[0]), /most used: Gemini$/.test(cells[0])]).toEqual([true, true, true]);
-    expect([/7d/.test(cells[1]), /39%/.test(cells[1]), /most used: Claude & others$/.test(cells[1])]).toEqual([true, true, true]);
+    expect(blocks()).toEqual([
+      { pool: "Gemini", meters: [["5h", "0%"], ["7d", "13%"]] },
+      { pool: "Claude & others", meters: [["5h", "0%"], ["7d", "39%"]] },
+      { pool: "Gemini 4 Argon", meters: [["—", "1%"]] },       // one number with no window: a dash, under the pool's name
+    ]);
+    expect(hostBox().querySelector(".s-account-usage").className).toContain("is-pooled");
     i18n.setLang("zh-TW", { store: false }); await p.unmount(); A.accountsStore.set({ loaded: false, failed: false, view: null }); await mount();
-    expect([...hostBox().querySelectorAll(".s-usage-pool")].map((w: any) => text(w))).toEqual(["用量最高：Gemini", "用量最高：Claude 與其他模型"]);
+    expect(blocks()).toEqual([
+      { pool: "Gemini", meters: [["5h", "0%"], ["本週", "13%"]] },
+      { pool: "Claude 與其他模型", meters: [["5h", "0%"], ["本週", "39%"]] },
+      { pool: "Gemini 4 Argon", meters: [["—", "1%"]] },
+    ]);
   });
-  it("a window with no pool (Claude, Codex, or a provider with one pool) has no caption, and a reference the page does not know falls back to the label", async () => {
-    current = view([hostRow({ shortUsage: usage(null, 11, 5 * 3_600_000), usage: usage({ label: "Some pool", labelI18n: { key: "usage.metric.does_not_exist" } }, 27, 168 * 3_600_000) })]);
+  it("a provider with one set of limits (Claude, Codex) is drawn exactly as before: the windows side by side in the block, no pool block, no name", async () => {
+    current = view([hostRow({ usageGroups: [{ windows: [win("session", 11, 5 * H), win("weekly", 27, 168 * H)] }] })]);
     await mount();
-    expect(hostBox().querySelectorAll(".s-usage-cell").length).toBe(1);                     // only the window that has a pool is wrapped; the other is drawn as before
-    expect([...hostBox().querySelectorAll(".s-usage-pool")].map((w: any) => text(w))).toEqual(["most used: Some pool"]);
-    expect(hostBox().querySelector(".s-account-usage").children.length).toBe(2);           // both windows are still there, one grid item each
+    expect(hostBox().querySelectorAll(".s-usage-group").length).toBe(0); expect(hostBox().querySelectorAll(".s-usage-pool").length).toBe(0);
+    expect(hostBox().querySelector(".s-account-usage").className).not.toContain("is-pooled");
+    expect([...hostBox().querySelector(".s-account-usage").children].map((c: any) => c.className.split(" ")[0])).toEqual(["u-cm", "u-cm"]);   // one grid item per window, as the stylesheet has it
+  });
+  it("a pool the page has no word for falls back to the label the server sent; a window with no name for its pool sits in a block with no heading", async () => {
+    current = view([hostRow({ usageGroups: [{ pool: { label: "Some pool", labelI18n: { key: "usage.metric.does_not_exist" } }, windows: [win("session", 5, 5 * H)] }, { windows: [win("weekly", 6, 168 * H)] }] })]);
+    await mount();
+    expect(blocks().map((b: any) => b.pool)).toEqual(["Some pool", ""]);
+  });
+  it("a pool whose window has reset since the read says so in the usage panel's words instead of an old percent, and the pool's other windows keep their numbers", async () => {
+    current = view([hostRow({ usageGroups: [{ pool: GEMINI, windows: [{ ...win("session", 90, 5 * H), resetPassed: true }, win("weekly", 13, 168 * H)] }] })]);
+    await mount();
+    const g = hostBox().querySelector(".s-usage-group");
+    expect(g.querySelectorAll(".u-cm").length).toBe(2);
+    expect(text(g.querySelector(".s-usage-reset"))).toMatch(/^5h.*reset|^5h.*重置/i); expect(text(g.querySelector(".s-usage-reset"))).not.toContain("90");
+    expect(text(g.querySelectorAll(".u-cm")[1].querySelector(".u-cm-pct"))).toBe("13%");
+  });
+  it("the last known numbers are greyed and say so once", async () => {
+    current = view([hostRow({ usageGroups: POOLS, usageStale: true })]); await mount();
+    expect(hostBox().querySelector(".s-account-usage").className).toContain("is-stale");
+    expect(hostBox().querySelectorAll(".s-usage-stale").length).toBe(1);
   });
   it("the account line is the address alone: no plan is invented for Antigravity", async () => {
     current = view([hostRow({ identity: { maskedEmail: "ad***@example.com" } })]); await mount();
