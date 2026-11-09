@@ -1,3 +1,4 @@
+import { STRUCTURED_PROFILE_BACKENDS } from "./structured-signin-transport.js";
 import { hubModeOf, hubNameOf, type HubSwitches } from "./hub-mode.js";
 import { validCredentialProfileName } from "./runtime-credential-profiles.js";
 import { CANVAS_WORKER_EXPERIMENTAL_MESSAGE } from "./web-experimental.js";
@@ -1220,7 +1221,7 @@ function handleBrowserBackendSignIns(req: IncomingMessage, res: ServerResponse, 
     if (shape && computer && !backend) target = { machine: machine!, profile };
     // `?machine=<id>&backend=<cli>` is that computer's OWN login of a CLI the registry says has none (`runtime.signIn.profile === "none"`: Antigravity): no profile in the address, and nothing but these two keys.
     else if (keys.length === 2 && new Set(keys).size === 2 && computer && isRuntimeDefaultLoginCli(backend) && !profile) target = { machine: machine!, backend };
-    else if (shape && backend === "claude-code" && !machine) account = { backend, profile };
+    else if (shape && backend !== null && STRUCTURED_PROFILE_BACKENDS.has(backend) && !machine) account = { backend, profile };   // a CLI whose named account is signed in with these controls (registry: `host.structuredSignIn.named`)
     else { json(res, 404, { error: "not_found" }); return true; }
   }
   // Only the one that is asked for is looked up: the host's creates its checklist state, a computer's or a named account's does not need it.

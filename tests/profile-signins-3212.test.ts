@@ -402,6 +402,14 @@ describe("the route: ?backend=claude-code&profile=<name>", () => {
     expect(cancelled.body.login).toMatchObject({ phase: "failed", reason: "cancelled" });
     expect(h.lock.isHeld).toBe(false);
   });
+  it("AGEND-119: a CLI whose named account the registry says is signed in with these controls (Antigravity) has the same address; one that is not (Codex, Kiro) does not", async () => {
+    const h = await http();
+    const read = await h.call("?backend=antigravity&profile=CHY");
+    expect(read.status).toBe(200);
+    expect(read.body).toMatchObject({ selected: ["antigravity"], target: { backend: "antigravity", profile: "CHY" } });
+    expect((await h.call("?backend=codex&profile=CHY")).status).toBe(404);
+    expect((await h.call("?backend=kiro-cli&profile=CHY")).status).toBe(404);
+  });
   it.each([
     ["?backend=claude-code"], ["?profile=CHY"], ["?backend=kiro-cli&profile=CHY"], ["?backend=codex&profile=CHY"], ["?backend=claude-code&profile=..%2Fx"], ["?backend=claude-code&profile="],
     ["?backend=claude-code&profile=CHY&x=1"], ["?backend=claude-code&backend=claude-code"], ["?backend=claude-code&machine=3f2b6e0a-1111-4222-8333-444455556666&profile=CHY"],
