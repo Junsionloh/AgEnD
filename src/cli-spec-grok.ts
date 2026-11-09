@@ -16,7 +16,7 @@ export const GROK_SPEC = {
     signOut: toVerify("No `grok` logout command has been checked."),
     keepAlive: toVerify("Whether Grok's sign-in needs a keep-alive run has not been checked."),
     accountCard: yes({ rank: 4 }),
-    usage: yes({ providerId: "grok", name: "Grok", rank: 3, profileRows: false, pools: "single", windows: ["weekly"] }),
+    usage: yes({ providerId: "grok", name: "Grok", rank: 3, profileRows: false, hostRows: false, pools: "single", windows: ["weekly"] }),
   },
   runtime: {
     provider: yes({

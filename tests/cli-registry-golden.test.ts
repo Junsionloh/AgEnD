@@ -13,7 +13,7 @@ import { installerSignInBackends } from "/ui/js/backend-signin.js";
 import { INSTALL_CLIS } from "/ui/js/runtime-cli-install.js";
 import { hostFacts, hostIds, hostIdsByRank, runtimeDefaultLoginIds, runtimeFacts, runtimeIds, runtimeProviderIds, runtimeSignInCapabilities } from "../src/cli-registry.js";
 import { ACCOUNT_CLIS, MACHINE_ACCOUNT_CLIS, MACHINE_DEFAULT_LOGIN_CLIS, PROFILE_CLIS } from "../src/accounts-view.js";
-import { SIGN_OUT } from "../src/accounts-signout.js";
+import { SIGN_OUT, SIGN_OUT_REMOVES } from "../src/accounts-signout.js";
 import { ONBOARDING_BACKENDS } from "../src/backend-signin-pending.js";
 import { CHAT_PROFILE_LOGIN_BACKENDS, CREDENTIAL_HOMES } from "../src/backend/credential-profile.js";
 import { BACKEND_INSTALLATION_INFO } from "../src/instance-lifecycle.js";
@@ -30,10 +30,10 @@ import { NATIVE_PROVIDER_IDS, nativeProvider, nativeProviderMcpSupported } from 
 describe("host lists, as they were", () => {
   it("the Accounts page's CLIs, in its order, and which have named accounts, and which have a paired computer's rows", () => {
     expect([...ACCOUNT_CLIS]).toEqual(["claude-code", "codex", "kiro-cli", "antigravity", "grok", "muse"]);
-    expect([...PROFILE_CLIS]).toEqual(["claude-code", "codex", "kiro-cli"]);
+    expect([...PROFILE_CLIS]).toEqual(["claude-code", "codex", "kiro-cli", "antigravity"]);
     expect([...MACHINE_ACCOUNT_CLIS]).toEqual(["claude-code"]);
     expect(hostIdsByRank("accountCard")).toEqual(["claude-code", "codex", "kiro-cli", "antigravity", "grok", "muse"]);
-    expect(hostIds("namedAccounts")).toEqual(["claude-code", "codex", "kiro-cli"]);
+    expect(hostIds("namedAccounts")).toEqual(["claude-code", "codex", "kiro-cli", "antigravity"]);
     // AGEND-113: a paired computer also has a row for Antigravity's OWN login (no named accounts there), signed in from the Accounts page.
     expect(runtimeIds("accountRows")).toEqual(["claude-code", "antigravity"]);
     expect([...MACHINE_DEFAULT_LOGIN_CLIS]).toEqual(["antigravity"]);
@@ -97,14 +97,19 @@ describe("host lists, as they were", () => {
     expect(SIGN_OUT).toEqual({
       "claude-code": { binary: "claude", args: ["auth", "logout"] }, "codex": { binary: "codex", args: ["logout"] }, "kiro-cli": { binary: "kiro-cli", args: ["logout"] },
     });
-    expect([...KEEPALIVE_BACKENDS]).toEqual(["claude-code", "codex"]);
-    expect(hostIds("keepAlive")).toEqual(["claude-code", "codex"]);
+    // AGEND-119: Antigravity has no logout command; AgEnD removes its token file (and then asks `agy models`).
+    expect(SIGN_OUT_REMOVES).toEqual({ "antigravity": ["antigravity-oauth-token"] });
+    expect([...KEEPALIVE_BACKENDS]).toEqual(["claude-code", "codex", "antigravity"]);
+    expect(hostIds("keepAlive")).toEqual(["claude-code", "codex", "antigravity"]);
   });
 
   it("named accounts: the variable that relocates each CLI's home, and how", () => {
     expect(Object.fromEntries(Object.entries(CREDENTIAL_HOMES).map(([id, spec]) => [id, { env: spec.env, kind: spec.kind }]))).toEqual({
       "kiro-cli": { env: "XDG_DATA_HOME", kind: "relocate-home" }, "codex": { env: "CODEX_HOME", kind: "redirect-files" }, "claude-code": { env: "CLAUDE_CONFIG_DIR", kind: "relocate-home" },
+      // AGEND-119: no variable moves agy's home; its account's folder is an argument, and its launch carries `pin` so the sign-in is kept in that folder's file.
+      "antigravity": { env: "", kind: "launch-argument" },
     });
+    expect(hostFacts("antigravity", "namedAccounts")).toEqual({ support: "yes", home: "launch-argument", arg: "--app_data_dir", store: "antigravity-oauth-token", pin: { SSH_CONNECTION: "127.0.0.1 0 127.0.0.1 0" }, carry: "handover" });
   });
 
   it("the install table: binary, command and the unattended form", () => {
@@ -150,7 +155,7 @@ describe("host lists, as they were", () => {
     expect(hostIdsByRank("usage").map(id => [hostFacts(id, "usage")!.providerId, hostFacts(id, "usage")!.name])).toEqual([
       ["claude", "Claude"], ["codex", "Codex"], ["muse", "Muse"], ["grok", "Grok"], ["kiro", "Kiro"], ["antigravity", "Antigravity"],
     ]);
-    expect(hostIds("usage").filter(id => hostFacts(id, "usage")!.profileRows)).toEqual(["claude-code", "codex", "kiro-cli"]);
+    expect(hostIds("usage").filter(id => hostFacts(id, "usage")!.profileRows)).toEqual(["claude-code", "codex", "kiro-cli", "antigravity"]);
     expect(defaultUsageProviderIds()).toEqual(["claude", "codex", "muse", "grok", "kiro", "antigravity"]);
   });
 });
@@ -218,12 +223,12 @@ describe("the dashboard scripts' lists, as they were", () => {
   const source = (file: string) => readFileSync(new URL(`../src/ui/${file}`, import.meta.url), "utf8");
 
   it("Sign out is offered for the CLIs that can sign out", () => {
-    expect([...SIGN_OUT_CLIS].sort()).toEqual(["claude-code", "codex", "kiro-cli"]);
+    expect([...SIGN_OUT_CLIS].sort()).toEqual(["antigravity", "claude-code", "codex", "kiro-cli"]);
   });
 
   it("the structured sign-in controls are used for these CLIs, and for a named account only for these", () => {
     expect(ids(c => c.structuredSignIn).sort()).toEqual(["antigravity", "claude-code", "codex", "kiro-cli"]);
-    expect(ids(c => c.structuredNamedSignIn)).toEqual(["claude-code"]);
+    expect(ids(c => c.structuredNamedSignIn)).toEqual(["claude-code", "antigravity"]);
     expect(ids(c => c.runtimeDefaultLogin)).toEqual(["antigravity"]);
     expect(ids(c => c.codeHint)).toEqual(["antigravity"]);
     expect(ids(c => c.chatSignIn)).toEqual(["claude-code", "codex", "kiro-cli", "grok"]);
@@ -236,12 +241,12 @@ describe("the dashboard scripts' lists, as they were", () => {
   });
 
   it("what a Move between accounts says about the conversation, per CLI", () => {
-    expect(Object.fromEntries(CLI_IDS.map(id => [id, capsOf(id)!.carry]))).toEqual({ "claude-code": "carries", "codex": "keeps", "kiro-cli": "handover", "antigravity": null, "grok": null, "muse": null, "opencode": null });
+    expect(Object.fromEntries(CLI_IDS.map(id => [id, capsOf(id)!.carry]))).toEqual({ "claude-code": "carries", "codex": "keeps", "kiro-cli": "handover", "antigravity": "handover", "grok": null, "muse": null, "opencode": null });
     expect(Object.fromEntries(CLI_IDS.map(id => [id, capsOf(id)!.carry]))).toEqual(Object.fromEntries(CLI_IDS.map(id => [id, hostFacts(id, "namedAccounts")?.carry ?? null])));
   });
 
   it("an agent's settings offer an account choice for these CLIs, and the Runtime page lists these CLIs to install", () => {
-    expect(ids(c => c.namedAccounts)).toEqual(["claude-code", "codex", "kiro-cli"]);
+    expect(ids(c => c.namedAccounts)).toEqual(["claude-code", "codex", "kiro-cli", "antigravity"]);
     expect(INSTALL_CLIS).toEqual([{ id: "claude-code", label: "Claude Code" }, { id: "codex", label: "Codex" }, { id: "antigravity", label: "Antigravity" }, { id: "opencode", label: "OpenCode" }]);
   });
 

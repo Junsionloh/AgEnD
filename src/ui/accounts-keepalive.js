@@ -1,4 +1,4 @@
-// #3292: Settings → Accounts → "Keep sign-in alive", one line under a Claude Code or Codex row (signin-keepalive.ts on the
+// #3292: Settings → Accounts → "Keep sign-in alive", one line under a Claude Code, Codex or (AGEND-119) Antigravity row (signin-keepalive.ts on the
 // server decides and runs; this page only shows and asks). A module of its own with its own words and stylesheet: a tab
 // that loaded an older accounts-view.js never shows it, and it never meets an older cached strings file or accounts.css.
 // - The switch: once a day AgEnD renews this sign-in when no agent or room is using it — `claude auth status` / Codex's
@@ -17,6 +17,7 @@ register("accountsKeepAlive", {
     label: "Keep connection alive",
     hint_claude: "Once a day, if no agent is using it, AgEnD renews this connection with Claude Code's own status check. No model request.",
     hint_codex: "Once a day, if no agent is using it, AgEnD renews this connection through Codex's own refresh. No model request.",
+    hint_antigravity: "About once an hour, when the access token is close to lapsing and no agent is using it, AgEnD runs `agy models` for this account, which renews the token. That is what keeps its usage current. No model request.",
     fallback: "Backup renewal (a tiny request if the status check doesn't renew)",
     fallbackHint: "When the regular status check can't extend the sign-in, allow one very short request on the smallest model (a few dozen tokens) to keep it connected.",
     endsAt: "Connection ends {0}", endsSoon: "Connection ends {0}. Renewing can't move this date: reconnect before then.", ended: "Connection ended {0}. Reconnect.",
@@ -30,6 +31,7 @@ register("accountsKeepAlive", {
     label: "保持連接",
     hint_claude: "沒有 Agent 使用時，AgEnD 每天用 Claude Code 自己的狀態檢查續期這個連接一次。不會呼叫模型。",
     hint_codex: "沒有 Agent 使用時，AgEnD 每天透過 Codex 自己的刷新續期這個連接一次。不會呼叫模型。",
+    hint_antigravity: "沒有 Agent 使用、而且 access token 快過期時，AgEnD 大約每小時替這個帳號執行一次 `agy models`，它會更新 token，用量才不會顯示（未更新）。不會呼叫模型。",
     fallback: "備援續期（狀態檢查未續期時改送極小請求）",
     fallbackHint: "當一般狀態檢查未能延長登入效期時，允許改用最小模型送一次極短請求（約數十 token）來維持連接。",
     endsAt: "連接到期：{0}", endsSoon: "連接到期：{0}。續期無法延後這個日期，請在那之前重新連接。", ended: "連接已於 {0} 到期。請重新連接。",
@@ -41,6 +43,12 @@ register("accountsKeepAlive", {
   },
 });
 const tk = (k, ...v) => t(`accountsKeepAlive.${k}`, ...v);
+/** The words that say what the switch does for a CLI. */
+function hintKey(backend) {
+  if (backend === "claude-code") return "hint_claude";
+  if (backend === "antigravity") return "hint_antigravity";
+  return "hint_codex";
+}
 const WARN_MS = 10 * 86_400_000;
 
 /** This control's stylesheet, linked once (an older accounts.css has no rules for it). */
@@ -108,7 +116,7 @@ export function KeepAliveControl({ row, onSaved, now = Date.now() }) {
     ${/* Ridge #3321 S10: an on/off feature is the shared switch (s-ui-toggle), as Hub membership and web authority; the paid fallback stays a checkbox. */ ""}
     <label class="check"><input class="s-ui-toggle" type="checkbox" role="switch" checked=${!!k.enabled} disabled=${busy} onChange=${(e) => save(e.currentTarget.checked, k.fallback)} />
       <span>${tk("label")}</span></label>
-    <${InfoTip} text=${tk(row.backend === "claude-code" ? "hint_claude" : "hint_codex")} name=${tk("label")} />
+    <${InfoTip} text=${tk(hintKey(row.backend))} name=${tk("label")} />
     ${row.backend === "claude-code" && k.enabled ? html`<span class="s-keepalive-fallback"><label class="check"><input type="checkbox" checked=${!!k.fallback} disabled=${busy} onChange=${(e) => save(true, e.currentTarget.checked)} />
       <span>${tk("fallback")}</span></label><${InfoTip} text=${tk("fallbackHint")} name=${tk("fallback")} /></span>` : null}
     ${endLine ? html`<small class=${`s-keepalive-ends${warn ? " is-warn" : ""}`}>${endLine}</small>` : null}

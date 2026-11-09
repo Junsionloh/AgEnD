@@ -39,6 +39,10 @@ register("accountsManage", {
     stopUsers: "Using it now — they stop working until it's connected again:", nobody: "No agent, ClassicBot room or fleet default uses it.",
     signOutGo: "Disconnect", switchGo: "Disconnect and reconnect", signingOut: "Disconnecting…", signedOut: "Disconnected.",
     keychainLeft: "Disconnected, but a Keychain item for this account is still on this Mac. Remove it in Keychain Access.",
+    signOutLeadFiles: "{0} has no logout command, so AgEnD deletes this account's sign-in file on the host, then checks with {0} that it is disconnected. Its conversations stay.",
+    switchLeadFiles: "{0} has no logout command, so AgEnD deletes this account's sign-in file, then opens Connect for the account you want. Agents using it restart on the new account once you've connected.",
+    err_still_signed_in: "The sign-in file was deleted, but {0} still says it is connected: it keeps this connection somewhere AgEnD does not delete (the system's keyring). Disconnect inside {0} (its /logout).",
+    signedOutUnverified: "Disconnected. {0} did not answer the check afterwards, so that is not confirmed.",
     removedKeychainLeft: "Account “{0}” removed, but a Keychain item for it is still on this Mac. Remove it in Keychain Access.",
     err_unsupported: "This CLI can't be disconnected from here.", err_signout_failed: "{0}'s disconnect did not succeed. Try again here.",
     defName: "default connection", acctName: "account “{0}”",
@@ -81,6 +85,10 @@ register("accountsManage", {
     stopUsers: "目前使用中——在重新連接前它們都無法運作：", nobody: "沒有 Agent、ClassicBot 房間或 Fleet 預設在使用它。",
     signOutGo: "撤銷連接", switchGo: "撤銷並重新連接", signingOut: "正在撤銷連接…", signedOut: "已撤銷連接。",
     keychainLeft: "已撤銷連接，但這台 Mac 上仍有這個帳號的鑰匙圈項目。請在「鑰匙圈存取」中刪除。",
+    signOutLeadFiles: "{0} 沒有登出指令，所以 AgEnD 會刪除主機上這個帳號的登入檔，再用 {0} 確認已經撤銷連接。它的對話會保留。",
+    switchLeadFiles: "{0} 沒有登出指令，所以 AgEnD 會刪除這個帳號的登入檔，然後開啟「連接」讓你連接想用的帳號。連接好後，使用它的 Agent 會以新帳號重新啟動。",
+    err_still_signed_in: "登入檔已刪除，但 {0} 仍顯示已連接：它把這個連接存在 AgEnD 不會刪除的地方（系統鑰匙圈）。請在 {0} 裡自己登出（/logout）。",
+    signedOutUnverified: "已撤銷連接。之後 {0} 沒有回應檢查，所以尚未確認。",
     removedKeychainLeft: "已移除帳號「{0}」，但這台 Mac 上仍有它的鑰匙圈項目。請在「鑰匙圈存取」中刪除。",
     err_unsupported: "這個 CLI 無法在這裡撤銷連接。", err_signout_failed: "{0} 的撤銷連接沒有成功。請在這裡再試一次。",
     defName: "預設連接", acctName: "帳號「{0}」",
@@ -224,21 +232,22 @@ export function SignOutDialog({ cli, row, label, mode = "signout", onClose, onMo
   const any = users.agents.length > 0 || users.classic.length > 0 || users.fleetDefault;
   const which = row.profile ? tm("acctName", row.profile) : tm("defName");
   const machine = row.scope && row.scope.kind === "machine" ? row.scope : null;   // #3190 Part 3c: an account on a paired computer
+  const files = !machine && !!(CLI_CAPS[cli.backend] && CLI_CAPS[cli.backend].signOutFiles);   // AGEND-119: a CLI with no logout command is signed out by removing its sign-in file
   const go = async () => {
     if (busy) return;
     setBusy(true); setErr("");
     const r = await send("POST", `/ui/accounts/${encodeURIComponent(cli.backend)}/signout`, { profile: row.profile || null, confirm: true, ...(machine ? { machine: machine.id } : {}) });
     if (!live.current) return;
     setBusy(false);
-    if (!r.ok) { setErr(r.error === "failed" ? tm("err_signout_failed", label) : errText(r)); return; }
-    toast(r.keychainLeft ? tm("keychainLeft") : tm("signedOut"), !r.keychainLeft);
+    if (!r.ok) { setErr(r.error === "failed" ? tm("err_signout_failed", label) : r.error === "still_signed_in" ? tm("err_still_signed_in", label) : errText(r)); return; }
+    toast(r.keychainLeft ? tm("keychainLeft") : r.unverified ? tm("signedOutUnverified", label) : tm("signedOut"), !r.keychainLeft && !r.unverified);
     onClose(); onDone(r);
   };
   const moveBtn = (user) => html`<button type="button" class="btn btn-sm" disabled=${busy} onClick=${() => { onClose(); onMove(user); }}>${tm("move")}</button>`;
   return html`<${Dialog} title=${mode === "switch" ? tm("switchTitle", label) : tm("signOutTitle", label, which)} onClose=${onClose} busy=${busy}
     actions=${html`<button type="button" class="btn" disabled=${busy} onClick=${onClose}>${tm("cancel")}</button>
     <button type="button" class=${mode === "switch" ? "btn btn-primary" : "btn btn-danger"} disabled=${busy} onClick=${go}>${busy ? tm("signingOut") : mode === "switch" ? tm("switchGo") : tm("signOutGo")}</button>`}>
-    <p>${mode === "switch" ? tm("switchLead", label) : machine ? tm("signOutLeadMachine", machine.name, label) : tm("signOutLead", label)}</p>
+    <p>${mode === "switch" ? tm(files ? "switchLeadFiles" : "switchLead", label) : machine ? tm("signOutLeadMachine", machine.name, label) : tm(files ? "signOutLeadFiles" : "signOutLead", label)}</p>
     ${any ? html`<div class="s-account-inuse" role="status"><p><strong>${tm("stopUsers")}</strong></p><ul>
       ${users.agents.map((name) => html`<li><span>${tm("inUseAgent", name)}</span>${mode === "switch" ? null : moveBtn({ kind: "agent", name })}</li>`)}
       ${users.fleetDefault && row.profile ? html`<li><span>${machine ? tm("inUseMachineDefault") : tm("inUseDefault", label)}</span>${machine ? null : moveBtn({ kind: "default" })}</li>` : null}

@@ -56,7 +56,7 @@ export const isYes = <T extends object>(cap: Cap<T>): cap is Yes<T> => cap.suppo
 /** How the conversation of an agent moved between two accounts of this CLI carries over (the Accounts page's note on a Move). */
 export type CarryKind = "carries" | "keeps" | "handover";
 export type ChatLoginMode = "device-code" | "paste-code" | "menu" | "declined" | "install-only";
-export type CredentialHomeKind = "relocate-home" | "redirect-files";
+export type CredentialHomeKind = "relocate-home" | "redirect-files" | "launch-argument";
 export type NativePermission = "os-sandbox" | "read-tools" | "native-policy";
 export type NativePromptTransport = "stdin-text" | "stdin-json" | "file";
 
@@ -103,6 +103,8 @@ export interface HostCapabilities {
    * `screen`: its prompts are read by the `login-flow` patterns, or by its `own` closed table (structured-signin.ts SCREEN_READERS). `minVersion`: the oldest CLI that has the command.
    * `answer`: what the CLI's own prompt accepts: the `code`, or the code or the page's address (`code-or-address`). AgEnD's box takes the code only (a pasted address is refused), so a
    * CLI that also accepts an address gets a line under the box saying to paste the code alone.
+   * `named`: a NAMED account is signed in with these controls too (the login was checked to land in the account's own folder, which `host.namedAccounts` names). It is not implied by having named accounts:
+   * what these controls launch for an account is only what was checked.
    */
   readonly structuredSignIn: Cap<{ argv: readonly string[]; rank: number; named: boolean; ends: "success-line" | "exit-code"; screen: "login-flow" | "own"; answer: "code" | "code-or-address"; minVersion?: string }>;
   /** The first-run page offers it: as browser controls, or only as the console command. */
@@ -114,28 +116,43 @@ export interface HostCapabilities {
    * `token-file` is the one field of the CLI's own token file that names the account (`field`; nothing else of the file is read, kept or logged).
    */
   readonly identity: Cap<{ source: "status-command" } | { source: "token-file"; field: string }>;
-  /** Several sign-ins side by side (credential profiles): the variable that relocates the CLI's home, how, and how a Move is worded. */
-  readonly namedAccounts: Cap<{ env: string; home: CredentialHomeKind; carry: CarryKind }>;
-  /** Sign out from the dashboard: the CLI's own logout. */
-  readonly signOut: Cap<{ binary: string; args: readonly string[] }>;
+  /**
+   * Several sign-ins side by side (credential profiles): how the CLI is told which account it runs as, and how a Move is worded.
+   *  - `relocate-home` / `redirect-files`: a variable (`env`) moves the CLI's home, or a file or two of it, to the account's folder.
+   *  - `launch-argument` (AGEND-119, Antigravity): the CLI takes the account's folder as an argument (`arg`, a path relative to the CLI's own home), keeps the sign-in in one file there (`store`),
+   *    and is started with `pin` in its environment: variables that make it keep that sign-in in the file, never in the system's keyring or credential manager, where one folder's sign-in would
+   *    be every folder's. The account is only isolated when the CLI honours `pin`, which is why a sign-in first checks (an empty folder must answer "signed out") and never starts otherwise.
+   */
+  readonly namedAccounts: Cap<NamedAccountFacts & { carry: CarryKind }>;
+  /**
+   * Sign out from the dashboard: the CLI's own logout (`binary`, `args`), or — for a CLI that has none — the account's sign-in files, which AgEnD removes itself (`remove`: names inside the
+   * account's folder). Either way the answer is then checked with the CLI's own status probe, so a sign-out that did not sign it out is reported as that.
+   */
+  readonly signOut: Cap<{ binary: string; args: readonly string[] } | { remove: readonly string[] }>;
   /** "Keep sign-in alive". */
   readonly keepAlive: Cap;
   /** The CLI has a card on Settings → Accounts (`rank`: its place there). */
   readonly accountCard: Cap<{ rank: number }>;
   /**
-   * The usage panel's row for it: its provider id and name, its place, and whether a named account has a row of its own, and the SHAPE of the limits the CLI reports.
+   * The usage panel's row for it: its provider id and name, its place, and whether a named account has a row of its own (`profileRows`: one used by an agent; `hostRows`: every account on this host, used by an agent or
+   * not — a subscription at its limit is the one a person stops using, so it must not vanish because nothing runs on it), and the SHAPE of the limits the CLI reports.
    *  - `pools`: the account has one set of limits (`single`), or the CLI names several pools in its own answer and each has limits of its own (`several`: Antigravity's Gemini, Claude & others,
    *    Gemini 4 Argon). A pool the CLI names is shown whatever it is called; this says only whether to expect them.
    *  - `windows`: the kinds of window a pool's limit can have, as the CLI reports them: `session` (under two days: the 5h), `weekly`, `monthly`, and `unwindowed` (one number with no window of
    *    its own, as agy gives a pool it only knows from per-model data). An Accounts row shows every pool and every window the account reports, in the usage panel's own order, so a
    *    window is never hidden; this is what a CLI is expected to report, and tests/cli-registry-usage-shape.test.ts fails when a real payload carries a kind that is not listed here.
    */
-  readonly usage: Cap<{ providerId: string; name: string; rank: number; profileRows: boolean; pools: "single" | "several"; windows: readonly UsageWindowKind[] }>;
+  readonly usage: Cap<{ providerId: string; name: string; rank: number; profileRows: boolean; hostRows: boolean; pools: "single" | "several"; windows: readonly UsageWindowKind[] }>;
 }
 
 /** The kinds of window a usage limit can have (see `host.usage.windows`). */
 export const USAGE_WINDOW_KINDS = Object.freeze(["session", "weekly", "monthly", "unwindowed"] as const);
 export type UsageWindowKind = typeof USAGE_WINDOW_KINDS[number];
+
+/** How a named account is told apart (see `host.namedAccounts`). */
+export type NamedAccountFacts =
+  | { readonly env: string; readonly home: "relocate-home" | "redirect-files" }
+  | { readonly home: "launch-argument"; readonly arg: string; readonly store: string; readonly pin: Readonly<Record<string, string>> };
 
 /** Every capability a CLI has on a paired Windows computer, as its Runtime reports and does it. */
 /**

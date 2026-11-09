@@ -356,7 +356,7 @@ function MachineSection({ cli, m, running, openAgent, onAdd, onSignIn, onSignOut
   return html`<div class="s-account-machine" data-machine=${m.scope.id}>
     <div class="s-account-machine-head"><strong>${tx("machine", m.scope.name)}</strong>
       <span class=${`tag s-auth-state is-${online ? "usable" : "unknown"}`}>${online ? tx("machineOnline") : tx("machineOffline")}</span>
-      ${cli.profiles && !level && typeof onAdd === "function" ? html`<button type="button" class="btn btn-sm s-account-add" disabled=${running} onClick=${() => onAdd(m.scope)}>${manageWords.add()}</button>` : null}</div>
+      ${cli.profiles && cli.machineProfiles !== false && !level && typeof onAdd === "function" ? html`<button type="button" class="btn btn-sm s-account-add" disabled=${running} onClick=${() => onAdd(m.scope)}>${manageWords.add()}</button>` : null}</div>
     ${level ? html`<p class="note s-account-why" role="status">${reasonText(level, m.scope.name)}</p>` : null}
     ${m.rows.map((row) => html`<${Row} key=${`m:${m.scope.id}:${row.profile || ""}`} cli=${cli} row=${row} running=${running} openAgent=${openAgent} onSignIn=${onSignIn} onSignOut=${onSignOut} onRemove=${onRemove} />`)}
   </div>`;

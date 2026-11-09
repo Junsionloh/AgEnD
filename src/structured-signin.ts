@@ -32,7 +32,9 @@ const MAX_PANE = 64 * 1024;
 const MAX_VALUE = 4_096;
 
 export type SignInFailure = "busy" | "cancelled" | "expired" | "revoked" | "unsupported_prompt"
-  | "provider_rejected" | "relogin_required" | "auth_unconfirmed" | "transport_failed" | "cleanup_failed";
+  | "provider_rejected" | "relogin_required" | "auth_unconfirmed" | "transport_failed" | "cleanup_failed"
+  /** AGEND-119: a named account's folder is not where the CLI keeps its sign-in (it would use, and overwrite, another account's): nothing was started. */
+  | "not_isolated";
 export type SignInPrompt =
   | { phase: "waiting" }
   | { phase: "method"; choices: string[]; selected: number }
@@ -154,6 +156,11 @@ export interface StructuredSignInDeps {
   profile?: string;
   /** Independently probe the backend's auth status; bounded and token-free (LOGIN_FLOWS.authCheck). */
   checkAuth(): Promise<AuthCheckResult>;
+  /**
+   * AGEND-119, a NAMED account of a CLI told its account by an argument: whether this account's sign-in is really kept in its own folder, asked before anything is started. False: the CLI keeps one
+   * sign-in for every folder (its keyring), so signing this account in would replace another's — the sign-in ends as `not_isolated` and no login command runs. Absent: not asked.
+   */
+  isolated?(): Promise<boolean>;
   /** Monotonic elapsed milliseconds; wall-clock corrections must not extend an attempt. */
   now?(): number;
   /** Safe event only. Never receives panes, URLs, codes or supplied input. */
@@ -223,6 +230,11 @@ export class StructuredSignIn {
     this.deadline.unref?.();
     try {
       if (!this.current()) { await this.finish(this.lostReason()); return; }
+      if (this.deps.isolated) {
+        const isolated = await this.deps.isolated().catch(() => false);
+        if (!this.current()) { await this.finish(this.lostReason()); return; }
+        if (!isolated) { await this.finish("not_isolated"); return; }
+      }
       const auth = await this.deps.checkAuth();
       if (!this.current()) { await this.finish(this.lostReason()); return; }
       if (auth === "valid" && !confirmedRelogin) { await this.finish(); return; }

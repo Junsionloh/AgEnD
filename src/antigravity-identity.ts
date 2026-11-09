@@ -5,28 +5,22 @@
  *
  * Windows keeps this login in the Credential Manager, not in a file, so this is the host's (Linux, macOS, WSL) only; a paired Windows computer shows no account for it.
  */
-import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseAntigravityToken, type AccountIdentity } from "./claude-auth-status.js";
+import { readAntigravityTokenText } from "./antigravity-store.js";
 
-const MAX_BYTES = 64 * 1024;
 /** Where agy keeps its token under the CLI's home: the same file the availability probe and the usage panel read. */
 export const AGY_TOKEN_FILE = Object.freeze(["antigravity-cli", "antigravity-oauth-token"] as const);
 
-export function readAntigravityIdentity(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): AccountIdentity | undefined {
-  const file = join(env.GEMINI_HOME || join(home, ".gemini"), ...AGY_TOKEN_FILE);
-  let fd: number | null = null;
+/** The account of the sign-in kept in a folder (the default sign-in's `~/.gemini/antigravity-cli`, or a named account's own folder), masked; undefined when there is none or it names no one. */
+export function readAntigravityIdentityIn(folder: string): AccountIdentity | undefined {
   try {
-    const before = lstatSync(file);
-    if (!before.isFile() || before.isSymbolicLink() || before.size > MAX_BYTES) return undefined;
-    fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-    const stat = fstatSync(fd);
-    if (!stat.isFile() || stat.size > MAX_BYTES) return undefined;
-    const buffer = Buffer.alloc(stat.size);
-    let length = 0, count: number;
-    while (length < buffer.length && (count = readSync(fd, buffer, length, buffer.length - length, null)) > 0) length += count;
-    return parseAntigravityToken(buffer.subarray(0, length).toString("utf8"));
+    const text = readAntigravityTokenText(folder);
+    return typeof text === "string" ? parseAntigravityToken(text) : undefined;
   } catch { return undefined; }
-  finally { if (fd !== null) { try { closeSync(fd); } catch { /* read only */ } } }
+}
+
+export function readAntigravityIdentity(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): AccountIdentity | undefined {
+  return readAntigravityIdentityIn(join(env.GEMINI_HOME || join(home, ".gemini"), AGY_TOKEN_FILE[0]));
 }

@@ -479,7 +479,8 @@ describe("the Accounts rows for a computer's Antigravity login", () => {
   it("is one row under the computer's name, that can be signed in, with no profiles, Add, Sign out or Remove", async () => {
     const f = runtimeRig({ agy: true });
     const v = await view(f), cli = v.clis.find(c => c.backend === "antigravity")!;
-    expect(cli.profiles).toBe(false);
+    // AGEND-119: the HOST has named accounts of Antigravity (+ Add account on the card), a paired Windows computer does not: it has the one row for the computer's own login.
+    expect([cli.profiles, cli.machineProfiles]).toEqual([true, false]);
     expect(cli.rows).toEqual([{ scope: { kind: "machine", id: ID, name: "Desk PC", online: true }, backend: "antigravity", profile: null, state: "unknown", signIn: true, usedBy: { agents: [], classic: [], fleetDefault: false } }]);
     expect(JSON.stringify(v)).not.toMatch(/identity|email/i);
     await f.stop();
