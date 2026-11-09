@@ -20572,6 +20572,22 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     return checkAuthIdentity(target.backend, env, launch);
   }
   /**
+   * The sign-ins whose account is read: every sign-in the Accounts list knows (`backendSignInTargets`: each CLI's default and the profiles an agent uses) AND each named account on disk that is signed in, used by an
+   * agent or not — an account that was just signed in and has no agent yet has an account too, and the page shows it as it shows the default's.
+   */
+  private identityTargets(): SignInTarget[] {
+    const out = this.backendSignInTargets(), seen = new Set(out.map(t => `${t.backend}\0${t.profile ?? ""}`));
+    for (const backend of PROFILE_CLIS) {
+      for (const profile of profilesOnDisk(this.dataDir, backend)) {
+        if (seen.has(`${backend}\0${profile}`)) continue;
+        let login: ReturnType<typeof credentialProfileLogin>["state"] = "unknown";
+        try { login = credentialProfileLogin(this.dataDir, backend, profile).state; } catch { /* unknown */ }
+        if (login === "logged-in") out.push({ backend, profile, state: "usable", signIn: false });
+      }
+    }
+    return out;
+  }
+  /**
    * Start reading, in the background, the account of each Claude Code sign-in that is signed in (the default and every profile an agent uses) and
    * not read in the last five minutes. It never waits and never blocks a request: the list shows what is already known, and the pages are told to
    * read it again when something new was learned. A sign-in already being read is not read twice, and a read that began before the accounts were
@@ -20580,7 +20596,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   refreshSignInIdentities(): void {
     const now = Date.now(), fresh = (target: SignInTarget): boolean => { const entry = this.signInIdentities.get(`${target.backend}\0${target.profile ?? ""}`); return !!entry && now - entry.at < 5 * 60_000; };
     const started: Array<Promise<boolean>> = [];
-    for (const target of this.backendSignInTargets()) {
+    for (const target of this.identityTargets()) {
       const key = `${target.backend}\0${target.profile ?? ""}`;
       if (target.state !== "usable" || !authIdentitySupported(target.backend) || fresh(target) || this.signInIdentityReads.has(key)) continue;
       const generation = this.signInIdentityGeneration;

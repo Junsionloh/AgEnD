@@ -596,3 +596,26 @@ describe("an agent on a named account", () => {
     expect(() => launch({ credential_profile: "../escape" })).toThrow(/credential_profile/);
   });
 });
+
+describe("the Accounts view names an account that has no agent yet", () => {
+  it("a named Antigravity account that is signed in on disk and used by NO agent shows its masked e-mail, as the default's does (the identity read covers the accounts on disk, not only the ones an agent uses)", async () => {
+    const { FleetManager } = await import("../src/fleet-manager.js");
+    const w = world(["second", "spare"]);
+    tokenFile(w.home("second"), { email: "julia@gmail.com", expiresAt: Date.now() + 40 * MIN });        // signed in, no agent
+    setAuthCheckRunnerForTests(async () => ({ code: 1, output: "" }));                                     // no CLI is run for anything else
+    const work = join(w.data, "w"); mkdirSync(work, { recursive: true });
+    const path = join(w.data, "fleet.yaml");
+    writeFileSync(path, `defaults:\n  backend: claude-code\ninstances:\n  dev:\n    working_directory: ${work}\n`);
+    const fm = new FleetManager(w.data); fm.loadConfig(path);
+    const rowOf = async () => (await fm.accountsView(1)).clis.find(c => c.backend === "antigravity")!.rows.find(r => r.profile === "second")!;
+    await rowOf();                                                                  // the first look starts the read (it never waits)…
+    await new Promise(r => setTimeout(r, 150));
+    const row = await rowOf();                                                      // …and the next one has it
+    expect(row.state).toBe("usable");
+    expect(row.usedBy.agents).toEqual([]);
+    expect(row.identity).toEqual({ maskedEmail: "ju***@gmail.com" });
+    const signedOut = (await fm.accountsView(1)).clis.find(c => c.backend === "antigravity")!.rows.find(r => r.profile === "spare")!;
+    expect([signedOut.state, signedOut.identity]).toEqual(["not_signed_in", undefined]);
+    expect(JSON.stringify(row)).not.toMatch(/julia|SECRET/);
+  });
+});
