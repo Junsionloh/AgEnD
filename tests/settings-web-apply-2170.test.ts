@@ -210,7 +210,7 @@ describe("#2453 / AGEND-122: turning a link option on is confirmed like any othe
   // The link options: on `quick_link` the release default is on (#2819), so the option is first turned off for "opens it".
   const OPTIONS = [["named_link", "named link"], ["quick_link", "quick link"]] as const;
   const optionOff = (f: ReturnType<typeof fleet>, key: string) => { (f.fm.fleetConfig as any).web = { verified_authority: { [key]: false } }; };
-  it.each(OPTIONS)("a signed-in admin on this computer turning the %s option on — alone or with other keys — gets Apply now: opensLink is its only mark", async (key) => {
+  it.each(OPTIONS)("a signed-in admin on this computer turning the %s option on — alone or with other keys — gets Apply now: opensLink is its only mark, and on this computer no Notice", async (key) => {
     const f = fleet(), s = f.session({ adapterId: "a", userId: "a-F" }), notice = f.notices();
     optionOff(f, key);
     const alone = proposeWeb(f, { [key]: true }), mixed = proposeWeb(f, { [key]: true, loopback_only: true });
@@ -218,11 +218,14 @@ describe("#2453 / AGEND-122: turning a link option on is confirmed like any othe
     expect([f.any.settingsSelfConfirmation(f.store, s.req, alone.view.id)?.label, f.any.settingsSelfConfirmation(f.store, s.req, mixed.view.id)?.label]).toEqual([expect.stringMatching(/\(web-verified\)$/), expect.stringMatching(/\(web-verified\)$/)]);
     expect([(await applyNow(f, s.req, alone.view.id)).state, alone.apply.mock.calls.length, mixed.apply.mock.calls.length, notice.mock.calls.length]).toEqual(["applied", 1, 0, 0]);
   });
-  it.each(OPTIONS)("…from another device (a LAN name) the same admin gets Apply now too", async (key) => {
+  it.each(OPTIONS)("…from another device (a LAN name) the same admin gets Apply now too, and the %s change is announced: one Notice, not throttled, naming who and the outcome", async (key) => {
     const f = fleet(), s = f.session({ adapterId: "a", userId: "a-F" }, { lan: true }), notice = f.notices();
     optionOff(f, key);
     const p = proposeWeb(f, { [key]: true });
     expect([(await applyNow(f, s.req, p.view.id)).state, p.apply.mock.calls.length]).toEqual(["applied", 1]);
+    expect(notice).toHaveBeenCalledOnce();
+    expect(notice.mock.calls[0]).toEqual([expect.stringMatching(/^🔔 A Settings change that opens a public link was confirmed from another device by \S+\.\n.*\nOutcome: Change applied\.\nIf this was not you/s), { throttle: false }]);
+    expect(f.adapters.every(a => a.sendText.mock.calls.length === 0), "the Notice is the one announcement (not General's \"confirmed from the web\" too)").toBe(true);
   });
   it("…who still must not: a guest, a header token, the web authorization switch off, \"Only this computer can authorize\" from another device, an admin of nothing here", () => {
     const f = fleet(), p = proposeWeb(f, { named_link: true }), ask = (req: any) => f.any.settingsSelfConfirmation(f.store, req, p.view.id);
@@ -246,7 +249,7 @@ describe("#2453 / AGEND-122: turning a link option on is confirmed like any othe
     bindGatewayRequest(req, { surface: "gateway", ...(named ? { named: true } : {}), exposureId: X, expectedOrigin: `https://${host}`, isCurrent: () => true });
     return req;
   }
-  it.each(OPTIONS)("a %s session over the public link (option on) is a role-ok admin there: Apply now — never DM-authorized", async (key) => {
+  it.each(OPTIONS)("a %s session over the public link (option on) is a role-ok admin there: Apply now — never DM-authorized — and its change that opens a link is announced", async (key) => {
     const f = fleet(), notice = f.notices(), req = overLink(f, key, true);
     expect(f.any.settingsRole(req).role, "control: not on this computer, an admin over its own link").toMatchObject({ ok: true, onHost: false, account: true });
     const other = key === "named_link" ? "quick_link" : "named_link", plain = f.propose();
@@ -254,7 +257,7 @@ describe("#2453 / AGEND-122: turning a link option on is confirmed like any othe
     const opens = proposeWeb(f, { [other]: true });
     expect([(await applyNow(f, req, plain.view.id)).state, notice.mock.calls.length]).toEqual(["applied", 0]);
     expect(f.store.opensLink(opens.view.id)).toBe(true);
-    expect((await applyNow(f, req, opens.view.id)).state).toBe("applied");
+    expect([(await applyNow(f, req, opens.view.id)).state, notice.mock.calls.length, notice.mock.calls[0]?.[1]]).toEqual(["applied", 1, { throttle: false }]);
   });
   it.each(OPTIONS)("…with the %s option off: none (link_off); the owner's switches hold over the link too", (key) => {
     const f = fleet(), req = overLink(f, key, false), p = f.propose();

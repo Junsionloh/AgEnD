@@ -85,7 +85,7 @@ function fleet(o: { enrolled?: boolean; chat?: boolean; outside?: boolean; va?: 
     const apply = vi.fn(async (_c: () => boolean, execution: any) => execution.commit(() => "applied"));
     const view = store.propose({ session: "browser", key: `k${Math.random()}`, bytes: 1, source: "web_session", section: effect.diff!.section, requestedBy: "browser",
       fingerprint: effect.diff!.fingerprint, summary: effect.diff!.summary, affectedConnections: effect.diff!.affectedConnections, authority: effect.diff!.authority,
-      ...(effect.diff!.opensLink ? { opensLink: true as const } : {}), current: () => true, unchanged: async () => true, snapshot: () => null, apply }).view;
+      ...(effect.diff!.opensLink ? { opensLink: true as const } : {}), ...(effect.diff!.relaxesConfirm ? { relaxesConfirm: true as const } : {}), current: () => true, unchanged: async () => true, snapshot: () => null, apply }).view;
     return { view, apply };
   };
   /** One change of each class the old rules treated differently. */
@@ -216,22 +216,49 @@ describe("strict mode: off this computer a code, never Apply now — for every s
     expect([f.any.settingsTotpState(f.store, link.req, p.view.id), confirm(link)]).toEqual(["on_host", { error: "not_here" }]);
     expect(confirm(tail)).toMatchObject({ label: "Authenticator code" });
   });
-  it("end to end: with the option on, a LAN session turning it off is refused without the code and succeeds with it", async () => {
+  it("end to end: with the option on, a LAN session turning it off is refused without the code and succeeds with it — and the Notice says the requirement was turned off", async () => {
     const f = fleet({ enrolled: true, va: strict }), s = f.session("code", "lan");
+    const post = vi.spyOn(f.any, "postSettingsRemoteNotice").mockImplementation(() => undefined);
     const p = f.propose("/api/settings/fleet/web", { verified_authority: { remote_confirm_code: null } });
+    expect(f.store.relaxesConfirm(p.view.id)).toBe(true);
     expect([f.any.settingsSelfConfirmation(f.store, s.req, p.view.id), f.any.settingsTotpState(f.store, s.req, p.view.id)]).toEqual([null, "ready"]);
     const digest = f.store.confirmDigest(p.view.id);
     expect(f.any.settingsTotpConfirm(f.store, s.req, p.view.id, "000000", digest)).toEqual({ error: "wrong" });
     expect(f.store.get(p.view.id, "browser")!.state).toBe("pending");
     const ok = f.any.settingsTotpConfirm(f.store, s.req, p.view.id, codeAt(Date.now()), digest);
     expect(ok.label).toBe("Authenticator code");
-    const done = await f.store.decide(p.view.id, "confirm", { ...ok, via: "web" });
-    expect(done.state).toBe("applied");
+    const done = await f.store.decide(p.view.id, "confirm", { ...ok, via: "web" }); ok.done?.(done);
+    expect([done.state, post.mock.calls.map(c => c[1])]).toEqual(["applied", ["relax"]]);
   });
   it("an agent's or header-token request has no session: no code either", () => {
     const f = fleet({ enrolled: true, va: strict }), s = f.session("code", "lan"), p = f.classes().access();
     delete s.req.headers.cookie; s.req.headers.authorization = `Bearer ${TOKEN}`;
     expect([f.any.settingsTotpState(f.store, s.req, p.view.id), f.any.settingsTotpConfirm(f.store, s.req, p.view.id, codeAt(Date.now()), f.store.confirmDigest(p.view.id))]).toEqual([null, { error: "not_here" }]);
+  });
+});
+
+describe("Notices for a remote link-opening or secret confirmation", () => {
+  const notice = (f: ReturnType<typeof fleet>) => vi.spyOn(f.any, "postSettingsRemoteNotice").mockImplementation(() => undefined);
+  it("from another device: one for a link opener and one for a secret; none for an ordinary change; none on this computer", async () => {
+    const f = fleet(), post = notice(f);
+    const run = async (s: { req: any }, view: { id: string }) => {
+      const c = f.any.settingsSelfConfirmation(f.store, s.req, view.id)!;
+      const done = await f.store.decide(view.id, "confirm", { ...c, via: "web" }); await c.done?.(done);
+    };
+    const lan = f.session("code", "tailnetServe"), here = f.session("code", "here");
+    await run(lan, f.classes().openLink().view); await run(lan, f.secretChange()); await run(lan, f.classes().access().view);
+    await run(here, f.classes().openLink().view);
+    expect(post.mock.calls.map(c => c[1])).toEqual(["link", "secret"]);
+  });
+  it("it goes to the web Notices when nothing else could carry it: a chat fleet with no General and no primary target", () => {
+    const f = fleet({ chat: true });
+    vi.spyOn(f.any, "notifyFleetError").mockReturnValue(false);
+    const view = { id: "x", state: "applied", summary: ["named_link: default → true"], outcome: null } as any;
+    expect(f.any.webNoticesFeed()).toBeNull();
+    f.any.postSettingsRemoteNotice(view, "link", "Ada");
+    const feed = f.any.webNoticesFeed();
+    expect(feed).not.toBeNull();
+    expect(feed.list?.().some?.((n: any) => /opens a public link/.test(n.text)) ?? true).toBe(true);
   });
 });
 
@@ -259,6 +286,20 @@ describe("setting up, replacing and removing the authenticator (M3, S1)", () => 
     expect([f.any.webOutsideBeginEnrollment(s.req), f.any.webOutsideRemove(s.req)]).toEqual([{ error: "code_required" }, { error: "code_required" }]);
     expect(f.any.webOutsideStatus(s.req)).toMatchObject({ codeNeeded: true, strict: false });
     expect(f.any.webOutsideRemove(f.session("host", "here").req)).toBe("ok");
+  });
+  it("a first set-up from another device always posts a Notice; on this computer none", () => {
+    const f = fleet({ enrolled: false }), say = vi.spyOn(f.any, "notifyFleetError").mockReturnValue(true);
+    const s = f.session("code", "lan"), begun = f.any.webOutsideBeginEnrollment(s.req);
+    expect(f.any.webOutsideConfirmEnrollment(s.req, secretOf(begun))).toBe("ok");
+    expect(say.mock.calls.map(c => c[0])).toEqual([expect.stringContaining("set up from another device")]);
+    const g = fleet({ enrolled: false }), mute = vi.spyOn(g.any, "notifyFleetError").mockReturnValue(true), h = g.session("host", "here");
+    expect(g.any.webOutsideConfirmEnrollment(h.req, secretOf(g.any.webOutsideBeginEnrollment(h.req)))).toBe("ok");
+    expect(mute).not.toHaveBeenCalled();
+  });
+  it("turning the option on from another device posts a Notice; from this computer none", () => {
+    const f = fleet({ enrolled: true }), say = vi.spyOn(f.any, "notifyFleetError").mockReturnValue(true);
+    f.any.announceCodeOptionOn(f.session("code", "tailnetServe").req); f.any.announceCodeOptionOn(f.session("code", "here").req);
+    expect(say.mock.calls.length).toBe(1);
   });
 });
 

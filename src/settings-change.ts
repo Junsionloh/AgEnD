@@ -383,6 +383,8 @@ export interface SettingsChangeDiff {
    * owner asks for a code it is never confirmed over a link (fleet-manager.ts).
    */
   opensLink?: true;
+  /** AGEND-122: the effect turns the owner's code option (`remote_confirm_code`) off — every confirmation from another device posts a Notice. */
+  relaxesConfirm?: true;
 }
 /** Compare the entire normalized effect, including removals and primary/order. */
 export function settingsChangeDiff(before: unknown, after: unknown, options: {

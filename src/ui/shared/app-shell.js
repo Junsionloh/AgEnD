@@ -461,8 +461,8 @@ function Sidebar({ route, onNewInstance, viewOnly }) {
     <nav data-trust="navigation" class="side-nav" aria-label=${t("app.menu")}>
       ${overview}
       ${navLink("needs", NEEDS_PATH, "inbox", t("app.needsNav"), needsCount)}
-      ${/* #2910 D2: a web-only fleet (no chat connection) has Notices — what General would have said. */
-        app.connections === 0 && app.notices && app.notices.enabled ? navLink("notices", NOTICES_PATH, "bell", t("app.noticesNav"), app.notices.unread | 0, "app.noticesCount") : null}
+      ${/* #2910 D2: a web-only fleet (no chat connection) has Notices — what General would have said. AGEND-122: a chat fleet too, while one is unread (a confirmation from another device that nothing else could carry). */
+        (app.connections === 0 || (app.notices && app.notices.unread > 0)) && app.notices && app.notices.enabled ? navLink("notices", NOTICES_PATH, "bell", t("app.noticesNav"), app.notices.unread | 0, "app.noticesCount") : null}
       ${searchOffered(canCreate) ? searchRow() : null}
       ${canCreate && onNewInstance ? html`<button type="button" class="side-row side-new" onClick=${onNewInstance}><${Icon} name="plus" /><span class="grow">${t("app.newAgent")}</span></button>` : null}
     </nav>

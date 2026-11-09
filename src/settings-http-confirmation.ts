@@ -159,7 +159,7 @@ export class SettingsHttpConfirmation {
     const result = this.store.propose({ session: principal.id, key: key ?? `operation:${requestFingerprint}`,
       requestFingerprint, fingerprint: effect.diff.fingerprint, section: effect.diff.section, requestedBy: principal.label,
       source: principal.source, summary: effect.diff.summary, affectedConnections: effect.diff.affectedConnections, authority: effect.diff.authority,
-      ...(effect.diff.opensLink ? { opensLink: true as const } : {}),
+      ...(effect.diff.opensLink ? { opensLink: true as const } : {}), ...(effect.diff.relaxesConfirm ? { relaxesConfirm: true as const } : {}),
       bytes: raw.length, remainingMs: effect.proof?.remainingMs,
       current: () => principal.current(), snapshot: () => this.options.snapshot(),
       unchanged: async () => (await this.options.baseline()).fingerprint === baseline.fingerprint && settingsFingerprint(this.options.snapshot()) === snapshot,

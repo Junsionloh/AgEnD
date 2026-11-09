@@ -114,7 +114,7 @@ const ask = (h: Fleet, a: Held, sessionId: string, extra: Record<string, string>
 async function confirm(a: Held, how: any) { const view = await a.store.decide(a.view.id, "confirm", { ...how, via: "web" }); how.done?.(view); return view; }
 
 describe("D3 on a chat fleet (AGEND-122): any signed-in admin session confirms a change from anywhere; one with no standing never does", () => {
-  it("the launch-link session on this computer confirms it — labelled this fleet's admin, applied once, no card, applied once, no card", async () => {
+  it("the launch-link session on this computer confirms it — labelled this fleet's admin, applied once, no card, no Notice (it is this computer)", async () => {
     setLocale("en");
     const h = await startFleet(CHAT);
     try {
@@ -123,10 +123,10 @@ describe("D3 on a chat fleet (AGEND-122): any signed-in admin session confirms a
       const self = ask(h, a, s.sessionId);
       expect([self?.label, self?.current()]).toEqual(["This fleet's admin", true]);
       const done = await confirm(a, self);
-      expect([done.state, done.outcome?.decided_by_label, a.apply.mock.calls.length, 0]).toEqual(["applied", "This fleet's admin", 1, 0]);
+      expect([done.state, done.outcome?.decided_by_label, a.apply.mock.calls.length, remoteNotices(h).length]).toEqual(["applied", "This fleet's admin", 1, 0]);
     } finally { await h.stop(); }
   }, 20_000);
-  it("from another device too — forwarded, a LAN or public-named Host: the same session gets Apply now (it was none before)", async () => {
+  it("from another device too — forwarded, a LAN or public-named Host: the same session gets Apply now (it was none before); an ordinary change posts no Notice", async () => {
     setLocale("en");
     const h = await startFleet(CHAT);
     try {
@@ -198,7 +198,7 @@ describe("a link option turned on (#2453): marked opensLink; any signed-in admin
     const other = judge({ max_session_hours: 6 }, { max_session_hours: 1 });
     expect(other?.opensLink).toBeUndefined();
   });
-  it("chat fleet: the host's session confirms it here and from another device; another code's session cannot; no authenticator code is asked", async () => {
+  it("chat fleet: the host's session confirms it here (no Notice) and from another device (a Notice naming who, what and the outcome); another code's session cannot; no authenticator code is asked", async () => {
     setLocale("en");
     const h = await startFleet(CHAT);
     try {
@@ -212,13 +212,16 @@ describe("a link option turned on (#2453): marked opensLink; any signed-in admin
       expect(remoteNotices(h)).toEqual([]);                                                  // on this computer: nothing to announce
       const b = held(h, "link");
       expect((await confirm(b, ask(h, b, host.sessionId, AWAY))).state).toBe("applied");
+      expect(remoteNotices(h)).toHaveLength(1);
+      const [text, opts] = remoteNotices(h)[0]! as [string, unknown];
+      expect([opts, text.includes("This fleet's admin"), text.includes("opens a public link"), text.includes("Outcome: ")]).toEqual([{ throttle: false }, true, true, true]);
       // A card's route does not take it away: General's card stays another way to confirm.
       vi.spyOn(h.any, "settingsCardPossible").mockReturnValue(true);
       const c = held(h, "link");
       expect(ask(h, c, host.sessionId, AWAY)?.label).toBe("This fleet's admin");
     } finally { await h.stop(); }
   }, 20_000);
-  it("chat fleet: a chat account's session confirms it over the quick link (an option that is on); over a link whose option is off, or as a guest, it cannot", async () => {
+  it("chat fleet: a chat account's session confirms it over the quick link (an option that is on) with a Notice; over a link whose option is off, or as a guest, it cannot", async () => {
     setLocale("en");
     const h = await startFleet(CHAT);
     try {
@@ -229,13 +232,14 @@ describe("a link option turned on (#2453): marked opensLink; any signed-in admin
       const self = ask(h, a, viaLink.sessionId, {}, "quick");
       expect(self?.current()).toBe(true);
       expect((await confirm(a, self)).state).toBe("applied");
+      expect(remoteNotices(h)).toHaveLength(1);
       const b = held(h, "link"), off = ask(h, b, viaLink.sessionId, {}, "quick");
       (h.fm.fleetConfig as any).web.verified_authority.quick_link = false;                     // the quick link's own option turned off before it ran
       expect([off?.current(), ask(h, b, viaLink.sessionId, {}, "quick")]).toEqual([false, null]);
       expect(b.apply).not.toHaveBeenCalled();
     } finally { await h.stop(); }
   }, 20_000);
-  it("web-only fleet: Apply now for every signed-in admin session — the host's here, forwarded, another code's; none for a guest", async () => {
+  it("web-only fleet: Apply now for every signed-in admin session — the host's here, forwarded, another code's; none for a guest; the Notice only off this computer", async () => {
     setLocale("en");
     const h = await startFleet();
     try {
@@ -250,13 +254,15 @@ describe("a link option turned on (#2453): marked opensLink; any signed-in admin
       expect(remoteNotices(h)).toEqual([]);
       const b = held(h, "link");
       expect((await confirm(b, ask(h, b, other.sessionId, AWAY))).state).toBe("applied");           // …and from another device
-      // Over the public link, as the owner signed in from outside (#3008: the link's own opt-in): Apply now too.
+      expect(remoteNotices(h)).toHaveLength(1);
+      // Over the public link, as the owner signed in from outside (#3008: the link's own opt-in): Apply now too, with a Notice.
       vi.spyOn(h.any, "outsideLink").mockReturnValue({ exposureId: EXPOSURE });
       const outside = h.session({ link: true, remote: true }), c = held(h, "link");
       expect((await confirm(c, ask(h, c, outside.sessionId, {}, "quick"))).state).toBe("applied");
+      expect(remoteNotices(h)).toHaveLength(2);
     } finally { await h.stop(); }
   }, 20_000);
-  it("strict mode (remote_confirm_code), web-only: this computer still gets Apply now; a device on the LAN is asked the authenticator's code for it, wrong refused, right one applies; over HTTP the held Save says so", async () => {
+  it("strict mode (remote_confirm_code), web-only: this computer still gets Apply now; a device on the LAN is asked the authenticator's code for it, wrong refused, right one applies with a Notice; over HTTP the held Save says so", async () => {
     setLocale("en");
     const h = await startFleet(STRICT, { enrolled: true });
     try {
@@ -269,6 +275,8 @@ describe("a link option turned on (#2453): marked opensLink; any signed-in admin
       const how = h.any.settingsTotpConfirm(a.store, away, a.view.id, codeAt(Date.now()), digest);
       expect(how.label).toBe("Authenticator code");
       expect((await confirm(a, how)).state).toBe("applied");
+      expect(remoteNotices(h)).toHaveLength(1);
+      expect(String(remoteNotices(h)[0]![0]).includes("opens a public link")).toBe(true);
       // Over HTTP, through the Settings gate: a forwarded Save waits for the code and its page knows it is not on the computer.
       const put = await raw(h.port, "PUT", "/api/settings/fleet/web", { ...h.reqOf(host.sessionId, AWAY).headers,
         "content-type": "application/json", "idempotency-key": `k${Math.random()}` }, JSON.stringify({ verified_authority: { named_link: true } }));
@@ -279,7 +287,7 @@ describe("a link option turned on (#2453): marked opensLink; any signed-in admin
   }, 20_000);
 });
 
-// ── #3366 review (Fable F1, F2): the two guards on a link opener, now what strict mode carries ──
+// ── #3366 review (Fable F1, F2): the two guards on a link opener, now what strict mode and the Notice carry ──
 describe("a link opener and a web-verified admin's Apply now / an authenticator code (#3366 review, AGEND-122)", () => {
   const TOKEN = "c".repeat(48);
   function fixture(chat: boolean, strict = false) {
@@ -317,7 +325,7 @@ describe("a link opener and a web-verified admin's Apply now / an authenticator 
     };
     return { fm, any, store, notify, make, req, propose };
   }
-  it("F1 — chat fleet: a web-verified admin of the connection gets Apply now for an ordinary change AND a link opener (was: never the opener); a demoted admin is refused", async () => {
+  it("F1 — chat fleet: a web-verified admin of the connection gets Apply now for an ordinary change AND a link opener (was: never the opener); a link opener from another device posts a Notice; a demoted admin is refused", async () => {
     setLocale("en");
     const f = fixture(true), session = f.make({ owner: { adapterId: "a", userId: "1" } });
     vi.spyOn(f.any, "settingsCardPossible").mockReturnValue(true);                              // a General's card could take them: not what decides it any more
@@ -330,7 +338,8 @@ describe("a link opener and a web-verified admin's Apply now / an authenticator 
     const away = f.any.settingsSelfConfirmation(f.store, f.req(session.sessionId, "lan"), link.view.id);
     expect(away?.current()).toBe(true);
     const done = await f.store.decide(link.view.id, "confirm", { ...away, via: "web" }); away.done?.(done);
-    expect([done.state, link.apply.mock.calls.length]).toEqual(["applied", 1]);
+    expect([done.state, link.apply.mock.calls.length, f.notify.mock.calls.length]).toEqual(["applied", 1, 1]);
+    expect(String(f.notify.mock.calls[0]![0])).toContain("opens a public link");
     // The account stops being an admin of its connection before the ordinary change runs: refused, nothing applied.
     (f.fm.fleetConfig as any).channels[0].access.allowed_users = ["2"];
     expect(own?.current()).toBe(false);

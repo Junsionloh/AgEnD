@@ -3321,9 +3321,14 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       return now.role.ok && now.handle === handle && now.role.actor.user_id === actor.user_id && now.role.actor.adapter_id === actor.adapter_id
         && (!now.role.account || this.settingsAccountMayConfirm(store, id, actor));
     };
+    const notice = this.settingsRemoteNoticeKind(store, id, first.role.onHost);
     if (!account) {
-      return { label: t("settings_confirm.host_operator_label"), current,
-        done: view => { this.logger.info({ id: view.id, state: view.state }, "Settings change confirmed from the web by this fleet's admin"); } };
+      const who = t("settings_confirm.host_operator_label");
+      return { label: who, current,
+        done: view => {
+          this.logger.info({ id: view.id, state: view.state }, "Settings change confirmed from the web by this fleet's admin");
+          if (notice) this.postSettingsRemoteNotice(view, notice, who);
+        } };
     }
     const name = this.webPerson({ adapterId: actor.adapter_id, userId: actor.user_id }).name;
     // General hears of it when a chat card could have been posted (the old rule's own scope); it is a notice, not a step.
@@ -3335,7 +3340,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       current,
       ...(destinations.length ? { followStop: async (stopped: string, begin: () => Promise<unknown>) => {
         const route = destinations.find(item => item.current()); if (!route) throw Error("Settings route expired"); await route.followStop(stopped, begin); } } : {}),
-      done: view => { if (chat && destinations.length) return this.settingsWebConfirmedNotice(view, affected, name, chat.platform); },
+      done: view => {
+        if (notice) { this.postSettingsRemoteNotice(view, notice, name); return; }       // that Notice says it already, to General or the web
+        if (chat && destinations.length) return this.settingsWebConfirmedNotice(view, affected, name, chat.platform);
+      },
     };
   }
   /** AGEND-122: this request's role over a held change — its cookie session asked afresh each time (settings-role.ts). */
@@ -3350,6 +3358,29 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       isAdmin: (userId, adapterId) => this.adminGate(userId, adapterId) === "ok", outside: this.outsideLink(),
     });
     return { role, handle: auth.session.handle };
+  }
+  /**
+   * AGEND-122 (upstream R1): a change that opens a link, or one that changes a secret, confirmed from another device always
+   * posts a Notice — the audit trail alone is not what the owner sees. Null: not one of those, or confirmed on this computer.
+   */
+  private settingsRemoteNoticeKind(store: SettingsConfirmationStore, id: string, onHost: boolean): "link" | "secret" | "relax" | null {
+    if (onHost) return null;
+    if (store.relaxesConfirm(id)) return "relax";
+    if (store.opensLink(id)) return "link";
+    return store.inspect(id)?.section === "secret" ? "secret" : null;
+  }
+  /**
+   * Where that Notice goes: a web-only fleet's dashboard Notices; a chat fleet's General, else its primary connection's notice
+   * target (notifyFleetError) — and when nothing could be posted there, the web Notices, which a chat fleet's dashboard then
+   * shows. Never throttled, and never silent. It names the change as the card showed it (redacted), who confirmed and how.
+   */
+  private postSettingsRemoteNotice(view: SettingsPendingView, kind: "link" | "secret" | "relax", who: string): void {
+    const outcome = view.outcome ? view.outcome.message : view.state;
+    const text = t("settings_confirm.remote_notice", who, t(`settings_confirm.remote_kind_${kind}`), view.summary.join("\n"), outcome);
+    if (this.notifyFleetError(text, { throttle: false })) return;
+    const note = this.webNoticeStore()?.add({ kind: "fleet", text: stripPlaceRefs(text) });
+    if (note) this.emitSseEvent("notice", { notice: note, unread: this.webNoticeStore()!.unread() });
+    else this.logger.warn({ id: view.id }, "A settings change confirmed from another device could not be announced anywhere");
   }
   /**
    * AGEND-122: a chat account confirms a change only as an admin of every connection it touches — settingsChatAuthority's own
@@ -3460,13 +3491,18 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     if (!checked.ok) return { error: checked.error, ...(checked.retryAfterMs !== undefined ? { retryAfterMs: checked.retryAfterMs } : {}) };
     const enrollment = checked.enrollment;
     this.logger.info({ id, handle: local.handle }, "Settings change confirmed with the authenticator code");
+    const notice = this.settingsRemoteNoticeKind(store, id, false);   // the code is asked off this computer only
+    const who = `${local.account ? this.webPerson({ adapterId: local.actor.adapter_id, userId: local.actor.user_id }).name : t("settings_confirm.host_operator_label")} · ${t("settings_confirm.totp_label")}`;
     let lost = false;
     const current = (): boolean => {
       if (!lost && !(local.current() && this.webRemoteAccess()?.enrollment === enrollment)) lost = true;
       return !lost;
     };
     return { label: t("settings_confirm.totp_label"), current, audit: { confirmed_with: "authenticator_code", summary: shown },
-      done: view => { this.logger.info({ id: view.id, state: view.state }, "Settings change confirmed with the authenticator code: done"); } };
+      done: view => {
+        this.logger.info({ id: view.id, state: view.state }, "Settings change confirmed with the authenticator code: done");
+        if (notice) this.postSettingsRemoteNotice(view, notice, who);
+      } };
   }
 
   /**
@@ -16902,7 +16938,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
 
   private webNotices: WebNotices | null = null;
   /** #2910 D2 (web-api): the Notices on a web-only fleet; null on any other (its General says them). */
-  webNoticesFeed(): WebNotices | null { return this.webOnlyPromptPlace() ? this.webNoticeStore() : null; }
+  webNoticesFeed(): WebNotices | null { return this.hasWebNotices() ? this.webNoticeStore() : null; }
+  /** A web-only fleet always has its Notices; a chat fleet only once something was put there (AGEND-122: a confirmation that nothing else could carry). */
+  private hasWebNotices(): boolean { return !!this.webOnlyPromptPlace() || (this.webNoticeStore()?.newest() ?? 0) > 0; }
+
   /** #2910 D2: the web-only fleet's Notices (web-notices.json), read on first use. */
   webNoticeStore(): WebNotices | null {
     if (!this.dataDir) return null;
@@ -18541,7 +18580,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         // #3327: an authenticator set up again is announced where the owner looks (web Notices on a web-only fleet), so a
         // set-up they did not make is noticed.
         this.notifyFleetError(t("outside.reenrolled_notice"));
-      }
+      } else if (!owner.onHost) this.notifyFleetError(t("outside.enrolled_remote_notice"), { throttle: false });   // AGEND-122: from another device, always said
     }
     return r;
   }
@@ -18757,6 +18796,11 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const host = this.fleetConfig?.web?.public_link?.hostname;
     return { state, configured, hours: VERIFIED_SESSION_HOURS, lanHosts, authorized, namedHost: typeof host === "string" && host ? host : null, webOnly: this.isWebOnlyFleet(),
       authenticatorEnrolled: this.authenticatorEnrolled() };
+  }
+  /** AGEND-122: turning the code option on is not a held change; from another device it is still said where the owner looks. */
+  announceCodeOptionOn(req: IncomingMessage): void {
+    if (webPeerOf(req) === "loopback") return;
+    this.notifyFleetError(t("outside.strict_on_notice"), { throttle: false });
   }
   /** AGEND-122: an authenticator is set up (what the owner's stricter option needs to be turned on). */
   authenticatorEnrolled(): boolean { return !!this.webRemoteAccess()?.enrolled; }
@@ -28366,7 +28410,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       // shown here rather than in chat). null when normal, unknown or advisory.
       host_memory: this.hostMemoryIndicator(),
       // #2910 D2: a web-only fleet's newest Notice — a polling page (no SSE `notice`) reads the list again when it moves.
-      ...(this.webOnlyPromptPlace() ? { notices_newest: this.webNoticeStore()?.newest() ?? 0 } : {}),
+      ...(this.hasWebNotices() ? { notices_newest: this.webNoticeStore()?.newest() ?? 0 } : {}),
       // alpha.2 (M-2300, #2997 review): agents' requests changed — the owner's page reads GET /ui/agent-proposals again.
       ...(this.isWebOnlyFleet() ? { agent_proposals_rev: this.agentProposalsRev } : {}),
       // #2015: the largest processes while it lasts (name, pid, RSS, and whose: an instance, the fleet or tmux).

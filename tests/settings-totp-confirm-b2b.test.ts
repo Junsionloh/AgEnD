@@ -250,6 +250,15 @@ describe("confirming with the code", () => {
     p.release(); await decided;
     expect([p.apply.mock.calls.length, f.store.get(p.view.id, "browser")!.state]).toEqual([0, "stale"]);
   });
+  it("a remote confirmation of a change that opens a link posts a Notice (a code confirmation from the LAN); an ordinary change posts none", () => {
+    for (const [change, kind] of [["link", "link"], ["ordinary", null]] as const) {
+      const f = fleet(), s = f.session(), p = change === "link" ? f.linkOn() : f.propose();
+      const notice = vi.spyOn(f.any, "postSettingsRemoteNotice").mockImplementation(() => {});
+      const r = f.confirm(s, p.view.id);
+      r.done(f.store.get(p.view.id, "browser")!);
+      expect(notice.mock.calls.map(c => c[1])).toEqual(kind ? [kind] : []);
+    }
+  });
 });
 
 describe("#3355 review (Prism P2): the code's authority is the app it came from, through execution", () => {

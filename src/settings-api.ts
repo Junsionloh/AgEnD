@@ -138,6 +138,8 @@ export interface SettingsApiContext extends AppShellContext {
   webAuthorityOverview?(): unknown;
   /** AGEND-122: an authenticator is set up — the owner's stricter option (`remote_confirm_code`) can only be turned on while one is. */
   authenticatorEnrolled?(): boolean;
+  /** AGEND-122: the code option was turned on by this request — a Notice when it came from another device. */
+  announceCodeOptionOn?(req: IncomingMessage): void;
   revokeWebAuthority?(): { epoch: number; durable: boolean };
   readonly webToken?: string | null;
   readonly webSessions?: import("./web-session.js").WebSessionStore | null;
@@ -1303,6 +1305,8 @@ export function handleSettingsRequest(
         ctx.logger.warn({ err }, "settings: web save refused");
         return json(res, 500, { ok: false, error: (err as Error).message });
       }
+      // AGEND-122: turning the owner's code option on applies at once (it only tightens); from another device it is announced.
+      if (parsed.verifiedAuthority?.remote_confirm_code === true && previous.web?.verified_authority?.remote_confirm_code !== true) ctx.announceCodeOptionOn?.(req);
       // #2348: a grant taken away (or emptied) ends that person's guest access now — sessions, an outstanding code, and
       // remembered browsers — not at their next request. A narrowed grant keeps its sessions; they see less from now on.
       const ended = new Map<string, number>();
