@@ -766,11 +766,10 @@ Sources: [Microsoft networking](https://learn.microsoft.com/en-us/windows/wsl/ne
 Changing access/F/C lists, secrets, connection destinations/order, public exposure, control-bearing instance settings, or loosening a web setting (a longer local session or idle time, the browser terminal turned on or given more minutes) returns `202 pending_confirmation`. The requester can list/poll `GET /api/settings/pending[/:id]` and withdraw an unclaimed request with `DELETE /api/settings/pending/:id`. Other sessions receive 404. Polling is passive and does not extend sign-in lifetime; `remaining_ms` is the countdown, and the display timestamp is not an authorization deadline.
 
 Confirm the redacted diff in General as a fleet admin. If chat is unavailable, use the host command `agend settings confirm <id>`; Reject, expiry or session revocation does not apply the change. Apply retries must reuse the same `Idempotency-Key` and body, which returns the same request. After a terminal failure, review and submit a new key; secrets must be entered again. In the web app, a request waiting for confirmation shows as a card in any panel, with its countdown and **Withdraw** (see [`/settings`](#settings)).
-- **What the card says (#2868).**
-  - First, where to confirm it: "Sending the confirm card to General…", then "To apply it, press Confirm on the card in General on Discord" (or Telegram; the platform the card was actually posted on).
-  - The host command `agend settings confirm <id>` is folded under **Advanced: confirm on the host**. It is shown directly only when no General could take the card.
-  - When this browser is web-verified and its account may confirm the change itself (the same rule as confirming by applying), the card offers **Apply now**: General is told, as when it applies at Save.
-  - When this browser isn't verified but could be, the card offers **Authorize this browser** (the same DM card as the composer's). Once confirmed, the waiting card gets **Apply now** too.
+- **What the card says (#2868, reworded by AGEND-122).**
+  - A signed-in admin's change normally does not wait: it is confirmed as it is saved ("Confirmed by your account — applying."), from any device that can reach the dashboard. A card waits only for a page that cannot confirm by itself: one where **Only this computer can authorize** is on (it says only the AgEnD computer's browser can confirm).
+  - A chat fleet's card still says where General's card is ("To apply it, press Confirm on the card in General on Discord"); **Apply now** is offered next to it when this session may confirm.
+  - On a page that is not the AgEnD computer's own browser, the card never shows the host command `agend settings confirm <id>`. On the AgEnD computer it stays folded under **Advanced: confirm on the host**.
 
 **Which bot's admin can confirm?** Changes to existing connections require the
 admin of every affected connection, including both owners when an agent moves.

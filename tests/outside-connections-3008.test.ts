@@ -248,13 +248,13 @@ describe("#3008 a real fleet: connections from outside", () => {
       return req;
     };
     const self = h.any.settingsSelfConfirmation(store, overLink(first), own.id);
-    expect(self?.label).toBe("This computer's admin");
+    expect(self?.label).toBe("This fleet's admin");
     expect((await store.decide(own.id, "confirm", { ...self, via: "web" })).state).toBe("applied");
     // The switch off: the same session confirms nothing any more (it has ended).
     const another = store.propose({ session: record.idHash, key: "web-change-2", fingerprint: "h", bytes: 1, source: "web", section: "channel", requestedBy: "web",
       summary: ["Change more"], authority: { connections: [], primaryGeneral: true, unknown: false }, affectedConnections: [],
       current: () => true, unchanged: async () => true, snapshot: () => null, apply: vi.fn() }).view;
-    expect(h.any.settingsSelfConfirmation(store, overLink(first), another.id)?.label).toBe("This computer's admin");
+    expect(h.any.settingsSelfConfirmation(store, overLink(first), another.id)?.label).toBe("This fleet's admin");
     const s2 = await h.hostSignIn();
     await h.local(s2, "POST", "/ui/outside/switch", { on: false });
     expect(h.any.settingsSelfConfirmation(store, overLink(first), another.id)).toBeNull();

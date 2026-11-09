@@ -18,7 +18,6 @@ import { ErrorState, Skeleton } from "./ui-states.js";
 import { Dialog } from "./ui-dialog.js";
 import { InstanceNav, RosterNav, namesStore, setNamesPrimary } from "./instance-nav.js";
 import { usageRailStore } from "./header-tools.js";
-import { useWebAuthorization } from "./web-authorize.js";
 import { RightRail, sidePanelStore } from "./side-panel.js";
 import { OwnerCssKeepBar } from "./owner-css.js";
 import { AgentWidget, fleetBinds, sidebarWidget, sidebarWidgetStore } from "./agent-widget.js";
@@ -688,7 +687,7 @@ function whereText(where) {
 register("pendingHost", {
   en: {
     no_chat: "This fleet has no chat app connected, so there is no General to send the confirm card to.",
-    no_chat_do: "This computer's owner confirms it here with Apply now. To confirm from Discord or Telegram, connect one in Settings → Chat & connections.",
+    no_chat_do: "To confirm from Discord or Telegram, connect one in Settings → Chat & connections.",
     cross_platform: "This change affects chat apps on more than one platform, so no single General can confirm it.",
     cross_platform_do: "Make the change for one platform at a time.",
     no_general: "No agent is the General in a connected chat app, so there is nowhere to send the confirm card.",
@@ -709,12 +708,12 @@ register("pendingHost", {
     codeUnavailable: "The code could not be checked. Try again.",
     codeChanged: "This change is no longer the one shown here. Reload the page and check it again.",
     onHost: "This change can't be confirmed over a link. Confirm it in the browser on the computer running AgEnD, or in General.",
-    hostBrowser: "This change opens a link to this fleet, so only the browser on the computer running AgEnD can confirm it. Do it there.",
+    hostOnly: "Only the computer running AgEnD can confirm changes here: “Only this computer can authorize” is turned on. Confirm it in the browser on that computer.",
     codeSetUp: "To confirm changes here with a code, set up an authenticator app in Access & security.",
   },
   "zh-TW": {
     no_chat: "這個 Fleet 沒有連接聊天平台，所以沒有 General 可以接收確認卡。",
-    no_chat_do: "這台電腦的擁有者可以在這裡按「立即套用」確認。若要從 Discord 或 Telegram 確認，請到「設定 → 聊天與連線」連接其中一個。",
+    no_chat_do: "若要從 Discord 或 Telegram 確認，請到「設定 → 聊天與連線」連接其中一個。",
     cross_platform: "這項變更涉及多個聊天平台，沒有單一的 General 可以確認。",
     cross_platform_do: "請一次只變更一個平台。",
     no_general: "已連接的聊天平台中沒有任何 Agent 是 General，所以確認卡無處可送。",
@@ -735,7 +734,7 @@ register("pendingHost", {
     codeUnavailable: "無法檢查代碼，請再試一次。",
     codeChanged: "這項變更已不是這裡顯示的內容，請重新整理頁面再確認一次。",
     onHost: "這項變更無法透過連結確認。請在執行 AgEnD 的那台電腦的瀏覽器中確認，或在 General 確認。",
-    hostBrowser: "這項變更會開放一條連到這個 fleet 的連結，只有執行 AgEnD 的那台電腦上的瀏覽器能確認。請到那裡操作。",
+    hostOnly: "目前只有執行 AgEnD 的那台電腦能確認變更（已開啟「只有這台電腦可以授權」）。請到那台電腦的瀏覽器確認。",
     codeSetUp: "若要在這裡用代碼確認變更，請先到「存取與安全」設定驗證器 App。",
   },
 });
@@ -768,31 +767,22 @@ function PendingCode({ p }) {
   </form>${msg ? html`<p class="note" role="alert">${msg}</p>` : null}`;
 }
 function PendingHow({ p }) {
-  const a = useWebAuthorization();
   const [refused, setRefused] = useState(false);
   const c = p.confirmation || {}, cmd = `agend settings confirm ${p.id}`;
   const why = c.kind === "host_cli" && PENDING_HOST_REASONS.includes(c.reason) ? c.reason : null;
   const lead = c.kind === "posting" ? t("app.pendingPosting") : c.kind === "host_cli" ? t(`pendingHost.${why || "unknown"}`) : t("app.pendingChatWhere", whereText(c.where));
   const go = why && Object.hasOwn(PENDING_HOST_GO, why) ? PENDING_HOST_GO[why] : null;
-  // A browser that isn't verified but could be: authorizing it makes this one (and later ones) "Apply now".
-  const route = c.kind !== "host_cli" && !p.applyNow && a.st;
-  const canAsk = route && a.st.state === "none" && (a.st.reason === "not_authorized" || a.st.reason === "authorization_expired");
-  const asking = route && a.st.state === "pending";
   const apply = async () => { setRefused(false); const r = await p.applyNow(); if (!r || !r.ok) setRefused(true); };
   return html`<p class="note">${lead}</p>
     ${why ? html`<p class="note pending-why">${t(`pendingHost.${why}_do`)}${go ? html` <a class="btn btn-sm" href=${settingsPath(go)}>${t("pendingHost.go")}</a>` : null}</p>` : null}
     ${p.confirmWithCode && !p.applyNow ? html`<${PendingCode} p=${p} />` : null}
     ${p.onHost && !p.applyNow ? html`<p class="note pending-on-host">${t("pendingHost.onHost")}</p>` : null}
-    ${p.hostBrowser && !p.applyNow ? html`<p class="note pending-host-browser">${t("pendingHost.hostBrowser")}</p>` : null}
+    ${p.hostOnly && !p.applyNow ? html`<p class="note pending-host-only">${t("pendingHost.hostOnly")}</p>` : null}
     ${p.totpNotSetUp && !p.applyNow ? html`<p class="note pending-code-setup">${t("pendingHost.codeSetUp")} <a class="btn btn-sm" href=${settingsPath("access")}>${t("pendingHost.go")}</a></p>` : null}
     ${p.applyNow ? html`<div class="pending-self"><span class="note">${t("app.pendingSelf")}</span>
       <button type="button" class="btn btn-sm btn-primary" onClick=${apply}>${t("app.pendingApplyNow")}</button></div>` : null}
     ${refused && !p.applyNow ? html`<p class="note" role="status">${t("app.pendingApplyRefused")}</p>` : null}
-    ${canAsk ? html`<div class="pending-self"><span class="note">${t("app.pendingAuthorize")}</span>
-      <button type="button" class="btn btn-sm" onClick=${a.ask}>${t("webauth.authorize")}</button></div>` : null}
-    ${asking ? html`<p class="note">${t("webauth.waiting", mmss(a.left))}</p>` : null}
-    ${a.notice && (canAsk || asking) ? html`<p class="note" role="status">${a.notice}</p>` : null}
-    <details class="pending-host"><summary>${t("app.pendingAdvanced")}</summary><code>${cmd}</code></details>`;
+    ${p.remote ? null : html`<details class="pending-host"><summary>${t("app.pendingAdvanced")}</summary><code>${cmd}</code></details>`}`;
 }
 
 /** Settings' Apply, followed from another panel: one line, and the way back to it (§5: progress shows in any panel). */

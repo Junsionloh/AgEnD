@@ -1,8 +1,11 @@
 /**
- * #2868: the pending-change card says where to confirm it, in the order a person can act on it — the General card (the
- * platform it was posted on), or the host's command only when no General took it (otherwise folded under "Advanced");
- * "Apply now" when the server says this browser may confirm it itself; "Authorize this browser" when it isn't verified
- * but could be. The real app modules in the mini DOM; fetch is the only stub.
+ * #2868 / AGEND-122 (R1, upstream #3486): the pending-change card says where to confirm it, in the order a person can act on
+ * it — the General card (the platform it was posted on), or why no General took it; "Apply now" when the server says this
+ * session may confirm it itself (a signed-in fleet admin: no "Authorize this browser" DM step any more); the authenticator
+ * code field while the owner's strict option asks for one (`totp: "ready"`); on a remote page (`remote: true`) the host's
+ * command (`agend settings confirm <id>`) is never shown, on the AgEnD computer's own page it stays folded under "Advanced".
+ * `totp: "host_only"` ("Only this computer can authorize") and `"on_host"` (a link-opening change over a link) say so, with
+ * neither a field nor Apply now. The real app modules in the mini DOM; fetch is the only stub.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fire } from "./helpers/mini-dom.js";
@@ -14,17 +17,16 @@ const view = (o: Record<string, unknown> = {}) => ({ id: ID, state: "pending", s
 const mounted: AppPage[] = [];
 afterEach(async () => { for (const p of mounted.splice(0)) { await p.unmount(); p.restore(); } vi.unstubAllGlobals(); });
 
-async function card(v: Record<string, unknown>, auth: Record<string, unknown> = { state: "none", reason: "not_authorized" }, lang = "en", answers: Record<string, unknown> = {}) {
+async function card(v: Record<string, unknown>, lang = "en", answers: Record<string, unknown> = {}) {
   for (const old of mounted.splice(0)) { await old.unmount(); old.restore(); }     // one page at a time
   vi.resetModules();
   const harness = await import("./helpers/app-harness.js");
   const p = harness.page({ storage: { agend_tour_done: "1", agend_lang: lang } });
   mounted.push(p);
-  const calls: Array<[string, string]> = [];
-  vi.stubGlobal("fetch", vi.fn(async (url: string, init: { method?: string } = {}) => {
-    calls.push([init.method ?? "GET", url]);
-    const body = url === "/ui/authorization" ? (init.method === "POST" ? { ok: true, expiresInMs: 300_000 } : auth)
-      : url in answers ? answers[url] : url === `/api/settings/pending/${ID}` ? v : {};
+  const calls: Array<[string, string, any]> = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init: { method?: string; body?: string } = {}) => {
+    calls.push([init.method ?? "GET", url, init.body ? JSON.parse(init.body) : undefined]);
+    const body = url in answers ? answers[url] : url === `/api/settings/pending/${ID}` ? v : {};
     const status = (body as any)?.__status ?? 200;
     return { ok: status < 400, status, json: async () => body };
   }));
@@ -37,7 +39,8 @@ async function card(v: Record<string, unknown>, auth: Record<string, unknown> = 
   await settle(4);
   const text = () => (p.root.querySelector(".pending-card")?.textContent ?? "").replace(/\s+/g, " ");
   const button = (label: string) => [...p.root.querySelectorAll(".pending-card button")].find((b: any) => b.textContent.trim() === label) as any;
-  return { p, calls, text, button, confirm };
+  const fold = () => p.root.querySelector(".pending-card details.pending-host") as any;
+  return { p, calls, text, button, confirm, fold };
 }
 
 describe("where to confirm it", () => {
@@ -83,62 +86,83 @@ describe("where to confirm it", () => {
     expect((await card(view({ confirmation: { kind: "host_cli", code: ID, reason: "something_new" } }))).text()).toContain("No General could take the confirm card for this change.");
   });
   it("zh-TW", async () => {
-    const c = await card(view({ confirmation: { kind: "chat", code: ID, where: [{ platform: "discord", connection: "discord" }] } }), undefined, "zh-TW");
+    const c = await card(view({ can_self_confirm: true, confirmation: { kind: "chat", code: ID, where: [{ platform: "discord", connection: "discord" }] } }), "zh-TW");
     expect(c.text()).toContain("要套用，請到 Discord 的 General，在確認卡上按「確認」。");
-    expect(c.text()).toContain("授權這個瀏覽器，之後這類變更可以直接套用，不必到 General。");
+    expect(c.text()).toContain("你已用管理員身分登入，可以直接在這裡套用。");
+    expect(c.button("直接套用"), "the apply button is in Chinese too").toBeDefined();
+    expect(c.text()).not.toContain("授權這個瀏覽器");
     expect(c.p.root.querySelector(".pending-host summary").textContent).toBe("進階：在主機上確認");
   });
 });
 
-describe("this browser", () => {
-  it("not verified: Authorize this browser asks for the DM card (the composer's same request)", async () => {
+describe("this session (a signed-in admin)", () => {
+  it("not able to confirm it here: only the General instruction — no Authorize-this-browser step, no DM authorization request, no Apply now", async () => {
     const c = await card(view());
-    expect(c.text()).toContain("Authorize this browser to apply changes like this here next time, without General.");
-    fire(c.button("Authorize this browser"), "click"); await settle(4);
-    expect(c.calls.filter(([m, u]) => m === "POST" && u === "/ui/authorization")).toHaveLength(1);
-    expect(c.text()).toContain("Sent — confirm it in your DM within 5 minutes.");
-  });
-  it("verified but not allowed to confirm this one: only the General instruction (no Apply now, no Authorize)", async () => {
-    const c = await card(view(), { state: "verified", until: Date.now() + 3600_000 });
+    expect(c.text()).toContain("press Confirm on the card in General");
     expect([c.button("Apply now"), c.button("Authorize this browser")]).toEqual([undefined, undefined]);
+    expect(c.text()).not.toContain("Authorize this browser");
+    expect(c.text()).not.toContain("without General");
+    await settle(4);
+    expect(c.calls.filter(([, u]) => u.includes("authorization")), "the card never asks for the #1939 DM authorization any more").toEqual([]);
   });
   it("allowed (the server's can_self_confirm): Apply now posts the confirm and follows the answer", async () => {
     const applying = view({ state: "applying", can_withdraw: false, confirmation: { kind: "web" } });
-    const c = await card(view({ can_self_confirm: true }), { state: "verified", until: Date.now() + 3600_000 }, "en",
+    const c = await card(view({ can_self_confirm: true }), "en",
       { [`/api/settings/pending/${ID}/confirm`]: { __status: 202, ok: true, result: "pending_confirmation", pending_change: applying } });
-    expect(c.text()).toContain("This browser is verified, so you can also apply it here.");
-    expect(c.button("Authorize this browser"), "verified: nothing to authorize").toBe(undefined);
+    expect(c.text()).toContain("You are signed in as an admin, so you can apply it here.");
+    expect(c.text()).not.toContain("This browser is verified");
+    expect(c.button("Authorize this browser"), "nothing to authorize").toBe(undefined);
     fire(c.button("Apply now"), "click"); await settle(4);
     expect(c.calls.filter(([m, u]) => m === "POST" && u === `/api/settings/pending/${ID}/confirm`)).toHaveLength(1);
     expect(c.p.root.querySelector(".pending-card").className).toContain("applying");
   });
   it("Apply now refused (no longer allowed here): it says so, Apply now goes, the General instruction stays", async () => {
-    const c = await card(view({ can_self_confirm: true }), { state: "verified", until: Date.now() + 3600_000 }, "en",
+    const c = await card(view({ can_self_confirm: true }), "en",
       { [`/api/settings/pending/${ID}/confirm`]: { __status: 403, error: "self_confirm_unavailable" } });
     fire(c.button("Apply now"), "click"); await settle(4);
-    expect([c.button("Apply now"), c.text().includes("This browser can't apply it here now — confirm it in General."), c.text().includes("press Confirm on the card in General")])
+    expect([c.button("Apply now"), c.text().includes("This browser can't apply it here now. Another way to confirm it: the card in General, if this fleet has chat."), c.text().includes("press Confirm on the card in General")])
       .toEqual([undefined, true, true]);
   });
 });
 
+// AGEND-122: a page that is not the AgEnD computer's own browser (`remote: true`, any fleet) never shows the host's command.
+describe("a remote page: no host command", () => {
+  const outsideFold = (c: Awaited<ReturnType<typeof card>>) => (c.p.root.querySelector(".pending-card")!.textContent ?? "");
+  it("remote: no Advanced fold and no `agend settings confirm` anywhere — the General instruction and Apply now stay", async () => {
+    const c = await card(view({ remote: true, can_self_confirm: true }));
+    expect([c.fold(), outsideFold(c).includes("agend settings confirm"), c.text().includes("press Confirm on the card in General"), !!c.button("Apply now")]).toEqual([null, false, true, true]);
+  });
+  it("remote, no General could take it: why in plain words, and still no host command", async () => {
+    const c = await card(view({ remote: true, confirmation: { kind: "host_cli", code: ID, reason: "no_chat" } }));
+    expect(c.text()).toContain("This fleet has no chat app connected, so there is no General to send the confirm card to.");
+    expect(c.text()).toContain("To confirm from Discord or Telegram, connect one in Settings → Chat & connections.");
+    expect(c.text()).not.toContain("This computer's owner confirms it here");
+    expect([c.fold(), outsideFold(c).includes("agend settings confirm")]).toEqual([null, false]);
+  });
+  it("not remote (the AgEnD computer's own browser): the command is there, folded", async () => {
+    const c = await card(view({ remote: false }));
+    expect([c.fold()?.querySelector("code").textContent, c.fold()?.open ?? false]).toEqual([`agend settings confirm ${ID}`, false]);
+  });
+  it("zh-TW: the same, in Chinese", async () => {
+    const c = await card(view({ remote: true }), "zh-TW");
+    expect([c.fold(), outsideFold(c).includes("agend settings confirm")]).toEqual([null, false]);
+  });
+});
+
 // alpha.6 feedback #2c (the user's decision hmsg-468cc290 + the leader's ruling (b)): the authenticator-code confirmation.
-describe("confirm with the authenticator code (web-only fleet, this computer or the LAN)", () => {
+describe("confirm with the authenticator code (strict mode: the owner asks for a code from other devices)", () => {
   const DIGEST = "d".repeat(32);
-  const posted: Array<{ url: string; body: any }> = [];
-  const withCode = async (answer: { __status: number; [k: string]: unknown }, lang = "en", totp = "ready") => {
-    posted.length = 0;
-    const c = await card(view({ confirmation: { kind: "host_cli", code: ID, reason: "no_chat" }, totp, confirm_digest: DIGEST }), undefined, lang,
+  const withCode = async (answer: { __status: number; [k: string]: unknown }, lang = "en", totp = "ready", extra: Record<string, unknown> = {}) =>
+    card(view({ confirmation: { kind: "host_cli", code: ID, reason: "no_chat" }, totp, confirm_digest: DIGEST, remote: true, ...extra }), lang,
       { [`/api/settings/pending/${ID}/confirm-totp`]: answer });
-    return c;
-  };
-  it("ready: a code field and Confirm; the code goes with this change's digest", async () => {
-    const c = await withCode({ __status: 202, ok: true, result: "pending_confirmation", pending_change: view({ state: "applying" }) });
+  const enter = async (c: Awaited<ReturnType<typeof card>>, code: string) => {
     const input = c.p.root.querySelector(".pending-card .pending-code-input") as any;
-    expect([!!input, c.text()]).toEqual([true, expect.stringContaining("Or confirm it here with the code from your authenticator app.")]);
-    input.value = "123 456"; fire(input, "input"); await settle(3);
+    input.value = code; fire(input, "input"); await settle(3);
     fire(c.p.root.querySelector(".pending-card form.pending-code")!, "submit"); await settle(6);
-    const call = c.calls.find(([m, u]) => m === "POST" && u.endsWith("/confirm-totp"));
-    expect(call).toBeDefined();
+  };
+  it("ready, on the AgEnD computer's own page (not remote): the field and the folded command both", async () => {
+    const c = await withCode({ __status: 200 }, "en", "ready", { remote: false });
+    expect([!!c.p.root.querySelector(".pending-code-input"), c.fold()?.querySelector("code").textContent]).toEqual([true, `agend settings confirm ${ID}`]);
   });
   it.each([
     [{ __status: 401, error: "wrong_code" }, "That code is not right. Use the current code in your authenticator app."],
@@ -146,20 +170,21 @@ describe("confirm with the authenticator code (web-only fleet, this computer or 
     [{ __status: 429, error: "paused", retryAfterMs: 15 * 60_000 }, "Too many wrong codes. Try again in 15 minutes."],
   ])("refused (%j): says why, in plain words", async (answer, words) => {
     const c = await withCode(answer as any);
-    const input = c.p.root.querySelector(".pending-card .pending-code-input") as any;
-    input.value = "123456"; fire(input, "input"); await settle(3);
-    fire(c.p.root.querySelector(".pending-card form.pending-code")!, "submit"); await settle(6);
+    await enter(c, "123456");
     expect(c.text()).toContain(words);
   });
-  it("over a link (on_host): no field — confirm in the host computer's browser, or in General; never a host command", async () => {
-    const c = await withCode({ __status: 200 }, "en", "on_host");
-    expect([!!c.p.root.querySelector(".pending-code-input"), c.text()]).toEqual([false, expect.stringContaining("Confirm it in the browser on the computer running AgEnD, or in General.")]);
-    const outside = (c.p.root.querySelector(".pending-card")!.textContent ?? "").replace(c.p.root.querySelector(".pending-card details.pending-host")!.textContent ?? "", "");
-    expect(outside).not.toContain("agend settings confirm");
+  it("host_only (“Only this computer can authorize” is on): no field, no Apply now — only the AgEnD computer's own browser confirms", async () => {
+    const c = await withCode({ __status: 200 }, "en", "host_only");
+    expect(c.text()).toContain("Only the computer running AgEnD can confirm changes here: “Only this computer can authorize” is turned on. Confirm it in the browser on that computer.");
+    expect([!!c.p.root.querySelector(".pending-code-input"), !!c.p.root.querySelector(".pending-host-only"), c.button("Apply now"), c.fold()]).toEqual([false, true, undefined, null]);
+    expect(c.text()).not.toContain("authenticator code");
   });
-  it("no authenticator set up: says so and links to Access & security", async () => {
-    const c = await withCode({ __status: 200 }, "zh-TW", "not_set_up");
-    expect(c.text()).toContain("若要在這裡用代碼確認變更，請先到「存取與安全」設定驗證器 App。");
-    expect((c.p.root.querySelector(".pending-code-setup a") as any).getAttribute("href")).toBe("/settings/access");
+  it("host_only, zh-TW", async () => {
+    const c = await withCode({ __status: 200 }, "zh-TW", "host_only");
+    expect(c.text()).toContain("目前只有執行 AgEnD 的那台電腦能確認變更（已開啟「只有這台電腦可以授權」）。請到那台電腦的瀏覽器確認。");
+  });
+  it("Apply now wins: a session the server lets apply (can_self_confirm) gets no code field and no host-only / on-host line", async () => {
+    const c = await withCode({ __status: 200 }, "en", "ready", { can_self_confirm: true });
+    expect([!!c.button("Apply now"), !!c.p.root.querySelector(".pending-code-input"), !!c.p.root.querySelector(".pending-host-only")]).toEqual([true, false, false]);
   });
 });
