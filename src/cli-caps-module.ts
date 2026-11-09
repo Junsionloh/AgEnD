@@ -17,6 +17,8 @@ export interface UiCliCaps {
   signOutFiles: boolean;
   /** The CLI can have named accounts (`host.namedAccounts`), and how a Move between two of them words the conversation; null when it has none. */
   namedAccounts: boolean;
+  /** An account is the CLI's whole app-data folder (`host.namedAccounts` as a launch argument): Remove deletes its conversations with its sign-in. */
+  accountIsFolder: boolean;
   carry: CarryKind | null;
   /** Browser controls for default accounts (`host.structuredSignIn`), and separately named accounts (`host.structuredSignIn.named`). */
   structuredSignIn: boolean;
@@ -47,6 +49,7 @@ export function uiCliCaps(): Record<CliId, UiCliCaps> {
       signOut: hostFacts(id, "signOut") !== null,
       signOutFiles: hostFacts(id, "signOut") !== null && "remove" in hostFacts(id, "signOut")!,
       namedAccounts: named !== null,
+      accountIsFolder: named?.home === "launch-argument",
       carry: named?.carry ?? null,
       structuredSignIn: structured !== null,
       structuredNamedSignIn: structured?.named === true,

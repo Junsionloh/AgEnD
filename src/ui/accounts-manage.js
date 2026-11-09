@@ -24,6 +24,7 @@ register("accountsManage", {
     added: "Account “{0}” added.", addedHostSignIn: "Account “{0}” added. Send /login in chat, or ask General.",
     remove: "Remove", removeTitle: "Remove the {0} account “{1}”?",
     removeLead: "This deletes the account's folder on this host: its connection.", removeLeadClaude: "This deletes the account's folder on this host: its connection and its own copies of conversations.",
+    removeLeadFolder: "This deletes the account's folder on this host: its connection and its own conversations.",
     removeAfter: "Agents can't use it afterwards.", sep: " ",
     inUse: "Still used by — move each to another account first:", inUseAgent: "Agent {0}", inUseRoom: "ClassicBot room {0}", inUseDefault: "The fleet default for {0} agents",
     move: "Move…", roomHow: "Change it in that room's ClassicBot settings (its credential_profile).",
@@ -70,6 +71,7 @@ register("accountsManage", {
     added: "已新增帳號「{0}」。", addedHostSignIn: "已新增帳號「{0}」。請在聊天傳 /login，或請 General。",
     remove: "移除", removeTitle: "要移除 {0} 帳號「{1}」嗎？",
     removeLead: "這會刪除這台主機上該帳號的資料夾：它的連接。", removeLeadClaude: "這會刪除這台主機上該帳號的資料夾：它的連接，以及它自己的對話副本。",
+    removeLeadFolder: "這會刪除這台主機上該帳號的資料夾：它的連接，以及它自己的對話。",
     removeAfter: "之後 Agent 就不能使用它。", sep: "",
     inUse: "仍在使用中，請先把每一項移到其他帳號：", inUseAgent: "Agent {0}", inUseRoom: "ClassicBot 房間 {0}", inUseDefault: "{0} Agent 的 Fleet 預設帳號",
     move: "移動…", roomHow: "請在該房間的 ClassicBot 設定（credential_profile）中更改。",
@@ -207,7 +209,7 @@ export function RemoveAccountDialog({ cli, row, label, onClose, onMove, onRemove
   return html`<${Dialog} title=${tm("removeTitle", label, row.profile)} onClose=${onClose} busy=${busy} actions=${html`<button type="button" class="btn" disabled=${busy} onClick=${onClose}>${tm("cancel")}</button>
     ${errCode === "signing_in" && !machine ? html`<button type="button" class="btn" disabled=${busy || inUse || typed !== row.profile} onClick=${cancelAndRemove}>${tm("cancelAndRemove")}</button>` : null}
     <button type="button" class="btn btn-danger" disabled=${busy || inUse || typed !== row.profile} onClick=${go}>${busy ? tm("removing") : tm("removeGo")}</button>`}>
-    <p>${machine ? tm("removeLeadMachine", machine.name) : cli.backend === "claude-code" ? tm("removeLeadClaude") : tm("removeLead")}${tm("sep")}${tm("removeAfter")}</p>
+    <p>${machine ? tm("removeLeadMachine", machine.name) : cli.backend === "claude-code" ? tm("removeLeadClaude") : CLI_CAPS[cli.backend] && CLI_CAPS[cli.backend].accountIsFolder ? tm("removeLeadFolder") : tm("removeLead")}${tm("sep")}${tm("removeAfter")}</p>
     ${inUse ? html`<div class="s-account-inuse" role="status"><p><strong>${tm("inUse")}</strong></p><ul>
       ${users.agents.map((name) => html`<li><span>${tm("inUseAgent", name)}</span>${moveBtn({ kind: "agent", name })}</li>`)}
       ${users.fleetDefault ? html`<li><span>${machine ? tm("inUseMachineDefault") : tm("inUseDefault", label)}</span>${machine ? null : moveBtn({ kind: "default" })}</li>` : null}
