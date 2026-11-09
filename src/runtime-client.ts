@@ -588,6 +588,25 @@ export class RuntimeClient {
     }
     return unknown ? "unknown" : undefined;
   }
+  /**
+   * AGEND-124: whether a terminal of this CLI is open on this computer, from the pane ledgers (the same files `profileInUseNow` reads), whatever account it names: the computer's OWN login is every such terminal's
+   * when it names none. A ledger that cannot be read is `unknown` (true here: the safe side for a sign-out); a row recorded under another boot of the computer cannot still be running. False: none.
+   */
+  private cliTerminalRunning(cli: string): boolean {
+    const boot = this.computerBootValue;
+    for (const file of paneLedgerFiles(this.options.store.directory)) {
+      try {
+        const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
+        for (const row of object(raw) && object(raw.panes) ? Object.values(raw.panes) : []) {
+          const launch = object(row) && object(row.launch) ? row.launch : undefined, snapshot = object(row) && object(row.snapshot) ? row.snapshot : undefined;
+          if (!launch || snapshot?.state === "exited" || launch.cli !== cli) continue;
+          if (typeof (row as { systemBootId?: unknown }).systemBootId === "string" && boot && boot !== (row as { systemBootId: string }).systemBootId) continue;
+          return true;
+        }
+      } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") return true; }
+    }
+    return false;
+  }
   /** #3190 Part 3a: the remote account operations (switches, sign-in, sign-out, remove, install), built on first use. */
   private remote(): RemoteAccounts {
     const root = this.options.credentialProfilesRoot, extra = this.options.remoteAccounts;
@@ -606,7 +625,7 @@ export class RuntimeClient {
       // AGEND-124: the proof that an Antigravity account's sign-in stays in its own folder (an empty scratch folder must answer "signed out"), and the Credential Manager entry of the computer's own login.
       isolated: extra?.isolated ?? ((cli, scratch) => probeCredentialIsolation(cli, scratch, extra?.find ? id => extra.find!(id as CredentialProfileCli) : undefined, this.options.credentialIsolationRun)),
       deleteCredential: extra?.deleteCredential ?? (name => deleteWindowsCredential(name, extra?.environment?.() ?? undefined)),
-      taskRunning: () => this.active.size > 0,
+      taskRunning: () => this.active.size > 0 || this.cliTerminalRunning("antigravity") !== false,
       inUse: name => this.profileInUse(name), inUseNow: name => this.profileInUseNow(name), report: text => this.report(text),
       // Throws when `credential-default.json` cannot be read: an unreadable default is not "no default" (the remove then answers `unconfirmed`).
       defaultProfile: () => this.options.store.credentialDefault(),

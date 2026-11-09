@@ -71,7 +71,9 @@ export const ANTIGRAVITY_SPEC = {
     accountRows: yes({ defaultRow: "sign-in" }),
     // agy has no status command: the model listing the Runtime asks for anyway says whether it is signed in (exit code and words), so no extra process is started.
     authStatus: yes({ argv: ["models"], source: "model-listing" }),
-    identity: byDesign("The account could only be read from the Credential Manager entry `gemini:antigravity`, which holds the login's tokens: the Runtime does not read credentials (agy has no command that names the account, and its log files are not a reliable source)."),
+    // AGEND-124: a NAMED account's only. Its login is the file `<folder>/antigravity-oauth-token` (the pin), so the Runtime reads that one file's `id_token_email` (host.identity's field) in the account's verified folder and
+    // reports it masked, never anything else of the file. The computer's OWN login is in the Credential Manager entry `gemini:antigravity`, which holds the login's tokens: the Runtime does not read credentials there, so it names nobody.
+    identity: yes(),
     usage: notYetBuilt("undecided", "A computer reports no usage for any CLI yet; and the usage read needs the account's token, which on Windows is in the Credential Manager."),
   },
 } satisfies CliSpec;

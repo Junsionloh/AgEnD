@@ -95,11 +95,11 @@ export function createRuntimeSignInTransport(options: RuntimeSignInTransportOpti
       if (!started) throw new Error("signin_not_started");
       return reduceLoginScreen(started, screen);
     },
-    async status(): Promise<{ alive: boolean; exitCode?: number }> {
+    async status(): Promise<{ alive: boolean; exitCode?: number; isolated?: false }> {
       guard();
       const answer = await call(machineId, "signin.status", { sessionId: live() });
-      if (!record(answer) || typeof answer.alive !== "boolean" || (answer.exitCode !== undefined && !Number.isInteger(answer.exitCode))) throw new Error("signin_protocol");
-      return { alive: answer.alive, ...(answer.exitCode !== undefined ? { exitCode: answer.exitCode as number } : {}) };
+      if (!record(answer) || typeof answer.alive !== "boolean" || (answer.exitCode !== undefined && !Number.isInteger(answer.exitCode)) || (answer.isolated !== undefined && answer.isolated !== false)) throw new Error("signin_protocol");
+      return { alive: answer.alive, ...(answer.exitCode !== undefined ? { exitCode: answer.exitCode as number } : {}), ...(answer.isolated === false ? { isolated: false as const } : {}) };
     },
     async write(input: string, signal: AbortSignal): Promise<void> {
       guard(signal);

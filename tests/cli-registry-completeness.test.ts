@@ -80,7 +80,6 @@ kiro-cli runtime.authStatus not_yet_built undecided
 kiro-cli runtime.identity not_applicable
 kiro-cli runtime.usage not_yet_built undecided
 antigravity host.dashboardSignIn by_design
-antigravity runtime.identity by_design
 antigravity runtime.usage not_yet_built undecided
 grok host.structuredSignIn not_yet_built undecided
 grok host.firstRunSignIn not_yet_built undecided
