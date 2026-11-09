@@ -52,7 +52,11 @@ export const ANTIGRAVITY_SPEC = {
     update: yes({ kind: "latest-unaudited" }),
     // The computer's OWN login (no profile): Windows keeps it in the Credential Manager under one fixed name, so signing in REPLACES that Windows user's Antigravity login.
     signIn: yes({ argv: ["agy", "acp", "--login"], profile: "none" }),
-    namedAccounts: byDesign("Windows keeps agy's login in the Credential Manager under one fixed name (`gemini:antigravity`), the same for every folder and every HOME (AGEND-112), so there is one per Windows user and a profile folder cannot hold another."),
+    // AGEND-119 re-check of AGEND-112 (whose "one login per Windows user" was only true of agy.exe's default store): agy.exe keeps its login in the Credential Manager (`gemini:antigravity`, one for every folder) unless it detects
+    // WSL (a \\wsl.localhost working directory) or an SSH session (SSH_CONNECTION / SSH_TTY / SSH_CLIENT set), when it keeps `<--app_data_dir>/antigravity-oauth-token` instead ("Using file-based token storage because SSH
+    // session detected" in its log). Measured on agy.exe 1.5.3 with a planted token in a test folder: the folder's login is read, deleting the file signs it out, the Credential Manager login is untouched, and a `..`
+    // relative --app_data_dir into the Runtime's own folder works (not across drives). So named accounts on a computer are possible with the host's `pin`; the Runtime side (profile folders, sign-in, probes, an agent's launch) is not built.
+    namedAccounts: notYetBuilt("undecided", "Possible (agy.exe keeps a named folder's login in a file under SSH_CONNECTION, measured AGEND-119) but the Runtime's profile folders are Claude Code's only; not built."),
     accountRows: yes({ defaultRow: "sign-in" }),
     // agy has no status command: the model listing the Runtime asks for anyway says whether it is signed in (exit code and words), so no extra process is started.
     authStatus: yes({ argv: ["models"], source: "model-listing" }),
