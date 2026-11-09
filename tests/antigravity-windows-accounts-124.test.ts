@@ -345,11 +345,11 @@ describe("a named account's e-mail, read from its own token file on the computer
   const SECRETS = ["ACCESS-FIXTURE-aaa", "REFRESH-FIXTURE-bbb", "ID-TOKEN-FIXTURE-ccc"];
   const tokenFile = (extra: Record<string, unknown> = {}) => JSON.stringify({ token: { access_token: SECRETS[0], refresh_token: SECRETS[1], expiry: "2030-01-01T00:00:00Z" }, id_token: SECRETS[2], id_token_email: "juan@example.com", ...extra });
   const folder = (content?: string | ((dir: string) => void)) => { const dir = join(scratch(), "work"); mkdirSync(dir, { recursive: true }); if (typeof content === "string") writeFileSync(join(dir, TOKEN), content); else content?.(dir); return dir; };
-  it("is the masked address of `id_token_email` and nothing else of the file: no token, no other field, not the unmasked address", async () => {
+  it("is the whole address of `id_token_email` and nothing else of the file: no token, no other field", async () => {
     const answer = await probeCredentialProfileStatus("antigravity", folder(tokenFile({ name: "Juan Fixture", picture: "https://example.com/p.png", id_token_name: "Juan" })), async () => exe, listing);
-    expect(answer).toEqual({ loggedIn: true, identity: { maskedEmail: "ju***@example.com" } });
+    expect(answer).toEqual({ loggedIn: true, identity: { maskedEmail: "juan@example.com" } });
     const text = JSON.stringify(answer);
-    for (const secret of [...SECRETS, "juan@example.com", "Juan", "picture"]) expect(text).not.toContain(secret);
+    for (const secret of [...SECRETS, "Juan Fixture", "picture"]) expect(text).not.toContain(secret);
   });
   it("is nothing for a file with no such field, a field that is not an address, a file that is not JSON, one too big, and a link", async () => {
     const none = async (dir: string) => (await probeCredentialProfileStatus("antigravity", dir, async () => exe, listing));
@@ -368,21 +368,22 @@ describe("a named account's e-mail, read from its own token file on the computer
     // The isolation probe passes that off: a scratch folder holding a token (a CLI that ignores the folder) is "signed in", not proof, and names nobody.
     expect(await probeCredentialIsolation("antigravity", dirname(dir), async () => exe, listing)).toBe(false);
   });
-  it("reaches the page: a check reports it masked, the cache keeps it, and the Accounts row shows it; the computer's own login names nobody", async () => {
+  it("reaches the page: a check reports it, the cache keeps it, and the Accounts row shows it; the computer's own login names nobody", async () => {
     const f = runtimeRig({ agy: { authenticated: true }, agyCreated: ["work"], status: (cli, dir) => probeCredentialProfileStatus(cli, dir, async () => exe, listing) });
     writeFileSync(join(agyDir(f, "work"), TOKEN), tokenFile());
-    expect(await f.runtime.handle("accounts.check", { cli: "antigravity", profile: "work" })).toEqual({ loggedIn: true, identity: { maskedEmail: "ju***@example.com" } });
+    expect(await f.runtime.handle("accounts.check", { cli: "antigravity", profile: "work" })).toEqual({ loggedIn: true, identity: { maskedEmail: "juan@example.com" } });
     const cache = readFileSync(join(f.root, "status.json"), "utf8");
-    expect(cache).toContain("ju***@example.com"); for (const secret of [...SECRETS, "juan@example.com"]) expect(cache).not.toContain(secret);
+    expect(cache).toContain("juan@example.com"); for (const secret of SECRETS) expect(cache).not.toContain(secret);
     const report = credentialProfileReport(f.root, undefined, () => true);
-    expect(report.byCli!.antigravity![0]).toMatchObject({ name: "work", identity: { maskedEmail: "ju***@example.com" } });
+    expect(report.byCli!.antigravity![0]).toMatchObject({ name: "work", identity: { maskedEmail: "juan@example.com" } });
     f.reportAgy(report.byCli!.antigravity!);
     const rows = (await buildAccountsView({ targets: [], diskProfiles: new Map(), agents: [], classic: [], fleetDefaults: new Map(), machines: await f.accounts.list() })).clis.find(c => c.backend === "antigravity")!.rows;
-    expect(rows.map(r => [r.profile, (r.identity as { maskedEmail?: string } | undefined)?.maskedEmail ?? null])).toEqual([[null, null], ["work", "ju***@example.com"]]);
+    expect(rows.map(r => [r.profile, (r.identity as { maskedEmail?: string } | undefined)?.maskedEmail ?? null])).toEqual([[null, null], ["work", "juan@example.com"]]);
     await f.stop();
   });
-  it("a report row with an unmasked address is refused as a protocol error (the server never shows what the Runtime did not mask)", () => {
-    expect(() => parseCredentialProfileReport({ profiles: [], byCli: { antigravity: [{ name: "work", loggedIn: true, identity: { maskedEmail: "juan@example.com" } }] } })).toThrow(/Invalid credential profile report/);
+  it("a report row takes a whole address (and an older masked one); one that does not fit is refused as a protocol error, never shortened", () => {
+    for (const ok of ["juan@example.com", "ju***@example.com"]) expect(() => parseCredentialProfileReport({ profiles: [], byCli: { antigravity: [{ name: "work", loggedIn: true, identity: { maskedEmail: ok } }] } }), ok).not.toThrow();
+    for (const bad of [`${"j".repeat(255 - "@example.com".length)}@example.com`, "juan@exämple.com", "juan @example.com", "juan@x@example.com"]) expect(() => parseCredentialProfileReport({ profiles: [], byCli: { antigravity: [{ name: "work", loggedIn: true, identity: { maskedEmail: bad } }] } }), bad.slice(0, 10)).toThrow(/Invalid credential profile report/);
   });
 });
 
