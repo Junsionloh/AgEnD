@@ -244,6 +244,8 @@ describe("a link option turned on (#2453): marked opensLink; any signed-in admin
       const a = held(h, "link");
       expect([ask(h, a, host.sessionId)?.label, ask(h, a, host.sessionId, AWAY)?.label, ask(h, a, other.sessionId)?.label, ask(h, a, other.sessionId, AWAY)?.label])
         .toEqual(Array(4).fill("This fleet's admin"));
+      expect([h.any.settingsTotpState(a.store, h.reqOf(host.sessionId, AWAY), a.view.id), h.any.settingsTotpConfirm(a.store, h.reqOf(host.sessionId, AWAY), a.view.id, "123456", "x")])
+        .toEqual([null, { error: "not_here" }]);                                                     // strict off: no code is asked of anyone, a posted code is refused
       expect((await confirm(a, ask(h, a, other.sessionId))).state).toBe("applied");                 // another code's session, on this computer
       expect(remoteNotices(h)).toEqual([]);
       const b = held(h, "link");
@@ -252,6 +254,27 @@ describe("a link option turned on (#2453): marked opensLink; any signed-in admin
       vi.spyOn(h.any, "outsideLink").mockReturnValue({ exposureId: EXPOSURE });
       const outside = h.session({ link: true, remote: true }), c = held(h, "link");
       expect((await confirm(c, ask(h, c, outside.sessionId, {}, "quick"))).state).toBe("applied");
+    } finally { await h.stop(); }
+  }, 20_000);
+  it("strict mode (remote_confirm_code), web-only: this computer still gets Apply now; a device on the LAN is asked the authenticator's code for it, wrong refused, right one applies; over HTTP the held Save says so", async () => {
+    setLocale("en");
+    const h = await startFleet(STRICT, { enrolled: true });
+    try {
+      const host = await h.signIn(), a = held(h, "link");
+      const away = h.reqOf(host.sessionId, AWAY);
+      expect([ask(h, a, host.sessionId)?.label, h.any.settingsTotpState(a.store, h.reqOf(host.sessionId), a.view.id)]).toEqual(["This fleet's admin", null]);
+      expect([ask(h, a, host.sessionId, AWAY), h.any.settingsTotpState(a.store, away, a.view.id)]).toEqual([null, "ready"]);     // no Apply now off this computer: the code
+      const digest = a.store.confirmDigest(a.view.id)!;
+      expect(h.any.settingsTotpConfirm(a.store, away, a.view.id, "000000", digest)).toEqual({ error: "wrong" });
+      const how = h.any.settingsTotpConfirm(a.store, away, a.view.id, codeAt(Date.now()), digest);
+      expect(how.label).toBe("Authenticator code");
+      expect((await confirm(a, how)).state).toBe("applied");
+      // Over HTTP, through the Settings gate: a forwarded Save waits for the code and its page knows it is not on the computer.
+      const put = await raw(h.port, "PUT", "/api/settings/fleet/web", { ...h.reqOf(host.sessionId, AWAY).headers,
+        "content-type": "application/json", "idempotency-key": `k${Math.random()}` }, JSON.stringify({ verified_authority: { named_link: true } }));
+      expect(put.status).toBe(202);
+      const pending = JSON.parse(put.body).pending_change;
+      expect([pending.state, pending.totp, pending.remote, pending.can_self_confirm]).toEqual(["pending", "ready", true, undefined]);
     } finally { await h.stop(); }
   }, 20_000);
 });
@@ -313,5 +336,24 @@ describe("a link opener and a web-verified admin's Apply now / an authenticator 
     expect(own?.current()).toBe(false);
     await expect(f.store.decide(ordinary.view.id, "confirm", { ...own, via: "web" })).rejects.toMatchObject({ code: "admin_required" });
     expect([f.any.settingsSelfConfirmation(f.store, f.req(session.sessionId), ordinary.view.id), ordinary.apply.mock.calls.length]).toEqual([null, 0]);
+  });
+  it("F2 — web-only fleet, strict mode: a correct authenticator code with the right digest, POSTed for a link opener over the public link, is refused (nothing applied); from a LAN device, or for an ordinary change over the link, it is accepted", async () => {
+    const f = fixture(false, true), outside = f.make({ link: true, remote: true }), lan = f.make();
+    vi.spyOn(f.any, "outsideLink").mockReturnValue({ exposureId: EXPOSURE });                      // the link "connections from outside" opened
+    const link = f.propose(true), ordinary = f.propose(false);
+    expect([f.any.settingsTotpState(f.store, f.req(outside.sessionId, "link"), link.view.id), f.any.settingsTotpState(f.store, f.req(outside.sessionId, "link"), ordinary.view.id)]).toEqual(["on_host", "ready"]);
+    expect(f.any.settingsSelfConfirmation(f.store, f.req(outside.sessionId, "link"), link.view.id)).toBeNull();     // strict: no Apply now off this computer, link or not
+    const refused = f.any.settingsTotpConfirm(f.store, f.req(outside.sessionId, "link"), link.view.id, codeAt(Date.now()), f.store.confirmDigest(link.view.id));
+    expect(refused).toEqual({ error: "not_here" });
+    expect(link.apply).not.toHaveBeenCalled();
+    // Controls: the same app confirms the link opener from a device on the LAN (a direct connection, not a link), and an ordinary change over the link.
+    expect(f.any.settingsTotpState(f.store, f.req(lan.sessionId, "lan"), link.view.id)).toBe("ready");
+    const r = f.any.settingsTotpConfirm(f.store, f.req(lan.sessionId, "lan"), link.view.id, codeAt(Date.now()), f.store.confirmDigest(link.view.id));
+    expect(r.label).toBe("Authenticator code");
+    const c = f.any.settingsTotpConfirm(f.store, f.req(outside.sessionId, "link"), ordinary.view.id, codeAt(Date.now() + 30_000), f.store.confirmDigest(ordinary.view.id));
+    expect(c.label).toBe("Authenticator code");
+    // On this computer nothing is asked in strict mode: Apply now, and no code is taken.
+    expect([f.any.settingsTotpState(f.store, f.req(lan.sessionId, "here"), link.view.id), f.any.settingsSelfConfirmation(f.store, f.req(lan.sessionId, "here"), link.view.id)?.label])
+      .toEqual([null, "This fleet's admin"]);
   });
 });

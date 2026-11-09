@@ -223,8 +223,11 @@ function verifiedAuthorityChange(old: unknown, next: unknown): Array<[string, un
   if ((old !== undefined && old !== null && !object(old)) || (next !== undefined && next !== null && !object(next))) return null;
   const a: Record<string, any> = object(old) ? old : {}, b: Record<string, any> = object(next) ? next : {};
   const changed = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(k => !same(a[k], b[k]));
-  if (changed.some(k => !["enabled", "loopback_only", "max_session_hours", "named_link", "quick_link"].includes(k))) return null;
+  if (changed.some(k => !["enabled", "loopback_only", "remote_confirm_code", "max_session_hours", "named_link", "quick_link"].includes(k))) return null;
   const held: Array<[string, unknown, unknown]> = [];
+  // AGEND-122: the owner's stricter option — turning it on tightens and applies at once; turning it off is confirmed (with the
+  // code, off this computer, while it is on: that is what keeps a session it restricts from lifting the restriction by itself).
+  if (a.remote_confirm_code === true && b.remote_confirm_code !== true) held.push(["remote_confirm_code", a.remote_confirm_code, b.remote_confirm_code]);
   if (a.named_link !== true && b.named_link === true) held.push(["named_link", a.named_link, b.named_link]);
   if (!quickLinkEffective(a) && quickLinkEffective(b)) held.push(["quick_link", a.quick_link, b.quick_link]);
   return held;
@@ -374,10 +377,10 @@ export interface SettingsChangeDiff {
   /** Private normalized effect scope, populated by prepareSettingsEffect. */
   authority?: SettingsChangeAuthority;
   /**
-   * #2453 (§0.2) / §0.3: the effect turns `web.verified_authority.named_link` or `quick_link` on, whatever else the change holds —
-   * judged from the config before and after (prepareSettingsEffect), never the body. It replaces the old noSelfConfirm /
-   * hostLocalConfirm / hostSessionOnly marks (AGEND-122): it is confirmed as any change is, and later steps use this one mark
-   * (a Notice for a confirmation from another device; never over a link while the owner asks for a code).
+   * #2453 (§0.2) / §0.3: the effect turns `web.verified_authority.named_link` or `quick_link` on, whatever else the change
+   * holds — judged from the config before and after (prepareSettingsEffect), never the body. AGEND-122: it is confirmed as
+   * any change is (a signed-in admin's Apply now), but every confirmation from another device posts a Notice, and while the
+   * owner asks for a code it is never confirmed over a link (fleet-manager.ts).
    */
   opensLink?: true;
 }

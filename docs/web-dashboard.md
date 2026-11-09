@@ -767,9 +767,10 @@ Changing access/F/C lists, secrets, connection destinations/order, public exposu
 
 Confirm the redacted diff in General as a fleet admin. If chat is unavailable, use the host command `agend settings confirm <id>`; Reject, expiry or session revocation does not apply the change. Apply retries must reuse the same `Idempotency-Key` and body, which returns the same request. After a terminal failure, review and submit a new key; secrets must be entered again. In the web app, a request waiting for confirmation shows as a card in any panel, with its countdown and **Withdraw** (see [`/settings`](#settings)).
 - **What the card says (#2868, reworded by AGEND-122).**
-  - A signed-in admin's change normally does not wait: it is confirmed as it is saved ("Confirmed by your account — applying."), from any device that can reach the dashboard. A card waits only for a page that cannot confirm by itself: one where **Only this computer can authorize** is on (it says only the AgEnD computer's browser can confirm).
+  - A signed-in admin's change normally does not wait: it is confirmed as it is saved ("Confirmed by your account — applying."), from any device that can reach the dashboard. A card waits only for a page that cannot confirm by itself: one whose owner asked for a code (it shows the code field), or one where **Only this computer can authorize** is on (it says only the AgEnD computer's browser can confirm).
   - A chat fleet's card still says where General's card is ("To apply it, press Confirm on the card in General on Discord"); **Apply now** is offered next to it when this session may confirm.
   - On a page that is not the AgEnD computer's own browser, the card never shows the host command `agend settings confirm <id>`. On the AgEnD computer it stays folded under **Advanced: confirm on the host**.
+  - While the owner's option **Ask for an authenticator code to confirm changes from other devices** is on, the card asks for the code of that change; with no authenticator set up it says to set one up on the AgEnD computer.
 
 **Which bot's admin can confirm?** Changes to existing connections require the
 admin of every affected connection, including both owners when an agent moves.

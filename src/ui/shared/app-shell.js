@@ -700,16 +700,16 @@ register("pendingHost", {
     post_failed_do: "Check General's chat connection in Settings → Chat & connections, then make the change again.",
     unknown: "No General could take the confirm card for this change.",
     go: "Open",
-    codeLead: "Or confirm it here with the code from your authenticator app.",
+    codeLead: "This fleet asks for an authenticator code to confirm changes from here. Enter the code your authenticator app shows.",
     codeLabel: "Authenticator code", codeGo: "Confirm",
     codeWrong: "That code is not right. Use the current code in your authenticator app.",
     codePaused: "Too many wrong codes. Try again in {0} minutes.",
     codeNotHere: "This page can no longer confirm it with a code.",
     codeUnavailable: "The code could not be checked. Try again.",
     codeChanged: "This change is no longer the one shown here. Reload the page and check it again.",
-    onHost: "This change can't be confirmed over a link. Confirm it in the browser on the computer running AgEnD, or in General.",
+    onHost: "A change that opens a public link can't be confirmed over a link. Confirm it from a direct connection, or in the browser on the computer running AgEnD.",
     hostOnly: "Only the computer running AgEnD can confirm changes here: “Only this computer can authorize” is turned on. Confirm it in the browser on that computer.",
-    codeSetUp: "To confirm changes here with a code, set up an authenticator app in Access & security.",
+    codeSetUp: "This fleet asks for an authenticator code to confirm changes from other devices, but no authenticator is set up. Set one up again on the computer running AgEnD (Settings → Access & security), or turn that option off there.",
   },
   "zh-TW": {
     no_chat: "這個 Fleet 沒有連接聊天平台，所以沒有 General 可以接收確認卡。",
@@ -726,16 +726,16 @@ register("pendingHost", {
     post_failed_do: "請到「設定 → 聊天與連線」檢查 General 的連線，再重新做一次這項變更。",
     unknown: "這項變更沒有 General 可以接收確認卡。",
     go: "前往",
-    codeLead: "也可以在這裡輸入驗證器 App 的代碼確認。",
+    codeLead: "這個 fleet 要求從這裡確認變更時輸入驗證器代碼。請輸入驗證器 App 目前顯示的代碼。",
     codeLabel: "驗證器代碼", codeGo: "確認",
     codeWrong: "代碼不正確，請使用驗證器 App 目前顯示的代碼。",
     codePaused: "錯誤次數太多，請 {0} 分鐘後再試。",
     codeNotHere: "這個頁面已無法用代碼確認這項變更。",
     codeUnavailable: "無法檢查代碼，請再試一次。",
     codeChanged: "這項變更已不是這裡顯示的內容，請重新整理頁面再確認一次。",
-    onHost: "這項變更無法透過連結確認。請在執行 AgEnD 的那台電腦的瀏覽器中確認，或在 General 確認。",
+    onHost: "會開放公開連結的變更無法透過連結確認。請改用直接連線，或在執行 AgEnD 的那台電腦的瀏覽器中確認。",
     hostOnly: "目前只有執行 AgEnD 的那台電腦能確認變更（已開啟「只有這台電腦可以授權」）。請到那台電腦的瀏覽器確認。",
-    codeSetUp: "若要在這裡用代碼確認變更，請先到「存取與安全」設定驗證器 App。",
+    codeSetUp: "這個 fleet 要求從其他裝置確認變更時輸入驗證器代碼，但還沒有設定驗證器。請到執行 AgEnD 的那台電腦，在「設定 → 存取與安全」重新設定驗證器 App，或在那裡關閉這個選項。",
   },
 });
 const PENDING_HOST_REASONS = ["no_chat", "cross_platform", "no_general", "chat_disconnected", "no_topic", "post_failed"];
@@ -774,11 +774,11 @@ function PendingHow({ p }) {
   const go = why && Object.hasOwn(PENDING_HOST_GO, why) ? PENDING_HOST_GO[why] : null;
   const apply = async () => { setRefused(false); const r = await p.applyNow(); if (!r || !r.ok) setRefused(true); };
   return html`<p class="note">${lead}</p>
-    ${why ? html`<p class="note pending-why">${t(`pendingHost.${why}_do`)}${go ? html` <a class="btn btn-sm" href=${settingsPath(go)}>${t("pendingHost.go")}</a>` : null}</p>` : null}
+    ${why && !p.confirmWithCode && !p.totpNotSetUp && !p.hostOnly ? html`<p class="note pending-why">${t(`pendingHost.${why}_do`)}${go ? html` <a class="btn btn-sm" href=${settingsPath(go)}>${t("pendingHost.go")}</a>` : null}</p>` : null}
     ${p.confirmWithCode && !p.applyNow ? html`<${PendingCode} p=${p} />` : null}
     ${p.onHost && !p.applyNow ? html`<p class="note pending-on-host">${t("pendingHost.onHost")}</p>` : null}
     ${p.hostOnly && !p.applyNow ? html`<p class="note pending-host-only">${t("pendingHost.hostOnly")}</p>` : null}
-    ${p.totpNotSetUp && !p.applyNow ? html`<p class="note pending-code-setup">${t("pendingHost.codeSetUp")} <a class="btn btn-sm" href=${settingsPath("access")}>${t("pendingHost.go")}</a></p>` : null}
+    ${p.totpNotSetUp && !p.applyNow ? html`<p class="note pending-code-setup">${t("pendingHost.codeSetUp")}</p>` : null}
     ${p.applyNow ? html`<div class="pending-self"><span class="note">${t("app.pendingSelf")}</span>
       <button type="button" class="btn btn-sm btn-primary" onClick=${apply}>${t("app.pendingApplyNow")}</button></div>` : null}
     ${refused && !p.applyNow ? html`<p class="note" role="status">${t("app.pendingApplyRefused")}</p>` : null}

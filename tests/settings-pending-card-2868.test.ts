@@ -120,7 +120,7 @@ describe("this session (a signed-in admin)", () => {
     const c = await card(view({ can_self_confirm: true }), "en",
       { [`/api/settings/pending/${ID}/confirm`]: { __status: 403, error: "self_confirm_unavailable" } });
     fire(c.button("Apply now"), "click"); await settle(4);
-    expect([c.button("Apply now"), c.text().includes("This browser can't apply it here now. Another way to confirm it: the card in General, if this fleet has chat."), c.text().includes("press Confirm on the card in General")])
+    expect([c.button("Apply now"), c.text().includes("This browser can't apply it here now. Another way to confirm it: the card in General (if this fleet has chat), or the code if your owner asks for one."), c.text().includes("press Confirm on the card in General")])
       .toEqual([undefined, true, true]);
   });
 });
@@ -160,9 +160,24 @@ describe("confirm with the authenticator code (strict mode: the owner asks for a
     input.value = code; fire(input, "input"); await settle(3);
     fire(c.p.root.querySelector(".pending-card form.pending-code")!, "submit"); await settle(6);
   };
+  it("ready: a code field and Confirm; the code goes with this change's digest; no host command on a remote page", async () => {
+    const c = await withCode({ __status: 202, ok: true, result: "pending_confirmation", pending_change: view({ state: "applying" }) });
+    const input = c.p.root.querySelector(".pending-card .pending-code-input") as any;
+    expect([!!input, c.text()]).toEqual([true, expect.stringContaining("This fleet asks for an authenticator code to confirm changes from here. Enter the code your authenticator app shows.")]);
+    expect(c.text()).not.toContain("Or confirm it here");
+    expect(c.fold(), "a remote page shows no host command").toBe(null);
+    await enter(c, "123 456");
+    const call = c.calls.find(([m, u]) => m === "POST" && u.endsWith("/confirm-totp"));
+    expect(call).toBeDefined();
+    expect(call![2], "spaces dropped; the change's own digest goes with the code").toEqual({ code: "123456", digest: DIGEST });
+  });
   it("ready, on the AgEnD computer's own page (not remote): the field and the folded command both", async () => {
     const c = await withCode({ __status: 200 }, "en", "ready", { remote: false });
     expect([!!c.p.root.querySelector(".pending-code-input"), c.fold()?.querySelector("code").textContent]).toEqual([true, `agend settings confirm ${ID}`]);
+  });
+  it("zh-TW: the code lead is in Chinese", async () => {
+    const c = await withCode({ __status: 200 }, "zh-TW");
+    expect(c.text()).toContain("這個 fleet 要求從這裡確認變更時輸入驗證器代碼。請輸入驗證器 App 目前顯示的代碼。");
   });
   it.each([
     [{ __status: 401, error: "wrong_code" }, "That code is not right. Use the current code in your authenticator app."],
@@ -173,6 +188,11 @@ describe("confirm with the authenticator code (strict mode: the owner asks for a
     await enter(c, "123456");
     expect(c.text()).toContain(words);
   });
+  it("over a link (on_host): no field — a change that opens a public link can't be confirmed over a link; never a host command", async () => {
+    const c = await withCode({ __status: 200 }, "en", "on_host");
+    expect([!!c.p.root.querySelector(".pending-code-input"), c.text()]).toEqual([false, expect.stringContaining("A change that opens a public link can't be confirmed over a link. Confirm it from a direct connection, or in the browser on the computer running AgEnD.")]);
+    expect([c.fold(), (c.p.root.querySelector(".pending-card")!.textContent ?? "").includes("agend settings confirm"), c.button("Apply now")]).toEqual([null, false, undefined]);
+  });
   it("host_only (“Only this computer can authorize” is on): no field, no Apply now — only the AgEnD computer's own browser confirms", async () => {
     const c = await withCode({ __status: 200 }, "en", "host_only");
     expect(c.text()).toContain("Only the computer running AgEnD can confirm changes here: “Only this computer can authorize” is turned on. Confirm it in the browser on that computer.");
@@ -182,6 +202,13 @@ describe("confirm with the authenticator code (strict mode: the owner asks for a
   it("host_only, zh-TW", async () => {
     const c = await withCode({ __status: 200 }, "zh-TW", "host_only");
     expect(c.text()).toContain("目前只有執行 AgEnD 的那台電腦能確認變更（已開啟「只有這台電腦可以授權」）。請到那台電腦的瀏覽器確認。");
+  });
+  it("no authenticator set up (strict mode on, no app): says so, plain text — no link, no field; repair it on the AgEnD computer", async () => {
+    const c = await withCode({ __status: 200 }, "en", "not_set_up");
+    expect(c.text()).toContain("This fleet asks for an authenticator code to confirm changes from other devices, but no authenticator is set up. Set one up again on the computer running AgEnD (Settings → Access & security), or turn that option off there.");
+    expect([!!c.p.root.querySelector(".pending-code-input"), c.p.root.querySelector(".pending-code-setup a")]).toEqual([false, null]);
+    const zh = await withCode({ __status: 200 }, "zh-TW", "not_set_up");
+    expect(zh.text()).toContain("這個 fleet 要求從其他裝置確認變更時輸入驗證器代碼，但還沒有設定驗證器。請到執行 AgEnD 的那台電腦，在「設定 → 存取與安全」重新設定驗證器 App，或在那裡關閉這個選項。");
   });
   it("Apply now wins: a session the server lets apply (can_self_confirm) gets no code field and no host-only / on-host line", async () => {
     const c = await withCode({ __status: 200 }, "en", "ready", { can_self_confirm: true });

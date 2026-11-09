@@ -58,8 +58,10 @@ export interface SettingsPendingView {
   can_withdraw: boolean;
   /** #2868: the browser that reads it may confirm it itself now (#2170's rule, asked at that read): "Apply now". */
   can_self_confirm?: boolean;
-  /** AGEND-122: why this page is told only where to confirm: "Only this computer can authorize" is on (`host_only`). */
-  totp?: "host_only";
+  /** alpha.6 #2c (hmsg-468cc290): this page may confirm it with the authenticator's code (ready), or could once one is set up. */
+  totp?: "ready" | "not_set_up" | "on_host" | "host_only";
+  /** B2b: with `totp` ready, the change's digest the page sends back with the code (one code confirms only this change). */
+  confirm_digest?: string;
   /**
    * AGEND-122: this page is not the browser on the AgEnD computer itself (a LAN, tailnet or link connection). Only about
    * what the page says: it names no host command and no "go to that computer" step the reader cannot take. It grants
@@ -209,9 +211,9 @@ export class SettingsConfirmationStore {
     if (entry.requestFingerprint !== fingerprint) throw new SettingsConfirmationError(409, "idempotency_key_reused");
     return this.snapshot(entry);
   }
-  /** AGEND-122: the change turns the named or quick link option on. */
-  opensLink(id: string): boolean { return this.records.get(id)?.proposal?.opensLink === true; }
   affectedConnections(id: string): readonly string[] { return this.records.get(id)?.proposal?.affectedConnections ?? []; }
+  /** AGEND-122: the change turns the named or quick link option on (a Notice for every confirmation from another device). */
+  opensLink(id: string): boolean { return this.records.get(id)?.proposal?.opensLink === true; }
   /** B2b (#3352 security review, point 2): what an authenticator code confirms — this change as the page showed it. */
   confirmDigest(id: string): string | null { const e = this.records.get(id); return e ? settingsFingerprint([id, e.fingerprint]).slice(0, 32) : null; }
   authorityOf(id: string): SettingsChangeAuthority | null {

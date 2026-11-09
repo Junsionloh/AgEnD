@@ -136,6 +136,8 @@ export interface SettingsApiContext extends AppShellContext {
   sendGuestCodeByAdmin?(owner: { adapterId: string; userId: string }, by: string, current?: () => boolean): Promise<{ status: number; body: Record<string, unknown> }>;
   /** #1939 S2a: Settings → Web → Web authority — what is in force, the actions to pick from, and the revocation. */
   webAuthorityOverview?(): unknown;
+  /** AGEND-122: an authenticator is set up — the owner's stricter option (`remote_confirm_code`) can only be turned on while one is. */
+  authenticatorEnrolled?(): boolean;
   revokeWebAuthority?(): { epoch: number; durable: boolean };
   readonly webToken?: string | null;
   readonly webSessions?: import("./web-session.js").WebSessionStore | null;
@@ -1280,6 +1282,8 @@ export function handleSettingsRequest(
       }
       // #1939 S2a: web authority; loosening it is confirmed, tightening applies at once (settings-change.ts).
       if (parsed.verifiedAuthority) {
+        // AGEND-122: asking for the code needs an app to give it — never turned on with none set up (it would lock this page out).
+        if (parsed.verifiedAuthority.remote_confirm_code === true && ctx.authenticatorEnrolled?.() !== true) return json(res, 409, { error: "authenticator_required" });
         const applied = applyVerifiedAuthorityPatch(cfg.web?.verified_authority, parsed.verifiedAuthority);
         if (applied.next) web.verified_authority = applied.next; else delete web.verified_authority;
         changes.push(...applied.changes);
