@@ -48,7 +48,7 @@ describe("agend-runtime login claude-code NAME", () => {
   });
   it("supports Claude Code only, and takes no server, name or credential-profile option", async () => {
     const f = setup();
-    await expect(f.run(["login", "codex", "work"])).rejects.toThrow(/Claude Code only/);
+    await expect(f.run(["login", "codex", "work"])).rejects.toThrow(/Claude Code and Antigravity only/);
     await expect(f.run(["login", "claude-code"])).rejects.toThrow(/Usage/);
     await expect(f.run(["login", "claude-code", "work", "extra"])).rejects.toThrow();
     await expect(f.run(["login", "claude-code", "work", "--server", "https://x.test"])).rejects.toThrow(/Usage|only by connect/);

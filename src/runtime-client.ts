@@ -8,7 +8,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { WindowsCliBridge, nativeWindowsTransport, WINDOWS_CLI_INVENTORY_FILE, type WindowsCliProbe, type WindowsCliTask, type WindowsRunOptions } from "./windows-cli.js";
-import { refreshNativeModels, probeDefaultLogin, probeCredentialProfileStatus, validateNativeTask, validWindowsAgentId, type CredentialProfileAnswer, type NativeTaskInput } from "./windows-cli-worker.js";
+import { refreshNativeModels, deleteWindowsCredential, probeCredentialIsolation, probeDefaultLogin, probeCredentialProfileStatus, validateNativeTask, validWindowsAgentId, type CredentialProfileAnswer, type NativeTaskInput } from "./windows-cli-worker.js";
 import { validNativeSessionId, type NativeMcpConnection } from "./windows-cli-providers.js";
 import { RUNTIME_CREDENTIAL_CAPABILITY, credentialLoginRequired, credentialProfileReport, isCredentialProfileCli, listCredentialProfileNames, rememberCredentialStatus, requireCredentialProfile, credentialCacheStamp,
   assertCredentialProfileName, assertCredentialProfileCli, type CredentialProfileCli, type CredentialProfileReport } from "./runtime-credential-profiles.js";
@@ -20,7 +20,7 @@ import { ProcessNotConfirmedEnded, RemoteAccounts, type RemoteAccountsDeps, type
 import { isCreatedProfile } from "./runtime-profile-ownership.js";
 import { killTree } from "./runtime-signin.js";
 import { CLI_INSTALL_CAPABILITY, CLI_UPDATE_CAPABILITY, MODEL_REFRESH_CAPABILITY, REMOTE_SIGNIN_CAPABILITY } from "./runtime-remote-setup.js";
-import { runtimeSignInCapabilities } from "./cli-registry.js";
+import { runtimeAccountsCapabilities, runtimeIds, runtimeSignInCapabilities } from "./cli-registry.js";
 import { managedCliRoot, managedInstaller, nativeInstallSupported } from "./runtime-cli-install.js";
 import { isRuntimeRemoteOperation } from "./runtime-protocol.js";
 import { PANE_IN_PROCESS_DIRECTORY, paneLedgerFiles } from "./runtime-pane-store.js";
@@ -91,6 +91,8 @@ export interface RuntimeClientOptions {
   credentialProfilesRoot?: string;
   /** Test seam; production asks the CLI itself (`claude auth status` under that profile's folder). */
   credentialLogin?: (cli: CredentialProfileCli, directory: string) => Promise<boolean | null>;
+  /** Test seam: how the isolation probe's status command is run (AGEND-124); production runs the CLI. */
+  credentialIsolationRun?: Parameters<typeof probeCredentialProfileStatus>[3];
   /** Test seam for the same check with the account in it (masked e-mail, plan). Wins over `credentialLogin`. */
   credentialStatus?: (cli: CredentialProfileCli, directory: string, authorized?: () => boolean) => Promise<CredentialProfileAnswer>;
   /** How often to look for a sign-in made by `agend-runtime login` in another window (default 5 s). */
@@ -102,7 +104,7 @@ export interface RuntimeClientOptions {
    */
   /** The Runtime's installation root, where the shared install lock is taken for a CLI install. Default: the managed install root this code runs from, else the CLI folder. */
   installRoot?: string;
-  remoteAccounts?: Partial<Pick<RemoteAccountsDeps, "find" | "defaultStatus" | "runLogout" | "installer" | "signIn" | "ownership" | "environment" | "now" | "switchWatchMs" | "models">> & { systemBootId?: () => Promise<string | undefined> };
+  remoteAccounts?: Partial<Pick<RemoteAccountsDeps, "find" | "defaultStatus" | "runLogout" | "isolated" | "deleteCredential" | "installer" | "signIn" | "ownership" | "environment" | "now" | "switchWatchMs" | "models">> & { systemBootId?: () => Promise<string | undefined> };
   /** Internal supervisor seam, never a server-supplied configuration option. */
   managedUpdate?: { trialId?: string; authenticated?(value: { bootId: string; generation: number; updateProtocol?: 1; runtimeInfo: ReturnType<typeof readRuntimeInfo> }): void };
   /** Isolated tests can supply a private pane service. Production uses attach-only discovery and physical exit proof. */
@@ -225,7 +227,7 @@ export class RuntimeClient {
     this.runtimeInfo = { ...info, capabilities: [...info.capabilities.filter(name => options.credentialProfilesRoot || name !== RUNTIME_CREDENTIAL_CAPABILITY), ...(options.managedUpdate ? [RUNTIME_MANAGED_UPDATE_CAPABILITY] : []), ...(this.updateStatus ? [RUNTIME_UPDATE_STATUS_CAPABILITY] : [])] };
     // Remote account operations need the profile folder, and a way to run the Windows CLI (native Windows, or a test's own). `cli-install` also needs an installer.
     const remote = !!options.credentialProfilesRoot && (process.platform === "win32" || !!options.remoteAccounts);
-    this.runtimeInfo = { ...this.runtimeInfo, capabilities: this.runtimeInfo.capabilities.filter(name => (name === REMOTE_SIGNIN_CAPABILITY || name === MODEL_REFRESH_CAPABILITY || runtimeSignInCapabilities().includes(name)) ? remote : (name === CLI_INSTALL_CAPABILITY || name === CLI_UPDATE_CAPABILITY) ? remote && !!(options.remoteAccounts?.installer || nativeInstallSupported()) : true) };
+    this.runtimeInfo = { ...this.runtimeInfo, capabilities: this.runtimeInfo.capabilities.filter(name => (name === REMOTE_SIGNIN_CAPABILITY || name === MODEL_REFRESH_CAPABILITY || runtimeSignInCapabilities().includes(name) || runtimeAccountsCapabilities().includes(name)) ? remote : (name === CLI_INSTALL_CAPABILITY || name === CLI_UPDATE_CAPABILITY) ? remote && !!(options.remoteAccounts?.installer || nativeInstallSupported()) : true) };
     this.bridge = options.bridge ?? new WindowsCliBridge(nativeWindowsTransport, join(options.store.directory, WINDOWS_CLI_INVENTORY_FILE));
   }
   private report(text: string): void { this.options.report?.(text); }
@@ -531,11 +533,11 @@ export class RuntimeClient {
   private async credentialHome(cli: string, name: string): Promise<string> {
     const root = this.options.credentialProfilesRoot;
     if (!root) throw new Error("This Runtime has no credential profile folder, so it cannot select an account. Update or restart the Runtime.");
-    if (!isCredentialProfileCli(cli)) throw new Error("Credential profiles on a Windows Runtime support Claude Code only");
-    const directory = requireCredentialProfile(root, cli, name);
-    const answer = await this.statusOf(cli, directory);
-    this.remember(root, cli, name, answer);
-    if (answer.loggedIn !== true) throw credentialLoginRequired(cli, name, answer.loggedIn);
+    const kind = assertCredentialProfileCli(cli);   // throws, naming the CLIs that have accounts here
+    const directory = requireCredentialProfile(root, kind, name);
+    const answer = await this.statusOf(kind, directory);
+    this.remember(root, kind, name, answer);
+    if (answer.loggedIn !== true) throw credentialLoginRequired(kind, name, answer.loggedIn);
     return directory;
   }
   /** Names and signed-in yes/no only. `force` (an explicit "Detect again") asks each profile's CLI; otherwise the last known answer is reported. */
@@ -543,13 +545,14 @@ export class RuntimeClient {
     const root = this.options.credentialProfilesRoot; if (!root) return undefined;
     // `authorized` (an install's live consent and connection check) is asked before each profile's status is started and again before its answer is written to the cache.
     const still = (): void => { if (authorized && !authorized()) throw new Error("Authorization expired during CLI discovery"); };
-    if (force) for (const name of listCredentialProfileNames(root, "claude-code")) {
+    // Every CLI that has accounts on this computer (Claude Code, Antigravity), each profile asked of its own CLI under its own launch.
+    if (force) for (const cli of runtimeIds("namedAccounts") as CredentialProfileCli[]) for (const name of listCredentialProfileNames(root, cli)) {
       still();
-      try { const answer = await this.statusOf("claude-code", requireCredentialProfile(root, "claude-code", name), authorized); still(); this.remember(root, "claude-code", name, answer); }
-      catch { still(); this.remember(root, "claude-code", name, { loggedIn: null }); }
+      try { const answer = await this.statusOf(cli, requireCredentialProfile(root, cli, name), authorized); still(); this.remember(root, cli, name, answer); }
+      catch { still(); this.remember(root, cli, name, { loggedIn: null }); }
     }
     let name: string | undefined; try { name = this.options.store.credentialDefault(); } catch { /* reported as no default; a run refuses with the real error */ }
-    return credentialProfileReport(root, name, profile => isCreatedProfile(root, "claude-code", profile));
+    return credentialProfileReport(root, name, (cli, profile) => isCreatedProfile(root, cli, profile));
   }
   private computerBoot: Promise<string | undefined> | undefined;
   private computerBootValue: string | undefined;
@@ -600,6 +603,10 @@ export class RuntimeClient {
       noteLogin: (cli, loggedIn) => this.bridge.noteAuthenticated?.(cli, loggedIn),
       environment: extra?.environment ?? (() => nativeCliEnvironment()),
       runLogout: extra?.runLogout ?? ((executable, args, env) => runLogoutProcess(executable, args, env)),
+      // AGEND-124: the proof that an Antigravity account's sign-in stays in its own folder (an empty scratch folder must answer "signed out"), and the Credential Manager entry of the computer's own login.
+      isolated: extra?.isolated ?? ((cli, scratch) => probeCredentialIsolation(cli, scratch, extra?.find ? id => extra.find!(id as CredentialProfileCli) : undefined, this.options.credentialIsolationRun)),
+      deleteCredential: extra?.deleteCredential ?? (name => deleteWindowsCredential(name, extra?.environment?.() ?? undefined)),
+      taskRunning: () => this.active.size > 0,
       inUse: name => this.profileInUse(name), inUseNow: name => this.profileInUseNow(name), report: text => this.report(text),
       // Throws when `credential-default.json` cannot be read: an unreadable default is not "no default" (the remove then answers `unconfirmed`).
       defaultProfile: () => this.options.store.credentialDefault(),

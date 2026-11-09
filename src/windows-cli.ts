@@ -8,7 +8,7 @@ import { atomicWriteFileSync } from "./atomic-write.js";
 import { dirname, join, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validWindowsAgentId, validWindowsDirectory, validateNativeTask, withAuthenticated, type NativeCliRow, type NativeTaskInput } from "./windows-cli-worker.js";
-import type { CredentialProfileReport } from "./runtime-credential-profiles.js";
+import { isCredentialProfileCli, type CredentialProfileReport } from "./runtime-credential-profiles.js";
 import { isNativeProviderId, parseNativeProviderEvent, validateNativeMcpConnection, type NativeMcpConnection, type NativeProviderId } from "./windows-cli-providers.js";
 
 const exec = promisify(execFile);
@@ -202,7 +202,7 @@ export class WindowsCliBridge {
     const input = validateNativeTask(value);
     if (options.mcp) options = {...options,mcp:validateNativeMcpConnection(options.mcp)};
     if (options.context !== undefined && (typeof options.context !== "string" || options.context.length > 2000 || options.context.includes("\0"))) throw new Error("Invalid native task context");
-    if (options.credentialHome !== undefined && (input.cli !== "claude-code" || !validWindowsDirectory(options.credentialHome))) throw new Error("Invalid credential profile folder");
+    if (options.credentialHome !== undefined && (!isCredentialProfileCli(input.cli) || !validWindowsDirectory(options.credentialHome))) throw new Error("Invalid credential profile folder");
     const old = this.tasks.get(input.requestId);
     if (old) {
       if (JSON.stringify(old.input) !== JSON.stringify(input)) throw new Error("requestId already belongs to another task");

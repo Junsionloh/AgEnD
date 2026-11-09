@@ -154,6 +154,11 @@ export type NamedAccountFacts =
   | { readonly env: string; readonly home: "relocate-home" | "redirect-files" }
   | { readonly home: "launch-argument"; readonly arg: string; readonly store: string; readonly pin: Readonly<Record<string, string>> };
 
+/** How a named account on a computer is told apart (see `runtime.namedAccounts`). */
+export type RuntimeNamedAccountFacts =
+  | { readonly env: string }
+  | { readonly arg: string; readonly store: string; readonly pin: Readonly<Record<string, string>> };
+
 /** Every capability a CLI has on a paired Windows computer, as its Runtime reports and does it. */
 /**
  * What a Runtime install's pinned version vouches for: `audited` — the pin is a release AgEnD has audited (the upstream rule for npm CLIs: "the audited version, not latest"); `integrity` — it is
@@ -175,12 +180,23 @@ export interface RuntimeCapabilities {
   readonly update: Cap<{ kind: "pinned" | "latest-unaudited" }>;
   /**
    * The dashboard signs it in on that computer: the exact command, and whose login it is: a `named` profile this Runtime created (nothing else is touched), or `none`: the
-   * computer's OWN login (a CLI that keeps one login per Windows user and has no profile folder; signing in REPLACES it, which is why only a CLI whose spec says `none` may, and the
-   * computer's owner must have turned `accounts` on). A `none` is announced to the server by a capability of its own (`signin-<id>`, runtimeSignInCapability).
+   * computer's OWN login (a CLI that keeps one login per Windows user and has no profile folder; signing in REPLACES it, which is why only a CLI whose spec says `none` or `both` may, and the
+   * computer's owner must have turned `accounts` on), or `both` (AGEND-124, Antigravity: the computer's own login AND named accounts, each with its own rules). A `none` or `both` is announced
+   * to the server by a capability of its own (`signin-<id>`, runtimeSignInCapability).
    */
-  readonly signIn: Cap<{ argv: readonly string[]; profile: "named" | "none" }>;
-  /** Named accounts on that computer: the variable that points the CLI at the profile's folder. */
-  readonly namedAccounts: Cap<{ env: string }>;
+  readonly signIn: Cap<{ argv: readonly string[]; profile: "named" | "none" | "both" }>;
+  /**
+   * Named accounts on that computer: how the CLI is pointed at the profile's folder. `env`: the variable that does it (Claude Code). `arg`/`store`/`pin` (AGEND-124, Antigravity): the same launch-argument
+   * facts as `host.namedAccounts` (a path relative to the CLI's own home, the file the sign-in is kept in, and the variables that keep it there: never in the Credential Manager, where one folder's sign-in would
+   * be every folder's). They must be the host's, word for word (cli-registry-check.ts).
+   */
+  readonly namedAccounts: Cap<RuntimeNamedAccountFacts>;
+  /**
+   * Sign out from the dashboard on that computer: the CLI's own logout (`binary`, `args`, run under the profile's folder), or — for a CLI that has none (Antigravity) — the files AgEnD's Runtime removes itself
+   * (`remove`: names inside a named account's folder) and, for the computer's own login, the Credential Manager entry (`credential`) the CLI keeps it in. Either way the answer is then checked with the CLI's own
+   * status probe, so a sign-out that did not take effect is reported as that.
+   */
+  readonly signOut: Cap<{ binary: string; args: readonly string[] } | { remove: readonly string[]; credential: string }>;
   /** The Accounts page shows that computer's accounts of this CLI; `defaultRow`: the computer's own login is `read-only` there (a named account is added instead), or can be signed in (`sign-in`). */
   readonly accountRows: Cap<{ defaultRow: "read-only" | "sign-in" }>;
   /**
@@ -202,7 +218,7 @@ export interface CliSpec {
 
 /** `host.install`, `runtime.signIn`, …: every capability's address, in the order the specs and the gap report list them. */
 export const HOST_CAPABILITIES = Object.freeze(["install", "update", "chatLogin", "dashboardSignIn", "structuredSignIn", "firstRunSignIn", "authCheck", "identity", "namedAccounts", "signOut", "keepAlive", "accountCard", "usage"] as const satisfies readonly (keyof HostCapabilities)[]);
-export const RUNTIME_CAPABILITIES = Object.freeze(["provider", "install", "update", "signIn", "namedAccounts", "accountRows", "authStatus", "identity", "usage"] as const satisfies readonly (keyof RuntimeCapabilities)[]);
+export const RUNTIME_CAPABILITIES = Object.freeze(["provider", "install", "update", "signIn", "namedAccounts", "signOut", "accountRows", "authStatus", "identity", "usage"] as const satisfies readonly (keyof RuntimeCapabilities)[]);
 // Compile-time: the two lists above name every field of the interfaces (a capability added to an interface and not here fails the build).
 const _hostListed: [Exclude<keyof HostCapabilities, typeof HOST_CAPABILITIES[number]>] extends [never] ? true : never = true;
 const _runtimeListed: [Exclude<keyof RuntimeCapabilities, typeof RUNTIME_CAPABILITIES[number]>] extends [never] ? true : never = true;

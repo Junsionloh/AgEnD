@@ -32,6 +32,7 @@ export const MUSE_SPEC = {
     update: none("Muse's launcher updates itself in the background and has no update command."),
     signIn: notApplicable("AgEnD has no sign-in flow for Muse."),
     namedAccounts: toVerify("Whether `muse` on Windows can keep more than one login side by side has not been checked."),
+    signOut: notApplicable("AgEnD has no sign-in flow for Muse, so nothing to sign out."),
     accountRows: notYetBuilt("undecided", "Accounts shows a computer's Claude Code accounts only."),
     authStatus: notYetBuilt("undecided", "The Windows adapter has no sign-in probe for Muse (`authProbe` is null); its state is unknown, not signed out."),
     identity: notApplicable("Needs a sign-in probe on the computer first."),

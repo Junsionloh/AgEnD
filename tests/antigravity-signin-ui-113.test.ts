@@ -98,7 +98,7 @@ describe("a computer's Antigravity login", () => {
     expect(text(machineBox().querySelector(".s-account-machine-head strong"))).toBe("On Desk PC");
     expect(actions(mrow())).toEqual(["Sign in"]);
     expect(labels(card().querySelector(".s-account-head"))).toEqual([]);          // no + Add account on this card
-    expect(text(mrow())).toContain("Antigravity keeps one sign-in per computer. Signing in here replaces the one on Desk PC.");
+    expect(text(mrow())).toContain("This is the Windows user's own Antigravity sign-in on Desk PC, one for the whole computer. Signing in here replaces it; use + Add account to keep another one beside it.");
     expect(machineBox().querySelectorAll(".s-account-row").length).toBe(1);
     current = view([machineRow({ state: "usable" })]); await p.unmount(); A.accountsStore.set({ loaded: false, failed: false, view: null }); await mount();
     expect(actions(mrow())).toEqual(["Sign in again"]);

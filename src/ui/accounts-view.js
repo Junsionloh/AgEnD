@@ -62,7 +62,7 @@ register("accounts", {
     why_default_login: "This is the Windows user's own connection on {0}. It is never changed from here: add an account instead.",
     why_cli_old: "{1} on {0} is too old to connect from here (it needs {2} or newer). Update it on that computer.",
     why_cli_missing: "{1} is not installed on {0}.",
-    machineOneLogin: "{1} keeps one connection per computer. Connecting here replaces the one on {0}.",
+    machineOneLogin: "This is the Windows user's own {1} connection on {0}, one for the whole computer. Connecting here replaces it; use + Add account to keep another one beside it.",
     acctLabel: "Account", acctInherit: "Fleet default ({0})", acctInheritDefault: "Fleet default (default connection)", acctNotSignedIn: "{0} — not connected",
     acctHint: "Changing the account restarts the agent. A disconnected account can't be chosen: connect it under Accounts first.",
     acctHintCreate: "The new agent connects with this account from its first start. A disconnected account can't be chosen: connect it under Accounts first.",
@@ -95,7 +95,7 @@ register("accounts", {
     why_default_login: "這是 {0} 上 Windows 使用者自己的連接，永遠不會從這裡更改：請改用新增帳號。",
     why_cli_old: "{0} 上的 {1} 版本太舊，無法從這裡連接（需要 {2} 或更新）。請在那台電腦上更新它。",
     why_cli_missing: "{0} 上沒有安裝 {1}。",
-    machineOneLogin: "{1} 每台電腦只能有一個連接。在這裡連接會取代 {0} 上現有的連接。",
+    machineOneLogin: "這是 {0} 上 Windows 使用者自己的 {1} 連接，整台電腦只有一個。在這裡連接會取代它；要另外保留一個，請用「＋新增帳號」。",
     acctLabel: "帳號", acctInherit: "Fleet 預設（{0}）", acctInheritDefault: "Fleet 預設（預設連接）", acctNotSignedIn: "{0}——尚未連接",
     acctHint: "更換帳號會重新啟動 Agent。尚未連接的帳號不能選，請先在「帳號」連接。",
     acctHintCreate: "新 Agent 從第一次啟動就會使用這個帳號。尚未連接的帳號不能選，請先在「帳號」連接。",
@@ -249,7 +249,7 @@ export function AccountsView({ instances, stageAgent, stageDefault, openAgent })
       onSignOut=${begin((row, mode) => setSigningOut({ cli, row, mode }))} />`)}
     ${move ? html`<${MoveDialog} cli=${move.cli} row=${move.row} instances=${instances} stageAgent=${stageAgent} onClose=${() => setMove(null)} />` : null}
     ${adding ? html`<${AddAccountDialog} cli=${adding.machine ? adding.cli : adding} machine=${adding.machine || null} label=${cliLabel((adding.machine ? adding.cli : adding).backend)} onClose=${() => setAdding(null)}
-      onAdded=${(name) => { const mine = ++interaction.current, a = adding; void (a.machine ? machineAdded(a.machine, name, () => mounted.current && interaction.current === mine) : accountAdded(a.backend, name, () => mounted.current && interaction.current === mine)); }} />` : null}
+      onAdded=${(name) => { const mine = ++interaction.current, a = adding; void (a.machine ? machineAdded(a.machine, name, () => mounted.current && interaction.current === mine, a.cli.backend) : accountAdded(a.backend, name, () => mounted.current && interaction.current === mine)); }} />` : null}
     ${signingOut ? html`<${SignOutDialog} cli=${signingOut.cli} row=${signingOut.row} mode=${signingOut.mode} label=${cliLabel(signingOut.cli.backend)}
       onClose=${() => setSigningOut(null)} onMove=${(user) => moveUser(signingOut.cli.backend, user, openAgent)}
       onDone=${() => { const s = signingOut, mine = ++interaction.current; void signedOut(s, () => mounted.current && interaction.current === mine); }} />` : null}
@@ -275,10 +275,10 @@ async function accountAdded(backend, name, current) {
  * #3190 Part 3c: after + Add account on a computer: the server only checked the name (the folder is made by that computer's Runtime when the first sign-in starts), so
  * Sign in opens at once for the new name — while this is still the person's current interaction and no other dialog is open.
  */
-async function machineAdded(machine, name, current) {
+async function machineAdded(machine, name, current, backend) {
   await refreshAccounts({ fresh: true });
   if (!current() || shellStore.get().dialog) return;
-  openMachineSignIn({ machine, profile: name });
+  openMachineSignIn({ machine, profile: name, ...(backend ? { backend } : {}) });
 }
 /**
  * #3212 PR 3: after Sign out — the view and the sign-ins read again (reads begun after it); Switch account then opens
@@ -356,7 +356,7 @@ function MachineSection({ cli, m, running, openAgent, onAdd, onSignIn, onSignOut
   return html`<div class="s-account-machine" data-machine=${m.scope.id}>
     <div class="s-account-machine-head"><strong>${tx("machine", m.scope.name)}</strong>
       <span class=${`tag s-auth-state is-${online ? "usable" : "unknown"}`}>${online ? tx("machineOnline") : tx("machineOffline")}</span>
-      ${cli.profiles && cli.machineProfiles !== false && !level && typeof onAdd === "function" ? html`<button type="button" class="btn btn-sm s-account-add" disabled=${running} onClick=${() => onAdd(m.scope)}>${manageWords.add()}</button>` : null}</div>
+      ${cli.profiles && cli.machineProfiles !== false && !level && !m.rows.some((r) => r.scope.namedAccounts === false) && typeof onAdd === "function" ? html`<button type="button" class="btn btn-sm s-account-add" disabled=${running} onClick=${() => onAdd(m.scope)}>${manageWords.add()}</button>` : null}</div>
     ${level ? html`<p class="note s-account-why" role="status">${reasonText(level, m.scope.name)}</p>` : null}
     ${m.rows.map((row) => html`<${Row} key=${`m:${m.scope.id}:${row.profile || ""}`} cli=${cli} row=${row} running=${running} openAgent=${openAgent} onSignIn=${onSignIn} onSignOut=${onSignOut} onRemove=${onRemove} />`)}
   </div>`;
@@ -379,7 +379,8 @@ function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, ope
   // #3212 PR 3: a signed-in account of a CLI whose own logout the dashboard runs; Switch account on the default sign-in.
   // #3190 Part 3c: a computer's row is changed only where its Runtime allows it (`signIn`); never its default (the Windows user's own sign-in), never Move or Switch.
   const machine = row.scope && row.scope.kind === "machine" ? row.scope : null;
-  const manageable = !machine || (row.signIn && !!row.profile);
+  // AGEND-124: the computer's OWN login of a CLI whose Runtime signs it out (Antigravity: `signOutOwn`) is signed out from here too; Claude Code's never is.
+  const manageable = !machine || (row.signIn && (!!row.profile || row.signOutOwn === true));
   const canSignOut = manageable && typeof onSignOut === "function" && row.state === "usable" && SIGN_OUT_CLIS.has(row.backend);
   const who = identityText(row.identity);
   // AGEND-133 (#3521): a CLI that is not installed on the host gets Install on its default row (the server looks up the command; the page sends the CLI's id).
@@ -415,7 +416,7 @@ function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, ope
     ${canInstall && !installRun ? html`<p class="note s-account-why">${hostInstallText("notInstalled")}</p>` : null}
     ${!machine && !row.profile && !readOnly ? html`<${VersionLine} row=${row} label=${cliLabel(row.backend)} blocked=${running} />` : null}
     ${!machine && !row.profile ? html`<${HostInstallRun} backend=${row.backend} label=${cliLabel(row.backend)} />` : null}
-    ${machine && capsOf(row.backend) && capsOf(row.backend).runtimeDefaultLogin && row.signIn && !readOnly ? html`<p class="note s-account-why">${tx("machineOneLogin", machine.name, cliLabel(row.backend))}</p>` : null}
+    ${machine && capsOf(row.backend) && capsOf(row.backend).runtimeDefaultLogin && !row.profile && row.signIn && !readOnly ? html`<p class="note s-account-why">${tx("machineOneLogin", machine.name, cliLabel(row.backend))}</p>` : null}
     ${!readOnly && !machine && !row.signIn && row.update && row.state !== "too_old" ? html`<p class="note s-account-why">${tx("updateHint", cliLabel(row.backend))} <code>${row.update}</code></p>` : null}
     ${!readOnly && !row.signIn && row.hostCommand ? html`<details class="s-host-cli-help"><summary>${machine ? tx("machineCommand") : tx("hostCommand")}</summary><p class="note">${machine ? tx("machineCommandHint", machine.name) : tx("hostCommandHint")}</p>${machine ? html`<p class="s-host-cli-command"><code>${row.hostCommand}</code></p>` : null}</details>` : null}
     ${!readOnly && row.keepAlive && row.state !== "not_installed" && (!row.scope || row.scope.kind === "host") ? html`<${KeepAliveControl} row=${row} onSaved=${() => refreshAccounts({ fresh: true })} />` : null}

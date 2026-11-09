@@ -1,6 +1,7 @@
 import { STRUCTURED_PROFILE_BACKENDS } from "./structured-signin-transport.js";
 import { hubModeOf, hubNameOf, type HubSwitches } from "./hub-mode.js";
 import { validCredentialProfileName } from "./runtime-credential-profiles.js";
+import { MACHINE_ACCOUNT_CLIS } from "./accounts-view.js";
 import { CANVAS_WORKER_EXPERIMENTAL_MESSAGE } from "./web-experimental.js";
 import { MachineSlotLimitError } from "./windows-agents.js";
 import { daemonTopicMode } from "./web-only-fleet.js";
@@ -1212,7 +1213,7 @@ function handleBrowserBackendSignIns(req: IncomingMessage, res: ServerResponse, 
   // `?backend=<cli>&profile=<name>` addresses them for a named account on THIS host (profile-signins.ts). Nothing else is accepted in the query, and both are checked
   // in full before anything else happens.
   const keys = [...url.searchParams.keys()];
-  let target: { machine: string; profile?: string; backend?: RuntimeDefaultLoginCli } | null = null;
+  let target: { machine: string; profile?: string; backend?: RuntimeDefaultLoginCli } | null = null;   // backend + profile (AGEND-124): a named Antigravity account on a computer
   let account: { backend: string; profile: string } | null = null;
   if (keys.length) {
     const machine = url.searchParams.get("machine"), backend = url.searchParams.get("backend"), profile = url.searchParams.get("profile");
@@ -1221,6 +1222,8 @@ function handleBrowserBackendSignIns(req: IncomingMessage, res: ServerResponse, 
     if (shape && computer && !backend) target = { machine: machine!, profile };
     // `?machine=<id>&backend=<cli>` is that computer's OWN login of a CLI the registry says has none (`runtime.signIn.profile === "none"`: Antigravity): no profile in the address, and nothing but these two keys.
     else if (keys.length === 2 && new Set(keys).size === 2 && computer && isRuntimeDefaultLoginCli(backend) && !profile) target = { machine: machine!, backend };
+    // AGEND-124: `?machine=<id>&backend=<cli>&profile=<name>` is a NAMED account of a CLI other than Claude Code on that computer (the registry's `runtime.namedAccounts`: Antigravity): exactly these three keys.
+    else if (keys.length === 3 && new Set(keys).size === 3 && computer && profile && validCredentialProfileName(profile) && isRuntimeDefaultLoginCli(backend) && MACHINE_ACCOUNT_CLIS.has(backend)) target = { machine: machine!, backend, profile };
     else if (shape && backend !== null && STRUCTURED_PROFILE_BACKENDS.has(backend) && !machine) account = { backend, profile };   // a CLI whose named account is signed in with these controls (registry: `host.structuredSignIn.named`)
     else { json(res, 404, { error: "not_found" }); return true; }
   }

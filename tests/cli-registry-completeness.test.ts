@@ -64,6 +64,7 @@ claude-code runtime.usage not_yet_built undecided
 codex host.identity needs_verification
 codex runtime.signIn not_yet_built #3212
 codex runtime.namedAccounts not_yet_built #3212
+codex runtime.signOut not_yet_built #3212
 codex runtime.accountRows not_yet_built #3212
 codex runtime.identity needs_verification
 codex runtime.usage not_yet_built undecided
@@ -73,12 +74,12 @@ kiro-cli runtime.install by_design
 kiro-cli runtime.update by_design
 kiro-cli runtime.signIn not_yet_built undecided
 kiro-cli runtime.namedAccounts not_yet_built undecided
+kiro-cli runtime.signOut not_yet_built undecided
 kiro-cli runtime.accountRows not_yet_built undecided
 kiro-cli runtime.authStatus not_yet_built undecided
 kiro-cli runtime.identity not_applicable
 kiro-cli runtime.usage not_yet_built undecided
 antigravity host.dashboardSignIn by_design
-antigravity runtime.namedAccounts not_yet_built undecided
 antigravity runtime.identity by_design
 antigravity runtime.usage not_yet_built undecided
 grok host.structuredSignIn not_yet_built undecided
@@ -91,6 +92,7 @@ grok runtime.install by_design
 grok runtime.update by_design
 grok runtime.signIn not_yet_built undecided
 grok runtime.namedAccounts needs_verification
+grok runtime.signOut needs_verification
 grok runtime.accountRows not_yet_built undecided
 grok runtime.authStatus not_yet_built undecided
 grok runtime.identity not_applicable
@@ -109,6 +111,7 @@ muse runtime.install by_design
 muse runtime.update cli_has_none
 muse runtime.signIn not_applicable
 muse runtime.namedAccounts needs_verification
+muse runtime.signOut not_applicable
 muse runtime.accountRows not_yet_built undecided
 muse runtime.authStatus not_yet_built undecided
 muse runtime.identity not_applicable
@@ -124,6 +127,7 @@ opencode host.accountCard cli_has_none
 opencode host.usage cli_has_none
 opencode runtime.signIn not_applicable
 opencode runtime.namedAccounts needs_verification
+opencode runtime.signOut not_applicable
 opencode runtime.accountRows cli_has_none
 opencode runtime.authStatus not_yet_built undecided
 opencode runtime.identity not_applicable
@@ -270,13 +274,15 @@ describe("a CLI that leaves something out is caught", () => {
 describe("a sign-in with no profile (the computer's own login, which signing in REPLACES) is only set up whole", () => {
   const broken = (change: (specs: ReturnType<typeof copy>) => void): string[] => { const specs = copy(); change(specs); return checkCliRegistry(specs); };
   it("needs the row that signs it in, a way to tell it worked, the same command on both sides and no named accounts", () => {
-    expect(broken(specs => { specs.antigravity.runtime.accountRows = yes({ defaultRow: "read-only" }); })).toContainEqual(expect.stringContaining("antigravity: runtime.signIn has no profile (the computer's own login), so runtime.accountRows must say"));
-    expect(broken(specs => { specs.antigravity.runtime.authStatus = byDesign("taken away to see the sign-in notice it"); })).toContainEqual(expect.stringContaining("antigravity: runtime.signIn has no profile, but runtime.authStatus is not \"yes\""));
-    expect(broken(specs => { specs.antigravity.runtime.namedAccounts = yes({ env: "SOMETHING" }); })).toContainEqual(expect.stringContaining("antigravity: runtime.signIn has no profile, but runtime.namedAccounts is \"yes\""));
-    expect(broken(specs => { specs.antigravity.runtime.signIn = yes({ argv: ["agy", "login"], profile: "none" }); })).toContainEqual(expect.stringContaining("antigravity: runtime.signIn launches [\"agy\",\"login\"], host.structuredSignIn [\"agy\",\"acp\",\"--login\"]"));
-    expect(broken(specs => { specs.antigravity.host.structuredSignIn = byDesign("taken away to see the Runtime's sign-in notice it"); })).toContainEqual(expect.stringContaining("antigravity: runtime.signIn has no profile, but host.structuredSignIn is not \"yes\""));
+    expect(broken(specs => { specs.antigravity.runtime.accountRows = yes({ defaultRow: "read-only" }); })).toContainEqual(expect.stringContaining("antigravity: runtime.signIn covers the computer's own login, so runtime.accountRows must say"));
+    expect(broken(specs => { specs.antigravity.runtime.authStatus = byDesign("taken away to see the sign-in notice it"); })).toContainEqual(expect.stringContaining("antigravity: runtime.signIn covers the computer's own login, but runtime.authStatus is not \"yes\""));
+    // `none` is a sign-in with no named accounts; `both` (Antigravity, AGEND-124) needs them.
+    expect(broken(specs => { specs.antigravity.runtime.signIn = yes({ argv: ["agy", "acp", "--login"], profile: "none" }); })).toContainEqual(expect.stringContaining("antigravity: runtime.signIn has no profile, but runtime.namedAccounts is \"yes\""));
+    expect(broken(specs => { specs.antigravity.runtime.namedAccounts = byDesign("taken away to see `both` notice it"); })).toContainEqual(expect.stringContaining("antigravity: runtime.signIn is a named account's, but runtime.namedAccounts is not \"yes\""));
+    expect(broken(specs => { specs.antigravity.runtime.signIn = yes({ argv: ["agy", "login"], profile: "both" }); })).toContainEqual(expect.stringContaining("antigravity: runtime.signIn launches [\"agy\",\"login\"], host.structuredSignIn [\"agy\",\"acp\",\"--login\"]"));
+    expect(broken(specs => { specs.antigravity.host.structuredSignIn = byDesign("taken away to see the Runtime's sign-in notice it"); })).toContainEqual(expect.stringContaining("antigravity: runtime.signIn covers the computer's own login, but host.structuredSignIn is not \"yes\""));
     // And the other way round: a row that signs the computer's own login in, for a CLI whose sign-in is a named account's.
-    expect(broken(specs => { specs["claude-code"].runtime.accountRows = yes({ defaultRow: "sign-in" }); })).toContainEqual(expect.stringContaining("claude-code: runtime.accountRows lets the computer's own login be signed in, but runtime.signIn is not a sign-in with no profile"));
+    expect(broken(specs => { specs["claude-code"].runtime.accountRows = yes({ defaultRow: "sign-in" }); })).toContainEqual(expect.stringContaining("claude-code: runtime.accountRows lets the computer's own login be signed in, but runtime.signIn does not cover it"));
   });
   it("reads the account from one named field of a token file, and a status that is the model listing names that listing", () => {
     expect(broken(specs => { specs.antigravity.host.identity = yes({ source: "token-file" } as never); })).toContainEqual(expect.stringContaining("antigravity: host.identity reads a token file but names no `field`"));
@@ -407,12 +413,13 @@ describe("every \"yes\" has the behaviour it promises, every \"no\" has none", (
       if (install) expect(INSTALLABLE_CLIS[id as keyof typeof INSTALLABLE_CLIS].kind, id).toBe(install.kind);
       expect(RUNTIME_SIGNIN_CLIS[id] ?? null, id).toEqual(signIn?.argv ?? null);
       expect(isCredentialProfileCli(id), id).toBe(!!named);
-      if (named) expect(CREDENTIAL_PROFILE_CLIS[id as keyof typeof CREDENTIAL_PROFILE_CLIS], id).toBe(named.env);
+      // how a named account is told apart: the registry's variable, or the argument, the file and the pin, word for word
+      if (named) expect(CREDENTIAL_PROFILE_CLIS[id as keyof typeof CREDENTIAL_PROFILE_CLIS], id).toEqual("env" in named ? { env: named.env } : { arg: named.arg, store: named.store, pin: named.pin });
       expect(MACHINE_ACCOUNT_CLIS.has(id), id).toBe(!!runtimeFacts(id, "accountRows") && !!named);
       expect(MACHINE_DEFAULT_LOGIN_CLIS.has(id), id).toBe(runtimeFacts(id, "accountRows")?.defaultRow === "sign-in");
       // a sign-in with no profile is announced by a capability of its own, derived from the registry; a named one needs none beyond `remote-signin`
-      expect(isRuntimeDefaultLoginCli(id), id).toBe(signIn?.profile === "none");
-      expect(runtimeSignInCapabilities().includes(`signin-${id}`), id).toBe(signIn?.profile === "none");
+      expect(isRuntimeDefaultLoginCli(id), id).toBe(signIn?.profile === "none" || signIn?.profile === "both");
+      expect(runtimeSignInCapabilities().includes(`signin-${id}`), id).toBe(signIn?.profile === "none" || signIn?.profile === "both");
     }
     expect(Object.keys(INSTALLABLE_CLIS).sort()).toEqual(runtimeIds("install").sort());
   });

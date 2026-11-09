@@ -32,6 +32,7 @@ export const KIRO_CLI_SPEC = {
     update: byDesign("Kiro's Windows build is an MSI into Program Files and needs an administrator (the same reason as runtime.install); the dashboard does not update it."),
     signIn: notYetBuilt("undecided", "Only Claude Code is signed in from the dashboard on a computer."),
     namedAccounts: notYetBuilt("undecided", "The Runtime's profile folders are Claude Code's only."),
+    signOut: notYetBuilt("undecided", "The Runtime signs a Claude Code profile out only."),
     accountRows: notYetBuilt("undecided", "Accounts shows a computer's Claude Code accounts only."),
     authStatus: notYetBuilt("undecided", "The Windows adapter has no verified sign-in probe for Kiro (`authProbe` is null); its state is unknown, not signed out."),
     identity: notApplicable("Needs a sign-in probe on the computer first."),
