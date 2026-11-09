@@ -28,7 +28,7 @@ export const STRUCTURED_PROFILE_BACKENDS: ReadonlySet<string> = new Set(["claude
 /** Only host-selected paths/locale enter the dedicated CLI. No fleet/MCP/provider env injection. */
 export function structuredSignInEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
   const result: Record<string, string> = { TERM: "xterm-256color", BROWSER: "false", EDITOR: "false", VISUAL: "false" };
-  for (const key of ["HOME", "PATH", "LANG", "LC_ALL", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "CODEX_HOME", "CLAUDE_CONFIG_DIR"]) {
+  for (const key of ["HOME", "PATH", "LANG", "LC_ALL", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "GEMINI_HOME"]) {
     const value = env[key];
     if (value && !/[\0\r\n]/.test(value)) result[key] = value;
   }

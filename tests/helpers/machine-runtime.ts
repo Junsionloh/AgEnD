@@ -21,6 +21,10 @@ import type { AccountCaller } from "../../src/runtime-signin-transport.js";
 export const ID = "11111111-2222-3333-4444-555555555555";
 export const URL_OK = "https://claude.com/cai/oauth/authorize?code=true&client_id=fixture&response_type=code&state=STATE-NEVER-LOGGED";
 export const CODE = "SECRETCODE123-abc";
+/** What `agy acp --login` prints (agy 1.5.3, measured: the same through pipes and a terminal). The link is Google's account chooser; the account name and the state are made-up fixtures. */
+export const AGY_URL = "https://accounts.google.com/o/oauth2/auth?access_type=offline&client_id=fixture.apps.example.com&redirect_uri=https%3A%2F%2Fantigravity.google%2Foauth-callback&response_type=code&state=STATE-NEVER-LOGGED";
+export const AGY_SCREEN = `Open this link in a browser to log in with Google:\n\n  ${AGY_URL}\n\nThen paste the authorization code, or the full URL of the page you land on, and press Enter:\n`;
+export const AGY_CODE = "4/0AFixtureCode_abc-123";
 export const EMAIL = "ada.lovelace@example.com";
 export const ACTOR = "admin:0123456789abcdef";
 const directories: string[] = [];
@@ -46,16 +50,23 @@ export interface RigOptions {
   defaultProfile?: () => string | undefined;
   /** What the Runtime does when an operation changed its inventory (default: nothing is sent, as a Runtime that answers first). */
   changed?: RemoteAccountsDeps["changed"];
+  /** AGEND-113: what the Runtime does with the answer of a check of a CLI's own login (the bridge keeps it in its cached inventory). */
+  noteLogin?: RemoteAccountsDeps["noteLogin"];
+  /** AGEND-113: this computer has Antigravity (agy.exe 1.5.3) in its inventory, and its Runtime offers `signin-antigravity`. */
+  agy?: boolean | { version?: string; authenticated?: boolean | null; capability?: boolean };
 }
 export function runtimeRig(options: RigOptions = {}) {
   const pairing = scratch(), root = credentialProfilesRoot(pairing), children: FakeChild[] = [], spawned: Array<{ args: readonly string[]; env: NodeJS.ProcessEnv | undefined }> = [];
   for (const name of options.created ?? []) createRuntimeProfile(root, "claude-code", name);
   let answer: RemoteStatusAnswer = { loggedIn: false };
+  let agyAnswer: boolean | null = false;                       // Antigravity's own login on that computer (`agy models` by its exit code)
   let clock = Date.now();                                      // the Runtime's clock: it paces sign-in starts (5 s apart), so a test moves it
-  const deps: RemoteAccountsDeps = { pairingDirectory: pairing, credentialRoot: root, now: () => clock, status: async () => answer, find: async () => ({ path: "claude.exe", command: "claude.exe", args: [] }), environment: () => ({ PATH: "p" }),
+  const deps: RemoteAccountsDeps = { pairingDirectory: pairing, credentialRoot: root, now: () => clock, status: async () => answer, find: async cli => (cli === "antigravity" ? { path: "agy.exe", command: "agy.exe", args: [] } : { path: "claude.exe", command: "claude.exe", args: [] }), environment: () => ({ PATH: "p" }),
+    defaultStatus: async () => agyAnswer,
+    ...(options.noteLogin ? { noteLogin: options.noteLogin } : {}),
     runLogout: options.runLogout ?? (async () => 0), inUse: () => undefined, inUseNow: () => undefined, defaultProfile: options.defaultProfile ?? (() => undefined), changed: options.changed ?? vi.fn(),
     ...(options.ownership ? { ownership: options.ownership } : {}),
-    signIn: { scratchRoot: scratch(), spawn: (_c, args, spawnOptions) => { spawned.push({ args, env: spawnOptions.env }); const child = new FakeChild(); children.push(child); queueMicrotask(() => { child.say(`If the browser didn't open, visit: ${URL_OK}\nPaste code here if prompted > `); }); return child as unknown as ChildProcess; } } };
+    signIn: { scratchRoot: scratch(), spawn: (_c, args, spawnOptions) => { spawned.push({ args, env: spawnOptions.env }); const child = new FakeChild(); children.push(child); queueMicrotask(() => { child.say(args.includes("acp") ? AGY_SCREEN : `If the browser didn't open, visit: ${URL_OK}\nPaste code here if prompted > `); }); return child as unknown as ChildProcess; } } };
   const runtime = new RemoteAccounts(deps);
   if (options.switchOn !== false) setRemoteSwitch(pairing, "accounts", true, undefined, clock);
   const sent: Array<{ operation: string; payload: any }> = [];
@@ -71,21 +82,29 @@ export function runtimeRig(options: RigOptions = {}) {
   // What the computer last reported (the inventory the coordinator holds): a test moves it with `report`, as a new `inventory` frame does.
   const inventory = { profiles: (options.created ?? []).map(name => ({ name, loggedIn: false, created: true })) as CredentialProfileStatus[], at: 1000 };
   const report = (profiles: CredentialProfileStatus[]): void => { inventory.profiles = structuredClone(profiles); inventory.at += 1; };
-  const machine = (): RuntimeMachine => ({ id: ID, name: "Desk PC", platform: "win32", status: "online", createdAt: 1, generation: 1, runtimeInfo: { protocolVersions: [1], capabilities: ["exec", "remote-signin"] },
-    inventoryUpdatedAt: inventory.at, inventory: { clis: [], home: "", probedAt: null, credentialProfiles: { profiles: structuredClone(inventory.profiles) } } } as RuntimeMachine);
+  const agy = options.agy ? (options.agy === true ? {} : options.agy) : null;
+  const agyRow = () => ({ id: "antigravity", path: "agy.exe", version: agy?.version ?? "1.5.3", authenticated: agy?.authenticated ?? null, runnable: true, supports: {}, models: [] });
+  const machine = (): RuntimeMachine => ({ id: ID, name: "Desk PC", platform: "win32", status: "online", createdAt: 1, generation: 1,
+    runtimeInfo: { protocolVersions: [1], capabilities: ["exec", "remote-signin", ...(agy && agy.capability !== false ? ["signin-antigravity"] : [])] },
+    inventoryUpdatedAt: inventory.at, inventory: { clis: agy ? [agyRow()] : [], home: "", probedAt: null, credentialProfiles: { profiles: structuredClone(inventory.profiles) } } } as unknown as RuntimeMachine);
   const logs: Array<Record<string, unknown>> = [];
   const accounts = new MachineAccounts({ call, machine: id => (id === ID ? machine() : undefined), machines: () => [machine()], agents: () => [], signingIn: () => false, log: entry => { logs.push({ ...entry }); } });
   const events: Array<Record<string, unknown>> = [];
   let live = true;
   const owner = {};
-  const signIns = new MachineSignIns({ call, current: who => live && who === owner, reported: (id, profile) => accounts.profileState(id, profile), readiness: id => accounts.readiness(id), actor: () => ACTOR,
+  const signIns = new MachineSignIns({ call, current: who => live && who === owner, reported: (id, profile) => accounts.profileState(id, profile), reportedDefault: (id, backend) => accounts.reportedDefault(id, backend),
+    readiness: (id, backend) => accounts.readiness(id, backend), actor: () => ACTOR,
     changed: (event, who, launched) => { events.push({ ...event, launched, mine: who === owner }); } } satisfies MachineSignInDeps);
   const target = (profile: string) => ({ machine: ID, profile });
   const view = (profile: string) => signIns.snapshot(owner, target(profile)).login;
   const phase = (profile: string) => signIns.snapshot(owner, target(profile)).login?.phase;
+  /** AGEND-113: that computer's own Antigravity login (no profile). */
+  const agyTarget = { machine: ID, backend: "antigravity" as const };
+  const agyView = () => signIns.snapshot(owner, agyTarget).login;
+  const agyPhase = () => signIns.snapshot(owner, agyTarget).login?.phase;
   const who = { id: ID, actor: ACTOR };
-  return { runtime, signIns, accounts, owner, who, pairing, root, children, spawned, sent, replies, events, logs, call, target, view, phase, report, inventory,
-    answer: (value: RemoteStatusAnswer) => { answer = value; }, tick: (ms: number) => { clock += ms; }, end: () => { live = false; },
+  return { runtime, signIns, accounts, owner, who, pairing, root, children, spawned, sent, replies, events, logs, call, target, view, phase, report, inventory, agyTarget, agyView, agyPhase,
+    answer: (value: RemoteStatusAnswer) => { answer = value; }, agyAnswer: (value: boolean | null) => { agyAnswer = value; }, tick: (ms: number) => { clock += ms; }, end: () => { live = false; },
     stop: async () => { await signIns.close(); await runtime.stop().catch(() => {}); } };
 }
 export type Rig = ReturnType<typeof runtimeRig>;

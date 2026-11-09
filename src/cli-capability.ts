@@ -86,14 +86,24 @@ export interface HostCapabilities {
   readonly chatLogin: Cap<{ aliases: readonly string[]; mode: ChatLoginMode }>;
   /** The dashboard can sign this CLI in (the browser-terminal flow, `dashboardSignInSupported`); `named`: a named account too. */
   readonly dashboardSignIn: Cap<{ named: boolean }>;
-  /** The structured sign-in (Sign in → open the page → paste the code): the exact command it launches, and its place in the lists. */
-  readonly structuredSignIn: Cap<{ argv: readonly string[]; rank: number }>;
+  /**
+   * The structured sign-in (Sign in → open the page → paste the code): the exact command it launches, and its place in the lists.
+   * `ends`: how the driver knows it is over: `success-line` (the CLI prints one, or the process ends and the auth check passes) or `exit-code` (the CLI prints no success line:
+   * signed in only when the command ended with exit 0 AND the auth check passes; a failed command is never "signed in" because an older login is still there).
+   * `screen`: its prompts are read by the `login-flow` patterns, or by its `own` closed table (structured-signin.ts SCREEN_READERS). `minVersion`: the oldest CLI that has the command.
+   * `answer`: what the CLI's own prompt accepts: the `code`, or the code or the page's address (`code-or-address`). AgEnD's box takes the code only (a pasted address is refused), so a
+   * CLI that also accepts an address gets a line under the box saying to paste the code alone.
+   */
+  readonly structuredSignIn: Cap<{ argv: readonly string[]; rank: number; ends: "success-line" | "exit-code"; screen: "login-flow" | "own"; answer: "code" | "code-or-address"; minVersion?: string }>;
   /** The first-run page offers it: as browser controls, or only as the console command. */
   readonly firstRunSignIn: Cap<{ mode: "browser" | "console"; rank: number }>;
   /** A cheap, token-free probe of whether the sign-in works (the command, run with a 5 s timeout). */
   readonly authCheck: Cap<{ argv: readonly string[] }>;
-  /** Which account the sign-in is (a masked e-mail and a plan), read from the CLI's own status answer. */
-  readonly identity: Cap<{ source: "status-command" }>;
+  /**
+   * Which account the sign-in is (a masked e-mail, and a plan where the CLI says one), read locally and never from a credential: `status-command` is the CLI's own status answer;
+   * `token-file` is the one field of the CLI's own token file that names the account (`field`; nothing else of the file is read, kept or logged).
+   */
+  readonly identity: Cap<{ source: "status-command" } | { source: "token-file"; field: string }>;
   /** Several sign-ins side by side (credential profiles): the variable that relocates the CLI's home, how, and how a Move is worded. */
   readonly namedAccounts: Cap<{ env: string; home: CredentialHomeKind; carry: CarryKind }>;
   /** Sign out from the dashboard: the CLI's own logout. */
@@ -102,9 +112,20 @@ export interface HostCapabilities {
   readonly keepAlive: Cap;
   /** The CLI has a card on Settings → Accounts (`rank`: its place there). */
   readonly accountCard: Cap<{ rank: number }>;
-  /** The usage panel's row for it: its provider id and name, its place, and whether a named account has a row of its own. */
-  readonly usage: Cap<{ providerId: string; name: string; rank: number; profileRows: boolean }>;
+  /**
+   * The usage panel's row for it: its provider id and name, its place, and whether a named account has a row of its own, and the SHAPE of the limits the CLI reports.
+   *  - `pools`: the account has one set of limits (`single`), or the CLI names several pools in its own answer and each has limits of its own (`several`: Antigravity's Gemini, Claude & others,
+   *    Gemini 4 Argon). A pool the CLI names is shown whatever it is called; this says only whether to expect them.
+   *  - `windows`: the kinds of window a pool's limit can have, as the CLI reports them: `session` (under two days: the 5h), `weekly`, `monthly`, and `unwindowed` (one number with no window of
+   *    its own, as agy gives a pool it only knows from per-model data). An Accounts row shows every pool and every window the account reports, in the usage panel's own order, so a
+   *    window is never hidden; this is what a CLI is expected to report, and tests/cli-registry-usage-shape.test.ts fails when a real payload carries a kind that is not listed here.
+   */
+  readonly usage: Cap<{ providerId: string; name: string; rank: number; profileRows: boolean; pools: "single" | "several"; windows: readonly UsageWindowKind[] }>;
 }
+
+/** The kinds of window a usage limit can have (see `host.usage.windows`). */
+export const USAGE_WINDOW_KINDS = Object.freeze(["session", "weekly", "monthly", "unwindowed"] as const);
+export type UsageWindowKind = typeof USAGE_WINDOW_KINDS[number];
 
 /** Every capability a CLI has on a paired Windows computer, as its Runtime reports and does it. */
 export interface RuntimeCapabilities {
@@ -112,14 +133,21 @@ export interface RuntimeCapabilities {
   readonly provider: Cap<NativeProviderFacts>;
   /** The dashboard installs it, from a pinned npm package. (The pins stay in runtime-cli-install.ts.) */
   readonly install: Cap<{ kind: "npm" }>;
-  /** The dashboard signs it in on that computer: the exact command, and whether it is a named account's sign-in. */
-  readonly signIn: Cap<{ argv: readonly string[]; profile: "named" }>;
+  /**
+   * The dashboard signs it in on that computer: the exact command, and whose login it is: a `named` profile this Runtime created (nothing else is touched), or `none`: the
+   * computer's OWN login (a CLI that keeps one login per Windows user and has no profile folder; signing in REPLACES it, which is why only a CLI whose spec says `none` may, and the
+   * computer's owner must have turned `accounts` on). A `none` is announced to the server by a capability of its own (`signin-<id>`, runtimeSignInCapability).
+   */
+  readonly signIn: Cap<{ argv: readonly string[]; profile: "named" | "none" }>;
   /** Named accounts on that computer: the variable that points the CLI at the profile's folder. */
   readonly namedAccounts: Cap<{ env: string }>;
-  /** The Accounts page shows that computer's accounts of this CLI. */
-  readonly accountRows: Cap;
-  /** The status probe the Runtime runs for a sign-in (never a login). */
-  readonly authStatus: Cap<{ argv: readonly string[] }>;
+  /** The Accounts page shows that computer's accounts of this CLI; `defaultRow`: the computer's own login is `read-only` there (a named account is added instead), or can be signed in (`sign-in`). */
+  readonly accountRows: Cap<{ defaultRow: "read-only" | "sign-in" }>;
+  /**
+   * The status probe for a sign-in (never a login). `own-command`: a command of the CLI's own, run for that (`runtime.provider`'s auth probe). `model-listing`: the CLI has none, so its
+   * answer is the model listing the Runtime already asks for (`argv` is `runtime.provider.modelProbe`, and the answer is read by its exit code and its words: no extra process).
+   */
+  readonly authStatus: Cap<{ argv: readonly string[]; source: "own-command" | "model-listing" }>;
   /** The Runtime reports which account it is (masked). */
   readonly identity: Cap;
   /** The Runtime reports the account's usage. */

@@ -18,7 +18,7 @@ export const MUSE_SPEC = {
     signOut: toVerify("No `muse` logout command has been checked."),
     keepAlive: toVerify("Whether Muse's sign-in needs a keep-alive run has not been checked."),
     accountCard: yes({ rank: 5 }),
-    usage: yes({ providerId: "muse", name: "Muse", rank: 2, profileRows: false }),
+    usage: yes({ providerId: "muse", name: "Muse", rank: 2, profileRows: false, pools: "single", windows: ["session", "weekly"] }),
   },
   runtime: {
     provider: yes({

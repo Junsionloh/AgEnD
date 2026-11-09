@@ -132,7 +132,7 @@ import { getEffectiveInstanceDefaults, loadFleetConfig, loadRawFleetConfig, load
 import { EventLog } from "./event-log.js";
 import { binaryProbe } from "./binary-probe.js";
 import { deletePlannedTopic, planInstanceTopicDelete, topicDestination, topicMustStay, type InstanceTopicPlan, type TopicDeleteOutcome, type TopicOwnership } from "./instance-topic-delete.js";
-import { AVAILABILITY_STALE_MS, BackendAvailabilityStore, hostAvailabilityProbes, findExecutableIn, resolveBackendBinary, type AvailabilityProbes, type BackendAvailability } from "./backend-availability.js";
+import { AVAILABILITY_STALE_MS, BackendAvailabilityStore, versionAtLeast, hostAvailabilityProbes, findExecutableIn, resolveBackendBinary, type AvailabilityProbes, type BackendAvailability } from "./backend-availability.js";
 import { classifySqliteOpenError } from "./sqlite-open-errors.js";
 import { OutboxOpenError } from "./outbox-open-error.js";
 import { AdapterWorld } from "./adapter-world.js";
@@ -316,7 +316,7 @@ import { envFileKeys } from "./token-env-name.js";
 import { discordGeneralChannelId } from "./discord-general.js";
 import { parseEnvText } from "./env-file.js";
 import { isDisallowedIntentsError, isRejectedTokenError } from "./discord-permissions.js";
-import { filterUsageProviders, formatDiscordUsageActivity, getUsageSnapshot, handleUsageRequest, isUsagePath, setCapacityLookup, usageProviderIdForBackend } from "./usage/usage-api.js";
+import { filterUsageProviders, formatDiscordUsageActivity, getUsageSnapshot, handleUsageRequest, isUsagePath, refreshUsageAfterSignIn, setCapacityLookup, usageProviderIdForBackend } from "./usage/usage-api.js";
 import { LOGIN_FLOWS, checkAuthStatus, checkAuthIdentity, authIdentitySupported, LOGIN_BACKEND_ALIASES, type LoginFlow, type AuthCheckResult } from "./login-flows.js";
 import type { AccountIdentity } from "./claude-auth-status.js";
 import { LoginSession } from "./login-manager.js";
@@ -340,8 +340,8 @@ import { runBeforeDeadline } from "./deadline.js";
 import { LoginWindowLock } from "./login-window-lock.js";
 import { BrowserBackendSignIns } from "./browser-backend-signins.js";
 import { createStructuredSignInTransport } from "./structured-signin-transport.js";
-import { ONBOARDING_BACKENDS, readPendingBackendSignIns } from "./backend-signin-pending.js";
-import { structuredSignInSupported } from "./structured-signin.js";
+import { ONBOARDING_BACKENDS, ONBOARDING_BROWSER_BACKENDS, readPendingBackendSignIns } from "./backend-signin-pending.js";
+import { hostFacts } from "./cli-registry.js";
 import { handleSettingsRequest, type RawConfigPatch } from "./settings-api.js";
 import type { SettingsChangeAuthority } from "./settings-authority.js";
 import { setLocale, detectLocale, getLocale, t } from "./locale.js";
@@ -480,7 +480,7 @@ import { kiroHome } from "./backend/kiro-kas-store.js";
 import { CHAT_PROFILE_LOGIN_BACKENDS, credentialHomeSpec, credentialProfileHome, credentialProfileEnv, credentialProfileLogin, credentialProfileLoginCommand, credentialProfileStoreHome, credentialSwitchCarriesConversation, credentialSwitchStartsFresh, instanceCredentialProfile, listConfiguredProfiles, resolveCredentialProfile } from "./backend/credential-profile.js";
 import { carryClaudeConversation, type CarryResult } from "./backend/claude-carry.js";
 import { classicProfile, mergeBackendOptions, profileKey, profileName, profileOf, readClassicBindings, readClassicBindingsStrict, type ClassicProfile } from "./classic-bindings.js";
-import { ACCOUNT_CLIS, PROFILE_CLIS, buildAccountsView, profilesOnDisk, shortUsage, weeklyUsage, type AccountUsage, type AccountsView } from "./accounts-view.js";
+import { ACCOUNT_CLIS, PROFILE_CLIS, accountUsage, buildAccountsView, profilesOnDisk, type AccountUsage, type AccountsView } from "./accounts-view.js";
 import { accountFolderExists, addAccountProfile, removeAccountProfile, type AddResult, type RemoveResult } from "./accounts-profiles.js";
 import { signOutAccount, type SignOutResult } from "./accounts-signout.js";
 import { MachineAccounts, machineAgents, type MachineActor, type MachineAccountResult } from "./machine-accounts.js";
@@ -20380,12 +20380,15 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       call: (id, operation, payload, timeoutMs) => this.runtimeCoordinator().callAccount(id, operation, payload, timeoutMs),
       current: owner => this.browserSignInOwnerCurrent(owner),
       reported: (id, profile) => this.machineAccounts.profileState(id, profile),
-      readiness: id => this.machineAccounts.readiness(id),
+      reportedDefault: (id, backend) => this.machineAccounts.reportedDefault(id, backend),
+      readiness: (id, backend) => this.machineAccounts.readiness(id, backend),
       actor: owner => { const handle = (owner as SessionRecord).handle; return typeof handle === "string" && /^[a-f0-9]{16}$/.test(handle) ? `admin:${handle}` : null; },
       changed: (event, owner) => {
-        // Safe fields only: the computer, the profile name, a phase and a fixed reason. Never a URL, a code, output or an e-mail address.
-        this.logger.info({ machine: event.machine, profile: event.profile, phase: event.phase, ...(event.reason ? { reason: event.reason } : {}), by: (owner as SessionRecord).label },
+        // Safe fields only: the computer, the CLI, the profile name (none for Antigravity's default login), a phase and a fixed reason. Never a URL, a code, output or an e-mail address.
+        this.logger.info({ machine: event.machine, backend: event.backend, ...(event.profile ? { profile: event.profile } : {}), phase: event.phase, ...(event.reason ? { reason: event.reason } : {}), by: (owner as SessionRecord).label },
           "Computer account sign-in from Settings → Accounts");
+        // The page reads the computer's last detection (agy is never run for a read): a login made just now is remembered until the next one.
+        if (event.phase === "done") this.machineAccounts.noteDefaultLogin(event.machine, event.backend, true);
         broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"));
         this.needsYou?.poke();
       },
@@ -20400,6 +20403,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       machines: () => remoteRuntimeEnabled() ? this.runtimeCoordinator().listMachines() : [],
       agents: id => machineAgents(this.fleetConfig?.instances, id, name => { try { return nativeCredentialProfile(this.fleetConfig?.instances[name]) ?? null; } catch { return null; } }, this.fleetConfig?.defaults?.backend ?? "claude-code"),
       signingIn: (id, profile) => this.machineSignInsInstance?.signingIn(id, profile) ?? false,
+      cliAgents: (id, backend) => machineAgents(this.fleetConfig?.instances, id, () => null, this.fleetConfig?.defaults?.backend ?? "claude-code", backend).map(agent => agent.name),
       log: entry => this.logger.info(entry, entry.outcome === "ok" ? "Computer account changed from Settings → Accounts" : "Computer account change refused"),
     });
   }
@@ -20425,6 +20429,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       },
       checkAuth: backend => checkAuthStatus(LOGIN_FLOWS[backend]!.authCheck!),
       checkConsoleAuth: backend => checkAuthStatus(LOGIN_FLOWS[backend]!.authCheck!),
+      accountsPage: true,   // Settings → Accounts starts what the registry says can be driven (Antigravity: `agy acp --login`); the first-run page's own instance does not
       transport: () => createStructuredSignInTransport(),
       changed: (event, owner, launched) => {
         try { this.eventLog?.insert("login", "browser_backend_signin", event); } catch { /* safe metadata only */ }
@@ -20432,6 +20437,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         if (event.phase === "done") {
           this.forgetSignInIdentities();   // a sign-in may be a different account now
           this.keepAliveAfterSignIn(event.backend, null);   // its file changed, whoever is watching: a "needs sign-in" left from before is no longer the answer
+          this.usageAfterSignIn();   // the usage read before this sign-in is not this account's
         }
         this.needsYou?.poke();
         if (!this.browserSignInOwnerCurrent(owner)) return;
@@ -20474,6 +20480,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         if (event.phase === "done") {
           this.forgetSignInIdentities();   // a sign-in may be a different account now
           this.keepAliveAfterSignIn(event.backend, event.profile);
+          this.usageAfterSignIn();
         }
         this.needsYou?.poke();
         if (!this.browserSignInOwnerCurrent(owner)) return;
@@ -20492,7 +20499,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     for (const backend of this.pendingBackendSince?.keys() ?? []) if (!pending.includes(backend as typeof pending[number])) this.pendingBackendSince.delete(backend);
     return pending.map(backend => {
       if (!this.pendingBackendSince.has(backend)) this.pendingBackendSince.set(backend, Date.now());
-      return { backend, since: this.pendingBackendSince.get(backend)!, browser: structuredSignInSupported(backend) };
+      return { backend, since: this.pendingBackendSince.get(backend)!, browser: (ONBOARDING_BROWSER_BACKENDS as readonly string[]).includes(backend) };
     });
   }
 
@@ -20600,9 +20607,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       diskProfiles.set(backend, rows);
     }
     const { agents, classic, fleetDefaults } = this.accountUses();
-    // Weekly and short-window (5h) usage, from the usage panel's own (cached, never forced) read.
+    // Every pool's and every window's usage, from the usage panel's own (cached, never forced) read.
     const usage = new Map<string, AccountUsage>();
-    const shortWindow = new Map<string, AccountUsage>();
     const ids = new Map<string, string>();                                   // provider id → backend\0profile
     for (const backend of ACCOUNT_CLIS) {
       const pid = usageProviderIdForBackend(backend); if (!pid) continue;
@@ -20613,8 +20619,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       const payload = await Promise.race([getUsageSnapshot(false, undefined, { allowStale: true }), new Promise<null>(r => { const tm = setTimeout(() => r(null), usageWaitMs); tm.unref?.(); })]);
       for (const provider of payload?.providers ?? []) {
         const at = ids.get(provider.id); if (!at) continue;
-        const w = weeklyUsage(provider as never); if (w) usage.set(at, w);
-        const sh = shortUsage(provider as never); if (sh) shortWindow.set(at, sh);
+        const u = accountUsage(at.split("\0")[0]!, provider as never); if (u) usage.set(at, u);
       }
     } catch { /* the view without usage */ }
     // #3292: each Claude Code / Codex row's "Keep sign-in alive" part (the setting, its last run, the dates its file says).
@@ -20630,7 +20635,17 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     // (Keep-alive is the host's: it is built from the host's profiles above and never given to a computer's rows.)
     let machines: Awaited<ReturnType<MachineAccounts["list"]>> = [];
     if (remoteRuntimeEnabled()) { try { machines = await this.machineAccounts.list(); } catch (err) { this.logger.debug({ err: (err as Error).message }, "Computer accounts not read"); } }
-    return buildAccountsView({ targets, diskProfiles, agents, classic, fleetDefaults, usage, shortUsage: shortWindow, keepAlive, machines });
+    return buildAccountsView({ targets, diskProfiles, agents, classic, fleetDefaults, usage, keepAlive, machines });
+  }
+
+  /**
+   * AGEND-113: a dashboard sign-in just finished: read the usage once more now (the panel's own forced read, so its 30-second floor and Retry-After hold), instead of showing what was read
+   * before it for up to five minutes, and tell the pages to read their view again when something really was fetched. Never awaited, never allowed to fail the sign-in's follow-up.
+   */
+  private usageAfterSignIn(): void {
+    try {
+      void refreshUsageAfterSignIn(() => broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"))).catch(() => {});
+    } catch { /* the usage shows itself within its own cache time */ }
   }
 
   /**
@@ -20994,12 +21009,19 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     for (const row of this.backendAvailabilityRows()) {
       const flow = LOGIN_FLOWS[row.backend];
       const install = BACKEND_INSTALLATION_INFO[row.backend]?.install;
+      // A CLI the dashboard drives with the structured sign-in (registry: `host.structuredSignIn`) although chat's /login and the browser terminal decline it (Antigravity: `agy acp --login`, agy
+      // >= its `minVersion`) is signed in from Settings → Accounts. A CLI that is older, or whose version is not known, keeps "Sign in on the host" and is told to update.
+      const structured = hostFacts(row.backend, "structuredSignIn");
+      const viaStructured = !!structured && flow?.remoteLogin === "unsupported" && row.state !== "not_installed";
+      const structuredSignIn = viaStructured && versionAtLeast(row.version, structured!.minVersion);
+      // Told to update only when the version is KNOWN to be older: a version that was not read yet is not "too old".
+      const structuredUpdate = viaStructured && !structuredSignIn && typeof row.version === "string" && /\d/.test(row.version);
       out.push({
         // Not installed or too old: signing in would not help — the row says how to install (or update) it instead.
-        backend: row.backend, state: row.state, signIn: row.state !== "not_installed" && row.state !== "too_old" && dashboardSignInSupported(row.backend),
-        ...(flow?.remoteLogin === "unsupported" ? { hostCommand: flow.command } : {}),
+        backend: row.backend, state: row.state, signIn: row.state !== "not_installed" && row.state !== "too_old" && (viaStructured ? structuredSignIn : dashboardSignInSupported(row.backend)),
+        ...(flow?.remoteLogin === "unsupported" && !structuredSignIn ? { hostCommand: flow.command } : {}),
         ...(row.state === "not_installed" && install ? { install } : {}),
-        ...(row.state === "too_old" && install ? { update: install } : {}),
+        ...((row.state === "too_old" || structuredUpdate) && install ? { update: install } : {}),
         ...(this.signInIdentity(row.backend) ? { identity: this.signInIdentity(row.backend) } : {}),
       });
     }

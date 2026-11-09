@@ -16,21 +16,21 @@ Plain data: strings, numbers, booleans and lists of them; no function, no RegExp
 | `host.install` | a binary and the command a person (or the install window) runs | `BIN_DIRS` in `instance-lifecycle.ts` |
 | `host.chatLogin` | `/login <name>` recognises it (`aliases`), and what it does (`mode`) | `LOGIN_FLOWS` in `login-flows.ts` |
 | `host.dashboardSignIn` | the browser-terminal flow signs it in; `named`: a named account too | `LOGIN_FLOWS[id].noShellEscape`, `dashboardSignInSupported` |
-| `host.structuredSignIn` | Sign in → open the page → paste the code; the exact command | `structured-signin.ts` |
+| `host.structuredSignIn` | Sign in → open the page → paste the code; the exact command, how it `ends` (`success-line`, or `exit-code`: the CLI prints no success line, so signed in = exit 0 AND the auth check), whose `screen` table reads it (`login-flow` patterns, or an `own` closed table), what its prompt `answer`s (the `code`, or also the page's address: the box says to paste the code alone), and its `minVersion` | `structured-signin.ts` (`SCREEN_READERS`), `runtime-signin.ts` (`BEHAVIOUR`) |
 | `host.firstRunSignIn` | the first-run page offers it, as browser controls or only the console command | `browser-backend-signins.ts` |
 | `host.authCheck` | a token-free probe of whether the sign-in works | `LOGIN_FLOWS[id].authCheck`, `BACKEND_AUTH_CHECKS` |
-| `host.identity` | which account it is (masked), read from the CLI's own status | `AUTH_IDENTITY` in `login-flows.ts` |
+| `host.identity` | which account it is (masked): from the CLI's own status command (`status-command`), or from ONE named field of its own token file, read locally (`token-file`) | `IDENTITY_READERS` in `login-flows.ts` |
 | `host.namedAccounts` | several sign-ins side by side (the variable that relocates its home) | `CREDENTIAL_HOMES` in `backend/credential-profile.ts` |
 | `host.signOut` | the CLI's own logout | `accounts-signout.ts` |
 | `host.keepAlive` | "Keep sign-in alive" | `signin-keepalive.ts` |
 | `host.accountCard` | a card on Settings → Accounts | — |
-| `host.usage` | a row in the usage panel (provider id, name, place) | `USAGE_FETCHERS` in `usage/providers.ts` |
+| `host.usage` | a row in the usage panel (provider id, name, place); `pools`: one set of limits (`single`) or pools the CLI names in its own answer (`several`: an Accounts row has a block per pool, named); `windows`: the kinds of window it reports (`session`, `weekly`, `monthly`, `unwindowed`). An Accounts row shows every pool and every window the account reports, in the usage panel's order, and `tests/cli-registry-usage-shape.test.ts` fails when a real payload carries a kind the entry does not list | `USAGE_FETCHERS` in `usage/providers.ts`, `accountUsage` in `accounts-view.ts` |
 | `runtime.provider` | a Windows Runtime lists it and (if `supports.execution`) runs it | `windows-cli-worker.ts` |
 | `runtime.install` | the dashboard installs it from a pinned package | pins and signer in `runtime-cli-install.ts` |
-| `runtime.signIn` | the dashboard signs it in on that computer | `runtime-signin.ts` |
+| `runtime.signIn` | the dashboard signs it in on that computer: a `named` profile this Runtime created, or `none`: the computer's OWN login (a CLI with one login per Windows user; signing in REPLACES it). A `none` is announced by a capability derived from the registry, `signin-<id>` | `runtime-signin.ts` (`BEHAVIOUR`) |
 | `runtime.namedAccounts` | named accounts on that computer | `runtime-credential-profiles.ts` |
-| `runtime.accountRows` | Accounts shows that computer's accounts of it | `machine-accounts.ts` |
-| `runtime.authStatus` | the status probe the Runtime runs (never a login) | `windows-cli-worker.ts` |
+| `runtime.accountRows` | Accounts shows that computer's accounts of it; `defaultRow`: the computer's own login is `read-only` there, or can be signed in (`sign-in`) | `machine-accounts.ts` |
+| `runtime.authStatus` | the status probe (never a login): `own-command` (the Runtime runs it), or `model-listing` (the CLI has none: the model listing it is asked for anyway says whether it is signed in) | `windows-cli-worker.ts`, `parseNativeAuthResult` |
 | `runtime.identity` / `runtime.usage` | the Runtime reports the account / its usage | — |
 
 A `no` says why: `cli_has_none` (the tool has no such thing), `not_applicable` (it needs a capability this CLI lacks), `by_design` (decided against; the note says where),
@@ -51,7 +51,7 @@ time anything runs and not in front of a user.
 
 ## Rules that keep it safe
 
-- The server sends a Runtime only a CLI id (and a profile name); nothing in the registry is sent anywhere. A Runtime reads its own copy, shipped in its own bundle
+- The server sends a Runtime only a CLI id (and a profile name, except for a CLI whose `runtime.signIn.profile` is `none`: it has no profile to send); nothing in the registry is sent anywhere. A Runtime reads its own copy, shipped in its own bundle
   (`CLI_REGISTRY_MODULES` in `runtime-build-info.ts`). Its whitelist is still the frozen table it builds at start, and the computer's own `accounts` switch still applies.
 - Values that decide what is run (sign-in commands, environment variable names, probes, executable names, the login flows' safety flags) are also written out in
   `tests/cli-registry-golden.test.ts`. Changing one takes a change in both places.

@@ -20,6 +20,7 @@ import { ErrorState, Skeleton } from "/assets/ui-states.js";
 import { CompactMeter } from "/assets/usage-meter.js";   // #3321: the Usage panel's meter, not a second one (its own module: a tab that kept an older usage-dialog.js still links)
 import { CliProductMark, cliLabel } from "./cli-picker.js";
 import { identityText } from "./account-identity.js";
+import { UsageBlock } from "./usage-pool.js";   // AGEND-113: every pool and window an account reports, as the server sends them
 import { openSignIn, refreshSignIn, signInStore } from "./backend-signin.js";
 import { capsOf } from "./cli-caps.js";
 import { toast } from "/assets/ui-toast.js";
@@ -38,6 +39,7 @@ register("accounts", {
     fleetDefaultTag: "fleet default",
     usageLabel: "Usage", winHours: "{0}h", winDays: "{0}d", winWeek: "7d", winStale: "(stale)",
     signIn: "Sign in", signInAgain: "Sign in again", hostCommand: "Sign in from chat", hostCommandHint: "This row cannot sign in from the dashboard. Send /login in chat, or ask General.",
+    updateHint: "{0} needs a newer version before it can be signed in from here. Update it on the host:",
     moveHere: "Move agents here", moveTitle: "Move agents to {0}", moveLead: "Choose the {0} agents that should use {1}. Each restarts on it when you Save:",
     carry_claude: "Claude Code carries its conversation over.", carry_codex: "Codex keeps its conversation.", carry_kiro: "Kiro starts a new conversation, with a handover.",
     moveNone: "Every {0} agent already uses this account.", moveStage: "Stage", cancel: "Cancel", current: "now: {0}",
@@ -52,6 +54,9 @@ register("accounts", {
     why_not_installed: "Claude Code is not installed on {0}. Install it from Settings → Runtime.",
     why_not_created: "This account was not created by AgEnD's Runtime, so it can only be handled on {0}.",
     why_default_login: "This is the Windows user's own sign-in on {0}. It is never changed from here: add an account instead.",
+    why_cli_old: "{1} on {0} is too old to sign in from here (it needs {2} or newer). Update it on that computer.",
+    why_cli_missing: "{1} is not installed on {0}.",
+    machineOneLogin: "{1} keeps one sign-in per computer. Signing in here replaces the one on {0}.",
     acctLabel: "Account", acctInherit: "Fleet default ({0})", acctInheritDefault: "Fleet default (default sign-in)", acctNotSignedIn: "{0} — not signed in",
     acctHint: "Changing the account restarts the agent. A signed-out account can't be chosen: sign it in under Accounts first.",
     acctDefaultBlocked: "This fleet's default for {0} is “{1}”, so an agent follows it unless it names another account.",
@@ -66,6 +71,7 @@ register("accounts", {
     fleetDefaultTag: "Fleet 預設",
     usageLabel: "用量", winHours: "{0}h", winDays: "{0}天", winWeek: "本週", winStale: "（未更新）",
     signIn: "登入", signInAgain: "重新登入", hostCommand: "從聊天登入", hostCommandHint: "這一列無法從儀表板登入。請在聊天傳 /login，或請 General。",
+    updateHint: "{0} 需要更新到較新的版本，才能從這裡登入。請在主機上更新：",
     moveHere: "移入 Agent", moveTitle: "把 Agent 移到 {0}", moveLead: "選擇要改用 {1} 的 {0} Agent。按「儲存」後，各自會以它重新啟動：",
     carry_claude: "Claude Code 會帶著對話過去。", carry_codex: "Codex 保留原本的對話。", carry_kiro: "Kiro 會開新對話並附上交接。",
     moveNone: "所有 {0} Agent 都已經使用這個帳號。", moveStage: "加入待儲存", cancel: "取消", current: "目前：{0}",
@@ -80,6 +86,9 @@ register("accounts", {
     why_not_installed: "{0} 上沒有安裝 Claude Code。請從「設定 → Runtime」安裝。",
     why_not_created: "這個帳號不是 AgEnD 的 Runtime 建立的，只能在 {0} 上處理。",
     why_default_login: "這是 {0} 上 Windows 使用者自己的登入，永遠不會從這裡更改：請改用新增帳號。",
+    why_cli_old: "{0} 上的 {1} 版本太舊，無法從這裡登入（需要 {2} 或更新）。請在那台電腦上更新它。",
+    why_cli_missing: "{0} 上沒有安裝 {1}。",
+    machineOneLogin: "{1} 每台電腦只能有一個登入。在這裡登入會取代 {0} 上現有的登入。",
     acctLabel: "帳號", acctInherit: "Fleet 預設（{0}）", acctInheritDefault: "Fleet 預設（預設登入）", acctNotSignedIn: "{0}——尚未登入",
     acctHint: "更換帳號會重新啟動 Agent。尚未登入的帳號不能選，請先在「帳號」登入。",
     acctDefaultBlocked: "這個 Fleet 的 {0} 預設帳號是「{1}」，Agent 除非指定其他帳號，否則會使用它。",
@@ -89,7 +98,7 @@ register("accounts", {
 const tx = (k, ...v) => t(`accounts.${k}`, ...v);
 /** The reasons that apply to a whole computer (the heading says them once); the others belong to one row. A code a newer server sends that this page does not know is shown as it is. */
 const MACHINE_LEVEL = new Set(["offline", "runtime_old", "accounts_off", "switch_unreadable", "not_installed"]);
-const reasonText = (code, name) => { const key = `why_${code}`, text = tx(key, name); return text === `accounts.${key}` ? String(code) : text; };
+const reasonText = (code, name, ...more) => { const key = `why_${code}`, text = tx(key, name, ...more); return text === `accounts.${key}` ? String(code) : text; };
 /** This view's stylesheet, linked once (a tab opened before an upgrade has an app.css without these rules). */
 function linkAccountsCss(doc = typeof document !== "undefined" ? document : null) {
   try {
@@ -151,14 +160,10 @@ const winLabel = (u, fallback = "") => {
   return d >= 6 && d <= 8 ? tx("winWeek") : tx("winDays", d);
 };
 /**
- * One window of the usage block: the Usage panel's own meter (`CompactMeter`, usage-dialog.js) — its name ("5h", "本週"), the bar, the percent
- * (amber from 70%, red from 90%: the theme's --warn / --danger) and when the window resets. The server's window ({ percent, windowMs, resetsAt }) is
- * given in the meter's shape.
+ * A window's short name for the usage block's meter ("5h", "本週", "30d", "—"): by its length when the CLI gives one, else by its kind; one number with no window is a dash. The meter itself
+ * is the Usage panel's (usage-pool.js).
  */
-function UsageWindow({ u, kind }) {
-  const name = winLabel(u, kind === "weekly" ? tx("winWeek") : "");
-  return html`<${CompactMeter} m=${{ used: Number(u.percent) || 0, windowMs: u.windowMs, resetsAt: u.resetsAt, label: name }} tag=${name} />`;
-}
+const usageTag = (w) => (w.kind === "unwindowed" ? "—" : winLabel(w, w.kind === "weekly" ? tx("winWeek") : w.kind === "monthly" ? tx("winDays", 30) : ""));
 
 /**
  * The fleet default's `backend_options` after choosing `profile` (null: none) for `backend`: the whole map, because the
@@ -342,11 +347,10 @@ function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, ope
   const manageable = !machine || (row.signIn && !!row.profile);
   const canSignOut = manageable && typeof onSignOut === "function" && row.state === "usable" && SIGN_OUT_CLIS.has(row.backend);
   const who = identityText(row.identity);
-  // The week's usage and the short window's (the "5h"), as the server gives them; a CLI that reports one shows one.
-  const windows = [row.shortUsage ? ["short", row.shortUsage] : null, row.usage ? ["weekly", row.usage] : null].filter(Boolean);
-  const stale = windows.some(([, w]) => w.stale);
-  const why = machine && machine.readOnlyReason && !MACHINE_LEVEL.has(machine.readOnlyReason) ? reasonText(machine.readOnlyReason, machine.name) : "";
-  // Four layers in one box: the title bar (name, state, default tag · the buttons), the meta bar (who, used by), the usage block (5h and the week) and Keep sign-in alive as the box's foot.
+  // Every pool and every window the account reports, as the server gives them (accounts-view.ts `accountUsage`); the page lays them out, it does not pick.
+  const usageGroups = Array.isArray(row.usageGroups) ? row.usageGroups.filter((g) => g && Array.isArray(g.windows) && g.windows.length) : [];
+  const why = machine && machine.readOnlyReason && !MACHINE_LEVEL.has(machine.readOnlyReason) ? reasonText(machine.readOnlyReason, machine.name, cliLabel(row.backend), (capsOf(row.backend) && capsOf(row.backend).structuredMinVersion) || "") : "";
+  // Four layers in one box: the title bar (name, state, default tag · the buttons), the meta bar (who, used by), the usage block (every pool and window it reports) and Keep sign-in alive as the box's foot.
   return html`<div class="s-row s-account-row" data-account=${row.profile || "default"}>
     <div class="s-account-title-bar">
       <div class="s-account-title-left"><strong>${rowName(row)}</strong>
@@ -365,11 +369,10 @@ function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, ope
       <${UsedBy} row=${row} label=${usedText(row)} openAgent=${openAgent} />
       ${machine ? html`<small class="s-account-usage is-none" title=${tx("machineNoUsageHint")}>${tx("machineNoUsage")}</small>` : null}
     </div>
-    ${windows.length ? html`<div class=${`s-account-usage${stale ? " is-stale" : ""}`} role="group" aria-label=${tx("usageLabel")}>
-      ${windows.map(([kind, w]) => html`<${UsageWindow} key=${kind} u=${w} kind=${kind} />`)}
-      ${stale ? html`<small class="s-usage-stale">${tx("winStale")}</small>` : null}
-    </div>` : null}
+    ${usageGroups.length ? html`<${UsageBlock} groups=${usageGroups} stale=${row.usageStale === true} tagOf=${usageTag} label=${tx("usageLabel")} staleText=${tx("winStale")} />` : null}
     ${why ? html`<p class="note s-account-why">${why}</p>` : null}
+    ${machine && capsOf(row.backend) && capsOf(row.backend).runtimeDefaultLogin && row.signIn && !readOnly ? html`<p class="note s-account-why">${tx("machineOneLogin", machine.name, cliLabel(row.backend))}</p>` : null}
+    ${!readOnly && !machine && !row.signIn && row.update && row.state !== "too_old" ? html`<p class="note s-account-why">${tx("updateHint", cliLabel(row.backend))} <code>${row.update}</code></p>` : null}
     ${!readOnly && !row.signIn && row.hostCommand ? html`<details class="s-host-cli-help"><summary>${machine ? tx("machineCommand") : tx("hostCommand")}</summary><p class="note">${machine ? tx("machineCommandHint", machine.name) : tx("hostCommandHint")}</p>${machine ? html`<p class="s-host-cli-command"><code>${row.hostCommand}</code></p>` : null}</details>` : null}
     ${!readOnly && row.keepAlive && (!row.scope || row.scope.kind === "host") ? html`<${KeepAliveControl} row=${row} onSaved=${() => refreshAccounts({ fresh: true })} />` : null}
   </div>`;

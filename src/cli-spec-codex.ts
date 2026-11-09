@@ -10,7 +10,7 @@ export const CODEX_SPEC = {
     }),
     chatLogin: yes({ aliases: [], mode: "device-code" }),
     dashboardSignIn: yes({ named: false }),
-    structuredSignIn: yes({ argv: ["codex", "login", "--device-auth"], rank: 2 }),
+    structuredSignIn: yes({ argv: ["codex", "login", "--device-auth"], rank: 2, ends: "success-line", screen: "login-flow", answer: "code" }),
     firstRunSignIn: yes({ mode: "browser", rank: 2 }),
     authCheck: yes({ argv: ["codex", "login", "status"] }),
     identity: toVerify("Only the sign-in state is read from `codex login status`; whether its output names the account (and could be masked like Claude Code's) has not been checked. Reading the credential file for it is not an option."),
@@ -18,7 +18,7 @@ export const CODEX_SPEC = {
     signOut: yes({ binary: "codex", args: ["logout"] }),
     keepAlive: yes(),
     accountCard: yes({ rank: 1 }),
-    usage: yes({ providerId: "codex", name: "Codex", rank: 1, profileRows: true }),
+    usage: yes({ providerId: "codex", name: "Codex", rank: 1, profileRows: true, pools: "single", windows: ["session", "weekly", "monthly"] }),
   },
   runtime: {
     provider: yes({
@@ -31,7 +31,7 @@ export const CODEX_SPEC = {
     signIn: notYetBuilt("#3212", "Named accounts on a computer wait for the Codex part of #3212 (its PR 4); only Claude Code is signed in from the dashboard there."),
     namedAccounts: notYetBuilt("#3212", "The Runtime's profile folders are Claude Code's only (CLAUDE_CONFIG_DIR); Codex waits for #3212 PR 4."),
     accountRows: notYetBuilt("#3212", "Accounts shows a computer's Claude Code accounts only; Codex waits for #3212 PR 4."),
-    authStatus: yes({ argv: ["login", "status"] }),
+    authStatus: yes({ argv: ["login", "status"], source: "own-command" }),
     identity: toVerify("The Runtime reports an identity for Claude Code only; whether `codex login status` has an account to mask has not been checked."),
     usage: notYetBuilt("undecided", "A computer reports no usage for any CLI yet."),
   },
