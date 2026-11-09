@@ -25,5 +25,12 @@ export async function proveFolderIsolation(
     if (answer === "unknown") answer = await check(launch);
     return answer === "invalid";
   } catch { return false; }
-  finally { if (scratch) { try { rmSync(scratch, { recursive: true, force: true }); } catch { /* a temp folder */ } } }
+  finally {
+    if (scratch) {
+      // The CLI's background updater can write into its folder a moment after the probe has answered (measured: an `updater` folder appeared after the first removal), so it is removed again shortly after.
+      const remove = () => { try { rmSync(scratch!, { recursive: true, force: true }); } catch { /* a temp folder */ } };
+      remove();
+      const again = setTimeout(remove, 3_000); again.unref?.();
+    }
+  }
 }
