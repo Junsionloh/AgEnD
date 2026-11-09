@@ -246,7 +246,10 @@ export class StructuredSignIn {
       await this.startInFlight;
       if (!this.current()) { await this.finish(this.lostReason()); return; }
       await this.poll();
-    } catch { await this.finish("transport_failed"); }
+    } catch (error) {
+      // A transport that was refused because the account's sign-in is not kept in the account's own folder (a Runtime's proof, AGEND-124) says so; nothing else of an error is read.
+      await this.finish(error instanceof Error && error.message === "not_isolated" ? "not_isolated" : "transport_failed");
+    }
   }
 
   view(who: object): StructuredSignInView {

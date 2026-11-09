@@ -4,7 +4,7 @@ import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { RUNTIME_PANE_MODULES } from "./runtime-pane-assets.js";
-import { CLI_REGISTRY_MODULES, runtimeSignInCapabilities } from "./cli-registry.js";
+import { CLI_REGISTRY_MODULES, runtimeAccountsCapabilities, runtimeSignInCapabilities } from "./cli-registry.js";
 import { RUNTIME_PROTOCOL_VERSION, validRuntimeVersion, type RuntimeInfo } from "./runtime-protocol.js";
 import { RUNTIME_CREDENTIAL_CAPABILITY } from "./runtime-credential-profiles.js";
 import { ACCOUNT_IDENTITY_CAPABILITY } from "./claude-auth-status.js";
@@ -36,6 +36,8 @@ export function readRuntimeInfo(options: { moduleDirectory?: string; packagePath
   const result: RuntimeInfo = { protocolVersions: [RUNTIME_PROTOCOL_VERSION], capabilities: ["exec", "mcp", ...((options.panes ?? process.platform === "win32") ? ["panes"] : []), RUNTIME_CREDENTIAL_CAPABILITY, ACCOUNT_IDENTITY_CAPABILITY, REMOTE_SIGNIN_CAPABILITY,
     // One `signin-<id>` for each CLI this build can sign in as the computer's OWN login (the registry's `runtime.signIn.profile === "none"`: Antigravity); AgEnD offers that sign-in only to a Runtime that says so.
     ...runtimeSignInCapabilities(),
+    // One `accounts-<id>` for each CLI other than Claude Code whose named accounts this build manages (Antigravity, AGEND-124): the server shows its rows on this computer only to a Runtime that says so.
+    ...runtimeAccountsCapabilities(),
     // Claimed only when this Runtime has an installer (native Windows x64): AgEnD must not offer an install to one that cannot do it.
     ...((options.install ?? nativeInstallSupported()) ? [CLI_INSTALL_CAPABILITY] : [])] };
   try {

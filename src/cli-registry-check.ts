@@ -48,8 +48,9 @@ const FACTS: Readonly<Record<CapabilityPath, Readonly<Record<string, Check>>>> =
     permissionNote: text, promptTransport: oneOf("stdin-text", "stdin-json", "file"), modelProbe: orNull(words(1)), "reason?": text, rank: int,
   },
   "runtime.install": { kind: oneOf("npm") },
-  "runtime.signIn": { argv: words(1), profile: oneOf("named", "none") },
-  "runtime.namedAccounts": { env: envName },
+  "runtime.signIn": { argv: words(1), profile: oneOf("named", "none", "both") },
+  "runtime.namedAccounts": { "env?": envName, "arg?": argName, "store?": fileName, "pin?": envMap },
+  "runtime.signOut": { "binary?": text, "args?": words(1), "remove?": fileNames, "credential?": text },
   "runtime.accountRows": { defaultRow: oneOf("read-only", "sign-in") },
   "runtime.authStatus": { argv: words(1), source: oneOf("own-command", "model-listing") },
   "runtime.identity": {},
@@ -168,17 +169,19 @@ function checkDependencies(specs: Record<string, unknown>, ids: readonly string[
     if (yesFactsOf(specs, id, "host.usage")?.hostRows === true && yesFactsOf(specs, id, "host.usage")?.profileRows !== true) problems.push(`${id}: host.usage has a row for every account on the host, but not for named accounts (profileRows)`);
     if (yesFactsOf(specs, id, "host.usage")?.profileRows === true && !has(id, "host.namedAccounts")) problems.push(`${id}: host.usage has rows for named accounts, but host.namedAccounts is not "yes"`);
     const signIn = yesFactsOf(specs, id, "runtime.signIn"), rows = yesFactsOf(specs, id, "runtime.accountRows");
-    if (signIn?.profile === "named" && !has(id, "runtime.namedAccounts")) problems.push(`${id}: runtime.signIn is a named account's, but runtime.namedAccounts is not "yes"`);
+    if ((signIn?.profile === "named" || signIn?.profile === "both") && !has(id, "runtime.namedAccounts")) problems.push(`${id}: runtime.signIn is a named account's, but runtime.namedAccounts is not "yes"`);
     // A sign-in with no profile REPLACES the computer's own login: it is only set up as that, with a row to sign it in from, a way to tell it worked, and the command the server launches (the Runtime maps the launch by exact argv).
-    if (signIn?.profile === "none") {
-      if (rows?.defaultRow !== "sign-in") problems.push(`${id}: runtime.signIn has no profile (the computer's own login), so runtime.accountRows must say \`defaultRow: "sign-in"\``);
-      if (!has(id, "runtime.authStatus")) problems.push(`${id}: runtime.signIn has no profile, but runtime.authStatus is not "yes" (nothing says whether it worked)`);
-      if (has(id, "runtime.namedAccounts")) problems.push(`${id}: runtime.signIn has no profile, but runtime.namedAccounts is "yes"`);
+    if (signIn?.profile === "none" || signIn?.profile === "both") {
+      if (rows?.defaultRow !== "sign-in") problems.push(`${id}: runtime.signIn covers the computer's own login, so runtime.accountRows must say \`defaultRow: "sign-in"\``);
+      if (!has(id, "runtime.authStatus")) problems.push(`${id}: runtime.signIn covers the computer's own login, but runtime.authStatus is not "yes" (nothing says whether it worked)`);
+      if (signIn.profile === "none" && has(id, "runtime.namedAccounts")) problems.push(`${id}: runtime.signIn has no profile, but runtime.namedAccounts is "yes" (say \`both\`)`);
+      if (signIn.profile === "both" && !has(id, "runtime.namedAccounts")) problems.push(`${id}: runtime.signIn is \`both\`, but runtime.namedAccounts is not "yes"`);
     }
-    if (rows?.defaultRow === "sign-in" && signIn?.profile !== "none") problems.push(`${id}: runtime.accountRows lets the computer's own login be signed in, but runtime.signIn is not a sign-in with no profile`);
+    if (rows?.defaultRow === "sign-in" && signIn?.profile !== "none" && signIn?.profile !== "both") problems.push(`${id}: runtime.accountRows lets the computer's own login be signed in, but runtime.signIn does not cover it`);
     const hostSignIn = yesFactsOf(specs, id, "host.structuredSignIn");
     if (signIn && hostSignIn && JSON.stringify(signIn.argv) !== JSON.stringify(hostSignIn.argv)) problems.push(`${id}: runtime.signIn launches ${JSON.stringify(signIn.argv)}, host.structuredSignIn ${JSON.stringify(hostSignIn.argv)} (the server maps a launch to the Runtime's sign-in by its exact argv)`);
-    if (signIn?.profile === "none" && !hostSignIn) problems.push(`${id}: runtime.signIn has no profile, but host.structuredSignIn is not "yes" (the dashboard drives both with the same dialog)`);
+    if ((signIn?.profile === "none" || signIn?.profile === "both") && !hostSignIn) problems.push(`${id}: runtime.signIn covers the computer's own login, but host.structuredSignIn is not "yes" (the dashboard drives both with the same dialog)`);
+    if (signIn?.profile === "both" && hostSignIn && hostSignIn.named !== true) problems.push(`${id}: runtime.signIn signs a named account in, but host.structuredSignIn does not (\`named\`): the dashboard drives both with the same dialog`);
     need(id, "runtime.accountRows", "runtime.authStatus", "a row shows the sign-in state from that probe");
     if (rows?.defaultRow === "read-only" && !has(id, "runtime.namedAccounts")) problems.push(`${id}: runtime.accountRows shows the computer's named accounts, but runtime.namedAccounts is not "yes"`);
     const status = yesFactsOf(specs, id, "runtime.authStatus"), provider = yesFactsOf(specs, id, "runtime.provider");
@@ -201,9 +204,25 @@ function checkDependencies(specs: Record<string, unknown>, ids: readonly string[
       if (removes && !has(id, "host.authCheck")) problems.push(`${id}: host.signOut removes files, but host.authCheck is not "yes" (nothing would say it signed out)`);
       if (removes && named?.home !== "launch-argument") problems.push(`${id}: host.signOut removes files, which is only set up for an account kept in its own folder (host.namedAccounts as a launch argument)`);
     }
-    const hostEnv = named?.env, runtimeEnv = yesFactsOf(specs, id, "runtime.namedAccounts")?.env;
-    if (runtimeEnv !== undefined && hostEnv !== undefined && runtimeEnv !== hostEnv) problems.push(`${id}: runtime.namedAccounts points at ${String(runtimeEnv)}, host.namedAccounts at ${String(hostEnv)}`);
-    if (runtimeEnv !== undefined && !named) problems.push(`${id}: runtime.namedAccounts is "yes" but host.namedAccounts is not`);
+    const runtimeNamed = yesFactsOf(specs, id, "runtime.namedAccounts");
+    if (runtimeNamed) {
+      const hostEnv = named?.env, runtimeEnv = runtimeNamed.env, byArgument = runtimeNamed.env === undefined;
+      if (!named) problems.push(`${id}: runtime.namedAccounts is "yes" but host.namedAccounts is not`);
+      if (runtimeEnv !== undefined && hostEnv !== undefined && runtimeEnv !== hostEnv) problems.push(`${id}: runtime.namedAccounts points at ${String(runtimeEnv)}, host.namedAccounts at ${String(hostEnv)}`);
+      for (const field of ["arg", "store", "pin"]) if ((runtimeNamed[field] === undefined) === byArgument) problems.push(`${id}: runtime.namedAccounts ${byArgument ? "has no `env`, so it needs" : "moves a home with a variable, so it has no"} \`${field}\``);
+      // The Runtime launches the CLI with the same argument and the same pin the host does: one set of facts, never two that drift apart.
+      if (byArgument && named) for (const field of ["arg", "store", "pin"]) if (JSON.stringify(runtimeNamed[field]) !== JSON.stringify(named[field])) problems.push(`${id}: runtime.namedAccounts \`${field}\` is not host.namedAccounts's`);
+    }
+    const runtimeSignOut = yesFactsOf(specs, id, "runtime.signOut");
+    if (runtimeSignOut) {
+      const command = runtimeSignOut.binary !== undefined || runtimeSignOut.args !== undefined, removes = runtimeSignOut.remove !== undefined || runtimeSignOut.credential !== undefined;
+      if (command === removes) problems.push(`${id}: runtime.signOut is either the CLI's own logout (binary and args) or what the Runtime removes (remove and credential), not both and not neither`);
+      else if (command && (runtimeSignOut.binary === undefined || runtimeSignOut.args === undefined)) problems.push(`${id}: runtime.signOut names a logout command, so it needs both \`binary\` and \`args\``);
+      else if (removes && (runtimeSignOut.remove === undefined || runtimeSignOut.credential === undefined)) problems.push(`${id}: runtime.signOut removes a named account's files and the computer's own login, so it needs both \`remove\` and \`credential\``);
+      if (removes && !has(id, "runtime.authStatus")) problems.push(`${id}: runtime.signOut removes sign-in data, but runtime.authStatus is not "yes" (nothing would say it signed out)`);
+      if (removes && yesFactsOf(specs, id, "runtime.namedAccounts")?.store !== undefined && JSON.stringify(runtimeSignOut.remove) !== JSON.stringify([runtimeNamed?.store])) problems.push(`${id}: runtime.signOut removes ${JSON.stringify(runtimeSignOut.remove)}, but the account keeps its sign-in in ${JSON.stringify(runtimeNamed?.store)}`);
+      if (!has(id, "runtime.signIn")) problems.push(`${id}: runtime.signOut is "yes" but runtime.signIn is not (nothing from the dashboard signed it in)`);
+    }
   }
   return problems;
 }

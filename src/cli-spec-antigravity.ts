@@ -1,6 +1,9 @@
 /** Antigravity (Google; the `agy` command). See cli-capability.ts for what each capability means. Built-ins only: part of the Runtime bundle. */
 import { byDesign, yes, notYetBuilt, type CliSpec } from "./cli-capability.js";
 
+/** The launch-argument facts of an Antigravity account, host and Runtime alike (cli-registry-check.ts holds them to be the same): one table, so they cannot drift. */
+const NAMED = { arg: "--app_data_dir", store: "antigravity-oauth-token", pin: { SSH_CONNECTION: "127.0.0.1 0 127.0.0.1 0" } } as const;
+
 export const ANTIGRAVITY_SPEC = {
   id: "antigravity",
   host: {
@@ -21,7 +24,7 @@ export const ANTIGRAVITY_SPEC = {
     // a new conversation: agy keeps them in the same folder as the sign-in.
     // Side effect to know: there is no agy-only switch for this (agy 1.5.3's strings on Linux and Windows hold no AGY_*/flag for the token store: AGY_ACCOUNT, AGY_ADC_AUTH, AGY_BROWSER_WS_URL, AGY_CLI_*, AGY_LLM_GATEWAY_*,
     // AGY_PROXY_STRICT_SSL … none of them), so `pin` is a variable that means "an SSH session" to every program the agent starts: an agent on a named account sees SSH_CONNECTION in its shell, tools and MCP servers.
-    namedAccounts: yes({ home: "launch-argument", arg: "--app_data_dir", store: "antigravity-oauth-token", pin: { SSH_CONNECTION: "127.0.0.1 0 127.0.0.1 0" }, carry: "handover" }),
+    namedAccounts: yes({ home: "launch-argument", ...NAMED, carry: "handover" }),
     // agy has no logout command (the TUI's `/logout` is interactive only): AgEnD removes the account's token file and then asks `agy models`, so a sign-out that did not take effect (a sign-in kept in the system
     // keyring) is reported as that. The default sign-in is `~/.gemini/antigravity-cli/antigravity-oauth-token`; a named account's is the same file in its own folder.
     signOut: yes({ remove: ["antigravity-oauth-token"] }),
@@ -40,13 +43,19 @@ export const ANTIGRAVITY_SPEC = {
       promptTransport: "stdin-json", modelProbe: ["models"], rank: 2,
     }),
     install: byDesign("Antigravity installs with a vendor PowerShell script, not an npm package (runtime-cli-install.ts); the dashboard shows the official command for the computer's owner."),
-    // The computer's OWN login (no profile): Windows keeps it in the Credential Manager under one fixed name, so signing in REPLACES that Windows user's Antigravity login.
-    signIn: yes({ argv: ["agy", "acp", "--login"], profile: "none" }),
+    // `both` (AGEND-124): the computer's OWN login (Windows keeps it in the Credential Manager under one fixed name, `gemini:antigravity`, so signing in REPLACES that Windows user's Antigravity login) AND named
+    // accounts (below). The two have separate rules in runtime-remote-accounts.ts: the own login has no profile and no owner, and the named account is a folder this Runtime created.
+    signIn: yes({ argv: ["agy", "acp", "--login"], profile: "both" }),
     // AGEND-119 re-check of AGEND-112 (whose "one login per Windows user" was only true of agy.exe's default store): agy.exe keeps its login in the Credential Manager (`gemini:antigravity`, one for every folder) unless it detects
     // WSL (a \\wsl.localhost working directory) or an SSH session (SSH_CONNECTION / SSH_TTY / SSH_CLIENT set), when it keeps `<--app_data_dir>/antigravity-oauth-token` instead ("Using file-based token storage because SSH
     // session detected" in its log). Measured on agy.exe 1.5.3 with a planted token in a test folder: the folder's login is read, deleting the file signs it out, the Credential Manager login is untouched, and a `..`
-    // relative --app_data_dir into the Runtime's own folder works (not across drives). So named accounts on a computer are possible with the host's `pin`; the Runtime side (profile folders, sign-in, probes, an agent's launch) is not built.
-    namedAccounts: notYetBuilt("undecided", "Possible (agy.exe keeps a named folder's login in a file under SSH_CONNECTION, measured AGEND-119) but the Runtime's profile folders are Claude Code's only; not built."),
+    // relative --app_data_dir into the Runtime's own folder works (not across drives, where there is no relative path: such an account is refused, never started). AGEND-124 builds the Runtime side: the account's folder is
+    // `credential-profiles\\antigravity\\<name>`, every launch (sign-in, status, an agent's) carries `--app_data_dir` and `pin`, and a sign-in first asks an EMPTY scratch folder (it must answer "signed out", else `not_isolated`).
+    // The same side effect as on the host: `pin` is `SSH_CONNECTION`, so an agent on a named account sees it in its shell, tools and MCP servers.
+    namedAccounts: yes({ ...NAMED }),
+    // agy has no logout command (the TUI's `/logout` is interactive only; it deletes the same entry `cmdkey /delete:gemini:antigravity` does, measured on a decoy entry). A named account's sign-out is removing its token file;
+    // the computer's own login is its Credential Manager entry. Either is then checked with `agy models`.
+    signOut: yes({ remove: [NAMED.store], credential: "gemini:antigravity" }),
     accountRows: yes({ defaultRow: "sign-in" }),
     // agy has no status command: the model listing the Runtime asks for anyway says whether it is signed in (exit code and words), so no extra process is started.
     authStatus: yes({ argv: ["models"], source: "model-listing" }),

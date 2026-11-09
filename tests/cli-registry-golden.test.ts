@@ -31,7 +31,8 @@ describe("host lists, as they were", () => {
   it("the Accounts page's CLIs, in its order, and which have named accounts, and which have a paired computer's rows", () => {
     expect([...ACCOUNT_CLIS]).toEqual(["claude-code", "codex", "kiro-cli", "antigravity", "grok", "muse"]);
     expect([...PROFILE_CLIS]).toEqual(["claude-code", "codex", "kiro-cli", "antigravity"]);
-    expect([...MACHINE_ACCOUNT_CLIS]).toEqual(["claude-code"]);
+    // AGEND-124: a paired computer has named accounts for Antigravity too.
+    expect([...MACHINE_ACCOUNT_CLIS]).toEqual(["claude-code", "antigravity"]);
     expect(hostIdsByRank("accountCard")).toEqual(["claude-code", "codex", "kiro-cli", "antigravity", "grok", "muse"]);
     expect(hostIds("namedAccounts")).toEqual(["claude-code", "codex", "kiro-cli", "antigravity"]);
     // AGEND-113: a paired computer also has a row for Antigravity's OWN login (no named accounts there), signed in from the Accounts page.
@@ -171,13 +172,13 @@ describe("the Windows Runtime's lists, as they were", () => {
   it("the sign-ins a computer runs for the dashboard, the variable that points a CLI at a profile, and the CLIs the Runtime installs", () => {
     expect(RUNTIME_SIGNIN_CLIS).toEqual({ "claude-code": ["claude", "auth", "login"], "antigravity": ["agy", "acp", "--login"] });
     expect(Object.isFrozen(RUNTIME_SIGNIN_CLIS)).toBe(true);
-    expect(CREDENTIAL_PROFILE_CLIS).toEqual({ "claude-code": "CLAUDE_CONFIG_DIR" });
+    expect(CREDENTIAL_PROFILE_CLIS).toEqual({ "claude-code": { env: "CLAUDE_CONFIG_DIR" }, antigravity: { arg: "--app_data_dir", store: "antigravity-oauth-token", pin: { SSH_CONNECTION: "127.0.0.1 0 127.0.0.1 0" } } });
     expect(Object.keys(INSTALLABLE_CLIS)).toEqual(["claude-code", "codex"]);
     expect(runtimeIds("install")).toEqual(["claude-code", "codex"]);
     expect(runtimeIds("signIn")).toEqual(["claude-code", "antigravity"]);
     expect(runtimeFacts("claude-code", "signIn")).toMatchObject({ argv: ["claude", "auth", "login"], profile: "named" });
     // The one sign-in with no profile (the computer's OWN login, which signing in REPLACES): Antigravity only, and the Runtime says so with `signin-<id>`.
-    expect(runtimeFacts("antigravity", "signIn")).toMatchObject({ argv: ["agy", "acp", "--login"], profile: "none" });
+    expect(runtimeFacts("antigravity", "signIn")).toMatchObject({ argv: ["agy", "acp", "--login"], profile: "both" });
     expect(runtimeDefaultLoginIds()).toEqual(["antigravity"]);
     expect(runtimeSignInCapabilities()).toEqual(["signin-antigravity"]);
     expect(runtimeFacts("antigravity", "authStatus")).toMatchObject({ argv: ["models"], source: "model-listing" });

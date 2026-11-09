@@ -28,6 +28,7 @@ export const KIRO_CLI_SPEC = {
     install: byDesign("Kiro installs from an MSI into Program Files, which the Runtime does not run (runtime-cli-install.ts); the dashboard shows the official command for the computer's owner."),
     signIn: notYetBuilt("undecided", "Only Claude Code is signed in from the dashboard on a computer."),
     namedAccounts: notYetBuilt("undecided", "The Runtime's profile folders are Claude Code's only."),
+    signOut: notYetBuilt("undecided", "The Runtime signs a Claude Code profile out only."),
     accountRows: notYetBuilt("undecided", "Accounts shows a computer's Claude Code accounts only."),
     authStatus: notYetBuilt("undecided", "The Windows adapter has no verified sign-in probe for Kiro (`authProbe` is null); its state is unknown, not signed out."),
     identity: notApplicable("Needs a sign-in probe on the computer first."),

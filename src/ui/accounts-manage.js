@@ -49,8 +49,12 @@ register("accountsManage", {
     // #3190 Part 3c: an account on a paired computer (its Runtime does the work; the computer's owner has to allow it there).
     addTitleMachine: "Add a {0} account on {1}", addLeadMachine: "A named account is a separate sign-in kept on {0}. Name it, then sign it in here. Its folder is made by that computer's Runtime.",
     removeLeadMachine: "This deletes the account's folder on {0}: its sign-in and its own copies of conversations. That computer's Runtime does it, and records it.",
+    removeLeadMachineFolder: "This deletes the account's folder on {0}: its sign-in and its own conversations. That computer's Runtime does it, and records it.",
     inUseMachineDefault: "This computer's default account for agents (change it on that computer: agend-runtime profile default NAME)",
     signOutLeadMachine: "AgEnD asks {0}'s Runtime to run {1}'s own logout for this account. Its conversations stay.",
+    signOutLeadMachineFiles: "AgEnD asks {0}'s Runtime to delete this account's sign-in file on that computer, then to check with {1} that it is signed out. Its conversations stay.",
+    signOutLeadMachineOwn: "This signs {1} out on {0}: the Windows user's own {1} sign-in there, which every agent on that computer that does not name an account uses. AgEnD asks that computer's Runtime to remove it, then checks with {1} that it is signed out. Sign in again from here to use it.",
+    signOutTitleOwn: "Sign out of {0} on {1}?",
     err_machine_unknown: "That computer is not paired any more.", err_machine_offline: "That computer is offline. Start its Runtime, then try again.",
     err_machine_unsupported: "That computer's Runtime is too old for this. Update the Runtime on it, then try again.",
     err_machine_accounts_off: "The owner of that computer has not allowed this. On that computer run: agend-runtime remote-setup accounts on",
@@ -95,8 +99,12 @@ register("accountsManage", {
     // #3190 Part 3c：配對電腦上的帳號（由那台電腦的 Runtime 執行；需要電腦的擁有者在那裡允許）。
     addTitleMachine: "在 {1} 新增 {0} 帳號", addLeadMachine: "具名帳號是保存在 {0} 上的另一組登入。先取名，再在這裡登入。它的資料夾由那台電腦的 Runtime 建立。",
     removeLeadMachine: "這會刪除 {0} 上該帳號的資料夾：它的登入，以及它自己的對話副本。由那台電腦的 Runtime 執行並記錄。",
+    removeLeadMachineFolder: "這會刪除 {0} 上該帳號的資料夾：它的登入，以及它自己的對話。由那台電腦的 Runtime 執行並記錄。",
     inUseMachineDefault: "這台電腦給 Agent 用的預設帳號（請在那台電腦上更改：agend-runtime profile default NAME）",
     signOutLeadMachine: "AgEnD 會請 {0} 的 Runtime 用 {1} 自己的登出指令登出這個帳號。它的對話會保留。",
+    signOutLeadMachineFiles: "AgEnD 會請 {0} 的 Runtime 刪除那台電腦上這個帳號的登入檔，再用 {1} 確認已經登出。它的對話會保留。",
+    signOutLeadMachineOwn: "這會登出 {0} 上的 {1}：那台電腦上 Windows 使用者自己的 {1} 登入，電腦上所有沒有指定帳號的 Agent 都用它。AgEnD 會請那台電腦的 Runtime 移除它，再用 {1} 確認已經登出。要再使用請從這裡重新登入。",
+    signOutTitleOwn: "要登出 {1} 上的 {0} 嗎？",
     err_machine_unknown: "那台電腦已不再配對。", err_machine_offline: "那台電腦離線了。請先啟動它的 Runtime，再試一次。",
     err_machine_unsupported: "那台電腦的 Runtime 太舊，無法這樣做。請先更新它的 Runtime，再試一次。",
     err_machine_accounts_off: "那台電腦的擁有者尚未允許這件事。請在那台電腦上執行：agend-runtime remote-setup accounts on",
@@ -207,7 +215,7 @@ export function RemoveAccountDialog({ cli, row, label, onClose, onMove, onRemove
   return html`<${Dialog} title=${tm("removeTitle", label, row.profile)} onClose=${onClose} busy=${busy} actions=${html`<button type="button" class="btn" disabled=${busy} onClick=${onClose}>${tm("cancel")}</button>
     ${errCode === "signing_in" && !machine ? html`<button type="button" class="btn" disabled=${busy || inUse || typed !== row.profile} onClick=${cancelAndRemove}>${tm("cancelAndRemove")}</button>` : null}
     <button type="button" class="btn btn-danger" disabled=${busy || inUse || typed !== row.profile} onClick=${go}>${busy ? tm("removing") : tm("removeGo")}</button>`}>
-    <p>${machine ? tm("removeLeadMachine", machine.name) : cli.backend === "claude-code" ? tm("removeLeadClaude") : CLI_CAPS[cli.backend] && CLI_CAPS[cli.backend].accountIsFolder ? tm("removeLeadFolder") : tm("removeLead")}${tm("sep")}${tm("removeAfter")}</p>
+    <p>${machine ? tm(CLI_CAPS[cli.backend] && CLI_CAPS[cli.backend].accountIsFolder ? "removeLeadMachineFolder" : "removeLeadMachine", machine.name) : cli.backend === "claude-code" ? tm("removeLeadClaude") : CLI_CAPS[cli.backend] && CLI_CAPS[cli.backend].accountIsFolder ? tm("removeLeadFolder") : tm("removeLead")}${tm("sep")}${tm("removeAfter")}</p>
     ${inUse ? html`<div class="s-account-inuse" role="status"><p><strong>${tm("inUse")}</strong></p><ul>
       ${users.agents.map((name) => html`<li><span>${tm("inUseAgent", name)}</span>${moveBtn({ kind: "agent", name })}</li>`)}
       ${users.fleetDefault ? html`<li><span>${machine ? tm("inUseMachineDefault") : tm("inUseDefault", label)}</span>${machine ? null : moveBtn({ kind: "default" })}</li>` : null}
@@ -232,7 +240,8 @@ export function SignOutDialog({ cli, row, label, mode = "signout", onClose, onMo
   const any = users.agents.length > 0 || users.classic.length > 0 || users.fleetDefault;
   const which = row.profile ? tm("acctName", row.profile) : tm("defName");
   const machine = row.scope && row.scope.kind === "machine" ? row.scope : null;   // #3190 Part 3c: an account on a paired computer
-  const files = !machine && !!(CLI_CAPS[cli.backend] && CLI_CAPS[cli.backend].signOutFiles);   // AGEND-119: a CLI with no logout command is signed out by removing its sign-in file
+  const files = !!(CLI_CAPS[cli.backend] && CLI_CAPS[cli.backend].signOutFiles);   // AGEND-119: a CLI with no logout command is signed out by removing its sign-in file (AGEND-124: on a computer too)
+  const own = !!machine && !row.profile;   // AGEND-124: the computer's OWN login of a CLI (Antigravity), signed out through that computer's Runtime
   const go = async () => {
     if (busy) return;
     setBusy(true); setErr("");
@@ -244,10 +253,10 @@ export function SignOutDialog({ cli, row, label, mode = "signout", onClose, onMo
     onClose(); onDone(r);
   };
   const moveBtn = (user) => html`<button type="button" class="btn btn-sm" disabled=${busy} onClick=${() => { onClose(); onMove(user); }}>${tm("move")}</button>`;
-  return html`<${Dialog} title=${mode === "switch" ? tm("switchTitle", label) : tm("signOutTitle", label, which)} onClose=${onClose} busy=${busy}
+  return html`<${Dialog} title=${mode === "switch" ? tm("switchTitle", label) : own ? tm("signOutTitleOwn", label, machine.name) : tm("signOutTitle", label, which)} onClose=${onClose} busy=${busy}
     actions=${html`<button type="button" class="btn" disabled=${busy} onClick=${onClose}>${tm("cancel")}</button>
     <button type="button" class=${mode === "switch" ? "btn btn-primary" : "btn btn-danger"} disabled=${busy} onClick=${go}>${busy ? tm("signingOut") : mode === "switch" ? tm("switchGo") : tm("signOutGo")}</button>`}>
-    <p>${mode === "switch" ? tm(files ? "switchLeadFiles" : "switchLead", label) : machine ? tm("signOutLeadMachine", machine.name, label) : tm(files ? "signOutLeadFiles" : "signOutLead", label)}</p>
+    <p>${mode === "switch" ? tm(files ? "switchLeadFiles" : "switchLead", label) : own ? tm("signOutLeadMachineOwn", machine.name, label) : machine ? tm(files ? "signOutLeadMachineFiles" : "signOutLeadMachine", machine.name, label) : tm(files ? "signOutLeadFiles" : "signOutLead", label)}</p>
     ${any ? html`<div class="s-account-inuse" role="status"><p><strong>${tm("stopUsers")}</strong></p><ul>
       ${users.agents.map((name) => html`<li><span>${tm("inUseAgent", name)}</span>${mode === "switch" ? null : moveBtn({ kind: "agent", name })}</li>`)}
       ${users.fleetDefault && row.profile ? html`<li><span>${machine ? tm("inUseMachineDefault") : tm("inUseDefault", label)}</span>${machine ? null : moveBtn({ kind: "default" })}</li>` : null}

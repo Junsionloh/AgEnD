@@ -49,7 +49,10 @@ export const machineSignInStore = createStore({ phase: "", reason: "" });
 /** The endpoint of one profile's sign-in on one computer; with a `backend` whose login is the computer's own (no profile), that login. */
 export const machineSignInEndpoint = (machineId, profile, backend) => backend && !profile && ownLogin(backend)
   ? `/ui/browser-backend-signins?machine=${encodeURIComponent(machineId)}&backend=${encodeURIComponent(backend)}`
-  : `/ui/browser-backend-signins?machine=${encodeURIComponent(machineId)}&profile=${encodeURIComponent(profile)}`;
+  // AGEND-124: a NAMED account of a CLI other than Claude Code (Antigravity) names its CLI too; Claude Code's address is the one it always had.
+  : backend && backend !== "claude-code" && profile
+    ? `/ui/browser-backend-signins?machine=${encodeURIComponent(machineId)}&backend=${encodeURIComponent(backend)}&profile=${encodeURIComponent(profile)}`
+    : `/ui/browser-backend-signins?machine=${encodeURIComponent(machineId)}&profile=${encodeURIComponent(profile)}`;
 
 /** `machine`: `{ id, name }`; `profile`: the credential profile's name on that computer (none for a CLI whose login is the computer's own: its `backend` says which). */
 export function MachineSignInDialog({ machine, profile, backend, onClose }) {
@@ -63,10 +66,11 @@ export function MachineSignInDialog({ machine, profile, backend, onClose }) {
     const unlisten = onLang(() => cards.relabel());
     return () => { unlisten(); cards.dispose(); machineSignInStore.set({ phase: "", reason: "" }); };
   }, [machine.id, profile, backend]);
-  return html`<${Dialog} title=${bare ? tm("titleDefault", cliLabel(backend), machine.name) : tm("title", cliLabel("claude-code"), profile, machine.name)} onClose=${close}
+  const product = cliLabel(backend && backend !== "claude-code" ? backend : "claude-code"), claude = !backend || backend === "claude-code";
+  return html`<${Dialog} title=${bare ? tm("titleDefault", cliLabel(backend), machine.name) : tm("title", product, profile, machine.name)} onClose=${close}
     actions=${html`<button type="button" class="btn" onClick=${close}>${tm("close")}</button>`}>
     <p>${bare ? tm("leadDefault", cliLabel(backend), machine.name) : tm("lead", machine.name)}</p>
-    ${bare ? null : html`<p class="note">${tm("console", `agend-runtime login claude-code ${profile}`)}</p>`}
+    ${bare || !claude ? null : html`<p class="note">${tm("console", `agend-runtime login claude-code ${profile}`)}</p>`}
     <div class="signin-browser" ref=${root}></div>
   </${Dialog}>`;
 }
@@ -76,8 +80,9 @@ export function MachineSignInDialog({ machine, profile, backend, onClose }) {
  * Windows user, which is not an account AgEnD created, so it never changes without that answer.
  */
 export function openMachineSignIn({ machine, profile, backend }) {
-  const target = { machine: { id: machine.id, name: machine.name }, ...(profile ? { profile } : {}), ...(!profile && ownLogin(backend) ? { backend } : {}) };
-  if (!target.backend) { showDialog(MachineSignInDialog, target); return; }
+  const target = { machine: { id: machine.id, name: machine.name }, ...(profile ? { profile } : {}), ...(!profile && ownLogin(backend) ? { backend } : {}), ...(profile && backend && backend !== "claude-code" ? { backend } : {}) };
+  // A NAMED account (with or without a CLI other than Claude Code) is one AgEnD's Runtime made: no question first. Only the computer's own login is confirmed.
+  if (profile || !target.backend) { showDialog(MachineSignInDialog, target); return; }
   void confirmDialog({ title: tm("confirmTitle", machine.name, cliLabel(backend)), message: tm("confirm", machine.name, cliLabel(backend)), confirmLabel: tm("confirmLabel") })
     .then((yes) => { if (yes) showDialog(MachineSignInDialog, target); }, () => {});
 }

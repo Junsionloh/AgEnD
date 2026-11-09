@@ -344,7 +344,7 @@ import { LoginWindowLock } from "./login-window-lock.js";
 import { BrowserBackendSignIns } from "./browser-backend-signins.js";
 import { createStructuredSignInTransport } from "./structured-signin-transport.js";
 import { ONBOARDING_BACKENDS, ONBOARDING_BROWSER_BACKENDS, readPendingBackendSignIns } from "./backend-signin-pending.js";
-import { hostFacts } from "./cli-registry.js";
+import { hostFacts, runtimeAccountsCapability, runtimeFacts } from "./cli-registry.js";
 import { handleSettingsRequest, type RawConfigPatch } from "./settings-api.js";
 import type { SettingsChangeAuthority } from "./settings-authority.js";
 import { setLocale, detectLocale, getLocale, t } from "./locale.js";
@@ -1368,10 +1368,14 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         if(sandbox==="read-only" && !provider.readOnlySupport)throw new Error("This runtime CLI cannot enforce read-only execution");
         if(credentialProfile!==undefined){
           // Fail closed at selection time, not at the first message: an old Runtime would ignore the name and run another account.
-          if(!machine.runtimeInfo?.capabilities.includes(RUNTIME_CREDENTIAL_CAPABILITY))throw new Error("This computer's Runtime is too old to choose a Claude account. Update the Runtime on that computer, then try again.");
-          const row=machine.inventory?.credentialProfiles?.profiles.find(profile=>profile.name===credentialProfile);
-          if(!row)throw new Error(`This computer has not reported a credential profile named "${credentialProfile}". On that computer run: agend-runtime login claude-code ${credentialProfile}, then choose Detect again in that computer's CLI diagnostics (Settings → Runtime).`);
-          if(row.loggedIn===false)throw new Error(`Credential profile "${credentialProfile}" is not signed in on that computer. Sign in there: agend-runtime login claude-code ${credentialProfile}`);
+          const product=cli==="claude-code"?"Claude":(runtimeFacts(cli,"provider")?.name??cli);
+          if(!machine.runtimeInfo?.capabilities.includes(RUNTIME_CREDENTIAL_CAPABILITY)||(cli!=="claude-code"&&!machine.runtimeInfo.capabilities.includes(runtimeAccountsCapability(cli))))throw new Error(`This computer's Runtime is too old to choose a ${product} account. Update the Runtime on that computer, then try again.`);
+          // Claude Code's profiles are the report's `profiles`; another CLI's (Antigravity) are its `byCli`.
+          const reported=cli==="claude-code"?machine.inventory?.credentialProfiles?.profiles:machine.inventory?.credentialProfiles?.byCli?.[cli];
+          const row=reported?.find(profile=>profile.name===credentialProfile);
+          const hint=cli==="claude-code"?`On that computer run: agend-runtime login claude-code ${credentialProfile}, then choose Detect again in that computer's CLI diagnostics (Settings → Runtime).`:"Add it in Settings → Agent → Accounts, under that computer's name.";
+          if(!row)throw new Error(`This computer has not reported a credential profile named "${credentialProfile}". ${hint}`);
+          if(row.loggedIn===false)throw new Error(`Credential profile "${credentialProfile}" is not signed in on that computer. ${cli==="claude-code"?`Sign in there: agend-runtime login claude-code ${credentialProfile}`:"Sign it in from Settings → Agent → Accounts."}`);
         }
       },
       emit:(event,data)=>{
@@ -20382,16 +20386,17 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     return this.machineSignInsInstance ??= new MachineSignIns({
       call: (id, operation, payload, timeoutMs) => this.runtimeCoordinator().callAccount(id, operation, payload, timeoutMs),
       current: owner => this.browserSignInOwnerCurrent(owner),
-      reported: (id, profile) => this.machineAccounts.profileState(id, profile),
+      reported: (id, profile, backend) => this.machineAccounts.profileState(id, profile, backend),
       reportedDefault: (id, backend) => this.machineAccounts.reportedDefault(id, backend),
-      readiness: (id, backend) => this.machineAccounts.readiness(id, backend),
+      readiness: (id, backend, named) => this.machineAccounts.readiness(id, backend, named),
       actor: owner => { const handle = (owner as SessionRecord).handle; return typeof handle === "string" && /^[a-f0-9]{16}$/.test(handle) ? `admin:${handle}` : null; },
       changed: (event, owner) => {
         // Safe fields only: the computer, the CLI, the profile name (none for Antigravity's default login), a phase and a fixed reason. Never a URL, a code, output or an e-mail address.
         this.logger.info({ machine: event.machine, backend: event.backend, ...(event.profile ? { profile: event.profile } : {}), phase: event.phase, ...(event.reason ? { reason: event.reason } : {}), by: (owner as SessionRecord).label },
           "Computer account sign-in from Settings → Accounts");
         // The page reads the computer's last detection (agy is never run for a read): a login made just now is remembered until the next one.
-        if (event.phase === "done") this.machineAccounts.noteDefaultLogin(event.machine, event.backend, true);
+        // Only the computer's OWN login (no profile) is remembered here: a named account's sign-in is reported by its Runtime's inventory, which it sends before the sign-in ends.
+        if (event.phase === "done" && event.profile === undefined) this.machineAccounts.noteDefaultLogin(event.machine, event.backend, true);
         broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"));
         this.needsYou?.poke();
       },
@@ -20404,8 +20409,9 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       call: (id, operation, payload, timeoutMs) => this.runtimeCoordinator().callAccount(id, operation, payload, timeoutMs),
       machine: id => remoteRuntimeEnabled() ? this.runtimeCoordinator().machine(id) ?? undefined : undefined,
       machines: () => remoteRuntimeEnabled() ? this.runtimeCoordinator().listMachines() : [],
-      agents: id => machineAgents(this.fleetConfig?.instances, id, name => { try { return nativeCredentialProfile(this.fleetConfig?.instances[name]) ?? null; } catch { return null; } }, this.fleetConfig?.defaults?.backend ?? "claude-code"),
-      signingIn: (id, profile) => this.machineSignInsInstance?.signingIn(id, profile) ?? false,
+      agents: (id, backend = "claude-code") => machineAgents(this.fleetConfig?.instances, id, name => { try { return nativeCredentialProfile(this.fleetConfig?.instances[name]) ?? null; } catch { return null; } }, this.fleetConfig?.defaults?.backend ?? "claude-code", backend),
+      signingIn: (id, profile, backend) => this.machineSignInsInstance?.signingIn(id, profile, backend) ?? false,
+      signingInDefault: (id, backend) => this.machineSignInsInstance?.signingInDefault(id, backend) ?? false,
       cliAgents: (id, backend) => machineAgents(this.fleetConfig?.instances, id, () => null, this.fleetConfig?.defaults?.backend ?? "claude-code", backend).map(agent => agent.name),
       log: entry => this.logger.info(entry, entry.outcome === "ok" ? "Computer account changed from Settings → Accounts" : "Computer account change refused"),
     });
