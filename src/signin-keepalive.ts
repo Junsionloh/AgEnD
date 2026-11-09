@@ -64,6 +64,8 @@ const CLAUDE_TIMEOUT_MS = 60_000, FALLBACK_TIMEOUT_MS = 120_000, CODEX_TIMEOUT_M
 /** Antigravity's access token lasts an hour; agy renews it when it is within ~5 minutes of lapsing. A run is due from six minutes before, and a switched-on sign-in is looked at this often. */
 export const AGY_DUE_AHEAD_MS = 6 * MIN;
 export const AGY_WAKE_MS = 5 * MIN;
+/** After a failed `agy models` run (or a failure to read the file) it is not started again for this long: a network that is down is not helped by asking every five minutes. */
+export const AGY_BACKOFF_MS = 30 * MIN;
 
 export const SETTINGS_FILE = "signin-keepalive.json";
 const WORK_DIR = "signin-keepalive";
@@ -72,7 +74,7 @@ const WORK_DIR = "signin-keepalive";
 
 export type Outcome =
   | "refreshed" | "fallback_refreshed" | "not_needed" | "checked"   // fine ("checked": signed in, the renewal not readable — macOS Keychain)
-  | "in_use" | "unsupported"                                       // left alone
+  | "in_use" | "unsupported" | "keyring"                           // left alone ("keyring": Antigravity's default sign-in is in the system keyring: no file to renew or read back)
   | "not_renewed" | "needs_sign_in" | "transient";                 // wants attention (transient: after a while)
 
 export interface KeepAliveRecord {
@@ -153,12 +155,13 @@ export const codexDue = (m: { lastRefresh?: number; accessExp?: number }, now: n
 const claudeDead = (m: ClaudeMeta): boolean => m.state === "ok" && (!m.hasRefresh || m.expiresAt === 0);
 
 /** The record after a run's outcome: failures counted, attention dated (pure). */
-export function nextRecord(prev: KeepAliveRecord | undefined, outcome: Outcome, now: number, facts: Partial<KeepAliveRecord> = {}): KeepAliveRecord {
+export function nextRecord(prev: KeepAliveRecord | undefined, outcome: Outcome, now: number, facts: Partial<KeepAliveRecord> = {}, opts: { byTimeOnly?: boolean } = {}): KeepAliveRecord {
   const base: KeepAliveRecord = { ...(prev ?? {}), ...facts, lastAt: now, outcome };
   if (outcome === "transient") {
     const failCount = (prev?.outcome === "transient" ? prev.failCount ?? 0 : 0) + 1;
     const failSince = prev?.outcome === "transient" && prev.failSince !== undefined ? prev.failSince : now;
-    const due = failCount >= TRANSIENT_RUNS || now - failSince >= TRANSIENT_MS;
+    // `byTimeOnly` (AGEND-119, Antigravity): runs there come every half hour or so, not once a day, so how many failed in a row says nothing; only how long it has been failing does.
+    const due = (!opts.byTimeOnly && failCount >= TRANSIENT_RUNS) || now - failSince >= TRANSIENT_MS;
     return { ...base, failCount, failSince, attentionSince: due ? (prev?.outcome === "transient" && prev.attentionSince !== undefined ? prev.attentionSince : now) : undefined };
   }
   const { failCount: _c, failSince: _s, attentionSince: _a, ...rest } = base;
@@ -225,7 +228,7 @@ export function readEntries(dataDir: string): KeepAliveEntry[] {
   }
   return out;
 }
-const OUTCOMES: ReadonlySet<string> = new Set(["refreshed", "fallback_refreshed", "not_needed", "checked", "in_use", "unsupported", "not_renewed", "needs_sign_in", "transient"]);
+const OUTCOMES: ReadonlySet<string> = new Set(["refreshed", "fallback_refreshed", "not_needed", "checked", "in_use", "unsupported", "keyring", "not_renewed", "needs_sign_in", "transient"]);
 function cleanRecord(r: Record<string, any>): KeepAliveRecord | undefined {
   const out: KeepAliveRecord = {};
   for (const k of ["lastAt", "expiresAt", "endsAt", "lastRefresh", "failCount", "failSince", "attentionSince"] as const) { const v = num(r[k]); if (v !== undefined) out[k] = v; }
@@ -380,6 +383,12 @@ export interface KeepAliveView { enabled: boolean; fallback?: boolean; endsAt?: 
 export type SetResult = { ok: true } | { ok: false; error: "backend" | "profile" | "fallback" | "write" };
 
 const iso = (ms: number | undefined) => ms === undefined ? undefined : new Date(ms).toISOString();
+/** Whether a new record says anything the last one did not: its outcome, the dates a page shows and whether it wants attention (not the time of the look). */
+function sameState(prev: KeepAliveRecord | undefined, next: KeepAliveRecord): boolean {
+  return !!prev && prev.outcome === next.outcome && prev.expiresAt === next.expiresAt && prev.endsAt === next.endsAt
+    && (prev.attentionSince !== undefined) === (next.attentionSince !== undefined);
+}
+
 /** A run whose setting changed (or whose service stopped) since it began: it does nothing more and records nothing. */
 class Withdrawn extends Error {}
 
@@ -481,6 +490,8 @@ export class SignInKeepAlive {
       else if (backend === "antigravity") { const m = readAntigravityStoreMeta(home); if (m.state === "ok") expiresAt = m.expiresAt ?? expiresAt; }
       else { const m = readCodexMeta(join(home, "auth.json")); if (m.state === "ok") { expiresAt = m.accessExp ?? expiresAt; planType = m.planType ?? planType; } }
     }
+    // AGEND-119: the default Antigravity sign-in with no token file is in the system keyring (nothing to renew): no switch is offered for it (one already on stays, so it can be turned off).
+    if (backend === "antigravity" && profile === null && home && e?.enabled !== true && readAntigravityStoreMeta(home).state === "missing") return undefined;
     const staleSignIn = this.signedInSince(backend, home, r);
     return {
       enabled: e?.enabled === true, ...(backend === "claude-code" ? { fallback: e?.fallback === true } : {}),
@@ -535,7 +546,7 @@ export class SignInKeepAlive {
   private find(key: string): KeepAliveEntry | undefined { return this.entries.find(x => entryKey(x.backend, x.profile) === key); }
 
   private async pass(opts: { force?: boolean; only?: { backend: KeepAliveBackend; profile: string | null }; backend?: KeepAliveBackend }): Promise<void> {
-    let changed = false;
+    let changed = false, notify = false;
     // Each sign-in as it is NOW: one switched off while an earlier one ran is not run.
     for (const key of this.entries.map(x => entryKey(x.backend, x.profile))) {
       if (this.stopped) break;
@@ -555,6 +566,8 @@ export class SignInKeepAlive {
       if (e.backend === "antigravity" && !opts.force && !opts.only && e.record) {
         const m = readAntigravityStoreMeta(home);
         if (m.state === "ok" && m.hasRefresh && m.expiresAt !== undefined && m.expiresAt > now + AGY_DUE_AHEAD_MS) continue;
+        // A run that failed (or that agy answered "Please sign in") is not repeated for AGY_BACKOFF_MS (nothing is started, held or recorded meanwhile).
+        if ((e.record.outcome === "transient" || e.record.outcome === "needs_sign_in") && e.record.lastAt !== undefined && now - e.record.lastAt < AGY_BACKOFF_MS && e.record.lastAt <= now) continue;
       }
       let record: KeepAliveRecord;
       const hold = this.deps.acquire(e.backend, e.profile);
@@ -583,6 +596,8 @@ export class SignInKeepAlive {
       if (!current?.enabled) continue;
       this.entries = this.entries.map(x => x === current ? { ...current, record } : x);
       changed = true;
+      // Antigravity is looked at often: a pass that found nothing new (the same outcome, dates and attention) is saved but does not tell the pages or Needs you again.
+      if (!(e.backend === "antigravity" && sameState(e.record, record))) notify = true;
       this.deps.log(record.outcome === "transient" || record.outcome === "needs_sign_in" || record.outcome === "not_renewed" ? "warn" : "info", "Sign-in keep-alive", {
         backend: e.backend, profile: e.profile ?? "(default)", outcome: record.outcome,
         ...(record.expiresAt ? { expiresAt: iso(record.expiresAt) } : {}), ...(record.endsAt ? { endsAt: iso(record.endsAt) } : {}),
@@ -591,7 +606,7 @@ export class SignInKeepAlive {
     }
     if (changed) {
       try { writeEntries(this.deps.dataDir, this.entries); } catch (err) { this.deps.log("warn", "Sign-in keep-alive: could not save", { err: String((err as Error)?.message ?? err) }); }
-      this.deps.changed();
+      if (notify) this.deps.changed();
     }
   }
 
@@ -692,8 +707,10 @@ export class SignInKeepAlive {
   private async runAntigravity(e: KeepAliveEntry, home: string, now: number, wanted: () => void, signal: AbortSignal, force: boolean): Promise<KeepAliveRecord> {
     const before = readAntigravityStoreMeta(home);
     const facts = (m: AntigravityStoreMeta): Partial<KeepAliveRecord> => m.state === "ok" && m.expiresAt ? { expiresAt: m.expiresAt } : {};
-    if (before.state === "missing") return nextRecord(e.record, "needs_sign_in", now);
-    if (before.state === "unreadable") return nextRecord(e.record, "transient", now);
+    const timed = { byTimeOnly: true };
+    // The default sign-in with no token file is, on a desktop Linux or a Mac, one kept in the system keyring: signed in as far as anyone can tell, but nothing here to renew or read back. Never "sign in again".
+    if (before.state === "missing") return e.profile === null ? nextRecord(e.record, "keyring", now) : nextRecord(e.record, "needs_sign_in", now);
+    if (before.state === "unreadable") return nextRecord(e.record, "transient", now, {}, timed);
     if (!before.hasRefresh) return nextRecord(e.record, "needs_sign_in", now, facts(before));
     if (!force && before.expiresAt !== undefined && before.expiresAt > now + AGY_DUE_AHEAD_MS) return nextRecord(e.record, "not_needed", now, facts(before));
     wanted();
@@ -702,12 +719,12 @@ export class SignInKeepAlive {
     const r = await this.runners.antigravityModels(launch, this.workDir("antigravity-cwd"), signal);
     wanted();
     const after = readAntigravityStoreMeta(home);
-    if (after.state === "missing") return nextRecord(e.record, "needs_sign_in", now);
+    if (after.state === "missing") return e.profile === null ? nextRecord(e.record, "keyring", now) : nextRecord(e.record, "needs_sign_in", now);
     if (r.signedOut) return nextRecord(e.record, "needs_sign_in", now, facts(after));
-    if (r.code === null || after.state !== "ok") return nextRecord(e.record, "transient", now, facts(after));
+    if (r.code === null || after.state !== "ok") return nextRecord(e.record, "transient", now, facts(after), timed);
     const moved = after.expiresAt !== undefined && after.expiresAt > now && (before.expiresAt === undefined || after.expiresAt > before.expiresAt);
     if (moved) return nextRecord(e.record, "refreshed", now, facts(after));
     // It ran and listed models (exit 0) but the token did not move: it was still good (inside agy's own margin), so nothing needed renewing.
-    return r.code === 0 ? nextRecord(e.record, "checked", now, facts(after)) : nextRecord(e.record, "transient", now, facts(after));
+    return r.code === 0 ? nextRecord(e.record, "checked", now, facts(after)) : nextRecord(e.record, "transient", now, facts(after), timed);
   }
 }

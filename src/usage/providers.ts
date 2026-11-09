@@ -745,7 +745,11 @@ export function agyUsageBuckets(summary: AgyQuotaSummary, models: AgyModels | nu
   return [...fromSummary, ...fromModels.filter(b => !isArgon(b) || !references.some(o => sameQuota(o, b)))];
 }
 
-/** Two buckets that count against one limit: the same remaining fraction and the same reset (a rolling window of its own never ties to the second with another's). */
+/**
+ * Two buckets that count against one limit: the same remaining fraction and the same reset (a rolling window of its own never ties to the second with another's). The trade-off: an independent pool that is exactly
+ * in step with another (the same fraction AND the same reset time, both untouched at 100% for instance) is taken for a repeat and not drawn as a line of its own, until its numbers part. A quota with no reset time
+ * never matches. That is a line missing for a while, never a wrong number; the other reading drew a repeat as a pool of its own (the Ultra account's Argon, measured) for as long as the account existed.
+ */
 function sameQuota(a: AgyBucket, b: AgyBucket): boolean {
   return typeof a.remainingFraction === "number" && typeof b.remainingFraction === "number" && Math.abs(a.remainingFraction - b.remainingFraction) < 1e-9
     && !!a.resetTime && a.resetTime === b.resetTime;

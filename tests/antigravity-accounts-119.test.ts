@@ -21,7 +21,8 @@ import { signOutAccount } from "../src/accounts-signout.js";
 import { createStructuredSignInTransport } from "../src/structured-signin-transport.js";
 import { StructuredSignIn, type StructuredSignInTransport } from "../src/structured-signin.js";
 import { LoginWindowLock } from "../src/login-window-lock.js";
-import { AGY_DUE_AHEAD_MS, SignInKeepAlive, type KeepAliveDeps, type KeepAliveRunners } from "../src/signin-keepalive.js";
+import { proveFolderIsolation } from "../src/account-isolation.js";
+import { AGY_BACKOFF_MS, AGY_DUE_AHEAD_MS, AGY_WAKE_MS, TRANSIENT_MS, SignInKeepAlive, attentionOf, type KeepAliveDeps, type KeepAliveRunners } from "../src/signin-keepalive.js";
 import { fetchAntigravityUsage, providersForConfig } from "../src/usage/providers.js";
 import { checkAuthIdentity, checkAuthStatus, setAuthCheckRunnerForTests, withProfileArgs } from "../src/login-flows.js";
 import { AntigravityBackend } from "../src/backend/antigravity.js";
@@ -228,6 +229,12 @@ describe("Sign out: agy has no logout command, so AgEnD removes the account's to
     expect(await signOutAccount(w.data, req("work", { signingIn: true }), deps(async () => "invalid"))).toEqual({ ok: false, error: "signing_in" });
     expect(left()).toBe(true);
   });
+  it("every check is made BEFORE the first removal: an owner that has lost the writer window (stillOwner false) leaves the token where it was", async () => {
+    const w = world(); tokenFile(w.home("work"));
+    const d = { ...deps(async () => "invalid"), stillOwner: () => false };
+    expect(await signOutAccount(w.data, req("work"), d)).toEqual({ ok: false, error: "failed" });
+    expect(existsSync(join(w.home("work"), "antigravity-oauth-token"))).toBe(true);
+  });
   it("a token file that is a link is only unlinked: what it points at is never touched", async () => {
     const w = world(), target = join(scratch(), "real-token");
     writeFileSync(target, "keep");
@@ -292,6 +299,33 @@ describe("signing an account in: the folder is proved first, and the command car
     const { transport, started } = fakeTransport(), owner = {};
     const run = new StructuredSignIn("antigravity", owner, { transport, lock: new LoginWindowLock(), current: () => true, profile: "work", checkAuth: async () => "invalid", isolated: async () => { throw new Error("boom"); } });
     await run.start();
+    expect(run.view(owner)).toMatchObject({ phase: "failed", reason: "not_isolated" });
+    expect(started()).toBe(0);
+  });
+  it("the proof asks about an EMPTY SCRATCH folder under the account's launch (never the account's own), deletes it, and only \"signed out\" proves it", async () => {
+    const w = world(); tokenFile(w.home("work"));
+    const seen: Array<{ args: string[]; env: Record<string, string> }> = [];
+    const folderOf = (args: string[]) => resolve(homedir(), ".gemini", args[1]!);
+    const proof = async (answer: "valid" | "invalid" | "unknown") => proveFolderIsolation("antigravity", async launch => { seen.push(launch); expect(existsSync(folderOf(launch.args))).toBe(true); expect(readdirSync(folderOf(launch.args))).toEqual([]); return answer; });
+    expect(await proof("invalid")).toBe(true);
+    expect(await proof("valid")).toBe(false);
+    expect(await proof("unknown")).toBe(false);                                       // asked twice, still no answer: not proven
+    expect(seen.length).toBe(4);
+    for (const l of seen) {
+      expect(l.args[0]).toBe("--app_data_dir"); expect(l.env).toEqual({ SSH_CONNECTION: "127.0.0.1 0 127.0.0.1 0" });
+      expect(folderOf(l.args)).not.toBe(w.home("work")); expect(existsSync(folderOf(l.args))).toBe(false);   // not the account's, and gone
+    }
+    expect(await proveFolderIsolation("antigravity", async () => { throw new Error("boom"); })).toBe(false);
+    expect(await proveFolderIsolation("grok", async () => "invalid")).toBe(false);     // a CLI with no such launch: nothing is proven
+  });
+  it("Sign in again on an account whose folder ALREADY has a token file, with the pin no longer isolating (agy answers \"signed in\" for the scratch folder): not_isolated, nothing started", async () => {
+    const w = world(); tokenFile(w.home("work"));
+    expect(credentialProfileLogin(w.data, "antigravity", "work").state).toBe("logged-in");
+    const { transport, started } = fakeTransport(), owner = {};
+    const checkAuth = vi.fn(async () => "valid" as const);
+    const run = new StructuredSignIn("antigravity", owner, { transport, lock: new LoginWindowLock(), current: () => true, profile: "work", checkAuth,
+      isolated: () => proveFolderIsolation("antigravity", async () => "valid") });
+    await run.start(true);                                                            // the person confirmed a re-login
     expect(run.view(owner)).toMatchObject({ phase: "failed", reason: "not_isolated" });
     expect(started()).toBe(0);
   });
@@ -400,6 +434,71 @@ describe("Keep sign-in alive for Antigravity", () => {
     await f.ka.tick({ backend: "antigravity" });
     expect(f.ka.list().find(e => e.backend === "claude-code")!.record).toBeUndefined();
     expect(f.ka.list().find(e => e.backend === "antigravity")!.record).toMatchObject({ outcome: "refreshed" });
+  });
+  it("failures count by TIME, not by runs: two five-minute looks that both fail do NOT make a Needs you item; 48 hours of failing do", async () => {
+    let clock = NOW;
+    const f = fx("work", { now: () => clock }); tokenFile(f.w.home("work"), { expiresAt: NOW - MIN });
+    f.models.mockResolvedValue({ code: null, signedOut: false });
+    await f.ka.tick({ only: { backend: "antigravity", profile: "work" } });
+    clock += AGY_WAKE_MS; await f.ka.tick({ backend: "antigravity" });
+    clock += AGY_WAKE_MS; await f.ka.tick({ backend: "antigravity" });
+    expect(attentionOf(f.ka.list(), clock)).toEqual([]);
+    expect(record(f)!.attentionSince).toBeUndefined();
+    // …it keeps trying, but only after the back-off, and the failure's own date is the first one's
+    clock = NOW + AGY_BACKOFF_MS; await f.ka.tick({ backend: "antigravity" });
+    expect(record(f)).toMatchObject({ outcome: "transient", failSince: NOW });
+    expect(attentionOf(f.ka.list(), clock)).toEqual([]);
+    clock = NOW + TRANSIENT_MS + MIN; await f.ka.tick({ backend: "antigravity" });
+    expect(attentionOf(f.ka.list(), clock).map(a => a.kind)).toEqual(["transient"]);
+  });
+  it("after a failed run agy is not started again for 30 minutes, however often it is looked at", async () => {
+    let clock = NOW;
+    const f = fx("work", { now: () => clock }); tokenFile(f.w.home("work"), { expiresAt: NOW - MIN });
+    f.models.mockResolvedValue({ code: null, signedOut: false });
+    await f.ka.tick({ only: { backend: "antigravity", profile: "work" } });
+    for (let i = 1; i < AGY_BACKOFF_MS / AGY_WAKE_MS; i++) { clock += AGY_WAKE_MS; await f.ka.tick({ backend: "antigravity" }); }
+    expect(f.models).toHaveBeenCalledTimes(1);
+    clock += AGY_WAKE_MS; await f.ka.tick({ backend: "antigravity" });
+    expect(f.models).toHaveBeenCalledTimes(2);
+  });
+  it("a look that finds the same state again does not tell the pages or Needs you again (saved, not announced)", async () => {
+    let clock = NOW, changes = 0;
+    const w = world(["work"]), models = vi.fn(async () => ({ code: null, signedOut: false }));
+    const runners = { claudeStatus: vi.fn(), claudeFallback: vi.fn(), codexRefresh: vi.fn(), antigravityModels: models };
+    const ka = new SignInKeepAlive({ dataDir: w.data, now: () => clock, log: () => {}, homeOf: () => w.home("work"), acquire: () => ({ release() {} }), changed: () => { changes++; }, runners: runners as unknown as KeepAliveRunners });
+    tokenFile(w.home("work"), { expiresAt: NOW - MIN }); ka.set("antigravity", "work", true);
+    const afterSet = changes;
+    await ka.tick({ only: { backend: "antigravity", profile: "work" } });
+    const afterFirst = changes; expect(afterFirst).toBeGreaterThan(afterSet);          // the first failure is news
+    clock += AGY_BACKOFF_MS; await ka.tick({ backend: "antigravity" });
+    clock += AGY_BACKOFF_MS; await ka.tick({ backend: "antigravity" });
+    expect(models).toHaveBeenCalledTimes(3);
+    expect(changes).toBe(afterFirst);                                                  // the same failure again: nothing new
+  });
+  it("\"Please sign in\" is not asked again every five minutes either (the back-off holds for it too)", async () => {
+    let clock = NOW;
+    const f = fx("work", { now: () => clock }); tokenFile(f.w.home("work"), { expiresAt: NOW - MIN });
+    f.models.mockResolvedValue({ code: 1, signedOut: true });
+    await f.ka.tick({ only: { backend: "antigravity", profile: "work" } });
+    clock += AGY_WAKE_MS; await f.ka.tick({ backend: "antigravity" });
+    expect(f.models).toHaveBeenCalledTimes(1);
+  });
+  it("the DEFAULT sign-in with no token file (kept in the system keyring) is never \"sign in again\": no Needs you item, and no switch is offered for it", async () => {
+    const f = fx(null);
+    expect(existsSync(join(f.w.def, "antigravity-oauth-token"))).toBe(false);
+    f.ka.set("antigravity", null, false);
+    expect(f.ka.view("antigravity", null)).toBeUndefined();                           // no switch for it
+    f.ka.set("antigravity", null, true);                                               // one that was already on keeps its switch (so it can be turned off) …
+    expect(f.ka.view("antigravity", null)).toMatchObject({ enabled: true });
+    await f.ka.tick({ only: { backend: "antigravity", profile: null } });
+    expect(record(f)).toMatchObject({ outcome: "keyring" });                          // … and says why nothing is renewed
+    expect(attentionOf(f.ka.list(), NOW)).toEqual([]);
+    expect(f.models).not.toHaveBeenCalled();
+  });
+  it("a NAMED account with no token file still needs signing in (its login is only ever in its file)", async () => {
+    const f = fx("work");
+    await f.ka.tick({ only: { backend: "antigravity", profile: "work" } });
+    expect(attentionOf(f.ka.list(), NOW).map(a => a.kind)).toEqual(["needs_sign_in"]);
   });
   it("a run records dates and outcomes only: no token value reaches the saved settings or the view", async () => {
     const f = fx("work"); tokenFile(f.w.home("work"), { expiresAt: NOW - MIN });

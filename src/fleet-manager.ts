@@ -322,6 +322,7 @@ import { isDisallowedIntentsError, isRejectedTokenError } from "./discord-permis
 import { filterUsageProviders, formatDiscordUsageActivity, getUsageSnapshot, handleUsageRequest, isUsagePath, refreshUsageAfterSignIn, setCapacityLookup, usageProviderIdForBackend } from "./usage/usage-api.js";
 import { LOGIN_FLOWS, checkAuthStatus, checkAuthIdentity, authIdentitySupported, LOGIN_BACKEND_ALIASES, type LoginFlow, type AuthCheckResult } from "./login-flows.js";
 import { structuredSignInSupported } from "./structured-signin.js";
+import { proveFolderIsolation } from "./account-isolation.js";
 import { STRUCTURED_PROFILE_BACKENDS } from "./structured-signin-transport.js";
 import type { AccountIdentity } from "./claude-auth-status.js";
 import { LoginSession, type LoginSessionEvents } from "./login-manager.js";
@@ -21153,18 +21154,11 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         const launch = credentialProfileLaunch(this.dataDir, backend, profile);
         return launch ? checkAuthStatus(LOGIN_FLOWS[backend]!.authCheck!, launch.env, launch.args) : Promise.resolve("unknown" as const);
       },
-      // AGEND-119: a CLI told its account by an argument (Antigravity) first proves the account's folder holds its sign-in. A folder that already has a token file is the proof (a login that came
-      // from it); an empty one must answer "signed out" — a CLI that answers "signed in" for a folder with nothing in it is reading a sign-in kept somewhere shared, and signing this account in
-      // would replace that one.
-      isolated: async (backend: string, profile: string) => {
+      // AGEND-119: a CLI told its account by an argument (Antigravity) first proves the pin keeps a folder's sign-in in that folder (account-isolation.ts): asked about an empty scratch folder, never the account's own
+      // (one that already has a token file proves nothing once the CLI stops honouring the pin).
+      isolated: async (backend: string) => {
         if (hostFacts(backend, "namedAccounts")?.home !== "launch-argument") return true;
-        if (credentialProfileLogin(this.dataDir, backend, profile).state === "logged-in") return true;
-        const launch = credentialProfileLaunch(this.dataDir, backend, profile);
-        if (!launch) return false;
-        // Only "signed out" proves it. A probe that could not answer (a slow start) is asked once more; if it still cannot, nothing is started: an unproven folder is not signed in to.
-        let answer = await checkAuthStatus(LOGIN_FLOWS[backend]!.authCheck!, launch.env, launch.args);
-        if (answer === "unknown") answer = await checkAuthStatus(LOGIN_FLOWS[backend]!.authCheck!, launch.env, launch.args);
-        return answer === "invalid";
+        return proveFolderIsolation(backend, launch => checkAuthStatus(LOGIN_FLOWS[backend]!.authCheck!, launch.env, launch.args));
       },
       transport: target => createStructuredSignInTransport({ backend: target.backend, dataDir: this.dataDir }),
       changed: (event, owner, launched) => {

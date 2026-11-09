@@ -586,13 +586,19 @@ export type CredentialProfileLogin =
 export function credentialProfileLaunch(dataDir: string, backendName: string, profile: string): { env: Record<string, string>; args: string[] } | null {
   const spec = credentialHomeSpec(backendName);
   if (!spec) return null;
-  const home = credentialProfileHome(dataDir, backendName, profile);
+  return credentialProfileLaunchAt(backendName, credentialProfileHome(dataDir, backendName, profile));
+}
+
+/** `credentialProfileLaunch` for a folder that is not an account's (the isolation probe's scratch folder): the same variables and argument, pointed at `folder`. */
+export function credentialProfileLaunchAt(backendName: string, folder: string): { env: Record<string, string>; args: string[] } | null {
+  const spec = credentialHomeSpec(backendName);
+  if (!spec) return null;
   if (spec.kind === "launch-argument") {
     const facts = hostFacts(backendName, "namedAccounts");
     if (!facts || facts.home !== "launch-argument") return null;
-    return { env: { ...facts.pin }, args: [facts.arg, relativeToCliHome(home)] };
+    return { env: { ...facts.pin }, args: [facts.arg, relativeToCliHome(folder)] };
   }
-  return { env: { [spec.env]: home }, args: [] };
+  return { env: { [spec.env]: folder }, args: [] };
 }
 
 /** A path the way agy wants it: relative to `~/.gemini` (where it resolves `--app_data_dir`), with `..` where the account's folder is outside it. */

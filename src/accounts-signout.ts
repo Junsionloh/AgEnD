@@ -154,12 +154,14 @@ export async function signOutAccount(dataDir: string, req: SignOutRequest, deps:
     // No logout command: the account's sign-in file goes, from the account's own folder (the default's: the CLI's home) and nowhere else, then the CLI's own probe says whether it is signed out.
     const folder = profile !== null ? credentialProfileHome(dataDir, req.backend, profile) : credentialHomeSpec(req.backend)?.sharedRoot() ?? null;
     if (!folder) return { ok: false, error: "failed" };
-    if (!removeSignInFiles(folder, files)) return { ok: false, error: "failed" };
-    if (d.stillOwner && !d.stillOwner()) return { ok: false, error: "failed" };
+    // The folder checked above is the one the files are removed from: its identity is compared again right before the first removal (not after: a folder swapped for a link to another
+    // account's would otherwise lose that account's token before anyone noticed).
     if (profile !== null) {
       const again = ownProfileFolder(dataDir, req.backend, profile, d.fs);
       if (!again.ok || again.st.dev !== identity!.dev || again.st.ino !== identity!.ino) return { ok: false, error: "unsafe" };
     }
+    if (d.stillOwner && !d.stillOwner()) return { ok: false, error: "failed" };
+    if (!removeSignInFiles(folder, files)) return { ok: false, error: "failed" };
     let state: "valid" | "invalid" | "unknown" = "unknown";
     try { state = await d.verify?.(req.backend, profile) ?? "unknown"; } catch { state = "unknown"; }
     return state === "valid" ? { ok: false, error: "still_signed_in" } : state === "invalid" ? { ok: true } : { ok: true, unverified: true };

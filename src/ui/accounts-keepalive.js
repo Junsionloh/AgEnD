@@ -24,8 +24,9 @@ register("accountsKeepAlive", {
     plan: "Plan: {0}", last: "Last check {0}: {1}",
     o_refreshed: "renewed", o_fallback_refreshed: "renewed with the small request", o_not_needed: "still valid", o_checked: "connected",
     o_in_use: "in use, kept alive by its agents", o_unsupported: "nothing to renew (an API key)", o_not_renewed: "not renewed",
-    o_needs_sign_in: "needs reconnecting", o_transient: "couldn't reach the service; will try again tomorrow",
+    o_needs_sign_in: "needs reconnecting", o_transient: "couldn't reach the service; will try again",
     on: "Keep connection alive is on.", off: "Keep connection alive is off.", failed: "That didn't work. Try again.",
+    o_keyring: "kept in the system keyring: nothing here to renew",
   },
   "zh-TW": {
     label: "保持連接",
@@ -38,8 +39,9 @@ register("accountsKeepAlive", {
     plan: "方案：{0}", last: "上次檢查 {0}：{1}",
     o_refreshed: "已續期", o_fallback_refreshed: "已用小請求續期", o_not_needed: "仍有效", o_checked: "已連接",
     o_in_use: "使用中，由它的 Agent 保持連接", o_unsupported: "沒有需要續期的（API 金鑰）", o_not_renewed: "沒有續期",
-    o_needs_sign_in: "需要重新連接", o_transient: "連不上服務；明天會再試",
+    o_needs_sign_in: "需要重新連接", o_transient: "連不上服務；稍後會再試",
     on: "已開啟保持連接。", off: "已關閉保持連接。", failed: "沒有成功，請再試一次。",
+    o_keyring: "連接存在系統鑰匙圈，這裡沒有可續期的檔案",
   },
 });
 const tk = (k, ...v) => t(`accountsKeepAlive.${k}`, ...v);
