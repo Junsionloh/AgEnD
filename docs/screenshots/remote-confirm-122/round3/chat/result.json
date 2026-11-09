@@ -1,0 +1,402 @@
+{
+ "desk-light-en:1-chat-no-app:observed": {
+  "present": true,
+  "text": "Confirmed — applying…Delete demo-victim-1Change detailsDELETE /api/settings/fleet/instances/demo-victim-1fleet.instances.demo-victim-1: deletedConfirmed by your account as a signed-in admin.",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "desk-light-en:1-chat-no-app:no-host-command": "PASS",
+ "desk-light-en:1-chat-no-app:applies-at-once": "PASS",
+ "desk-light-en:2-chat-app-off:observed": {
+  "present": true,
+  "text": "Confirmed — applying…Delete demo-victim-2Change detailsDELETE /api/settings/fleet/instances/demo-victim-2fleet.instances.demo-victim-2: deletedConfirmed by your account as a signed-in admin.",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "desk-light-en:2-chat-app-off:no-host-command": "PASS",
+ "desk-light-en:2-chat-app-off:applies-at-once": "PASS",
+ "desk-light-en:3-chat-code:observed": {
+  "present": true,
+  "text": "Waiting for confirmation4:59 leftDelete demo-victim-3Change detailsDELETE /api/settings/fleet/instances/demo-victim-3fleet.instances.demo-victim-3: deletedEnter the 6-digit code from your authenticator app to confirm this change.Authenticator codeConfirmWithdraw",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "desk-light-en:3-chat-code:no-host-command": "PASS",
+ "desk-light-en:3-chat-code:asks-for-code": "PASS",
+ "desk-light-en:3-chat-code:other-apps-code-refused": "PASS",
+ "desk-light-en:3-chat-code:own-code-applies": "PASS",
+ "desk-light-en:4a-observed": {
+  "present": true,
+  "text": "Owner verificationYour own authenticator app. With it you can ask for its 6-digit code each time you confirm a change from another device; nobody else can set it up, change it or switch that on or off for you.Not set upGoogle AuthenticatorMicrosoft AuthenticatorOther TOTP authenticatorsIf you lose the authenticator, set it up again on the AgEnD computer. There is no email or backup-code recovery.Set up authenticator app",
+  "setUp": true,
+  "strictSwitch": false
+ },
+ "desk-light-en:4-chat-admin-set-up": "PASS",
+ "desk-light-en:4-switch-on-asks-nothing": "PASS",
+ "desk-light-en:4-switch-off-with-code": "PASS",
+ "desk-light-en:4-remove-asks-code-though-switch-off": "PASS",
+ "desk-light-en:5-notice-in-both-connections": "PASS",
+ "desk-light-en:5-notice-in-dashboard": "PASS",
+ "desk-light-en:5-observed": {
+  "general": [
+   "🔔 Demo Person 4 turned on “ask for my authenticator code to confirm changes from other devices” for their own confirmations.",
+   "🔔 Demo Person 4 turned off “ask for my authenticator code to confirm changes from other devices”.",
+   "🔔 Demo Person 4 turned off “ask for my authenticator code to confirm changes from other devices”."
+  ]
+ },
+ "desk-light-en:5-notices-page-names-the-admin": "PASS",
+ "desk-light-en:no-page-errors": "PASS",
+ "desk-light-zh-TW:1-chat-no-app:observed": {
+  "present": true,
+  "text": "已確認——套用中…刪除 demo-victim-4變更明細DELETE /api/settings/fleet/instances/demo-victim-4fleet.instances.demo-victim-4: deleted由你的帳號以已登入的管理員身分確認。",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "desk-light-zh-TW:1-chat-no-app:no-host-command": "PASS",
+ "desk-light-zh-TW:1-chat-no-app:applies-at-once": "PASS",
+ "desk-light-zh-TW:2-chat-app-off:observed": {
+  "present": true,
+  "text": "已確認——套用中…刪除 demo-victim-5變更明細DELETE /api/settings/fleet/instances/demo-victim-5fleet.instances.demo-victim-5: deleted由你的帳號以已登入的管理員身分確認。",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "desk-light-zh-TW:2-chat-app-off:no-host-command": "PASS",
+ "desk-light-zh-TW:2-chat-app-off:applies-at-once": "PASS",
+ "desk-light-zh-TW:3-chat-code:observed": {
+  "present": true,
+  "text": "等待確認剩 4:59刪除 demo-victim-6變更明細DELETE /api/settings/fleet/instances/demo-victim-6fleet.instances.demo-victim-6: deleted輸入驗證器 App 的 6 位數代碼，就能確認這項變更。驗證器代碼確認撤回",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "desk-light-zh-TW:3-chat-code:no-host-command": "PASS",
+ "desk-light-zh-TW:3-chat-code:asks-for-code": "PASS",
+ "desk-light-zh-TW:3-chat-code:other-apps-code-refused": "PASS",
+ "desk-light-zh-TW:3-chat-code:own-code-applies": "PASS",
+ "desk-light-zh-TW:4a-observed": {
+  "present": true,
+  "text": "擁有者驗證你自己的驗證器 App。可以在每次從其他裝置確認變更時要求它的 6 位數代碼；別人無法替你設定、更換或開關。尚未設定Google AuthenticatorMicrosoft Authenticator其他 TOTP 驗證器遺失驗證器時，請回 AgEnD 主機重新綁定。沒有電子郵件或備援碼復原。設定驗證器",
+  "setUp": true,
+  "strictSwitch": false
+ },
+ "desk-light-zh-TW:4-chat-admin-set-up": "PASS",
+ "desk-light-zh-TW:4-switch-on-asks-nothing": "PASS",
+ "desk-light-zh-TW:4-switch-off-with-code": "PASS",
+ "desk-light-zh-TW:4-remove-asks-code-though-switch-off": "PASS",
+ "desk-light-zh-TW:5-notice-in-both-connections": "PASS",
+ "desk-light-zh-TW:5-notice-in-dashboard": "PASS",
+ "desk-light-zh-TW:5-observed": {
+  "general": [
+   "🔔 Demo Person 8 turned on “ask for my authenticator code to confirm changes from other devices” for their own confirmations.",
+   "🔔 Demo Person 8 turned off “ask for my authenticator code to confirm changes from other devices”.",
+   "🔔 Demo Person 8 turned off “ask for my authenticator code to confirm changes from other devices”."
+  ]
+ },
+ "desk-light-zh-TW:5-notices-page-names-the-admin": "PASS",
+ "desk-light-zh-TW:no-page-errors": "PASS",
+ "desk-dark-en:1-chat-no-app:observed": {
+  "present": true,
+  "text": "Confirmed — applying…Delete demo-victim-7Change detailsDELETE /api/settings/fleet/instances/demo-victim-7fleet.instances.demo-victim-7: deletedConfirmed by your account as a signed-in admin.",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "desk-dark-en:1-chat-no-app:no-host-command": "PASS",
+ "desk-dark-en:1-chat-no-app:applies-at-once": "PASS",
+ "desk-dark-en:2-chat-app-off:observed": {
+  "present": true,
+  "text": "Confirmed — applying…Delete demo-victim-8Change detailsDELETE /api/settings/fleet/instances/demo-victim-8fleet.instances.demo-victim-8: deletedConfirmed by your account as a signed-in admin.",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "desk-dark-en:2-chat-app-off:no-host-command": "PASS",
+ "desk-dark-en:2-chat-app-off:applies-at-once": "PASS",
+ "desk-dark-en:3-chat-code:observed": {
+  "present": true,
+  "text": "Waiting for confirmation4:59 leftDelete demo-victim-9Change detailsDELETE /api/settings/fleet/instances/demo-victim-9fleet.instances.demo-victim-9: deletedEnter the 6-digit code from your authenticator app to confirm this change.Authenticator codeConfirmWithdraw",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "desk-dark-en:3-chat-code:no-host-command": "PASS",
+ "desk-dark-en:3-chat-code:asks-for-code": "PASS",
+ "desk-dark-en:3-chat-code:other-apps-code-refused": "PASS",
+ "desk-dark-en:3-chat-code:own-code-applies": "PASS",
+ "desk-dark-en:4a-observed": {
+  "present": true,
+  "text": "Owner verificationYour own authenticator app. With it you can ask for its 6-digit code each time you confirm a change from another device; nobody else can set it up, change it or switch that on or off for you.Not set upGoogle AuthenticatorMicrosoft AuthenticatorOther TOTP authenticatorsIf you lose the authenticator, set it up again on the AgEnD computer. There is no email or backup-code recovery.Set up authenticator app",
+  "setUp": true,
+  "strictSwitch": false
+ },
+ "desk-dark-en:4-chat-admin-set-up": "PASS",
+ "desk-dark-en:4-switch-on-asks-nothing": "PASS",
+ "desk-dark-en:4-switch-off-with-code": "PASS",
+ "desk-dark-en:4-remove-asks-code-though-switch-off": "PASS",
+ "desk-dark-en:5-notice-in-both-connections": "PASS",
+ "desk-dark-en:5-notice-in-dashboard": "PASS",
+ "desk-dark-en:5-observed": {
+  "general": [
+   "🔔 Demo Person 12 turned on “ask for my authenticator code to confirm changes from other devices” for their own confirmations.",
+   "🔔 Demo Person 12 turned off “ask for my authenticator code to confirm changes from other devices”.",
+   "🔔 Demo Person 12 turned off “ask for my authenticator code to confirm changes from other devices”."
+  ]
+ },
+ "desk-dark-en:5-notices-page-names-the-admin": "PASS",
+ "desk-dark-en:no-page-errors": "PASS",
+ "desk-dark-zh-TW:1-chat-no-app:observed": {
+  "present": true,
+  "text": "已確認——套用中…刪除 demo-victim-10變更明細DELETE /api/settings/fleet/instances/demo-victim-10fleet.instances.demo-victim-10: deleted由你的帳號以已登入的管理員身分確認。",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "desk-dark-zh-TW:1-chat-no-app:no-host-command": "PASS",
+ "desk-dark-zh-TW:1-chat-no-app:applies-at-once": "PASS",
+ "desk-dark-zh-TW:2-chat-app-off:observed": {
+  "present": true,
+  "text": "已確認——套用中…刪除 demo-victim-11變更明細DELETE /api/settings/fleet/instances/demo-victim-11fleet.instances.demo-victim-11: deleted由你的帳號以已登入的管理員身分確認。",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "desk-dark-zh-TW:2-chat-app-off:no-host-command": "PASS",
+ "desk-dark-zh-TW:2-chat-app-off:applies-at-once": "PASS",
+ "desk-dark-zh-TW:3-chat-code:observed": {
+  "present": true,
+  "text": "等待確認剩 4:59刪除 demo-victim-12變更明細DELETE /api/settings/fleet/instances/demo-victim-12fleet.instances.demo-victim-12: deleted輸入驗證器 App 的 6 位數代碼，就能確認這項變更。驗證器代碼確認撤回",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "desk-dark-zh-TW:3-chat-code:no-host-command": "PASS",
+ "desk-dark-zh-TW:3-chat-code:asks-for-code": "PASS",
+ "desk-dark-zh-TW:3-chat-code:other-apps-code-refused": "PASS",
+ "desk-dark-zh-TW:3-chat-code:own-code-applies": "PASS",
+ "desk-dark-zh-TW:4a-observed": {
+  "present": true,
+  "text": "擁有者驗證你自己的驗證器 App。可以在每次從其他裝置確認變更時要求它的 6 位數代碼；別人無法替你設定、更換或開關。尚未設定Google AuthenticatorMicrosoft Authenticator其他 TOTP 驗證器遺失驗證器時，請回 AgEnD 主機重新綁定。沒有電子郵件或備援碼復原。設定驗證器",
+  "setUp": true,
+  "strictSwitch": false
+ },
+ "desk-dark-zh-TW:4-chat-admin-set-up": "PASS",
+ "desk-dark-zh-TW:4-switch-on-asks-nothing": "PASS",
+ "desk-dark-zh-TW:4-switch-off-with-code": "PASS",
+ "desk-dark-zh-TW:4-remove-asks-code-though-switch-off": "PASS",
+ "desk-dark-zh-TW:5-notice-in-both-connections": "PASS",
+ "desk-dark-zh-TW:5-notice-in-dashboard": "PASS",
+ "desk-dark-zh-TW:5-observed": {
+  "general": [
+   "🔔 Demo Person 16 turned on “ask for my authenticator code to confirm changes from other devices” for their own confirmations.",
+   "🔔 Demo Person 16 turned off “ask for my authenticator code to confirm changes from other devices”.",
+   "🔔 Demo Person 16 turned off “ask for my authenticator code to confirm changes from other devices”."
+  ]
+ },
+ "desk-dark-zh-TW:5-notices-page-names-the-admin": "PASS",
+ "desk-dark-zh-TW:no-page-errors": "PASS",
+ "phone-light-en:1-chat-no-app:observed": {
+  "present": true,
+  "text": "Confirmed — applying…Delete demo-victim-13Change detailsDELETE /api/settings/fleet/instances/demo-victim-13fleet.instances.demo-victim-13: deletedConfirmed by your account as a signed-in admin.",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "phone-light-en:1-chat-no-app:no-host-command": "PASS",
+ "phone-light-en:1-chat-no-app:applies-at-once": "PASS",
+ "phone-light-en:2-chat-app-off:observed": {
+  "present": true,
+  "text": "Confirmed — applying…Delete demo-victim-14Change detailsDELETE /api/settings/fleet/instances/demo-victim-14fleet.instances.demo-victim-14: deletedConfirmed by your account as a signed-in admin.",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "phone-light-en:2-chat-app-off:no-host-command": "PASS",
+ "phone-light-en:2-chat-app-off:applies-at-once": "PASS",
+ "phone-light-en:3-chat-code:observed": {
+  "present": true,
+  "text": "Waiting for confirmation4:59 leftDelete demo-victim-15Change detailsDELETE /api/settings/fleet/instances/demo-victim-15fleet.instances.demo-victim-15: deletedEnter the 6-digit code from your authenticator app to confirm this change.Authenticator codeConfirmWithdraw",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "phone-light-en:3-chat-code:no-host-command": "PASS",
+ "phone-light-en:3-chat-code:asks-for-code": "PASS",
+ "phone-light-en:3-chat-code:other-apps-code-refused": "PASS",
+ "phone-light-en:3-chat-code:own-code-applies": "PASS",
+ "phone-light-en:4a-observed": {
+  "present": true,
+  "text": "Owner verificationYour own authenticator app. With it you can ask for its 6-digit code each time you confirm a change from another device; nobody else can set it up, change it or switch that on or off for you.Not set upGoogle AuthenticatorMicrosoft AuthenticatorOther TOTP authenticatorsIf you lose the authenticator, set it up again on the AgEnD computer. There is no email or backup-code recovery.Set up authenticator app",
+  "setUp": true,
+  "strictSwitch": false
+ },
+ "phone-light-en:4-chat-admin-set-up": "PASS",
+ "phone-light-en:4-switch-on-asks-nothing": "PASS",
+ "phone-light-en:4-switch-off-with-code": "PASS",
+ "phone-light-en:4-remove-asks-code-though-switch-off": "PASS",
+ "phone-light-en:5-notice-in-both-connections": "PASS",
+ "phone-light-en:5-notice-in-dashboard": "PASS",
+ "phone-light-en:5-observed": {
+  "general": [
+   "🔔 Demo Person 20 turned on “ask for my authenticator code to confirm changes from other devices” for their own confirmations.",
+   "🔔 Demo Person 20 turned off “ask for my authenticator code to confirm changes from other devices”.",
+   "🔔 Demo Person 20 turned off “ask for my authenticator code to confirm changes from other devices”."
+  ]
+ },
+ "phone-light-en:5-notices-page-names-the-admin": "PASS",
+ "phone-light-en:no-page-errors": "PASS",
+ "phone-light-zh-TW:1-chat-no-app:observed": {
+  "present": true,
+  "text": "已確認——套用中…刪除 demo-victim-16變更明細DELETE /api/settings/fleet/instances/demo-victim-16fleet.instances.demo-victim-16: deleted由你的帳號以已登入的管理員身分確認。",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "phone-light-zh-TW:1-chat-no-app:no-host-command": "PASS",
+ "phone-light-zh-TW:1-chat-no-app:applies-at-once": "PASS",
+ "phone-light-zh-TW:2-chat-app-off:observed": {
+  "present": true,
+  "text": "已確認——套用中…刪除 demo-victim-17變更明細DELETE /api/settings/fleet/instances/demo-victim-17fleet.instances.demo-victim-17: deleted由你的帳號以已登入的管理員身分確認。",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "phone-light-zh-TW:2-chat-app-off:no-host-command": "PASS",
+ "phone-light-zh-TW:2-chat-app-off:applies-at-once": "PASS",
+ "phone-light-zh-TW:3-chat-code:observed": {
+  "present": true,
+  "text": "等待確認剩 4:59刪除 demo-victim-18變更明細DELETE /api/settings/fleet/instances/demo-victim-18fleet.instances.demo-victim-18: deleted輸入驗證器 App 的 6 位數代碼，就能確認這項變更。驗證器代碼確認撤回",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "phone-light-zh-TW:3-chat-code:no-host-command": "PASS",
+ "phone-light-zh-TW:3-chat-code:asks-for-code": "PASS",
+ "phone-light-zh-TW:3-chat-code:other-apps-code-refused": "PASS",
+ "phone-light-zh-TW:3-chat-code:own-code-applies": "PASS",
+ "phone-light-zh-TW:4a-observed": {
+  "present": true,
+  "text": "擁有者驗證你自己的驗證器 App。可以在每次從其他裝置確認變更時要求它的 6 位數代碼；別人無法替你設定、更換或開關。尚未設定Google AuthenticatorMicrosoft Authenticator其他 TOTP 驗證器遺失驗證器時，請回 AgEnD 主機重新綁定。沒有電子郵件或備援碼復原。設定驗證器",
+  "setUp": true,
+  "strictSwitch": false
+ },
+ "phone-light-zh-TW:4-chat-admin-set-up": "PASS",
+ "phone-light-zh-TW:4-switch-on-asks-nothing": "PASS",
+ "phone-light-zh-TW:4-switch-off-with-code": "PASS",
+ "phone-light-zh-TW:4-remove-asks-code-though-switch-off": "PASS",
+ "phone-light-zh-TW:5-notice-in-both-connections": "PASS",
+ "phone-light-zh-TW:5-notice-in-dashboard": "PASS",
+ "phone-light-zh-TW:5-observed": {
+  "general": [
+   "🔔 Demo Person 24 turned on “ask for my authenticator code to confirm changes from other devices” for their own confirmations.",
+   "🔔 Demo Person 24 turned off “ask for my authenticator code to confirm changes from other devices”.",
+   "🔔 Demo Person 24 turned off “ask for my authenticator code to confirm changes from other devices”."
+  ]
+ },
+ "phone-light-zh-TW:5-notices-page-names-the-admin": "PASS",
+ "phone-light-zh-TW:no-page-errors": "PASS",
+ "phone-dark-en:1-chat-no-app:observed": {
+  "present": true,
+  "text": "Confirmed — applying…Delete demo-victim-19Change detailsDELETE /api/settings/fleet/instances/demo-victim-19fleet.instances.demo-victim-19: deletedConfirmed by your account as a signed-in admin.",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "phone-dark-en:1-chat-no-app:no-host-command": "PASS",
+ "phone-dark-en:1-chat-no-app:applies-at-once": "PASS",
+ "phone-dark-en:2-chat-app-off:observed": {
+  "present": true,
+  "text": "Confirmed — applying…Delete demo-victim-20Change detailsDELETE /api/settings/fleet/instances/demo-victim-20fleet.instances.demo-victim-20: deletedConfirmed by your account as a signed-in admin.",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "phone-dark-en:2-chat-app-off:no-host-command": "PASS",
+ "phone-dark-en:2-chat-app-off:applies-at-once": "PASS",
+ "phone-dark-en:3-chat-code:observed": {
+  "present": true,
+  "text": "Waiting for confirmation4:59 leftDelete demo-victim-21Change detailsDELETE /api/settings/fleet/instances/demo-victim-21fleet.instances.demo-victim-21: deletedEnter the 6-digit code from your authenticator app to confirm this change.Authenticator codeConfirmWithdraw",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "phone-dark-en:3-chat-code:no-host-command": "PASS",
+ "phone-dark-en:3-chat-code:asks-for-code": "PASS",
+ "phone-dark-en:3-chat-code:other-apps-code-refused": "PASS",
+ "phone-dark-en:3-chat-code:own-code-applies": "PASS",
+ "phone-dark-en:4a-observed": {
+  "present": true,
+  "text": "Owner verificationYour own authenticator app. With it you can ask for its 6-digit code each time you confirm a change from another device; nobody else can set it up, change it or switch that on or off for you.Not set upGoogle AuthenticatorMicrosoft AuthenticatorOther TOTP authenticatorsIf you lose the authenticator, set it up again on the AgEnD computer. There is no email or backup-code recovery.Set up authenticator app",
+  "setUp": true,
+  "strictSwitch": false
+ },
+ "phone-dark-en:4-chat-admin-set-up": "PASS",
+ "phone-dark-en:4-switch-on-asks-nothing": "PASS",
+ "phone-dark-en:4-switch-off-with-code": "PASS",
+ "phone-dark-en:4-remove-asks-code-though-switch-off": "PASS",
+ "phone-dark-en:5-notice-in-both-connections": "PASS",
+ "phone-dark-en:5-notice-in-dashboard": "PASS",
+ "phone-dark-en:5-observed": {
+  "general": [
+   "🔔 Demo Person 28 turned on “ask for my authenticator code to confirm changes from other devices” for their own confirmations.",
+   "🔔 Demo Person 28 turned off “ask for my authenticator code to confirm changes from other devices”.",
+   "🔔 Demo Person 28 turned off “ask for my authenticator code to confirm changes from other devices”."
+  ]
+ },
+ "phone-dark-en:5-notices-page-names-the-admin": "PASS",
+ "phone-dark-en:no-page-errors": "PASS",
+ "phone-dark-zh-TW:1-chat-no-app:observed": {
+  "present": true,
+  "text": "已確認——套用中…刪除 demo-victim-22變更明細DELETE /api/settings/fleet/instances/demo-victim-22fleet.instances.demo-victim-22: deleted由你的帳號以已登入的管理員身分確認。",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "phone-dark-zh-TW:1-chat-no-app:no-host-command": "PASS",
+ "phone-dark-zh-TW:1-chat-no-app:applies-at-once": "PASS",
+ "phone-dark-zh-TW:2-chat-app-off:observed": {
+  "present": true,
+  "text": "已確認——套用中…刪除 demo-victim-23變更明細DELETE /api/settings/fleet/instances/demo-victim-23fleet.instances.demo-victim-23: deleted由你的帳號以已登入的管理員身分確認。",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "phone-dark-zh-TW:2-chat-app-off:no-host-command": "PASS",
+ "phone-dark-zh-TW:2-chat-app-off:applies-at-once": "PASS",
+ "phone-dark-zh-TW:3-chat-code:observed": {
+  "present": true,
+  "text": "等待確認剩 4:59刪除 demo-victim-24變更明細DELETE /api/settings/fleet/instances/demo-victim-24fleet.instances.demo-victim-24: deleted輸入驗證器 App 的 6 位數代碼，就能確認這項變更。驗證器代碼確認撤回",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "phone-dark-zh-TW:3-chat-code:no-host-command": "PASS",
+ "phone-dark-zh-TW:3-chat-code:asks-for-code": "PASS",
+ "phone-dark-zh-TW:3-chat-code:other-apps-code-refused": "PASS",
+ "phone-dark-zh-TW:3-chat-code:own-code-applies": "PASS",
+ "phone-dark-zh-TW:4a-observed": {
+  "present": true,
+  "text": "擁有者驗證你自己的驗證器 App。可以在每次從其他裝置確認變更時要求它的 6 位數代碼；別人無法替你設定、更換或開關。尚未設定Google AuthenticatorMicrosoft Authenticator其他 TOTP 驗證器遺失驗證器時，請回 AgEnD 主機重新綁定。沒有電子郵件或備援碼復原。設定驗證器",
+  "setUp": true,
+  "strictSwitch": false
+ },
+ "phone-dark-zh-TW:4-chat-admin-set-up": "PASS",
+ "phone-dark-zh-TW:4-switch-on-asks-nothing": "PASS",
+ "phone-dark-zh-TW:4-switch-off-with-code": "PASS",
+ "phone-dark-zh-TW:4-remove-asks-code-though-switch-off": "PASS",
+ "phone-dark-zh-TW:5-notice-in-both-connections": "PASS",
+ "phone-dark-zh-TW:5-notice-in-dashboard": "PASS",
+ "phone-dark-zh-TW:5-observed": {
+  "general": [
+   "🔔 Demo Person 32 turned on “ask for my authenticator code to confirm changes from other devices” for their own confirmations.",
+   "🔔 Demo Person 32 turned off “ask for my authenticator code to confirm changes from other devices”.",
+   "🔔 Demo Person 32 turned off “ask for my authenticator code to confirm changes from other devices”."
+  ]
+ },
+ "phone-dark-zh-TW:5-notices-page-names-the-admin": "PASS",
+ "phone-dark-zh-TW:no-page-errors": "PASS"
+}

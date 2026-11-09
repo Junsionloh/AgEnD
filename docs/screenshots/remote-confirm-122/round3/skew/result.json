@@ -1,0 +1,292 @@
+{
+ "desk-light-en:fresh:a-pending-lenient:observed": {
+  "present": true,
+  "text": "Confirmed — applying…Hub membershipChange detailsEnable this fleet's Hub membership. Pairing and sharing an agent are separate choices.Confirmed by your account as a signed-in admin.",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "desk-light-en:fresh:a-pending-lenient:words": "PASS",
+ "desk-light-en:fresh:a-pending-lenient:applies-at-once": "PASS",
+ "desk-light-en:fresh:a-pending-lenient:no-page-errors": "PASS",
+ "desk-light-en:fresh:b-pending-code:observed": {
+  "present": true,
+  "text": "Waiting for confirmation5:00 leftHub membershipChange detailsEnable this fleet's Hub membership. Pairing and sharing an agent are separate choices.Enter the 6-digit code from your authenticator app to confirm this change.Authenticator codeConfirmWithdraw",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "desk-light-en:fresh:b-pending-code:words": "PASS",
+ "desk-light-en:fresh:b-pending-code:code-applies": "PASS",
+ "desk-light-en:fresh:b-pending-code:no-page-errors": "PASS",
+ "desk-light-en:fresh:card:observed": {
+  "present": true,
+  "text": "Owner verificationUse your authenticator app's 6-digit code to prove, from outside, that you own this fleet.Authenticator set upGoogle AuthenticatorMicrosoft AuthenticatorOther TOTP authenticatorsAllow connections from outsideConnections from outside are turned on and off on the computer running AgEnD.Authenticator app set up on 1/1/1970.Lost your phone? On the AgEnD computer, choose “Set up again”. There is no email or backup-code recovery.Ask for my authenticator code to confirm changes from other devicesOff (the default): you apply a change from any device with Apply now. On: off the comput",
+  "setUp": false,
+  "strictSwitch": true
+ },
+ "desk-light-en:fresh:card:words": "PASS",
+ "desk-light-en:fresh:card:code-dialog": "PASS",
+ "desk-light-en:fresh:card:no-page-errors": "PASS",
+ "desk-light-en:dict:a-pending-lenient:observed": {
+  "present": true,
+  "text": "Confirmed — applying…Hub membershipChange detailsEnable this fleet's Hub membership. Pairing and sharing an agent are separate choices.Confirmed by your account (this browser is web-verified). General is told.",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "desk-light-en:dict:a-pending-lenient:words": "PASS",
+ "desk-light-en:dict:a-pending-lenient:applies-at-once": "PASS",
+ "desk-light-en:dict:a-pending-lenient:no-page-errors": "PASS",
+ "desk-light-en:dict:b-pending-code:observed": {
+  "present": true,
+  "text": "Waiting for confirmation5:00 leftHub membershipChange detailsEnable this fleet's Hub membership. Pairing and sharing an agent are separate choices.Enter the 6-digit code from your authenticator app to confirm this change.Authenticator codeConfirmWithdraw",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "desk-light-en:dict:b-pending-code:words": "PASS",
+ "desk-light-en:dict:b-pending-code:code-applies": "PASS",
+ "desk-light-en:dict:b-pending-code:no-page-errors": "PASS",
+ "desk-light-en:dict:card:observed": {
+  "present": true,
+  "text": "Owner verificationUse your authenticator app's 6-digit code to prove, from outside, that you own this fleet.Authenticator set upGoogle AuthenticatorMicrosoft AuthenticatorOther TOTP authenticatorsAllow connections from outsideConnections from outside are turned on and off on the computer running AgEnD.Authenticator app set up on 1/1/1970.Lost your phone? On the AgEnD computer, choose “Set up again”. There is no email or backup-code recovery.Ask for my authenticator code to confirm changes from other devicesOff (the default): you apply a change from any device with Apply now. On: off the comput",
+  "setUp": false,
+  "strictSwitch": true
+ },
+ "desk-light-en:dict:card:words": "PASS",
+ "desk-light-en:dict:card:code-dialog": "PASS",
+ "desk-light-en:dict:card:no-page-errors": "PASS",
+ "desk-light-en:css:a-pending-lenient:observed": {
+  "present": true,
+  "text": "Confirmed — applying…Hub membershipChange detailsEnable this fleet's Hub membership. Pairing and sharing an agent are separate choices.Confirmed by your account as a signed-in admin.",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "desk-light-en:css:a-pending-lenient:words": "PASS",
+ "desk-light-en:css:a-pending-lenient:applies-at-once": "PASS",
+ "desk-light-en:css:a-pending-lenient:no-page-errors": "PASS",
+ "desk-light-en:css:b-pending-code:observed": {
+  "present": true,
+  "text": "Waiting for confirmation5:00 leftHub membershipChange detailsEnable this fleet's Hub membership. Pairing and sharing an agent are separate choices.Enter the 6-digit code from your authenticator app to confirm this change.Authenticator codeConfirmWithdraw",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "desk-light-en:css:b-pending-code:words": "PASS",
+ "desk-light-en:css:b-pending-code:code-applies": "PASS",
+ "desk-light-en:css:b-pending-code:no-page-errors": "PASS",
+ "desk-light-en:css:card:observed": {
+  "present": true,
+  "text": "Owner verificationUse your authenticator app's 6-digit code to prove, from outside, that you own this fleet.Authenticator set upGoogle AuthenticatorMicrosoft AuthenticatorOther TOTP authenticatorsAllow connections from outsideConnections from outside are turned on and off on the computer running AgEnD.Authenticator app set up on 1/1/1970.Lost your phone? On the AgEnD computer, choose “Set up again”. There is no email or backup-code recovery.Ask for my authenticator code to confirm changes from other devicesOff (the default): you apply a change from any device with Apply now. On: off the comput",
+  "setUp": false,
+  "strictSwitch": true
+ },
+ "desk-light-en:css:card:words": "PASS",
+ "desk-light-en:css:card:code-dialog": "PASS",
+ "desk-light-en:css:card:no-page-errors": "PASS",
+ "desk-light-en:dict-css:a-pending-lenient:observed": {
+  "present": true,
+  "text": "Confirmed — applying…Hub membershipChange detailsEnable this fleet's Hub membership. Pairing and sharing an agent are separate choices.Confirmed by your account (this browser is web-verified). General is told.",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "desk-light-en:dict-css:a-pending-lenient:words": "PASS",
+ "desk-light-en:dict-css:a-pending-lenient:applies-at-once": "PASS",
+ "desk-light-en:dict-css:a-pending-lenient:no-page-errors": "PASS",
+ "desk-light-en:dict-css:b-pending-code:observed": {
+  "present": true,
+  "text": "Waiting for confirmation5:00 leftHub membershipChange detailsEnable this fleet's Hub membership. Pairing and sharing an agent are separate choices.Enter the 6-digit code from your authenticator app to confirm this change.Authenticator codeConfirmWithdraw",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "desk-light-en:dict-css:b-pending-code:words": "PASS",
+ "desk-light-en:dict-css:b-pending-code:code-applies": "PASS",
+ "desk-light-en:dict-css:b-pending-code:no-page-errors": "PASS",
+ "desk-light-en:dict-css:card:observed": {
+  "present": true,
+  "text": "Owner verificationUse your authenticator app's 6-digit code to prove, from outside, that you own this fleet.Authenticator set upGoogle AuthenticatorMicrosoft AuthenticatorOther TOTP authenticatorsAllow connections from outsideConnections from outside are turned on and off on the computer running AgEnD.Authenticator app set up on 1/1/1970.Lost your phone? On the AgEnD computer, choose “Set up again”. There is no email or backup-code recovery.Ask for my authenticator code to confirm changes from other devicesOff (the default): you apply a change from any device with Apply now. On: off the comput",
+  "setUp": false,
+  "strictSwitch": true
+ },
+ "desk-light-en:dict-css:card:words": "PASS",
+ "desk-light-en:dict-css:card:code-dialog": "PASS",
+ "desk-light-en:dict-css:card:no-page-errors": "PASS",
+ "desk-light-en:shell:a-pending-lenient:observed": {
+  "present": true,
+  "text": "Confirmed — applying…Hub membershipEnable this fleet's Hub membership. Pairing and sharing an agent are separate choices.Confirmed by your account (this browser is web-verified). General is told.",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "desk-light-en:shell:a-pending-lenient:words": "PASS",
+ "desk-light-en:shell:a-pending-lenient:applies-at-once": "PASS",
+ "desk-light-en:shell:a-pending-lenient:no-page-errors": "PASS",
+ "desk-light-en:shell:b-pending-code:observed": {
+  "present": true,
+  "text": "Waiting for confirmation5:00 leftHub membershipEnable this fleet's Hub membership. Pairing and sharing an agent are separate choices.Enter the 6-digit code from your authenticator app to confirm this change.Authenticator codeConfirmAdvanced: confirm on the hostagend settings confirm 27d34568ca528dcba322025296c4c63aWithdraw",
+  "hostCommand": true,
+  "codeField": true,
+  "applied": false
+ },
+ "desk-light-en:shell:b-pending-code:words": "PASS",
+ "desk-light-en:shell:b-pending-code:code-applies": "PASS",
+ "desk-light-en:shell:b-pending-code:no-page-errors": "PASS",
+ "desk-light-en:shell:card:observed": {
+  "present": true,
+  "text": "Owner verificationUse your authenticator app's 6-digit code to prove, from outside, that you own this fleet.Authenticator set upGoogle AuthenticatorMicrosoft AuthenticatorOther TOTP authenticatorsAllow connections from outsideConnections from outside are turned on and off on the computer running AgEnD.Authenticator app set up on 1/1/1970.Lost your phone? On the AgEnD computer, choose “Set up again”. There is no email or backup-code recovery.Ask for my authenticator code to confirm changes from other devicesOff (the default): you apply a change from any device with Apply now. On: off the comput",
+  "setUp": false,
+  "strictSwitch": true
+ },
+ "desk-light-en:shell:card:words": "PASS",
+ "desk-light-en:shell:card:code-dialog": "PASS",
+ "desk-light-en:shell:card:no-page-errors": "PASS",
+ "phone-dark-zh-TW:fresh:a-pending-lenient:observed": {
+  "present": true,
+  "text": "已確認——套用中…Hub 成員功能變更明細Enable this fleet's Hub membership. Pairing and sharing an agent are separate choices.由你的帳號以已登入的管理員身分確認。",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "phone-dark-zh-TW:fresh:a-pending-lenient:words": "PASS",
+ "phone-dark-zh-TW:fresh:a-pending-lenient:applies-at-once": "PASS",
+ "phone-dark-zh-TW:fresh:a-pending-lenient:no-page-errors": "PASS",
+ "phone-dark-zh-TW:fresh:b-pending-code:observed": {
+  "present": true,
+  "text": "等待確認剩 5:00Hub 成員功能變更明細Enable this fleet's Hub membership. Pairing and sharing an agent are separate choices.輸入驗證器 App 的 6 位數代碼，就能確認這項變更。驗證器代碼確認撤回",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "phone-dark-zh-TW:fresh:b-pending-code:words": "PASS",
+ "phone-dark-zh-TW:fresh:b-pending-code:code-applies": "PASS",
+ "phone-dark-zh-TW:fresh:b-pending-code:no-page-errors": "PASS",
+ "phone-dark-zh-TW:fresh:card:observed": {
+  "present": true,
+  "text": "擁有者驗證使用驗證器 App 的 6 位數代碼，從外面證明你是這個 fleet 的擁有者。驗證器已設定Google AuthenticatorMicrosoft Authenticator其他 TOTP 驗證器允許從外面連線從外面連線的開關，要在執行 AgEnD 的那台電腦上操作。驗證器 App 已於 1970/1/1 設定。手機遺失？請在 AgEnD 電腦上選「重新綁定驗證器」。沒有電子郵件或備援碼復原。從其他裝置確認變更時要我的驗證器代碼關閉（預設）：你可以在任何裝置按「直接套用」完成變更。開啟：在執行 AgEnD 的那台電腦以外，「你自己」的每次確認都要輸入該項變更的代碼。只約束你自己，不影響其他管理員；要關閉、或更換／停用你的 App，都要輸入你目前的代碼。每次設定、變更與開關都會通知全體管理員。重新綁定驗證器停用",
+  "setUp": false,
+  "strictSwitch": true
+ },
+ "phone-dark-zh-TW:fresh:card:words": "PASS",
+ "phone-dark-zh-TW:fresh:card:code-dialog": "PASS",
+ "phone-dark-zh-TW:fresh:card:no-page-errors": "PASS",
+ "phone-dark-zh-TW:dict:a-pending-lenient:observed": {
+  "present": true,
+  "text": "已確認——套用中…Hub 成員功能變更明細Enable this fleet's Hub membership. Pairing and sharing an agent are separate choices.由你的帳號確認（這個瀏覽器已通過網頁驗證），也會通知 General。",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "phone-dark-zh-TW:dict:a-pending-lenient:words": "PASS",
+ "phone-dark-zh-TW:dict:a-pending-lenient:applies-at-once": "PASS",
+ "phone-dark-zh-TW:dict:a-pending-lenient:no-page-errors": "PASS",
+ "phone-dark-zh-TW:dict:b-pending-code:observed": {
+  "present": true,
+  "text": "等待確認剩 5:00Hub 成員功能變更明細Enable this fleet's Hub membership. Pairing and sharing an agent are separate choices.輸入驗證器 App 的 6 位數代碼，就能確認這項變更。驗證器代碼確認撤回",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "phone-dark-zh-TW:dict:b-pending-code:words": "PASS",
+ "phone-dark-zh-TW:dict:b-pending-code:code-applies": "PASS",
+ "phone-dark-zh-TW:dict:b-pending-code:no-page-errors": "PASS",
+ "phone-dark-zh-TW:dict:card:observed": {
+  "present": true,
+  "text": "擁有者驗證使用驗證器 App 的 6 位數代碼，從外面證明你是這個 fleet 的擁有者。驗證器已設定Google AuthenticatorMicrosoft Authenticator其他 TOTP 驗證器允許從外面連線從外面連線的開關，要在執行 AgEnD 的那台電腦上操作。驗證器 App 已於 1970/1/1 設定。手機遺失？請在 AgEnD 電腦上選「重新綁定驗證器」。沒有電子郵件或備援碼復原。從其他裝置確認變更時要我的驗證器代碼關閉（預設）：你可以在任何裝置按「直接套用」完成變更。開啟：在執行 AgEnD 的那台電腦以外，「你自己」的每次確認都要輸入該項變更的代碼。只約束你自己，不影響其他管理員；要關閉、或更換／停用你的 App，都要輸入你目前的代碼。每次設定、變更與開關都會通知全體管理員。重新綁定驗證器停用",
+  "setUp": false,
+  "strictSwitch": true
+ },
+ "phone-dark-zh-TW:dict:card:words": "PASS",
+ "phone-dark-zh-TW:dict:card:code-dialog": "PASS",
+ "phone-dark-zh-TW:dict:card:no-page-errors": "PASS",
+ "phone-dark-zh-TW:css:a-pending-lenient:observed": {
+  "present": true,
+  "text": "已確認——套用中…Hub 成員功能變更明細Enable this fleet's Hub membership. Pairing and sharing an agent are separate choices.由你的帳號以已登入的管理員身分確認。",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "phone-dark-zh-TW:css:a-pending-lenient:words": "PASS",
+ "phone-dark-zh-TW:css:a-pending-lenient:applies-at-once": "PASS",
+ "phone-dark-zh-TW:css:a-pending-lenient:no-page-errors": "PASS",
+ "phone-dark-zh-TW:css:b-pending-code:observed": {
+  "present": true,
+  "text": "等待確認剩 5:00Hub 成員功能變更明細Enable this fleet's Hub membership. Pairing and sharing an agent are separate choices.輸入驗證器 App 的 6 位數代碼，就能確認這項變更。驗證器代碼確認撤回",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "phone-dark-zh-TW:css:b-pending-code:words": "PASS",
+ "phone-dark-zh-TW:css:b-pending-code:code-applies": "PASS",
+ "phone-dark-zh-TW:css:b-pending-code:no-page-errors": "PASS",
+ "phone-dark-zh-TW:css:card:observed": {
+  "present": true,
+  "text": "擁有者驗證使用驗證器 App 的 6 位數代碼，從外面證明你是這個 fleet 的擁有者。驗證器已設定Google AuthenticatorMicrosoft Authenticator其他 TOTP 驗證器允許從外面連線從外面連線的開關，要在執行 AgEnD 的那台電腦上操作。驗證器 App 已於 1970/1/1 設定。手機遺失？請在 AgEnD 電腦上選「重新綁定驗證器」。沒有電子郵件或備援碼復原。從其他裝置確認變更時要我的驗證器代碼關閉（預設）：你可以在任何裝置按「直接套用」完成變更。開啟：在執行 AgEnD 的那台電腦以外，「你自己」的每次確認都要輸入該項變更的代碼。只約束你自己，不影響其他管理員；要關閉、或更換／停用你的 App，都要輸入你目前的代碼。每次設定、變更與開關都會通知全體管理員。重新綁定驗證器停用",
+  "setUp": false,
+  "strictSwitch": true
+ },
+ "phone-dark-zh-TW:css:card:words": "PASS",
+ "phone-dark-zh-TW:css:card:code-dialog": "PASS",
+ "phone-dark-zh-TW:css:card:no-page-errors": "PASS",
+ "phone-dark-zh-TW:dict-css:a-pending-lenient:observed": {
+  "present": true,
+  "text": "已確認——套用中…Hub 成員功能變更明細Enable this fleet's Hub membership. Pairing and sharing an agent are separate choices.由你的帳號確認（這個瀏覽器已通過網頁驗證），也會通知 General。",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "phone-dark-zh-TW:dict-css:a-pending-lenient:words": "PASS",
+ "phone-dark-zh-TW:dict-css:a-pending-lenient:applies-at-once": "PASS",
+ "phone-dark-zh-TW:dict-css:a-pending-lenient:no-page-errors": "PASS",
+ "phone-dark-zh-TW:dict-css:b-pending-code:observed": {
+  "present": true,
+  "text": "等待確認剩 5:00Hub 成員功能變更明細Enable this fleet's Hub membership. Pairing and sharing an agent are separate choices.輸入驗證器 App 的 6 位數代碼，就能確認這項變更。驗證器代碼確認撤回",
+  "hostCommand": false,
+  "codeField": true,
+  "applied": false
+ },
+ "phone-dark-zh-TW:dict-css:b-pending-code:words": "PASS",
+ "phone-dark-zh-TW:dict-css:b-pending-code:code-applies": "PASS",
+ "phone-dark-zh-TW:dict-css:b-pending-code:no-page-errors": "PASS",
+ "phone-dark-zh-TW:dict-css:card:observed": {
+  "present": true,
+  "text": "擁有者驗證使用驗證器 App 的 6 位數代碼，從外面證明你是這個 fleet 的擁有者。驗證器已設定Google AuthenticatorMicrosoft Authenticator其他 TOTP 驗證器允許從外面連線從外面連線的開關，要在執行 AgEnD 的那台電腦上操作。驗證器 App 已於 1970/1/1 設定。手機遺失？請在 AgEnD 電腦上選「重新綁定驗證器」。沒有電子郵件或備援碼復原。從其他裝置確認變更時要我的驗證器代碼關閉（預設）：你可以在任何裝置按「直接套用」完成變更。開啟：在執行 AgEnD 的那台電腦以外，「你自己」的每次確認都要輸入該項變更的代碼。只約束你自己，不影響其他管理員；要關閉、或更換／停用你的 App，都要輸入你目前的代碼。每次設定、變更與開關都會通知全體管理員。重新綁定驗證器停用",
+  "setUp": false,
+  "strictSwitch": true
+ },
+ "phone-dark-zh-TW:dict-css:card:words": "PASS",
+ "phone-dark-zh-TW:dict-css:card:code-dialog": "PASS",
+ "phone-dark-zh-TW:dict-css:card:no-page-errors": "PASS",
+ "phone-dark-zh-TW:shell:a-pending-lenient:observed": {
+  "present": true,
+  "text": "已確認——套用中…Hub 成員功能Enable this fleet's Hub membership. Pairing and sharing an agent are separate choices.由你的帳號確認（這個瀏覽器已通過網頁驗證），也會通知 General。",
+  "hostCommand": false,
+  "codeField": false,
+  "applied": true
+ },
+ "phone-dark-zh-TW:shell:a-pending-lenient:words": "PASS",
+ "phone-dark-zh-TW:shell:a-pending-lenient:applies-at-once": "PASS",
+ "phone-dark-zh-TW:shell:a-pending-lenient:no-page-errors": "PASS",
+ "phone-dark-zh-TW:shell:b-pending-code:observed": {
+  "present": true,
+  "text": "等待確認剩 5:00Hub 成員功能Enable this fleet's Hub membership. Pairing and sharing an agent are separate choices.輸入驗證器 App 的 6 位數代碼，就能確認這項變更。驗證器代碼確認進階：在主機上確認agend settings confirm c5a331fddf94d5bf4cef76806aafa02a撤回",
+  "hostCommand": true,
+  "codeField": true,
+  "applied": false
+ },
+ "phone-dark-zh-TW:shell:b-pending-code:words": "PASS",
+ "phone-dark-zh-TW:shell:b-pending-code:code-applies": "PASS",
+ "phone-dark-zh-TW:shell:b-pending-code:no-page-errors": "PASS",
+ "phone-dark-zh-TW:shell:card:observed": {
+  "present": true,
+  "text": "擁有者驗證使用驗證器 App 的 6 位數代碼，從外面證明你是這個 fleet 的擁有者。驗證器已設定Google AuthenticatorMicrosoft Authenticator其他 TOTP 驗證器允許從外面連線從外面連線的開關，要在執行 AgEnD 的那台電腦上操作。驗證器 App 已於 1970/1/1 設定。手機遺失？請在 AgEnD 電腦上選「重新綁定驗證器」。沒有電子郵件或備援碼復原。從其他裝置確認變更時要我的驗證器代碼關閉（預設）：你可以在任何裝置按「直接套用」完成變更。開啟：在執行 AgEnD 的那台電腦以外，「你自己」的每次確認都要輸入該項變更的代碼。只約束你自己，不影響其他管理員；要關閉、或更換／停用你的 App，都要輸入你目前的代碼。每次設定、變更與開關都會通知全體管理員。重新綁定驗證器停用",
+  "setUp": false,
+  "strictSwitch": true
+ },
+ "phone-dark-zh-TW:shell:card:words": "PASS",
+ "phone-dark-zh-TW:shell:card:code-dialog": "PASS",
+ "phone-dark-zh-TW:shell:card:no-page-errors": "PASS"
+}
