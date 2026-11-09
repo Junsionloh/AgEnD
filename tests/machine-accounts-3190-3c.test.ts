@@ -32,7 +32,7 @@ describe("the rows under the machine scope", () => {
     expect(work!.scope).not.toHaveProperty("readOnlyReason");
     expect(home).toMatchObject({ state: "not_signed_in", signIn: true, usedBy: { agents: [], fleetDefault: false } });
     // No usage (that computer reports none), no host-only fields.
-    for (const row of mine) { expect(row.usage).toBeUndefined(); expect(row).not.toHaveProperty("install"); }
+    for (const row of mine) { expect(row.usageGroups).toBeUndefined(); expect(row).not.toHaveProperty("install"); }
     expect(Object.keys(work!).sort()).toEqual(["backend", "identity", "profile", "scope", "signIn", "state", "usedBy"]);
   });
   it("a profile this Runtime did not create (or that an older Runtime does not say) is read-only with its own reason and the command to run on that computer", () => {
