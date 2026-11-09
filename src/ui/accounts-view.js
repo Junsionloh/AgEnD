@@ -20,7 +20,7 @@ import { ErrorState, Skeleton } from "/assets/ui-states.js";
 import { CompactMeter } from "/assets/usage-meter.js";   // #3321: the Usage panel's meter, not a second one (its own module: a tab that kept an older usage-dialog.js still links)
 import { CliProductMark, cliLabel } from "./cli-picker.js";
 import { identityText } from "./account-identity.js";
-import { UsageCell } from "./usage-pool.js";   // AGEND-113: a window's quota pool, named (Antigravity)
+import { UsageBlock } from "./usage-pool.js";   // AGEND-113: every pool and window an account reports, as the server sends them
 import { openSignIn, refreshSignIn, signInStore } from "./backend-signin.js";
 import { capsOf } from "./cli-caps.js";
 import { toast } from "/assets/ui-toast.js";
@@ -169,14 +169,10 @@ const winLabel = (u, fallback = "") => {
   return d >= 6 && d <= 8 ? tx("winWeek") : tx("winDays", d);
 };
 /**
- * One window of the usage block: the Usage panel's own meter (`CompactMeter`, usage-dialog.js) — its name ("5h", "本週"), the bar, the percent
- * (amber from 70%, red from 90%: the theme's --warn / --danger) and when the window resets. The server's window ({ percent, windowMs, resetsAt }) is
- * given in the meter's shape.
+ * A window's short name for the usage block's meter ("5h", "本週", "30d", "—"): by its length when the CLI gives one, else by its kind; one number with no window is a dash. The meter itself
+ * is the Usage panel's (usage-pool.js).
  */
-function UsageWindow({ u, kind }) {
-  const name = winLabel(u, kind === "weekly" ? tx("winWeek") : "");
-  return html`<${CompactMeter} m=${{ used: Number(u.percent) || 0, windowMs: u.windowMs, resetsAt: u.resetsAt, label: name }} tag=${name} />`;
-}
+const usageTag = (w) => (w.kind === "unwindowed" ? "—" : winLabel(w, w.kind === "weekly" ? tx("winWeek") : w.kind === "monthly" ? tx("winDays", 30) : ""));
 
 /**
  * The fleet default's `backend_options` after choosing `profile` (null: none) for `backend`: the whole map, because the
@@ -391,11 +387,10 @@ function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, ope
   const installState = useStore(hostInstallStore);
   const installRun = !machine && !row.profile ? runFor(installState, row.backend) : null;
   const installingNow = !!installRun && installRun.phase === "running";
-  // The week's usage and the short window's (the "5h"), as the server gives them; a CLI that reports one shows one.
-  const windows = [row.shortUsage ? ["short", row.shortUsage] : null, row.usage ? ["weekly", row.usage] : null].filter(Boolean);
-  const stale = windows.some(([, w]) => w.stale);
+  // Every pool and every window the account reports, as the server gives them (accounts-view.ts `accountUsage`); the page lays them out, it does not pick.
+  const usageGroups = Array.isArray(row.usageGroups) ? row.usageGroups.filter((g) => g && Array.isArray(g.windows) && g.windows.length) : [];
   const why = machine && machine.readOnlyReason && !MACHINE_LEVEL.has(machine.readOnlyReason) ? reasonText(machine.readOnlyReason, machine.name, cliLabel(row.backend), (capsOf(row.backend) && capsOf(row.backend).structuredMinVersion) || "") : "";
-  // Four layers in one box: the title bar (name, state, default tag · the buttons), the meta bar (who, used by), the usage block (5h and the week) and Keep sign-in alive as the box's foot.
+  // Four layers in one box: the title bar (name, state, default tag · the buttons), the meta bar (who, used by), the usage block (every pool and window it reports) and Keep sign-in alive as the box's foot.
   return html`<div class="s-row s-account-row" data-account=${row.profile || "default"}>
     <div class="s-account-title-bar">
       <div class="s-account-title-left"><strong>${rowName(row)}</strong>
@@ -415,10 +410,7 @@ function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, ope
       <${UsedBy} row=${row} label=${usedText(row)} openAgent=${openAgent} />
       ${machine ? html`<small class="s-account-usage is-none" title=${tx("machineNoUsageHint")}>${tx("machineNoUsage")}</small>` : null}
     </div>
-    ${windows.length ? html`<div class=${`s-account-usage${stale ? " is-stale" : ""}`} role="group" aria-label=${tx("usageLabel")}>
-      ${windows.map(([kind, w]) => html`<${UsageCell} key=${kind} u=${w} kind=${kind} Window=${UsageWindow} />`)}
-      ${stale ? html`<small class="s-usage-stale">${tx("winStale")}</small>` : null}
-    </div>` : null}
+    ${usageGroups.length ? html`<${UsageBlock} groups=${usageGroups} stale=${row.usageStale === true} tagOf=${usageTag} label=${tx("usageLabel")} staleText=${tx("winStale")} />` : null}
     ${why ? html`<p class="note s-account-why">${why}</p>` : null}
     ${canInstall && !installRun ? html`<p class="note s-account-why">${hostInstallText("notInstalled")}</p>` : null}
     ${!machine && !row.profile && !readOnly ? html`<${VersionLine} row=${row} label=${cliLabel(row.backend)} blocked=${running} />` : null}
