@@ -341,9 +341,13 @@ export async function probeCredentialProfileStatus(cli: CredentialProfileCli, di
     const args = [...launch.args, ...nativeUpdateGuard(cli), ...listing];
     let answer = await run(executable, args, launch.env);
     if (answer.ok && !answer.text.trim()) answer = await run(executable, args, launch.env);
-    const loggedIn = parseNativeAuthResult(cli, answer.ok, answer.text);
+    let loggedIn = parseNativeAuthResult(cli, answer.ok, answer.text);
+    // A CLI that keeps a folder's sign-in in a file (the registry's `store`): "signed in" needs that plain file in the folder as evidence. Without it the CLI read the login from a store every folder shares (the Windows user's
+    // own), which is not this account's, so the answer is "could not confirm" (never "signed in", and not "signed out" either).
+    const store = credentialProfileStore(cli);
+    if (loggedIn === true && store !== undefined) { try { const stat = lstatSync(join(directory, store)); if (!stat.isFile() || stat.isSymbolicLink()) loggedIn = null; } catch { loggedIn = null; } }
     // AGEND-124: the one field of the account's own token file that names the account, masked here (agy has no command that does): only for a folder the CLI just said is signed in, only when asked.
-    const identity = withIdentity && loggedIn === true && credentialProfileStore(cli) !== undefined ? readAntigravityIdentityIn(directory) : undefined;
+    const identity = withIdentity && loggedIn === true && store !== undefined ? readAntigravityIdentityIn(directory) : undefined;
     return { loggedIn, ...(identity ? { identity } : {}) };
   }
   const result = await run(executable, [...launch.args, ...nativeUpdateGuard(cli), ...provider.authProbe!], launch.env);
