@@ -662,7 +662,7 @@ export function PendingChanges({ inline = false } = {}) {
       ${p.state === "pending" ? html`<span class="pending-left">${t("app.pendingLeft", mmss(p.deadline - NOW()))}</span>` : null}
       ${p.dismiss ? html`<button type="button" class="icon-btn" aria-label=${t("app.close")} title=${t("app.close")} onClick=${p.dismiss}><${Icon} name="close" size=${14} /></button>` : null}</div>
     ${p.label ? html`<div class="pending-label">${p.label}</div>` : null}
-    ${Array.isArray(p.summary) && p.summary.length ? html`<ul class="pending-summary">${p.summary.map((line, i) => html`<li key=${i}>${line}</li>`)}</ul>` : null}
+    ${Array.isArray(p.summary) && p.summary.length ? html`<details class="pending-details"><summary>${t("pendingHost.details")}</summary><ul class="pending-summary">${p.summary.map((line, i) => html`<li key=${i}>${String(line).replace(/\\([\\`*_~[\]()<>|])/g, "$1")}</li>`)}</ul></details>` : null}
     ${p.state === "pending" ? html`<${PendingHow} p=${p} />` : null}
     ${(p.state === "applying" || p.state === "applied") && p.confirmation && p.confirmation.kind === "web" ? html`<p class="note">${t("app.pendingWeb")}</p>` : null}
     ${p.state !== "pending" && p.state !== "applying" && p.state !== "applied" && p.outcome && p.outcome.message ? html`<p class="note">${p.outcome.message}</p>` : null}
@@ -700,6 +700,7 @@ register("pendingHost", {
     post_failed_do: "Check General's chat connection in Settings → Chat & connections, then make the change again.",
     unknown: "No General could take the confirm card for this change.",
     go: "Open",
+    details: "Change details",
     codeLead: "This fleet asks for an authenticator code to confirm changes from here. Enter the code your authenticator app shows.",
     codeLabel: "Authenticator code", codeGo: "Confirm",
     codeWrong: "That code is not right. Use the current code in your authenticator app.",
@@ -726,6 +727,7 @@ register("pendingHost", {
     post_failed_do: "請到「設定 → 聊天與連線」檢查 General 的連線，再重新做一次這項變更。",
     unknown: "這項變更沒有 General 可以接收確認卡。",
     go: "前往",
+    details: "變更明細",
     codeLead: "這個 fleet 要求從這裡確認變更時輸入驗證器代碼。請輸入驗證器 App 目前顯示的代碼。",
     codeLabel: "驗證器代碼", codeGo: "確認",
     codeWrong: "代碼不正確，請使用驗證器 App 目前顯示的代碼。",
