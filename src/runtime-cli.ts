@@ -116,13 +116,14 @@ function interactiveLogin(executable: NativeCliExecutable, args: string[], env: 
  * an address of the contract is dropped. `plan` and `apiKey` stay. `credentialProfileReport` itself is untouched.
  */
 function redactedReport(report: ReturnType<typeof credentialProfileReport>): ReturnType<typeof credentialProfileReport> {
-  return { ...report, profiles: report.profiles.map(row => {
+  const rows = (list: typeof report.profiles) => list.map(row => {
     if (!row.identity) return row;
     const { maskedEmail, ...rest } = row.identity, shown = maskedEmail === undefined ? undefined : redactedEmail(maskedEmail);
     const identity = { ...(shown ? { maskedEmail: shown } : {}), ...rest };
     const { identity: _full, ...bare } = row;
     return Object.keys(identity).length ? { ...bare, identity } : bare;
-  }) };
+  });
+  return { ...report, profiles: rows(report.profiles), ...(report.byCli ? { byCli: Object.fromEntries(Object.entries(report.byCli).map(([cli, list]) => [cli, rows(list)])) } : {}) };
 }
 function signInLabel(loggedIn: boolean | null): string { return loggedIn === true ? "signed in" : loggedIn === false ? "not signed in" : "not checked"; }
 /** `ab***@example.com · team`, or `API key`: a terminal line is not the Accounts page, so the address is redacted here; never the full address. */
