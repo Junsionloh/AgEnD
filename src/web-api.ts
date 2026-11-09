@@ -1,3 +1,4 @@
+import { STRUCTURED_PROFILE_BACKENDS } from "./structured-signin-transport.js";
 import { hubModeOf, hubNameOf, type HubSwitches } from "./hub-mode.js";
 import { validCredentialProfileName } from "./runtime-credential-profiles.js";
 import { CANVAS_WORKER_EXPERIMENTAL_MESSAGE } from "./web-experimental.js";
@@ -423,7 +424,7 @@ export interface WebApiContext {
   addAccountProfile?(backend: string, name: unknown, by: string, machine?: AccountMachine): AccountWriteResult | Promise<AccountWriteResult>;
   removeAccountProfile?(backend: string, name: unknown, confirm: unknown, by: string, machine?: AccountMachine, opts?: { cancelSignIn?: true }): Promise<AccountWriteResult & { keychainLeft?: true }>;
   /** #3212 PR 3: Sign out (accounts-signout.ts): `profile` null for the CLI's default sign-in. */
-  signOutAccount?(backend: string, profile: unknown, confirm: unknown, by: string, machine?: AccountMachine): Promise<AccountWriteResult & { keychainLeft?: true }>;
+  signOutAccount?(backend: string, profile: unknown, confirm: unknown, by: string, machine?: AccountMachine): Promise<AccountWriteResult & { keychainLeft?: true; unverified?: true }>;
   /** #3292: Keep sign-in alive (signin-keepalive.ts): `profile` null for the CLI's default sign-in. */
   setAccountKeepAlive?(backend: unknown, profile: unknown, enabled: unknown, fallback: unknown, by: string): { ok: true } | { ok: false; error: string };
   readonly eventLog: { logActivity(event: string, sender: string, summary: string, receiver?: string, detail?: string): void; listActivity(opts?: { since?: string; limit?: number }): unknown[] } | null;
@@ -1139,7 +1140,7 @@ function handleBrowserBackendSignIns(req: IncomingMessage, res: ServerResponse, 
     if (shape && computer && !backend) target = { machine: machine!, profile };
     // `?machine=<id>&backend=<cli>` is that computer's OWN login of a CLI the registry says has none (`runtime.signIn.profile === "none"`: Antigravity): no profile in the address, and nothing but these two keys.
     else if (keys.length === 2 && new Set(keys).size === 2 && computer && isRuntimeDefaultLoginCli(backend) && !profile) target = { machine: machine!, backend };
-    else if (shape && backend === "claude-code" && !machine) account = { backend, profile };
+    else if (shape && backend !== null && STRUCTURED_PROFILE_BACKENDS.has(backend) && !machine) account = { backend, profile };   // a CLI whose named account is signed in with these controls (registry: `host.structuredSignIn.named`)
     else { json(res, 404, { error: "not_found" }); return true; }
   }
   // Only the one that is asked for is looked up: the host's creates its checklist state, a computer's or a named account's does not need it.
@@ -1298,7 +1299,7 @@ function handleBackendLogin(req: IncomingMessage, res: ServerResponse, url: URL,
  */
 const ACCOUNT_STATUS: Readonly<Record<string, number>> = {
   backend: 400, name: 400, confirm: 400, exists: 409, case_clash: 409, unsafe_root: 409, in_use: 409, users_unknown: 409, signing_in: 409, missing: 404,
-  unsafe: 409, default_home: 409, failed: 500, unsupported: 400,
+  unsafe: 409, default_home: 409, failed: 500, unsupported: 400, still_signed_in: 409,
   // #3190 Part 3c: a paired computer (the Runtime there decides; these are what the server can say before it asks, or what the computer answered).
   machine_unknown: 404, machine_offline: 409, machine_unsupported: 409, machine_accounts_off: 409, machine_unreachable: 502, machine_profile_not_owned: 409,
   machine_refused: 409, machine_default_login: 409,
@@ -1363,7 +1364,7 @@ function handleAccountWrite(req: IncomingMessage, res: ServerResponse, url: URL,
       const machine = onMachine(parsed.data.machine);
       if (machine === "refused") { json(res, 403, { error: "accounts_need_a_local_admin" }); return; }
       const r = await (machine ? ctx.signOutAccount!(signout![1]!, parsed.data.profile, parsed.data.confirm, now.label, machine) : ctx.signOutAccount!(signout![1]!, parsed.data.profile, parsed.data.confirm, now.label));
-      if (r.ok) json(res, 200, { signedOut: parsed.data.profile, ...(r.keychainLeft ? { keychainLeft: true } : {}) });
+      if (r.ok) json(res, 200, { signedOut: parsed.data.profile, ...(r.keychainLeft ? { keychainLeft: true } : {}), ...(r.unverified ? { unverified: true } : {}) });
       else fail(r);
     }
   })().catch(() => { try { json(res, 500, { error: "accounts_request_failed" }); } catch { /* response ended */ } });

@@ -5,7 +5,8 @@ import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { TmuxTerminalBackend, shellQuote, segmentInput, type TerminalBackend } from "./web-terminal.js";
 import type { StructuredSignInLaunch, StructuredSignInTransport } from "./structured-signin.js";
-import { credentialHomeSpec, credentialProfileEnv, credentialProfileHome, isCredentialProfileName, prepareCredentialProfileHome } from "./backend/credential-profile.js";
+import { hostFacts, hostIds } from "./cli-registry.js";
+import { credentialHomeSpec, credentialProfileArgs, credentialProfileEnv, credentialProfileHome, isCredentialProfileName, prepareCredentialProfileHome } from "./backend/credential-profile.js";
 
 /**
  * Whether the account's folder is there, a real directory (never a link), with exactly this spelling (a case-insensitive disk finds `chy` for `CHY`, a case-sensitive one
@@ -20,10 +21,10 @@ function accountFolderThere(dataDir: string, backend: string, profile: string): 
 }
 
 /**
- * The backends whose NAMED accounts the dashboard signs in with the structured controls: Claude Code's only, whose login under a relocated `CLAUDE_CONFIG_DIR` was checked with
- * these controls. Deliberately not `CHAT_PROFILE_LOGIN_BACKENDS` (what chat's `/login <backend> <profile>` can sign in): widening that must not widen what these controls launch.
+ * The backends whose NAMED accounts the dashboard signs in with the structured controls: Claude Code, whose login under a relocated `CLAUDE_CONFIG_DIR` was checked with
+ * these controls, and Antigravity (AGEND-119), whose `agy --app_data_dir <folder> acp --login` was checked to keep the login in that folder (with the registry's `pin`). Deliberately not `CHAT_PROFILE_LOGIN_BACKENDS` (what chat's `/login <backend> <profile>` can sign in): widening that must not widen what these controls launch.
  */
-export const STRUCTURED_PROFILE_BACKENDS: ReadonlySet<string> = new Set(["claude-code"]);
+export const STRUCTURED_PROFILE_BACKENDS: ReadonlySet<string> = new Set(hostIds("structuredSignIn").filter(id => hostFacts(id, "structuredSignIn")!.named));
 
 /** Only host-selected paths/locale enter the dedicated CLI. No fleet/MCP/provider env injection. */
 export function structuredSignInEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
@@ -80,14 +81,18 @@ export function createStructuredSignInTransport(options: StructuredSignInTranspo
         // A named profile (#3212) is signed in here with that profile's own folder and variable; a transport that was not given its backend and data
         // directory cannot say where that is, so it refuses: a profile is never silently dropped (that would sign the DEFAULT account in).
         const environment = structuredSignInEnvironment(options.env ?? process.env);
+        let argv: readonly string[] = spec.argv;
         if (spec.profile !== undefined) {
           if (!options.backend || !options.dataDir) throw new Error("signin_profile_unsupported");
           Object.assign(environment, structuredSignInProfileEnvironment(options.dataDir, options.backend, spec.profile));
+          // AGEND-119: a CLI told its account by an argument (agy --app_data_dir <folder> acp --login) gets it right after the binary; the folder is the one the check above made.
+          const args = credentialProfileArgs(options.dataDir, options.backend, spec.profile);
+          if (args.length) argv = [spec.argv[0]!, ...args, ...spec.argv.slice(1)];
         }
         const envArgs = Object.entries(environment).map(([key, value]) => shellQuote(`${key}=${value}`)).join(" ");
         // Exec closes the shell boundary after the fixed login command exits.
         // Neither this spec nor env values come from browser-provided bytes.
-        const login = "exec " + spec.argv.map(shellQuote).join(" ");
+        const login = "exec " + argv.map(shellQuote).join(" ");
         const command = spec.logoutArgv ? spec.logoutArgv.map(shellQuote).join(" ") + " && " + login : login;
         dir = mkdtempSync(join(tmpdir(), "agend-signin-"));
         touched = true;

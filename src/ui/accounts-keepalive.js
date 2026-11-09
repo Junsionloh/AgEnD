@@ -1,4 +1,4 @@
-// #3292: Settings → Accounts → "Keep sign-in alive", one line under a Claude Code or Codex row (signin-keepalive.ts on the
+// #3292: Settings → Accounts → "Keep sign-in alive", one line under a Claude Code, Codex or (AGEND-119) Antigravity row (signin-keepalive.ts on the
 // server decides and runs; this page only shows and asks). A module of its own with its own words and stylesheet: a tab
 // that loaded an older accounts-view.js never shows it, and it never meets an older cached strings file or accounts.css.
 // - The switch: once a day AgEnD renews this sign-in when no agent or room is using it — `claude auth status` / Codex's
@@ -17,30 +17,38 @@ register("accountsKeepAlive", {
     label: "Keep sign-in alive",
     hint_claude: "Once a day, if no agent is using it, AgEnD renews this sign-in with Claude Code's own status check. No model request.",
     hint_codex: "Once a day, if no agent is using it, AgEnD renews this sign-in through Codex's own refresh. No model request.",
+    hint_antigravity: "About once an hour, when the access token is close to lapsing and no agent is using it, AgEnD runs `agy models` for this account, which renews the token. That is what keeps its usage current. No model request.",
     fallback: "Backup renewal (a tiny request if the status check doesn't renew)",
     fallbackHint: "When the regular status check can't extend the sign-in, allow one very short request on the smallest model (a few dozen tokens) to keep it signed in.",
     endsAt: "Sign-in ends {0}", endsSoon: "Sign-in ends {0}. Renewing can't move this date: sign in again before then.", ended: "Sign-in ended {0}. Sign in again.",
     plan: "Plan: {0}", last: "Last check {0}: {1}",
     o_refreshed: "renewed", o_fallback_refreshed: "renewed with the small request", o_not_needed: "still valid", o_checked: "signed in",
-    o_in_use: "in use, kept alive by its agents", o_unsupported: "nothing to renew (an API key)", o_not_renewed: "not renewed",
-    o_needs_sign_in: "needs signing in again", o_transient: "couldn't reach the service; will try again tomorrow",
+    o_in_use: "in use, kept alive by its agents", o_unsupported: "nothing to renew (an API key)", o_keyring: "kept in the system keyring: nothing here to renew", o_not_renewed: "not renewed",
+    o_needs_sign_in: "needs signing in again", o_transient: "couldn't reach the service; will try again",
     on: "Keep sign-in alive is on.", off: "Keep sign-in alive is off.", failed: "That didn't work. Try again.",
   },
   "zh-TW": {
     label: "保持登入",
     hint_claude: "沒有 Agent 使用時，AgEnD 每天用 Claude Code 自己的狀態檢查續期這個登入一次。不會呼叫模型。",
     hint_codex: "沒有 Agent 使用時，AgEnD 每天透過 Codex 自己的刷新續期這個登入一次。不會呼叫模型。",
+    hint_antigravity: "沒有 Agent 使用、而且 access token 快過期時，AgEnD 大約每小時替這個帳號執行一次 `agy models`，它會更新 token，用量才不會顯示（未更新）。不會呼叫模型。",
     fallback: "備援續期（狀態檢查未續期時改送極小請求）",
     fallbackHint: "當一般狀態檢查未能延長登入效期時，允許改用最小模型送一次極短請求（約數十 token）來維持登入。",
     endsAt: "登入到期：{0}", endsSoon: "登入到期：{0}。續期無法延後這個日期，請在那之前重新登入。", ended: "登入已於 {0} 到期。請重新登入。",
     plan: "方案：{0}", last: "上次檢查 {0}：{1}",
     o_refreshed: "已續期", o_fallback_refreshed: "已用小請求續期", o_not_needed: "仍有效", o_checked: "已登入",
-    o_in_use: "使用中，由它的 Agent 保持登入", o_unsupported: "沒有需要續期的（API 金鑰）", o_not_renewed: "沒有續期",
-    o_needs_sign_in: "需要重新登入", o_transient: "連不上服務；明天會再試",
+    o_in_use: "使用中，由它的 Agent 保持登入", o_unsupported: "沒有需要續期的（API 金鑰）", o_keyring: "登入存在系統鑰匙圈，這裡沒有可續期的檔案", o_not_renewed: "沒有續期",
+    o_needs_sign_in: "需要重新登入", o_transient: "連不上服務；稍後會再試",
     on: "已開啟保持登入。", off: "已關閉保持登入。", failed: "沒有成功，請再試一次。",
   },
 });
 const tk = (k, ...v) => t(`accountsKeepAlive.${k}`, ...v);
+/** The words that say what the switch does for a CLI. */
+function hintKey(backend) {
+  if (backend === "claude-code") return "hint_claude";
+  if (backend === "antigravity") return "hint_antigravity";
+  return "hint_codex";
+}
 const WARN_MS = 10 * 86_400_000;
 
 /** This control's stylesheet, linked once (an older accounts.css has no rules for it). */
@@ -108,7 +116,7 @@ export function KeepAliveControl({ row, onSaved, now = Date.now() }) {
     ${/* Ridge #3321 S10: an on/off feature is the shared switch (s-ui-toggle), as Hub membership and web authority; the paid fallback stays a checkbox. */ ""}
     <label class="check"><input class="s-ui-toggle" type="checkbox" role="switch" checked=${!!k.enabled} disabled=${busy} onChange=${(e) => save(e.currentTarget.checked, k.fallback)} />
       <span>${tk("label")}</span></label>
-    <${InfoTip} text=${tk(row.backend === "claude-code" ? "hint_claude" : "hint_codex")} name=${tk("label")} />
+    <${InfoTip} text=${tk(hintKey(row.backend))} name=${tk("label")} />
     ${row.backend === "claude-code" && k.enabled ? html`<span class="s-keepalive-fallback"><label class="check"><input type="checkbox" checked=${!!k.fallback} disabled=${busy} onChange=${(e) => save(true, e.currentTarget.checked)} />
       <span>${tk("fallback")}</span></label><${InfoTip} text=${tk("fallbackHint")} name=${tk("fallback")} /></span>` : null}
     ${endLine ? html`<small class=${`s-keepalive-ends${warn ? " is-warn" : ""}`}>${endLine}</small>` : null}

@@ -10,7 +10,7 @@ import {
 import { CLI_SPECS, cliSpec, hostCap, hostFacts, hostIds, hostIdsByRank, isCliId, isRuntimeDefaultLoginCli, runtimeFacts, runtimeIds, runtimeProviderIds, runtimeSignInCapabilities, type HostCliWith, type RuntimeCliWith } from "../src/cli-registry.js";
 import { capabilityOf, checkCliRegistry, cliGaps } from "../src/cli-registry-check.js";
 import { ACCOUNT_CLIS, MACHINE_ACCOUNT_CLIS, MACHINE_DEFAULT_LOGIN_CLIS, PROFILE_CLIS } from "../src/accounts-view.js";
-import { SIGN_OUT } from "../src/accounts-signout.js";
+import { SIGN_OUT, SIGN_OUT_REMOVES } from "../src/accounts-signout.js";
 import { ONBOARDING_BACKENDS } from "../src/backend-signin-pending.js";
 import { CHAT_PROFILE_LOGIN_BACKENDS, credentialHomeSpec } from "../src/backend/credential-profile.js";
 import { BACKEND_INSTALLATION_INFO } from "../src/instance-lifecycle.js";
@@ -77,11 +77,8 @@ kiro-cli runtime.authStatus not_yet_built undecided
 kiro-cli runtime.identity not_applicable
 kiro-cli runtime.usage not_yet_built undecided
 antigravity host.dashboardSignIn by_design
-antigravity host.namedAccounts by_design
-antigravity host.signOut cli_has_none
-antigravity host.keepAlive needs_verification
 antigravity runtime.install by_design
-antigravity runtime.namedAccounts by_design
+antigravity runtime.namedAccounts not_yet_built undecided
 antigravity runtime.identity by_design
 antigravity runtime.usage not_yet_built undecided
 grok host.structuredSignIn not_yet_built undecided
@@ -146,7 +143,7 @@ describe("a CLI that leaves something out is caught", () => {
   });
 
   it("the types follow the data: the CLIs that say yes are a type, and a CLI that says no is not one (checked by `npm run typecheck:tests`)", () => {
-    const keepAlive: HostCliWith<"keepAlive">[] = ["claude-code", "codex"];
+    const keepAlive: HostCliWith<"keepAlive">[] = ["claude-code", "codex", "antigravity"];
     // @ts-expect-error — Kiro's spec says no to keep-alive, so it is not one of the CLIs that have it
     const notKiro: HostCliWith<"keepAlive"> = "kiro-cli";
     const runtimeInstall: RuntimeCliWith<"install">[] = ["claude-code", "codex"];
@@ -237,7 +234,7 @@ describe("a CLI that leaves something out is caught", () => {
   it("a capability set up without what it stands on", () => {
     const specs = copy();
     specs["kiro-cli"].host.authCheck = byDesign("taken away to see structured sign-in and identity notice it");
-    specs.antigravity.host.keepAlive = yes();                    // keep-alive without named accounts
+    specs.grok.host.keepAlive = yes();                           // keep-alive without named accounts
     specs.grok.host.dashboardSignIn = yes({ named: true });      // named sign-in without named accounts
     specs.grok.host.usage = yes({ providerId: "grok", name: "Grok", rank: 3, profileRows: true });
     specs.codex.runtime.signIn = yes({ argv: ["codex", "login"], profile: "named" });
@@ -246,9 +243,19 @@ describe("a CLI that leaves something out is caught", () => {
     specs.opencode.runtime.install = yes({ kind: "npm" });
     specs.opencode.runtime.provider = byDesign("taken away to see the install notice it");
     specs["claude-code"].runtime.namedAccounts = yes({ env: "SOMETHING_ELSE" });
+    // AGEND-119: an account told apart by an argument names the argument, the file its sign-in is in and what keeps it there — and no variable; a sign-out is a command or the files removed.
+    specs.codex.host.namedAccounts = yes({ home: "launch-argument", arg: "--app_data_dir", carry: "keeps" } as never);
+    specs["kiro-cli"].host.namedAccounts = yes({ env: "XDG_DATA_HOME", home: "relocate-home", arg: "--x", carry: "handover" } as never);
+    specs["claude-code"].host.signOut = yes({ binary: "claude", args: ["auth", "logout"], remove: ["token"] } as never);
+    specs["claude-code"].host.structuredSignIn = yes({ argv: ["claude", "auth", "login"], rank: 1, ends: "success-line", screen: "login-flow", answer: "code" } as never);
     const problems = checkCliRegistry(specs);
+    expect(problems).toContainEqual(expect.stringContaining("codex: host.namedAccounts is a launch argument, so it needs `store`"));
+    expect(problems).toContainEqual(expect.stringContaining("codex: host.namedAccounts is a launch argument, so it needs `pin`"));
+    expect(problems).toContainEqual(expect.stringContaining("kiro-cli: host.namedAccounts moves a home with a variable, so it has no `arg`"));
+    expect(problems).toContainEqual(expect.stringContaining("claude-code: host.signOut is either the CLI's own logout"));
+    expect(problems).toContainEqual(expect.stringContaining("claude-code: host.structuredSignIn is \"yes\" but has no `named`"));
     expect(problems).toContainEqual(expect.stringContaining("kiro-cli: host.structuredSignIn is \"yes\" but host.authCheck is not"));
-    expect(problems).toContainEqual(expect.stringContaining("antigravity: host.keepAlive is \"yes\" but host.namedAccounts is not"));
+    expect(problems).toContainEqual(expect.stringContaining("grok: host.keepAlive is \"yes\" but host.namedAccounts is not"));
     expect(problems).toContainEqual(expect.stringContaining("grok: host.dashboardSignIn says named accounts can be signed in"));
     expect(problems).toContainEqual(expect.stringContaining("grok: host.usage has rows for named accounts"));
     expect(problems).toContainEqual(expect.stringContaining("codex: runtime.accountRows shows the computer's named accounts, but runtime.namedAccounts is not \"yes\""));
@@ -279,7 +286,7 @@ describe("a sign-in with no profile (the computer's own login, which signing in 
 
 describe("a usage fact says what limits the CLI reports (AGEND-113)", () => {
   const broken = (change: (specs: ReturnType<typeof copy>) => void): string[] => { const specs = copy(); change(specs); return checkCliRegistry(specs); };
-  const usage = (extra: Record<string, unknown>) => yes({ providerId: "antigravity", name: "Antigravity", rank: 5, profileRows: false, pools: "several", windows: ["session", "weekly"], ...extra } as never);
+  const usage = (extra: Record<string, unknown>) => yes({ providerId: "antigravity", name: "Antigravity", rank: 5, profileRows: false, hostRows: false, pools: "several", windows: ["session", "weekly"], ...extra } as never);
   it("every CLI with a usage row names its pools and the kinds of window it reports", () => {
     expect(Object.fromEntries(hostIds("usage").map(id => [id, [hostFacts(id, "usage")!.pools, hostFacts(id, "usage")!.windows]]))).toEqual({
       "claude-code": ["single", ["session", "weekly"]], codex: ["single", ["session", "weekly", "monthly"]], "kiro-cli": ["single", ["monthly"]],
@@ -289,7 +296,7 @@ describe("a usage fact says what limits the CLI reports (AGEND-113)", () => {
   it("a usage fact without its windows, with none, with one twice or with a kind that does not exist is not a complete registry", () => {
     const windows = (value: unknown) => broken(specs => { specs.antigravity.host.usage = usage({ windows: value }); });
     for (const bad of [[], ["session", "session"], ["session", "daily"], "weekly", [5]]) expect(windows(bad), JSON.stringify(bad)).toContainEqual(expect.stringContaining("antigravity: host.usage `windows` must be a list of at least one of session, weekly, monthly, unwindowed, none twice"));
-    expect(broken(specs => { specs.antigravity.host.usage = yes({ providerId: "antigravity", name: "Antigravity", rank: 5, profileRows: false, pools: "several" } as never); })).toContainEqual(expect.stringContaining("antigravity: host.usage is \"yes\" but has no `windows`"));
+    expect(broken(specs => { specs.antigravity.host.usage = yes({ providerId: "antigravity", name: "Antigravity", rank: 5, profileRows: false, hostRows: false, pools: "several" } as never); })).toContainEqual(expect.stringContaining("antigravity: host.usage is \"yes\" but has no `windows`"));
     expect(windows(["unwindowed", "monthly"])).toEqual([]);
   });
 });
@@ -355,17 +362,20 @@ describe("every \"yes\" has the behaviour it promises, every \"no\" has none", (
     for (const id of ids) {
       const facts = hostFacts(id, "namedAccounts"), spec = credentialHomeSpec(id);
       expect(!!spec, id).toBe(!!facts);
-      if (facts && spec) expect({ env: spec.env, home: spec.kind }, id).toEqual({ env: facts.env, home: facts.home });
+      // A CLI told its account by an argument has no variable: its credential home says so with an empty one (AGEND-119).
+      if (facts && spec) expect({ env: spec.env, home: spec.kind }, id).toEqual({ env: "env" in facts ? facts.env : "", home: facts.home });
     }
     expect([...PROFILE_CLIS]).toEqual(hostIds("namedAccounts"));
   });
 
   it("host.signOut, host.keepAlive, host.accountCard and host.usage: the same CLIs, in the same order", () => {
-    expect(Object.keys(SIGN_OUT)).toEqual(hostIds("signOut"));
+    // The CLIs with a logout command, and (AGEND-119) those whose sign-in file AgEnD removes: together, exactly the registry's.
+    expect([...Object.keys(SIGN_OUT), ...Object.keys(SIGN_OUT_REMOVES)].sort()).toEqual([...hostIds("signOut")].sort());
     for (const id of ids) {
       expect(isKeepAliveBackend(id), id).toBe(!!hostFacts(id, "keepAlive"));
       const signOut = hostFacts(id, "signOut");
-      expect(SIGN_OUT[id] ?? null, id).toEqual(signOut ? { binary: signOut.binary, args: signOut.args } : null);
+      expect(SIGN_OUT[id] ?? null, id).toEqual(signOut && "binary" in signOut ? { binary: signOut.binary, args: signOut.args } : null);
+      expect(SIGN_OUT_REMOVES[id] ?? null, id).toEqual(signOut && "remove" in signOut ? signOut.remove : null);
       expect(usageProviderIdForBackend(id), id).toBe(hostFacts(id, "usage")?.providerId ?? null);
     }
     expect([...ACCOUNT_CLIS]).toEqual(hostIdsByRank("accountCard"));

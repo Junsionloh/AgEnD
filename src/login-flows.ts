@@ -40,7 +40,7 @@ import { claudeLoginScreenActive } from "./backend/claude-code.js";
 import { agyLoginScreenActive } from "./backend/antigravity.js";
 import { identityOf, parseClaudeAuthStatus, type AccountIdentity } from "./claude-auth-status.js";
 import { hostFacts, hostIds, type HostCliWith } from "./cli-registry.js";
-import { readAntigravityIdentity } from "./antigravity-identity.js";
+import { readAntigravityIdentity, readAntigravityIdentityIn } from "./antigravity-identity.js";
 
 export interface AuthCheck {
   /** argv of a cheap, LLM-token-free status probe (5s timeout). */
@@ -385,29 +385,41 @@ async function runAuthCheckProcess(argv: string[], timeoutMs: number, env?: Reco
  * nothing is started and nothing leaves this machine, and nothing else of the file is read, kept or logged. What comes back is masked; the output (or the file's text) is dropped here.
  */
 type IdentityCli = HostCliWith<"identity">;
-const IDENTITY_READERS: Record<IdentityCli, { from: "status-command"; parse: (output: string) => AccountIdentity | undefined } | { from: "token-file"; read: (env?: Record<string, string>) => AccountIdentity | undefined }> = {
+const IDENTITY_READERS: Record<IdentityCli, { from: "status-command"; parse: (output: string) => AccountIdentity | undefined } | { from: "token-file"; read: (env?: Record<string, string>, folder?: string) => AccountIdentity | undefined }> = {
   "claude-code": { from: "status-command", parse: output => identityOf(parseClaudeAuthStatus(output)) },
-  "antigravity": { from: "token-file", read: env => readAntigravityIdentity({ ...process.env, ...(env ?? {}) }) },
+  // `folder`: a named account's own folder (AGEND-119); none: the default sign-in's.
+  "antigravity": { from: "token-file", read: (env, folder) => folder ? readAntigravityIdentityIn(folder) : readAntigravityIdentity({ ...process.env, ...(env ?? {}) }) },
 };
 /** How a CLI's identity is read (null: it has none), for the completeness test. */
 export function identityReaderKind(backend: string): "status-command" | "token-file" | null { return hostFacts(backend, "identity") ? IDENTITY_READERS[backend as IdentityCli]?.from ?? null : null; }
 export function authIdentitySupported(backend: string): boolean { return hostFacts(backend, "identity") !== null && !!IDENTITY_READERS[backend as IdentityCli]; }
-export async function checkAuthIdentity(backend: string, env?: Record<string, string>): Promise<AccountIdentity | undefined> {
+/**
+ * `profile` (AGEND-119): the launch of a NAMED account for a CLI that is told its account by an argument (credentialProfileLaunch): `args` go right after the binary, `folder` is where its sign-in is kept
+ * (read for the identity of a token-file CLI). `env` alone is a variable-based profile's, as before.
+ */
+export interface AuthProfileLaunch { args?: readonly string[]; folder?: string }
+export async function checkAuthIdentity(backend: string, env?: Record<string, string>, profile?: AuthProfileLaunch): Promise<AccountIdentity | undefined> {
   if (!authIdentitySupported(backend)) return undefined;
   const reader = IDENTITY_READERS[backend as IdentityCli];
-  if (reader.from === "token-file") { try { return reader.read(env); } catch { return undefined; } }
+  if (reader.from === "token-file") { try { return reader.read(env, profile?.folder); } catch { return undefined; } }
   const check = LOGIN_FLOWS[backend]?.authCheck;
   if (!check) return undefined;
   const run = authCheckRunnerOverride ?? runAuthCheckProcess;
+  const argv = withProfileArgs(check.argv, profile?.args);
   try {
-    const { code, output } = await (env ? run(check.argv, AUTH_CHECK_TIMEOUT_MS, env) : run(check.argv, AUTH_CHECK_TIMEOUT_MS));
+    const { code, output } = await (env ? run(argv, AUTH_CHECK_TIMEOUT_MS, env) : run(argv, AUTH_CHECK_TIMEOUT_MS));
     return code === 0 && (!check.valid || check.valid(output)) ? reader.parse(output) : undefined;
   } catch { return undefined; }
 }
-export async function checkAuthStatus(check: AuthCheck, env?: Record<string, string>): Promise<AuthCheckResult> {
+/** A command with the arguments a named account's launch adds put right after the binary (`agy models` → `agy --app_data_dir <folder> models`). */
+export function withProfileArgs(argv: readonly string[], args: readonly string[] | undefined): string[] {
+  return args?.length ? [argv[0]!, ...args, ...argv.slice(1)] : [...argv];
+}
+export async function checkAuthStatus(check: AuthCheck, env?: Record<string, string>, args?: readonly string[]): Promise<AuthCheckResult> {
   const run = authCheckRunnerOverride ?? runAuthCheckProcess;
+  const argv = withProfileArgs(check.argv, args);
   try {
-    const { code, output } = await (env ? run(check.argv, AUTH_CHECK_TIMEOUT_MS, env) : run(check.argv, AUTH_CHECK_TIMEOUT_MS));
+    const { code, output } = await (env ? run(argv, AUTH_CHECK_TIMEOUT_MS, env) : run(argv, AUTH_CHECK_TIMEOUT_MS));
     if (code === null) return "unknown";
     if (code !== 0) return "invalid";
     if (check.validPattern && !check.validPattern.test(output)) return "invalid";

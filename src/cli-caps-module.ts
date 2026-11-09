@@ -13,8 +13,12 @@ import { CLI_IDS, hostFacts, hostIdsByRank, runtimeFacts, type CarryKind, type C
 export interface UiCliCaps {
   /** The dashboard can sign this CLI's account out (`host.signOut`). */
   signOut: boolean;
+  /** It is signed out by AgEnD removing the account's sign-in file (the CLI has no logout command; `host.signOut.remove`), and then checking: the dialog says so instead of "the CLI's own logout". */
+  signOutFiles: boolean;
   /** The CLI can have named accounts (`host.namedAccounts`), and how a Move between two of them words the conversation; null when it has none. */
   namedAccounts: boolean;
+  /** An account is the CLI's whole app-data folder (`host.namedAccounts` as a launch argument): Remove deletes its conversations with its sign-in. */
+  accountIsFolder: boolean;
   carry: CarryKind | null;
   /** The default account is signed in with browser controls (`host.structuredSignIn`); a named one too (`host.dashboardSignIn.named`, with the structured sign-in). */
   structuredSignIn: boolean;
@@ -39,10 +43,12 @@ export function uiCliCaps(): Record<CliId, UiCliCaps> {
     const named = hostFacts(id, "namedAccounts"), structured = hostFacts(id, "structuredSignIn"), dashboard = hostFacts(id, "dashboardSignIn");
     const caps: UiCliCaps = {
       signOut: hostFacts(id, "signOut") !== null,
+      signOutFiles: hostFacts(id, "signOut") !== null && "remove" in hostFacts(id, "signOut")!,
       namedAccounts: named !== null,
+      accountIsFolder: named?.home === "launch-argument",
       carry: named?.carry ?? null,
       structuredSignIn: structured !== null,
-      structuredNamedSignIn: structured !== null && dashboard?.named === true,
+      structuredNamedSignIn: structured?.named === true,
       firstRunSignIn: hostFacts(id, "firstRunSignIn")?.mode ?? null,
       runtimeInstall: runtimeFacts(id, "install") !== null,
       runtimeName: runtimeFacts(id, "install") ? runtimeFacts(id, "provider")?.name ?? null : null,

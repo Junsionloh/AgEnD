@@ -5,3 +5,6 @@
 /* A window that has reset since the read: its tag, and the full card's "reset since" words where the bar would be. */
 .s-usage-reset { align-items: center; }
 .s-usage-reset-note { grid-column: 2 / -1; min-width: 0; color: var(--text-3); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+/* AGEND-119: why the numbers are the last known ones (the cause and when they were read, then what the read said), under the windows and across the block. */
+.s-usage-stale { min-width: 0; overflow-wrap: anywhere; }
+.s-usage-stale-detail { display: block; }
