@@ -18545,7 +18545,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
    * option was turned on (the secret lives ten minutes) must not be finished by a session the option now restricts: it never
    * passed the code, so the finish is refused (webOutsideConfirmEnrollment).
    */
-  private authenticatorStarts = new Map<string, boolean>();
+  private authenticatorStarts = new Map<string, "host" | "code" | "none">();
 
   /** Set up (or set up again): a new secret, shown once to the admin. Null: not them. A code is asked first when the option needs one. */
   webOutsideBeginEnrollment(req: IncomingMessage, code?: string): { secret: string; uri: string; expiresInMs: number } | { error: "code_required" | "wrong" | "paused" | "unavailable" | "not_here"; retryAfterMs?: number } | null {
@@ -18559,7 +18559,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     }
     if (!owner.current()) return null;
     const begun = store.beginEnrollment(owner.handle, hostname() || "fleet");
-    this.authenticatorStarts.set(owner.handle, step.verified);
+    // On this computer is not the same as the code: a start on the host, finished by the same cookie from another device, is refused too.
+    this.authenticatorStarts.set(owner.handle, owner.onHost ? "host" : step.verified ? "code" : "none");
     if (this.authenticatorStarts.size > 64) this.authenticatorStarts.delete(this.authenticatorStarts.keys().next().value!);
     return begun;
   }
@@ -18570,7 +18571,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     if (!owner || !store || !owner.current()) return "not_here";
     const had = store.enrolled;
     // Asked again here, not only at the start: the option may have been turned on since (see authenticatorStarts).
-    if (!owner.onHost && ((this.remoteConfirmCode() && !had) || (this.authenticatorCodeAsked(owner, store) && this.authenticatorStarts.get(owner.handle) !== true))) return "not_here";
+    if (!owner.onHost && ((this.remoteConfirmCode() && !had) || (this.authenticatorCodeAsked(owner, store) && this.authenticatorStarts.get(owner.handle) !== "code"))) return "not_here";
     const r = store.confirmEnrollment(owner.handle, code);
     if (r === "ok") {
       this.authenticatorStarts.delete(owner.handle);

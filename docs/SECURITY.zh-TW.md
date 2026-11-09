@@ -143,7 +143,7 @@ Daemon 透過 `~/.agend/instances/<name>/channel.sock` 與 AgEnD MCP bridge 通�
 
 **擁有者較嚴格的選項：要求代碼。** `web.verified_authority.remote_confirm_code: true`（設定 → 存取與安全 → **網頁授權** →「從其他裝置確認變更時要驗證器代碼」；預設關閉；需先在**擁有者驗證**設定驗證器，開啟本身不需任何額外確認）。開啟後，不是 AgEnD 電腦自己瀏覽器的 session 不再有「直接套用」，不論它是什麼：區域網路或 tailnet 的 session、經由連結的 session、從外面登入的擁有者：每項變更都用「那一項變更」專屬的驗證器代碼確認（綁定變更的 digest，先檢查 digest 再檢查代碼；每個時間步只能用一次；全 fleet 共用的錯誤次數限制；執行時再檢查，並且是同一個綁定）。聊天帳號在進入時與執行時仍須是變更涉及 connection 的管理員。**只有這台電腦可以授權**連代碼也擋。要求代碼時，開啟連結的變更絕不能透過連結確認。AgEnD 電腦自己的瀏覽器不會被要求輸入。「AgEnD 電腦」指來自 loopback 位址、loopback Host、沒有轉送 header 的請求，所以 `ssh -L`、IDE 的連接埠轉送，以及主機上的任何程序都算主機（與威脅模型一致）。**這個選項不會封住所有路徑：**聊天型 fleet 上，General 的確認卡是另一條確認同一項變更的管道（包括關閉這個選項），不需要代碼；它需要管理員的聊天帳號，是另一個因素。在 AgEnD 電腦以外，關閉這個選項、以及更換或停用驗證器，都要輸入目前的代碼，所以被它限制的 session 無法自己解除限制。若選項已開卻沒有驗證器（檔案遺失），不在 AgEnD 電腦上的頁面無法確認，直到在那裡重新設定：預設為擋住，不會變成放行。聊天型 fleet 的驗證器只用於逐筆代碼；從外面登入及其開關仍只屬於 web-only fleet。
 
-**Notice。** 開啟連結的變更、或更改 secret 的變更，只要從另一台裝置確認，除了稽核紀錄之外一定會發 Notice（web-only fleet 發到 dashboard 的 Notices；聊天型發到 General，否則主要 connection 的通知目標，再否則網頁 Notices）。稽核紀錄仍照舊記下誰確認、用什麼方式。
+**Notice。** 除了稽核紀錄之外，從另一台裝置（不是 AgEnD 電腦自己的瀏覽器）發生下列情況時一定會發 Notice：(1) 確認開啟公開連結的變更、(2) 確認更改 secret 的變更、(3) 第一次設定驗證器（重新設定或停用本來就有自己的 Notice）、(4) 開啟或關閉代碼選項（關閉是指它被確認時）。web-only fleet 發到 dashboard 的 Notices；聊天型發到 General，否則主要 connection 的通知目標，再否則網頁 Notices（聊天型的 dashboard 之後會顯示）。Notice 帶的是已遮蔽的 diff、誰、結果，絕不含 secret 值。稽核紀錄仍照舊記下誰確認、用什麼方式。
 
 **你接受的風險，白話說明。** 在擁有者開啟較嚴格的選項或**只有這台電腦可以授權**之前，任何持有已登入管理員 session 的人（沒登出的瀏覽器、或它的 session cookie）都能從任何連得到 dashboard 的裝置做任何變更，包括開啟公開連結和更改 secret，不需要第二步。Notice 是讓擁有者知道的方式，不是關卡。登入碼、session 時限和 `/web revoke` 限制這種 session 能活多久。程式與這些說明裡的「LAN」指「直接連線、而且不在 AgEnD 電腦上」：擁有者自己架的 tailnet、反向代理或 funnel 也會這樣到達，即使來自網際網路。它不是「私有區域網路」的意思。
 

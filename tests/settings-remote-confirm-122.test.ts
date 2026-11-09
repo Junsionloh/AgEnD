@@ -274,6 +274,14 @@ describe("setting up, replacing and removing the authenticator (M3, S1)", () => 
     const mine = f.session("host", "here"), hostBegun = f.any.webOutsideBeginEnrollment(mine.req);
     expect(f.any.webOutsideConfirmEnrollment(mine.req, secretOf(hostBegun))).toBe("ok");   // this computer is never asked
   });
+  it("a set-up begun on this computer is not finished by the same cookie from another device once the option is on", () => {
+    const f = fleet({ enrolled: true, outside: false, va: { remote_confirm_code: true } }), s = f.session("host", "here");
+    const begun = f.any.webOutsideBeginEnrollment(s.req);
+    expect(begun).toMatchObject({ secret: expect.any(String) });
+    const away = { ...s.req, socket: { remoteAddress: "192.0.2.20" }, headers: { ...s.req.headers, host: "192.0.2.5:19280", origin: "http://192.0.2.5:19280" } };
+    expect(f.any.webOutsideConfirmEnrollment(away, secretOf(begun))).toBe("not_here");
+    expect(f.any.webOutsideConfirmEnrollment(s.req, secretOf(begun))).toBe("ok");        // the same start, finished on this computer
+  });
   it("begun with the option on: the current code first, then the finish is allowed", () => {
     const f = fleet({ enrolled: true, outside: false, va: { remote_confirm_code: true } }), s = f.session("code", "lan");
     expect(f.any.webOutsideBeginEnrollment(s.req)).toEqual({ error: "code_required" });
