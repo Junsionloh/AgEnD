@@ -485,6 +485,14 @@ describe("an agent on a named account", () => {
     expect(JSON.parse(readFileSync(join(w.home("work"), "settings.json"), "utf8")).statusLine).toMatchObject({ enabled: true });
     expect(existsSync(join(w.def, "settings.json"))).toBe(false);
   });
+  it("the settings are never written through a folder that is a link (it would be another account's): refused before anything is written", () => {
+    const w = world(["work"]), other = scratch();
+    rmSync(w.home("work"), { recursive: true }); symlinkSync(other, w.home("work"));
+    const dir = join(w.data, "instances", "worker"); mkdirSync(dir, { recursive: true });
+    const be = new AntigravityBackend(dir, scratch(), w.data);
+    expect(() => be.writeConfig({ workingDirectory: dir, instanceDir: dir, instanceName: "worker", mcpServers: {}, backendOptions: { credential_profile: "work" } } as never)).toThrow(/symlink/);
+    expect(readdirSync(other)).toEqual([]);
+  });
   it("a name that is not a name is refused where the launch is built", () => {
     expect(() => launch({ credential_profile: "../escape" })).toThrow(/credential_profile/);
   });

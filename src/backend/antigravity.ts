@@ -292,10 +292,16 @@ export class AntigravityBackend implements CliBackend {
     this.enableStatusLine(this.accountFolder(config));
   }
 
-  /** The folder agy keeps this instance's settings in: its named account's own, or the default sign-in's. */
+  /**
+   * The folder agy keeps this instance's settings in: its named account's own, or the default sign-in's. A named account's is prepared first (a real folder, no link, seeded from the default's first run): the
+   * settings are written into it, and a folder that is a link to another account's must be refused before anything is written through it.
+   */
   private accountFolder(config: CliBackendConfig): string {
     const profile = resolveCredentialProfile(config.backendOptions);
-    return profile ? credentialProfileHome(this.agendHome, "antigravity", profile) : join(this.userHome, ".gemini", "antigravity-cli");
+    if (!profile) return join(this.userHome, ".gemini", "antigravity-cli");
+    const folder = credentialProfileHome(this.agendHome, "antigravity", profile);
+    prepareCredentialProfileHome(credentialHomeSpec("antigravity")!, folder);
+    return folder;
   }
 
   private writeMcpEnvWrapper(config: CliBackendConfig): void {
