@@ -124,8 +124,8 @@ describe("agend-runtime profile list / default", () => {
   it("status redacts the Antigravity accounts under `byCli` too", async () => {
     const f = setup(); ensureCredentialProfile(f.root, "antigravity", "work");
     rememberCredentialStatus(f.root, "antigravity", "work", { loggedIn: true, identity: { maskedEmail: "alice.fixture@example.com" } });
-    await f.run(["status"]);
-    expect(f.text()).not.toMatch(/alice|fixture/); expect(JSON.parse(f.text()).credentialProfiles.byCli.antigravity[0].identity).toEqual({ maskedEmail: "al***@example.com" });
+    await f.run(["status", "--json"]);
+    expect(f.text()).not.toMatch(/alice|fixture/); expect(JSON.parse(f.text()).profiles[0].credentialProfiles.byCli.antigravity[0].identity).toEqual({ maskedEmail: "al***@example.com" });
   });
   it("the report the Runtime sends over the paired channel is NOT redacted: credentialProfileReport still carries the whole address", () => {
     const f = setup(); ensureCredentialProfile(f.root, "claude-code", "work");
