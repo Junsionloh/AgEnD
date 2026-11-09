@@ -66,7 +66,7 @@ export interface RemoteAccountsDeps {
    */
   deleteCredential?(name: string): Promise<number | null>;
   /** A native task is running on this computer (the computer's own login must not be signed out under it). Absent: unknown, which refuses. */
-  taskRunning?(): boolean;
+  taskRunning?(): boolean | Promise<boolean>;
   /** Whether a task or terminal is running with this profile, which makes sign-out and remove refuse. */
   inUse(name: string): "task" | "pane" | "unknown" | undefined | Promise<"task" | "pane" | "unknown" | undefined>;
   /** The same question with no await (from what is already known in memory and on disk): asked once more, synchronously, immediately before a profile is renamed. */
@@ -591,7 +591,8 @@ export class RemoteAccounts {
       // The shared parser already masked the address; check the masked form once more before anything is stored or sent.
       const identity = answer.loggedIn === true && answer.identity ? parseAccountIdentity(answer.identity) : undefined;
       rememberCredentialStatus(this.deps.credentialRoot, cli, input.profile, { loggedIn: answer.loggedIn, ...(identity ? { identity } : {}) });
-      if (this.meta && this.meta.profile === input.profile) this.meta.signedIn = answer.loggedIn === true;
+      // A sign-in that ended without leaving its file in the account's folder (`notIsolated`) stays failed: a later check that reads "signed in" from a store every folder shares must not turn it into a success.
+      if (this.meta && this.meta.profile === input.profile && !this.meta.notIsolated) this.meta.signedIn = answer.loggedIn === true;
       await this.refreshed(ctx);
       return { loggedIn: answer.loggedIn, ...(identity ? { identity } : {}) };
     } finally { this.activeChecks--; }
@@ -667,14 +668,15 @@ export class RemoteAccounts {
         await this.settleEndedSignIn();
         if (this.slot.current()) throw new SignInRefusal("A sign-in is running on this computer; end it first", "busy");
         if (!this.deps.deleteCredential || !this.deps.defaultStatus) throw new ProfileOwnershipRefusal("This Runtime cannot sign this computer's own login out", "unsupported");
-        if (this.deps.taskRunning?.() !== false) throw new ProfileOwnershipRefusal(`A task is running on this computer (or this Runtime could not tell), and it would lose its ${cliName(cli)} login; wait for it to finish`, "in_use");
+        // Asked with `await`: the Runtime reads the computer's boot identity first, so a terminal recorded under an earlier boot is not counted as running.
+        if ((await this.deps.taskRunning?.()) !== false) throw new ProfileOwnershipRefusal(`A task is running on this computer (or this Runtime could not tell), and it would lose its ${cliName(cli)} login; wait for it to finish`, "in_use");
         const last = this.lastChange.get(paceKey);
         if (last !== undefined && this.now() - last < PROFILE_OP_MIN_GAP_MS) throw new SignInRefusal(`${cliName(cli)} was just signed out here; wait a few seconds`, "rate_limited");
         this.lastChange.set(paceKey, this.now());
       },
       run: async () => {
         this.gate(ctx, "accounts");
-        if (this.slot.current() || this.deps.taskRunning?.() !== false) throw new ProfileOwnershipRefusal("A sign-in or a task started on this computer; nothing was changed", "in_use");
+        if (this.slot.current() || (await this.deps.taskRunning?.()) !== false) throw new ProfileOwnershipRefusal("A sign-in or a task started on this computer; nothing was changed", "in_use");
         // 0: deleted. Any other exit is not by itself a failure (an entry that was not there is already signed out): `agy models` below is what answers.
         await this.deps.deleteCredential!(facts.credential);
         this.gate(ctx, "accounts");

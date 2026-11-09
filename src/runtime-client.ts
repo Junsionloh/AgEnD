@@ -621,7 +621,7 @@ export class RuntimeClient {
       // AGEND-124: the proof that an Antigravity account's sign-in stays in its own folder (an empty scratch folder must answer "signed out"), and the Credential Manager entry of the computer's own login.
       isolated: extra?.isolated ?? ((cli, scratch) => probeCredentialIsolation(cli, scratch, extra?.find ? id => extra.find!(id as CredentialProfileCli) : undefined, this.options.credentialIsolationRun)),
       deleteCredential: extra?.deleteCredential ?? (name => deleteWindowsCredential(name, extra?.environment?.() ?? undefined)),
-      taskRunning: () => this.active.size > 0 || this.cliTerminalRunning("antigravity") !== false,
+      taskRunning: async () => { await this.systemBoot(); return this.active.size > 0 || this.cliTerminalRunning("antigravity"); },
       inUse: name => this.profileInUse(name), inUseNow: name => this.profileInUseNow(name), report: text => this.report(text),
       // Throws when `credential-default.json` cannot be read: an unreadable default is not "no default" (the remove then answers `unconfirmed`).
       defaultProfile: () => this.options.store.credentialDefault(),

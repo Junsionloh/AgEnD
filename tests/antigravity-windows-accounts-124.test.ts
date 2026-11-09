@@ -66,10 +66,12 @@ describe("the status probe and the isolation probe of the Windows worker", () =>
   it("asks `agy --app_data_dir <folder> models` under the account's launch and reads the listing's own words: signed in, signed out, or unknown", async () => {
     const calls: Array<{ args: string[]; env: NodeJS.ProcessEnv }> = [];
     const answer = (ok: boolean, text: string) => async (_e: unknown, args: string[], env: NodeJS.ProcessEnv) => { calls.push({ args, env }); return { ok, text }; };
-    const dir = join(scratch(), "work");
+    const dir = join(scratch(), "work"); mkdirSync(dir); writeFileSync(join(dir, TOKEN), "FIXTURE-NOT-A-TOKEN");
     expect((await probeCredentialProfileStatus("antigravity", dir, async () => exe, answer(true, "gemini-3-pro  Gemini 3 Pro\n"))).loggedIn).toBe(true);
     expect((await probeCredentialProfileStatus("antigravity", dir, async () => exe, answer(false, "Please sign in to view available models"))).loggedIn).toBe(false);
     expect((await probeCredentialProfileStatus("antigravity", dir, async () => exe, answer(false, "network is unreachable"))).loggedIn).toBeNull();
+    // P3-A: "signed in" with no token file in the folder is the Windows user's own login speaking, not this account's: could not confirm.
+    expect((await probeCredentialProfileStatus("antigravity", join(scratch(), "empty"), async () => exe, answer(true, "gemini-3-pro  Gemini 3 Pro\n"))).loggedIn).toBeNull();
     expect(calls[0]!.args[0]).toBe("--app_data_dir"); expect(calls[0]!.args.at(-1)).toBe("models"); expect(calls[0]!.env.SSH_CONNECTION).toBe(PIN.SSH_CONNECTION);
   });
   it("proves isolation only from an explicit \"signed out\" for an empty scratch folder (asked once more when it said nothing), and removes the scratch folder", async () => {
@@ -80,7 +82,7 @@ describe("the status probe and the isolation probe of the Windows worker", () =>
     seen.length = 0;
     expect(await probeCredentialIsolation("antigravity", root, async () => exe, run("gemini-3-pro  Gemini 3 Pro", true))).toBe(false);   // signed in under an empty folder: the keyring answered, not the folder
     expect(await probeCredentialIsolation("antigravity", root, async () => exe, run("boom"))).toBe(false);                                   // could not tell, twice
-    expect(seen.length).toBe(3);
+    expect(seen.length).toBe(4);
     expect(await probeCredentialIsolation("antigravity", root, async () => null, run("Please sign in"))).toBe(false);                         // no CLI to ask
   });
 });
@@ -357,7 +359,7 @@ describe("a named account's e-mail, read from its own token file on the computer
     expect(await none(folder("{not json"))).toEqual({ loggedIn: true });
     expect(await none(folder(tokenFile({ pad: "x".repeat(70 * 1024) })))).toEqual({ loggedIn: true });
     const linked = folder(dir => { const outside = join(scratch(), "outside.json"); writeFileSync(outside, tokenFile()); try { symlinkSync(outside, join(dir, TOKEN)); } catch { writeFileSync(join(dir, TOKEN), "x"); } });
-    expect(await none(linked)).toEqual({ loggedIn: true });
+    expect(await none(linked)).toEqual({ loggedIn: null });                // a link is no evidence of a sign-in in this folder
   });
   it("is read only for a folder the CLI says is signed in, and never for the isolation probe's scratch folder", async () => {
     const dir = folder(tokenFile());
@@ -447,5 +449,27 @@ describe("signing the computer's own login out while an Antigravity terminal is 
       c: { launch: { cli: "antigravity" }, snapshot: { state: "running" }, systemBootId: "boot-0" } }))).toBe(false);
     const broken = scratch(); const file = paneLedgerFiles(broken)[1]!; mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, "{not json");
     expect(running(broken)).toBe(true);
+  });
+});
+
+describe("P3-A and P3-B (AGEND-124 2B)", () => {
+  it("a later check that reads \"signed in\" cannot turn a not_isolated sign-in into a success, in the record or the cache", async () => {
+    const { f } = proven(); f.answer({ loggedIn: true });
+    const { sessionId } = await f.runtime.handle("signin.start", { cli: "antigravity", profile: "work", method: "subscription", actor: ACTOR }) as { sessionId: string };
+    f.children[0]!.end(0);
+    expect(await f.runtime.handle("signin.status", { sessionId })).toMatchObject({ isolated: false });
+    f.tick(PROFILE_OP_MIN_GAP_MS + 1);
+    expect(await f.runtime.handle("accounts.check", { cli: "antigravity", profile: "work" })).toMatchObject({ loggedIn: true });   // the rig's status says so
+    await f.runtime.handle("signin.close", { sessionId });
+    expect(audit(f).filter(r => r.action === "signin").at(-1)).toMatchObject({ outcome: "failed", reason: "not_isolated" });
+    await f.stop();
+  });
+  it("the sign-out of the computer's own login waits for the boot identity before it looks at the terminals", async () => {
+    const order: string[] = [];
+    const { f, deleted } = (() => { const deleted: string[] = []; const f = runtimeRig({ agy: true, deleteCredential: async name => { deleted.push(name); return 0; }, taskRunning: async () => { order.push("asked"); await Promise.resolve(); order.push("answered"); return false; } }); return { f, deleted }; })();
+    f.agyAnswer(false);
+    await f.runtime.handle("accounts.signout", { cli: "antigravity", actor: ACTOR });
+    expect(order.slice(0, 2)).toEqual(["asked", "answered"]); expect(deleted).toEqual(["gemini:antigravity"]);
+    await f.stop();
   });
 });

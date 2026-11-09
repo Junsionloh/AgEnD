@@ -59,7 +59,7 @@ export interface RigOptions {
   /** AGEND-124: the Runtime's proof that a scratch folder is signed out under the CLI's launch (absent: not provable, so a named sign-in is refused), and the Credential Manager delete. */
   isolated?: RemoteAccountsDeps["isolated"]; deleteCredential?: RemoteAccountsDeps["deleteCredential"];
   /** AGEND-124: whether a native task is running on that computer (default: none). */
-  taskRunning?: () => boolean;
+  taskRunning?: () => boolean | Promise<boolean>;
   /** AGEND-124: what the CLI's status says about a named account's folder, by CLI (default: the one `answer`). */
   status?: RemoteAccountsDeps["status"];
 }
