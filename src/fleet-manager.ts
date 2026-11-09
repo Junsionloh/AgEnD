@@ -318,6 +318,8 @@ import { parseEnvText } from "./env-file.js";
 import { isDisallowedIntentsError, isRejectedTokenError } from "./discord-permissions.js";
 import { filterUsageProviders, formatDiscordUsageActivity, getUsageSnapshot, handleUsageRequest, isUsagePath, refreshUsageAfterSignIn, setCapacityLookup, usageProviderIdForBackend } from "./usage/usage-api.js";
 import { LOGIN_FLOWS, checkAuthStatus, checkAuthIdentity, authIdentitySupported, LOGIN_BACKEND_ALIASES, type LoginFlow, type AuthCheckResult } from "./login-flows.js";
+import { structuredSignInSupported } from "./structured-signin.js";
+import { STRUCTURED_PROFILE_BACKENDS } from "./structured-signin-transport.js";
 import type { AccountIdentity } from "./claude-auth-status.js";
 import { LoginSession } from "./login-manager.js";
 import { runOnLoginShell } from "./login-shell.js";
@@ -477,7 +479,7 @@ type ReconcileObserver = (
   error?: string,
 ) => void;
 import { kiroHome } from "./backend/kiro-kas-store.js";
-import { CHAT_PROFILE_LOGIN_BACKENDS, credentialHomeSpec, credentialProfileHome, credentialProfileEnv, credentialProfileLogin, credentialProfileLoginCommand, credentialProfileStoreHome, credentialSwitchCarriesConversation, credentialSwitchStartsFresh, instanceCredentialProfile, listConfiguredProfiles, resolveCredentialProfile } from "./backend/credential-profile.js";
+import { CHAT_PROFILE_LOGIN_BACKENDS, credentialHomeSpec, credentialProfileHome, credentialProfileEnv, credentialProfileLaunch, credentialProfileLogin, credentialProfileLoginCommand, credentialProfileStoreHome, credentialSwitchCarriesConversation, credentialSwitchStartsFresh, instanceCredentialProfile, listConfiguredProfiles, resolveCredentialProfile } from "./backend/credential-profile.js";
 import { carryClaudeConversation, type CarryResult } from "./backend/claude-carry.js";
 import { classicProfile, mergeBackendOptions, profileKey, profileName, profileOf, readClassicBindings, readClassicBindingsStrict, type ClassicProfile } from "./classic-bindings.js";
 import { ACCOUNT_CLIS, PROFILE_CLIS, accountUsage, buildAccountsView, profilesOnDisk, type AccountUsage, type AccountsView } from "./accounts-view.js";
@@ -488,7 +490,7 @@ import { MachineSignIns } from "./machine-signins.js";
 import { ProfileSignIns } from "./profile-signins.js";
 import { runQuiet } from "./quiet-run.js";
 
-const ACCOUNT_SIGN_OUT_DEPS: Pick<import("./accounts-signout.js").SignOutDeps, "run" | "keychainHas" | "platform"> = {
+const ACCOUNT_SIGN_OUT_DEPS: Pick<import("./accounts-signout.js").SignOutDeps, "run" | "keychainHas" | "platform"> & { verify?: import("./accounts-signout.js").SignOutDeps["verify"] } = {
   platform: process.platform,
   run: (binary: string, args: readonly string[], env: NodeJS.ProcessEnv) => runQuiet(binary, args, env),   // its `gone` is kept by withAccountWriter
   // #3305 review P2-5: a deadline is a failure (runQuiet), for the Keychain query too; it only reads, so its child is not
@@ -20470,8 +20472,21 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         return result.ok;
       },
       checkAuth: (backend, profile) => {
-        const env = credentialProfileEnv(this.dataDir, backend, profile);
-        return env ? checkAuthStatus(LOGIN_FLOWS[backend]!.authCheck!, env) : Promise.resolve("unknown" as const);
+        const launch = credentialProfileLaunch(this.dataDir, backend, profile);
+        return launch ? checkAuthStatus(LOGIN_FLOWS[backend]!.authCheck!, launch.env, launch.args) : Promise.resolve("unknown" as const);
+      },
+      // AGEND-119: a CLI told its account by an argument (Antigravity) first proves the account's folder holds its sign-in. A folder that already has a token file is the proof (a login that came
+      // from it); an empty one must answer "signed out" — a CLI that answers "signed in" for a folder with nothing in it is reading a sign-in kept somewhere shared, and signing this account in
+      // would replace that one.
+      isolated: async (backend: string, profile: string) => {
+        if (hostFacts(backend, "namedAccounts")?.home !== "launch-argument") return true;
+        if (credentialProfileLogin(this.dataDir, backend, profile).state === "logged-in") return true;
+        const launch = credentialProfileLaunch(this.dataDir, backend, profile);
+        if (!launch) return false;
+        // Only "signed out" proves it. A probe that could not answer (a slow start) is asked once more; if it still cannot, nothing is started: an unproven folder is not signed in to.
+        let answer = await checkAuthStatus(LOGIN_FLOWS[backend]!.authCheck!, launch.env, launch.args);
+        if (answer === "unknown") answer = await checkAuthStatus(LOGIN_FLOWS[backend]!.authCheck!, launch.env, launch.args);
+        return answer === "invalid";
       },
       transport: target => createStructuredSignInTransport({ backend: target.backend, dataDir: this.dataDir }),
       changed: (event, owner, launched) => {
@@ -20553,9 +20568,14 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   }
   /** One `claude auth status` for a sign-in (the default one, or a credential profile's folder). */
   private async readSignInIdentity(target: SignInTarget): Promise<AccountIdentity | undefined> {
-    let env: Record<string, string> | undefined;
-    if (target.profile) env = credentialProfileEnv(this.dataDir, target.backend, target.profile) ?? undefined;
-    return checkAuthIdentity(target.backend, env);
+    let env: Record<string, string> | undefined, launch: { args: string[]; folder: string } | undefined;
+    if (target.profile) {
+      const l = credentialProfileLaunch(this.dataDir, target.backend, target.profile);
+      env = l?.env;
+      // AGEND-119: a named account's folder (where a token-file CLI's sign-in is read) and the arguments a probe of it is given.
+      if (l) launch = { args: l.args, folder: credentialProfileHome(this.dataDir, target.backend, target.profile) };
+    }
+    return checkAuthIdentity(target.backend, env, launch);
   }
   /**
    * Start reading, in the background, the account of each Claude Code sign-in that is signed in (the default and every profile an agent uses) and
@@ -20598,7 +20618,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       for (const profile of profilesOnDisk(this.dataDir, backend)) {
         let login: ReturnType<typeof credentialProfileLogin>["state"] = "unknown";
         try { login = credentialProfileLogin(this.dataDir, backend, profile).state; } catch { /* unknown */ }
-        const signIn = dashboardSignInSupported(backend, profile);
+        const signIn = this.profileSignInSupported(backend, profile);
         const hostCommand = signIn ? null : credentialProfileLoginCommand(this.dataDir, backend, profile);
         const identity = this.signInIdentity(backend, profile);
         rows.push({ profile, state: (login === "logged-in" ? "usable" : login === "signed-out" ? "not_signed_in" : "unknown") as SignInTarget["state"], signIn,
@@ -20806,7 +20826,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const day = (ms: number | undefined) => ms === undefined ? "?" : new Date(ms).toISOString().slice(0, 10);
     const owner = this.worlds.keys().next().value;
     return ka.attention().map(a => ({
-      backend: a.backend, profile: a.profile, kind: a.kind, since: a.since, signIn: dashboardSignInSupported(a.backend, a.profile),
+      backend: a.backend, profile: a.profile, kind: a.kind, since: a.since, signIn: this.signInFromDashboard(a.backend, a.profile),
       ...(owner ? { owner } : {}),
       detail: t(`keepalive.${a.kind}`, BACKEND_LABELS[a.backend] ?? a.backend, a.profile ?? t("keepalive.default_name"), day(a.kind === "transient" ? a.failedSince ?? a.since : a.endsAt)),
     }));
@@ -20959,7 +20979,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
    * is unknown keeps sign-in admission closed (logged). Shutdown waits for these (shutdownLoginWindows), and a restart
    * reopens admission only after they are gone.
    */
-  private async withAccountWriter<T>(claim: import("./login-window-lock.js").LoginWindowClaim, work: (deps: Pick<import("./accounts-signout.js").SignOutDeps, "run" | "keychainHas" | "platform" | "stillOwner">) => Promise<T>): Promise<T> {
+  private async withAccountWriter<T>(claim: import("./login-window-lock.js").LoginWindowClaim, work: (deps: Pick<import("./accounts-signout.js").SignOutDeps, "run" | "keychainHas" | "platform" | "stillOwner" | "verify">) => Promise<T>): Promise<T> {
     const base = this.accountSignOutDeps ?? ACCOUNT_SIGN_OUT_DEPS;
     const children: Promise<void>[] = [];
     const watch = async (r: { code: number | null; gone?: Promise<void> }) => { if (r.gone) children.push(r.gone); return r; };
@@ -20968,6 +20988,13 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       run: async (b: string, a: readonly string[], e: NodeJS.ProcessEnv) => watch(await base.run(b, a, e)),
       keychainHas: base.keychainHas,
       stillOwner: () => this.loginWindow.isCurrent(claim),
+      // AGEND-119: a CLI with no logout command (Antigravity) is signed out by removing its sign-in file, and the CLI's own status probe then says whether it took effect — for this very account, launched as the agent is.
+      verify: base.verify ?? (async (backend: string, profile: string | null) => {
+        const check = LOGIN_FLOWS[backend]?.authCheck;
+        if (!check) return "unknown" as const;
+        const launch = profile ? credentialProfileLaunch(this.dataDir, backend, profile) : null;
+        return checkAuthStatus(check, launch?.env, launch?.args);
+      }),
     };
     let finished!: () => void;
     const life = new Promise<void>(r => { finished = r; });
@@ -20995,13 +21022,32 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     let result: SignOutResult;
     if (!claim) result = { ok: false, error: "signing_in" };
     else result = await this.withAccountWriter(claim, deps => signOutAccount(this.dataDir, { backend, profile: profile ?? null, confirm, signingIn: false }, deps));
+    // AGEND-119: the audit record of a sign-out — who, which backend's account (a name, never a path or an e-mail) and how it ended.
+    try { this.eventLog?.insert("login", "account_signout", { backend, profile: shown, by, ok: result.ok, ...(result.ok ? (result.unverified ? { unverified: true } : {}) : { refused: result.error }) }); } catch { /* safe metadata only */ }
     if (result.ok) {
-      this.logger.info({ backend, profile: shown, by, ...(result.keychainLeft ? { keychainLeft: true } : {}) }, "Account signed out from Settings → Accounts");
+      this.logger.info({ backend, profile: shown, by, ...(result.keychainLeft ? { keychainLeft: true } : {}), ...(result.unverified ? { unverified: true } : {}) }, "Account signed out from Settings → Accounts");
       this.forgetSignInIdentities();
       void this.backendAvailability.refresh([backend], { force: true }).catch(() => {});
       broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"));
     } else this.logger.info({ backend, profile: shown, by, refused: result.error }, "Account sign-out refused");
     return result;
+  }
+
+  /** Whether the dashboard can sign this account in — a named one (profileSignInSupported), or a CLI's default sign-in as the Accounts list says it (`backendSignInTargets`). */
+  private signInFromDashboard(backend: string, profile: string | null): boolean {
+    if (profile) return this.profileSignInSupported(backend, profile);
+    return this.backendSignInTargets().find(t => t.backend === backend && !t.profile)?.signIn ?? dashboardSignInSupported(backend, null);
+  }
+
+  /**
+   * Whether the dashboard can sign this NAMED account in: the browser-terminal flow of a CLI that supports it for profiles (`dashboardSignInSupported`), or — AGEND-119, Antigravity — the structured
+   * controls (`agy --app_data_dir <folder> acp --login`) once the CLI is installed and new enough to have the command. A CLI that is older, or whose version is not read yet, is signed in on the host.
+   */
+  private profileSignInSupported(backend: string, profile: string): boolean {
+    if (dashboardSignInSupported(backend, profile)) return true;
+    if (!structuredSignInSupported(backend) || !STRUCTURED_PROFILE_BACKENDS.has(backend)) return false;
+    const row = this.backendAvailabilityRows().find(r => r.backend === backend);
+    return !!row && row.state !== "not_installed" && row.state !== "too_old" && versionAtLeast(row.version, hostFacts(backend, "structuredSignIn")?.minVersion);
   }
 
   backendSignInTargets(): SignInTarget[] {
@@ -21033,7 +21079,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       seen.add(`${backend}\0${profile}`);
       let login: ReturnType<typeof credentialProfileLogin>["state"] = "unknown";
       try { login = credentialProfileLogin(this.dataDir, backend, profile).state; } catch { /* unknown */ }
-      const signIn = dashboardSignInSupported(backend, profile);
+      const signIn = this.profileSignInSupported(backend, profile);
       const hostCommand = signIn ? null : credentialProfileLoginCommand(this.dataDir, backend, profile);
       out.push({ backend, profile, state: login === "logged-in" ? "usable" : login === "signed-out" ? "not_signed_in" : "unknown", signIn,
         ...(hostCommand ? { hostCommand } : {}), ...(this.signInIdentity(backend, profile) ? { identity: this.signInIdentity(backend, profile) } : {}) });

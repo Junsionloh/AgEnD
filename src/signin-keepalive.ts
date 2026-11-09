@@ -17,6 +17,12 @@
  *   agent's home uses), so the refresh lands in that file and nothing else is written beside it. Codex refresh tokens
  *   are single-use: a sign-in a running agent or room uses is never refreshed here (its use keeps it alive anyway).
  *
+ * - Antigravity (AGEND-119): `agy models` renews the access token (an hour) by itself when it is within about five minutes of expiry or past it (measured with a planted copy of a token file: 8 minutes left
+ *   → untouched, 3 minutes left → renewed to 60, expired → renewed to 60), and prints "Please sign in" with exit 1 when the login can no longer be used. Whether it renewed is read back from the token
+ *   file (`expiry` moved); a refresh Google refused is read from agy's own answer. Its refresh token is not single-use (Google does not rotate it), so a run beside a running agent cannot take that agent's
+ *   login — but the same rule applies as for the others: a sign-in in use is left alone (its use keeps it renewed). The access token lasts an hour and the usage row needs one that has not lapsed, so
+ *   a switched-on Antigravity sign-in is looked at every five minutes and `agy models` runs only when its token is within six minutes of lapsing (about once an hour), not once a day.
+ *
  * Never: a token value read out of a file (only dates, booleans and a plan name leave the readers), any CLI output
  * logged or kept, a user-visible session, the default sign-in touched unless it is itself switched on, or a model call
  * — except the Claude fallback a person switched on for that one sign-in (a single tiny request, disclosed in the UI).
@@ -28,6 +34,8 @@ import { parseClaudeAuthStatus } from "./claude-auth-status.js";
 import { writeFileAtomic } from "./backend/kiro-engine-ledger.js";
 import { isCredentialProfileName } from "./backend/credential-profile.js";
 import { hostIds, type HostCliWith } from "./cli-registry.js";
+import { readAntigravityStoreMeta, type AntigravityStoreMeta } from "./antigravity-store.js";
+import { credentialProfileLaunch } from "./backend/credential-profile.js";
 
 /** The CLIs that have a "Keep sign-in alive" run (cli-registry.ts: `host.keepAlive`). */
 export const KEEPALIVE_BACKENDS: readonly KeepAliveBackend[] = Object.freeze(hostIds("keepAlive") as KeepAliveBackend[]);
@@ -47,7 +55,10 @@ export const TRANSIENT_MS = 48 * HOUR;
 /** Each sign-in is looked at about once a day; the timer itself wakes hourly. */
 export const RUN_EVERY_MS = 23 * HOUR;
 const WAKE_MS = HOUR, FIRST_WAKE_MS = 3 * MIN, SOON_MS = 2_000;
-const CLAUDE_TIMEOUT_MS = 60_000, FALLBACK_TIMEOUT_MS = 120_000, CODEX_TIMEOUT_MS = 60_000;
+const CLAUDE_TIMEOUT_MS = 60_000, FALLBACK_TIMEOUT_MS = 120_000, CODEX_TIMEOUT_MS = 60_000, AGY_TIMEOUT_MS = 60_000;
+/** Antigravity's access token lasts an hour; agy renews it when it is within ~5 minutes of lapsing. A run is due from six minutes before, and a switched-on sign-in is looked at this often. */
+export const AGY_DUE_AHEAD_MS = 6 * MIN;
+export const AGY_WAKE_MS = 5 * MIN;
 
 export const SETTINGS_FILE = "signin-keepalive.json";
 const WORK_DIR = "signin-keepalive";
@@ -210,6 +221,8 @@ export function writeEntries(dataDir: string, entries: readonly KeepAliveEntry[]
 
 export interface ClaudeStatusRun { code: number | null; loggedIn: boolean | null; loginExpiresAt?: number }
 export interface CodexRefreshRun { answered: boolean; accountNull: boolean }
+/** `signedOut`: agy said so ("Please sign in …"): its login cannot be used any more. `code` null: timed out, stopped, or did not start. */
+export interface AntigravityModelsRun { code: number | null; signedOut: boolean }
 /**
  * Each run resolves only once its CLI has exited (#3313 review P2: the sign-in's writer is not done before that), and
  * `signal` stops it: SIGINT, then SIGKILL. A child that cannot be ended keeps its run (and so its hold) unresolved.
@@ -221,6 +234,8 @@ export interface KeepAliveRunners {
   claudeFallback(configDir: string | null, cwd: string, signal: AbortSignal): Promise<{ code: number | null }>;
   /** `codex app-server` → initialize → `account/read {refreshToken:true}`, CODEX_HOME = `runHome`. */
   codexRefresh(runHome: string, signal: AbortSignal): Promise<CodexRefreshRun>;
+  /** `agy [--app_data_dir <folder>] models` (a named account's launch: its arguments and the variables that keep its sign-in in its own file; none for the default sign-in). Lists models; no prompt, no model call. */
+  antigravityModels(launch: { args: readonly string[]; env: Record<string, string> } | null, cwd: string, signal: AbortSignal): Promise<AntigravityModelsRun>;
 }
 
 /** Variables a keep-alive run never inherits: another credential would answer instead of the sign-in being kept. */
@@ -252,12 +267,13 @@ export function watchChild(child: Child): { exited: Promise<number | null>; stop
 }
 
 /** Run a CLI to its exit; keep only its stdout (bounded) for the caller to parse, never log it. Code null: timed out, stopped, or did not start. */
-async function runCli(cmd: string, args: string[], opts: { env: NodeJS.ProcessEnv; cwd: string; timeoutMs: number; signal: AbortSignal }): Promise<{ code: number | null; stdout: string }> {
+async function runCli(cmd: string, args: string[], opts: { env: NodeJS.ProcessEnv; cwd: string; timeoutMs: number; signal: AbortSignal; /** Read stderr as well (a CLI that says its error there). */ merge?: boolean }): Promise<{ code: number | null; stdout: string }> {
   if (opts.signal.aborted) return { code: null, stdout: "" };
   let child: Child;
-  try { child = spawn(cmd, args, { env: opts.env, cwd: opts.cwd, stdio: ["ignore", "pipe", "ignore"], windowsHide: true }); } catch { return { code: null, stdout: "" }; }
+  try { child = spawn(cmd, args, { env: opts.env, cwd: opts.cwd, stdio: ["ignore", "pipe", opts.merge ? "pipe" : "ignore"], windowsHide: true }); } catch { return { code: null, stdout: "" }; }
   let stdout = "", cut = false;
   child.stdout?.on("data", (d: Buffer) => { if (stdout.length < 64 * 1024) stdout += d.toString("utf8"); });
+  if (opts.merge) child.stderr?.on("data", (d: Buffer) => { if (stdout.length < 64 * 1024) stdout += d.toString("utf8"); });
   const w = watchChild(child);
   const end = () => { cut = true; w.stop(); };
   const timer = setTimeout(end, opts.timeoutMs); timer.unref?.();
@@ -267,7 +283,12 @@ async function runCli(cmd: string, args: string[], opts: { env: NodeJS.ProcessEn
 }
 
 /** The runners for these binaries (tests point them at a scratch fake; the fleet uses `claude` and `codex` from PATH). */
-export function makeRunners(bin: { claude: string; codex: string }): KeepAliveRunners { return {
+export function makeRunners(bin: { claude: string; codex: string; agy?: string }): KeepAliveRunners { return {
+  async antigravityModels(launch, cwd, signal) {
+    const r = await runCli(bin.agy ?? "agy", [...(launch?.args ?? []), "models"], { env: runEnv(launch?.env ?? {}), cwd, timeoutMs: AGY_TIMEOUT_MS, signal, merge: true });
+    // Only the words are read (never kept): agy's own "Please sign in to view available models" is what a login that cannot be renewed prints.
+    return { code: r.code, signedOut: r.code !== null && r.code !== 0 && /\bplease sign in\b/i.test(r.stdout) };
+  },
   async claudeStatus(configDir, cwd, signal) {
     const r = await runCli(bin.claude, ["auth", "status", "--json"], { env: runEnv(configDir ? { CLAUDE_CONFIG_DIR: configDir } : {}), cwd, timeoutMs: CLAUDE_TIMEOUT_MS, signal });
     if (r.code === null) return { code: null, loggedIn: null };
@@ -312,7 +333,7 @@ export function makeRunners(bin: { claude: string; codex: string }): KeepAliveRu
     return { answered, accountNull };
   },
 }; }
-export const realRunners: KeepAliveRunners = makeRunners({ claude: "claude", codex: "codex" });
+export const realRunners: KeepAliveRunners = makeRunners({ claude: "claude", codex: "codex", agy: "agy" });
 
 // ── The service ────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -347,6 +368,8 @@ export class SignInKeepAlive {
   private timer: NodeJS.Timeout | null = null;
   private first: NodeJS.Timeout | null = null;
   private soon: NodeJS.Timeout | null = null;
+  /** AGEND-119: Antigravity's own, faster wake (its access token lasts an hour, not a day). */
+  private agyTimer: NodeJS.Timeout | null = null;
   private running: Promise<void> | null = null;
   private stopped = false;
   /** Raised by each stop: a run begun before never goes on after it. */
@@ -369,13 +392,16 @@ export class SignInKeepAlive {
     for (const t of [this.timer, this.first]) if (t) clearTimeout(t);
     this.first = setTimeout(() => { void this.tick(); }, FIRST_WAKE_MS); this.first.unref?.();
     this.timer = setInterval(() => { void this.tick(); }, WAKE_MS); this.timer.unref?.();
+    if (this.agyTimer) clearInterval(this.agyTimer);
+    this.agyTimer = setInterval(() => { if (this.entries.some(x => x.enabled && x.backend === "antigravity")) void this.tick({ backend: "antigravity" }); }, AGY_WAKE_MS);
+    this.agyTimer.unref?.();
   }
   /** No new run; the one in flight stops its CLI. Resolves once that run (and its CLI) has ended. */
   stop(): Promise<void> {
     this.stopped = true;
     this.epoch++;
-    for (const t of [this.timer, this.first, this.soon]) if (t) clearTimeout(t);
-    this.timer = this.first = this.soon = null;
+    for (const t of [this.timer, this.first, this.soon, this.agyTimer]) if (t) clearTimeout(t);
+    this.timer = this.first = this.soon = this.agyTimer = null;
     this.inFlight?.controller.abort();
     return this.running ? this.running.then(() => undefined, () => undefined) : Promise.resolve();
   }
@@ -412,6 +438,10 @@ export class SignInKeepAlive {
       const m = readClaudeMeta(home);
       return m.state === "ok" && !claudeDead(m) && m.expiresAt !== undefined && m.expiresAt > now && (r.expiresAt === undefined || m.expiresAt > r.expiresAt);
     }
+    if (backend === "antigravity") {
+      const m = readAntigravityStoreMeta(home);
+      return m.state === "ok" && m.hasRefresh && m.expiresAt !== undefined && m.expiresAt > now && (r.expiresAt === undefined || m.expiresAt > r.expiresAt);
+    }
     const m = readCodexMeta(join(home, "auth.json"));
     return m.state === "ok" && m.hasRefresh && (
       (m.accessExp !== undefined && m.accessExp > now && (r.expiresAt === undefined || m.accessExp > r.expiresAt))
@@ -428,6 +458,7 @@ export class SignInKeepAlive {
     let endsAt = r?.endsAt, expiresAt = r?.expiresAt, planType = r?.planType;
     if (home) {
       if (backend === "claude-code") { const m = readClaudeMeta(home); if (m.state === "ok") { endsAt = m.endsAt ?? endsAt; expiresAt = m.expiresAt ?? expiresAt; } }
+      else if (backend === "antigravity") { const m = readAntigravityStoreMeta(home); if (m.state === "ok") expiresAt = m.expiresAt ?? expiresAt; }
       else { const m = readCodexMeta(join(home, "auth.json")); if (m.state === "ok") { expiresAt = m.accessExp ?? expiresAt; planType = m.planType ?? planType; } }
     }
     const staleSignIn = this.signedInSince(backend, home, r);
@@ -454,7 +485,7 @@ export class SignInKeepAlive {
   }
 
   /** One pass: every switched-on sign-in not looked at for about a day (or just the one switched on), one at a time. */
-  tick(opts: { force?: boolean; only?: { backend: KeepAliveBackend; profile: string | null } } = {}): Promise<void> {
+  tick(opts: { force?: boolean; only?: { backend: KeepAliveBackend; profile: string | null }; backend?: KeepAliveBackend } = {}): Promise<void> {
     if (this.running) return this.running.then(() => !this.stopped && (opts.only || opts.force) ? this.tick(opts) : undefined);
     this.running = this.pass(opts).finally(() => { this.running = null; });
     return this.running;
@@ -462,7 +493,7 @@ export class SignInKeepAlive {
 
   private find(key: string): KeepAliveEntry | undefined { return this.entries.find(x => entryKey(x.backend, x.profile) === key); }
 
-  private async pass(opts: { force?: boolean; only?: { backend: KeepAliveBackend; profile: string | null } }): Promise<void> {
+  private async pass(opts: { force?: boolean; only?: { backend: KeepAliveBackend; profile: string | null }; backend?: KeepAliveBackend }): Promise<void> {
     let changed = false;
     // Each sign-in as it is NOW: one switched off while an earlier one ran is not run.
     for (const key of this.entries.map(x => entryKey(x.backend, x.profile))) {
@@ -470,12 +501,19 @@ export class SignInKeepAlive {
       const e = this.find(key);
       if (!e?.enabled) continue;
       if (opts.only && !(opts.only.backend === e.backend && opts.only.profile === e.profile)) continue;
+      if (opts.backend && e.backend !== opts.backend) continue;
       const now = this.now(), last = e.record?.lastAt;
-      if (!opts.force && !opts.only && last !== undefined && now - last < RUN_EVERY_MS && last <= now + HOUR) continue;
+      // Antigravity's token lasts an hour, so it is not "about once a day": its own run decides from the token file whether it is due (a read, no process), and a run that was not due costs nothing.
+      if (e.backend !== "antigravity" && !opts.force && !opts.only && last !== undefined && now - last < RUN_EVERY_MS && last <= now + HOUR) continue;
       const home = this.deps.homeOf(e.backend, e.profile);
       if (!home) continue;
       if (e.profile !== null && !existsSync(home)) {          // the profile was removed: forget it, never ask anyone to sign it in
         this.entries = this.entries.filter(x => x !== e); changed = true; continue;
+      }
+      // Antigravity is looked at every five minutes: a token that is not due is a read and nothing else — no hold, no record, no log, no page update (the first look, or one asked for, records once).
+      if (e.backend === "antigravity" && !opts.force && !opts.only && e.record) {
+        const m = readAntigravityStoreMeta(home);
+        if (m.state === "ok" && m.hasRefresh && m.expiresAt !== undefined && m.expiresAt > now + AGY_DUE_AHEAD_MS) continue;
       }
       let record: KeepAliveRecord;
       const hold = this.deps.acquire(e.backend, e.profile);
@@ -490,7 +528,7 @@ export class SignInKeepAlive {
         };
         this.inFlight = { key, controller };
         try {
-          record = e.backend === "claude-code" ? await this.runClaude(e, home, now, wanted, controller.signal) : await this.runCodex(e, home, now, wanted, controller.signal);
+          record = await this.runOne(e, home, now, wanted, controller.signal, opts.force === true);
           wanted();
         } catch (err) {
           if (err instanceof Withdrawn) continue;                // withdrawn: nothing more, nothing recorded
@@ -516,9 +554,19 @@ export class SignInKeepAlive {
     }
   }
 
+  /** One sign-in's run, by its CLI (behaviour keyed by the registry's `host.keepAlive` ids: the compiler stops here when a CLI gains the capability). */
+  private runOne(e: KeepAliveEntry, home: string, now: number, wanted: (fallback?: boolean) => void, signal: AbortSignal, force: boolean): Promise<KeepAliveRecord> {
+    switch (e.backend) {
+      case "claude-code": return this.runClaude(e, home, now, wanted, signal);
+      case "antigravity": return this.runAntigravity(e, home, now, wanted, signal, force);
+      case "codex": return this.runCodex(e, home, now, wanted, signal);
+    }
+  }
+
   /** The dates a sign-in's own file says now (kept on a record that ran nothing). */
   private datesOf(backend: KeepAliveBackend, home: string): Partial<KeepAliveRecord> {
     if (backend === "claude-code") { const m = readClaudeMeta(home); return m.state === "ok" ? { ...(m.expiresAt ? { expiresAt: m.expiresAt } : {}), ...(m.endsAt ? { endsAt: m.endsAt } : {}) } : {}; }
+    if (backend === "antigravity") { const m = readAntigravityStoreMeta(home); return m.state === "ok" && m.expiresAt ? { expiresAt: m.expiresAt } : {}; }
     const m = readCodexMeta(join(home, "auth.json"));
     return m.state === "ok" ? { ...(m.lastRefresh ? { lastRefresh: m.lastRefresh } : {}), ...(m.accessExp ? { expiresAt: m.accessExp } : {}), ...(m.planType ? { planType: m.planType } : {}) } : {};
   }
@@ -593,5 +641,32 @@ export class SignInKeepAlive {
     if (after.state === "missing") return nextRecord(e.record, "needs_sign_in", now);
     if (r.answered && r.accountNull) return nextRecord(e.record, "needs_sign_in", now, facts(after));
     return nextRecord(e.record, "transient", now, facts(after));
+  }
+
+  /**
+   * Antigravity (AGEND-119): when the access token is within six minutes of lapsing (or past it), `agy models` runs for this account — the default sign-in, or the named one with its folder argument and the
+   * variables that keep its sign-in in its file — and the token file is read back: its `expiry` moved (renewed); agy said "Please sign in" (the login cannot be used: sign in again); the run timed out
+   * or failed otherwise (transient). A token not yet due runs nothing. `force`: run even when it is not due.
+   */
+  private async runAntigravity(e: KeepAliveEntry, home: string, now: number, wanted: () => void, signal: AbortSignal, force: boolean): Promise<KeepAliveRecord> {
+    const before = readAntigravityStoreMeta(home);
+    const facts = (m: AntigravityStoreMeta): Partial<KeepAliveRecord> => m.state === "ok" && m.expiresAt ? { expiresAt: m.expiresAt } : {};
+    if (before.state === "missing") return nextRecord(e.record, "needs_sign_in", now);
+    if (before.state === "unreadable") return nextRecord(e.record, "transient", now);
+    if (!before.hasRefresh) return nextRecord(e.record, "needs_sign_in", now, facts(before));
+    if (!force && before.expiresAt !== undefined && before.expiresAt > now + AGY_DUE_AHEAD_MS) return nextRecord(e.record, "not_needed", now, facts(before));
+    wanted();
+    const launch = e.profile === null ? null : credentialProfileLaunch(this.deps.dataDir, e.backend, e.profile);
+    if (e.profile !== null && !launch) return nextRecord(e.record, "unsupported", now, facts(before));
+    const r = await this.runners.antigravityModels(launch, this.workDir("antigravity-cwd"), signal);
+    wanted();
+    const after = readAntigravityStoreMeta(home);
+    if (after.state === "missing") return nextRecord(e.record, "needs_sign_in", now);
+    if (r.signedOut) return nextRecord(e.record, "needs_sign_in", now, facts(after));
+    if (r.code === null || after.state !== "ok") return nextRecord(e.record, "transient", now, facts(after));
+    const moved = after.expiresAt !== undefined && after.expiresAt > now && (before.expiresAt === undefined || after.expiresAt > before.expiresAt);
+    if (moved) return nextRecord(e.record, "refreshed", now, facts(after));
+    // It ran and listed models (exit 0) but the token did not move: it was still good (inside agy's own margin), so nothing needed renewing.
+    return r.code === 0 ? nextRecord(e.record, "checked", now, facts(after)) : nextRecord(e.record, "transient", now, facts(after));
   }
 }

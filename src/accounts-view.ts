@@ -89,7 +89,8 @@ export interface AccountRow {
 }
 /** Dates are ISO strings; `lastOutcome` is signin-keepalive.ts's Outcome. No token, path or output is in it. */
 export interface AccountKeepAlive { enabled: boolean; fallback?: boolean; endsAt?: string; expiresAt?: string; lastAt?: string; lastOutcome?: string; planType?: string }
-export interface AccountsCli { backend: string; profiles: boolean; installed: boolean; fleetDefault: string | null; agents: Array<{ name: string; profile: string | null }>; rows: AccountRow[] }
+/** `profiles`: this host can have named accounts of the CLI (+ Add account on the card); `machineProfiles` (AGEND-119): a paired computer can too (+ Add account under its name) — a CLI whose named accounts exist only on the host has `profiles` and not this. */
+export interface AccountsCli { backend: string; profiles: boolean; machineProfiles?: boolean; installed: boolean; fleetDefault: string | null; agents: Array<{ name: string; profile: string | null }>; rows: AccountRow[] }
 export interface AccountsView { clis: AccountsCli[] }
 
 /** AGEND-113: a computer's own login of a CLI without profiles (see `MachineAccountsInput.defaultLogins`). */
@@ -232,7 +233,7 @@ export function buildAccountsView(input: AccountsInput): AccountsView {
     // A paired computer's rows come after the host's, each computer's together (the page groups them by scope).
     for (const m of machines) rows.push(...machineRows(backend, m));
     rows.push(...defaultRows);
-    clis.push({ backend, profiles: PROFILE_CLIS.has(backend), installed, fleetDefault, agents: agents.map(a => ({ name: a.name, profile: a.profile })), rows });
+    clis.push({ backend, profiles: PROFILE_CLIS.has(backend), machineProfiles: MACHINE_ACCOUNT_CLIS.has(backend), installed, fleetDefault, agents: agents.map(a => ({ name: a.name, profile: a.profile })), rows });
   }
   return { clis };
 }

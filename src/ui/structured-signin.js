@@ -29,6 +29,7 @@ export const SIGNIN_STRINGS = {
     error_signin_profile_unknown: "This account is not in the list. Add it with + Add account in Settings → Accounts, then sign in.",
     error_auth_unconfirmed: "The CLI exited, but credentials could not be verified. Retry or sign in later.",
     error_provider_rejected: "The provider rejected this sign-in. Retry or sign in later.",
+    error_not_isolated: "This CLI keeps one sign-in for every account on this computer (the system's keyring), so this account cannot have its own. Nothing was started and no sign-in was changed.",
     // #3190 Part 3c: a profile on a paired computer (the dashboard's Accounts view).
     error_machine_unknown: "That computer is not paired any more.",
     error_machine_offline: "That computer is offline. Start its Runtime, then try again.",
@@ -68,6 +69,7 @@ export const SIGNIN_STRINGS = {
     error_signin_profile_unknown: "清單裡沒有這個帳號。請先在 設定 → 帳號 用 + 新增帳號 加入，再登入。",
     error_auth_unconfirmed: "CLI 已結束，但無法確認憑證。請重試或稍後登入。",
     error_provider_rejected: "平台拒絕了這次登入。請重試或稍後登入。",
+    error_not_isolated: "這個 CLI 在這台電腦上只保留一份登入（系統鑰匙圈），所以這個帳號無法有自己的登入。沒有啟動任何東西，也沒有改到現有的登入。",
     // #3190 Part 3c：配對電腦上的憑證設定檔（儀表板的「帳號」頁）。
     error_machine_unknown: "那台電腦已不再配對。",
     error_machine_offline: "那台電腦離線了。請先啟動它的 Runtime，再試一次。",

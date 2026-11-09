@@ -61,7 +61,7 @@ describe("the transport: which folder and variable a named account's sign-in get
         .snapshot({}, { backend: "codex", profile: "CHY" })).toThrow("invalid_signin_target");
     } finally { widened.clear(); for (const b of before) widened.add(b); }
   });
-  it.each(["kiro-cli", "codex", "antigravity", "nope", ""])("%j: a backend whose login screen was not checked under a relocated home is refused, and makes no folder", (backend) => {
+  it.each(["kiro-cli", "codex", "grok", "nope", ""])("%j: a backend whose login screen was not checked under a relocated home is refused, and makes no folder", (backend) => {
     const dir = temp();
     expect(() => structuredSignInProfileEnvironment(dir, backend, "CHY")).toThrow("signin_profile_unsupported");
     expect(existsSync(join(dir, "credential-profiles"))).toBe(false);

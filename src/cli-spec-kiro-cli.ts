@@ -7,7 +7,7 @@ export const KIRO_CLI_SPEC = {
     install: yes({ binary: "kiro-cli", command: "curl -fsSL https://cli.kiro.dev/install | bash" }),
     chatLogin: yes({ aliases: ["kiro"], mode: "menu" }),
     dashboardSignIn: yes({ named: false }),
-    structuredSignIn: yes({ argv: ["kiro-cli", "login"], rank: 0, ends: "success-line", screen: "login-flow", answer: "code" }),
+    structuredSignIn: yes({ argv: ["kiro-cli", "login"], rank: 0, ends: "success-line", screen: "login-flow", answer: "code", named: false }),
     firstRunSignIn: yes({ mode: "browser", rank: 0 }),
     authCheck: yes({ argv: ["kiro-cli", "whoami", "--format", "json"] }),
     identity: toVerify("`kiro-cli whoami --format json` is already run as the sign-in probe; whether its JSON names the account in a form that can be masked has not been checked."),
@@ -15,7 +15,7 @@ export const KIRO_CLI_SPEC = {
     signOut: yes({ binary: "kiro-cli", args: ["logout"] }),
     keepAlive: toVerify("Whether Kiro's token needs a keep-alive run (Claude Code and Codex have one) has not been checked."),
     accountCard: yes({ rank: 2 }),
-    usage: yes({ providerId: "kiro", name: "Kiro", rank: 4, profileRows: true, pools: "single", windows: ["monthly"] }),
+    usage: yes({ providerId: "kiro", name: "Kiro", rank: 4, profileRows: true, hostRows: false, pools: "single", windows: ["monthly"] }),
   },
   runtime: {
     provider: yes({

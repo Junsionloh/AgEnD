@@ -7,7 +7,7 @@ export const CLAUDE_CODE_SPEC = {
     install: yes({ binary: "claude", command: "curl -fsSL https://claude.ai/install.sh | bash" }),
     chatLogin: yes({ aliases: ["claude"], mode: "paste-code" }),
     dashboardSignIn: yes({ named: true }),
-    structuredSignIn: yes({ argv: ["claude", "auth", "login"], rank: 1, ends: "success-line", screen: "login-flow", answer: "code" }),
+    structuredSignIn: yes({ argv: ["claude", "auth", "login"], rank: 1, ends: "success-line", screen: "login-flow", answer: "code", named: true }),
     firstRunSignIn: yes({ mode: "browser", rank: 1 }),
     authCheck: yes({ argv: ["claude", "auth", "status"] }),
     identity: yes({ source: "status-command" }),
@@ -15,7 +15,7 @@ export const CLAUDE_CODE_SPEC = {
     signOut: yes({ binary: "claude", args: ["auth", "logout"] }),
     keepAlive: yes(),
     accountCard: yes({ rank: 0 }),
-    usage: yes({ providerId: "claude", name: "Claude", rank: 0, profileRows: true, pools: "single", windows: ["session", "weekly"] }),
+    usage: yes({ providerId: "claude", name: "Claude", rank: 0, profileRows: true, hostRows: true, pools: "single", windows: ["session", "weekly"] }),
   },
   runtime: {
     provider: yes({

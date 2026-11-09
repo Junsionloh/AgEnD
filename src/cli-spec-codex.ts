@@ -10,7 +10,7 @@ export const CODEX_SPEC = {
     }),
     chatLogin: yes({ aliases: [], mode: "device-code" }),
     dashboardSignIn: yes({ named: false }),
-    structuredSignIn: yes({ argv: ["codex", "login", "--device-auth"], rank: 2, ends: "success-line", screen: "login-flow", answer: "code" }),
+    structuredSignIn: yes({ argv: ["codex", "login", "--device-auth"], rank: 2, ends: "success-line", screen: "login-flow", answer: "code", named: false }),
     firstRunSignIn: yes({ mode: "browser", rank: 2 }),
     authCheck: yes({ argv: ["codex", "login", "status"] }),
     identity: toVerify("Only the sign-in state is read from `codex login status`; whether its output names the account (and could be masked like Claude Code's) has not been checked. Reading the credential file for it is not an option."),
@@ -18,7 +18,7 @@ export const CODEX_SPEC = {
     signOut: yes({ binary: "codex", args: ["logout"] }),
     keepAlive: yes(),
     accountCard: yes({ rank: 1 }),
-    usage: yes({ providerId: "codex", name: "Codex", rank: 1, profileRows: true, pools: "single", windows: ["session", "weekly", "monthly"] }),
+    usage: yes({ providerId: "codex", name: "Codex", rank: 1, profileRows: true, hostRows: false, pools: "single", windows: ["session", "weekly", "monthly"] }),
   },
   runtime: {
     provider: yes({

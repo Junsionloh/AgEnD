@@ -19,6 +19,13 @@ const someOf = (...allowed: readonly string[]): Check => v => Array.isArray(v) &
 const oneOf = (...allowed: string[]): Check => v => typeof v === "string" && allowed.includes(v) ? null : `one of ${allowed.join(", ")}`;
 const version: Check = v => typeof v === "string" && /^\d+(?:\.\d+){0,3}$/.test(v) ? null : "a version such as 1.5.0"
 const envName: Check = v => typeof v === "string" && /^[A-Z][A-Z0-9_]*$/.test(v) ? null : "an environment variable name";
+/** A launch argument as it is typed (`--app_data_dir`). */
+const argName: Check = v => typeof v === "string" && /^--?[A-Za-z][A-Za-z0-9_-]*$/.test(v) ? null : "a command-line flag such as --app_data_dir";
+/** A file name inside an account's folder: one name, no path. */
+const fileName: Check = v => typeof v === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(v) ? null : "a plain file name";
+const fileNames: Check = v => Array.isArray(v) && v.length >= 1 && new Set(v).size === v.length && v.every(w => fileName(w) === null) ? null : "a list of plain file names, none twice";
+/** Environment variables a launch is given: names and one-line values. */
+const envMap: Check = v => isRecord(v) && Object.keys(v).length >= 1 && Object.entries(v).every(([k, val]) => envName(k) === null && typeof val === "string" && val.trim() !== "" && !/[\0\r\n]/.test(val)) ? null : "one or more environment variables with one-line values";
 const orNull = (inner: Check): Check => v => v === null ? null : inner(v);
 const supportsShape: Check = v => isRecord(v) && ["execution", "resume", "model"].every(k => typeof v[k] === "boolean") && (v.mcp === undefined || typeof v.mcp === "boolean") && Object.keys(v).every(k => ["execution", "resume", "model", "mcp"].includes(k)) ? null : "{ execution, resume, model, mcp? } booleans";
 
@@ -27,15 +34,15 @@ const FACTS: Readonly<Record<CapabilityPath, Readonly<Record<string, Check>>>> =
   "host.install": { binary: text, command: text, "unattended?": text },
   "host.chatLogin": { aliases: words(0), mode: oneOf("device-code", "paste-code", "menu", "declined", "install-only") },
   "host.dashboardSignIn": { named: bool },
-  "host.structuredSignIn": { argv: words(1), rank: int, ends: oneOf("success-line", "exit-code"), screen: oneOf("login-flow", "own"), answer: oneOf("code", "code-or-address"), "minVersion?": version },
+  "host.structuredSignIn": { argv: words(1), rank: int, ends: oneOf("success-line", "exit-code"), screen: oneOf("login-flow", "own"), answer: oneOf("code", "code-or-address"), "minVersion?": version, named: bool },
   "host.firstRunSignIn": { mode: oneOf("browser", "console"), rank: int },
   "host.authCheck": { argv: words(1) },
   "host.identity": { source: oneOf("status-command", "token-file"), "field?": text },
-  "host.namedAccounts": { env: envName, home: oneOf("relocate-home", "redirect-files"), carry: oneOf("carries", "keeps", "handover") },
-  "host.signOut": { binary: text, args: words(1) },
+  "host.namedAccounts": { "env?": envName, home: oneOf("relocate-home", "redirect-files", "launch-argument"), "arg?": argName, "store?": fileName, "pin?": envMap, carry: oneOf("carries", "keeps", "handover") },
+  "host.signOut": { "binary?": text, "args?": words(1), "remove?": fileNames },
   "host.keepAlive": {},
   "host.accountCard": { rank: int },
-  "host.usage": { providerId: text, name: text, rank: int, profileRows: bool, pools: oneOf("single", "several"), windows: someOf(...USAGE_WINDOW_KINDS) },
+  "host.usage": { providerId: text, name: text, rank: int, profileRows: bool, hostRows: bool, pools: oneOf("single", "several"), windows: someOf(...USAGE_WINDOW_KINDS) },
   "runtime.provider": {
     name: text, company: text, binaryNames: words(1), supports: supportsShape, readOnlySupport: bool, permission: oneOf("os-sandbox", "read-tools", "native-policy"),
     permissionNote: text, promptTransport: oneOf("stdin-text", "stdin-json", "file"), modelProbe: orNull(words(1)), "reason?": text, rank: int,
@@ -154,9 +161,11 @@ function checkDependencies(specs: Record<string, unknown>, ids: readonly string[
     if (yesFactsOf(specs, id, "host.identity")?.source === "token-file" && !(typeof yesFactsOf(specs, id, "host.identity")?.field === "string")) problems.push(`${id}: host.identity reads a token file but names no \`field\``);
     if (yesFactsOf(specs, id, "host.identity")?.source === "status-command" && yesFactsOf(specs, id, "host.identity")?.field !== undefined) problems.push(`${id}: host.identity has a \`field\` but reads the status command`);
     need(id, "host.keepAlive", "host.namedAccounts", "it reads and renews a credential home");
+    if (yesFactsOf(specs, id, "host.structuredSignIn")?.named === true && !has(id, "host.namedAccounts")) problems.push(`${id}: host.structuredSignIn signs a named account in, but host.namedAccounts is not "yes"`);
     need(id, "host.dashboardSignIn", "host.chatLogin", "the dashboard runs the chat login's command");
     if (yesFactsOf(specs, id, "host.dashboardSignIn")?.named === true && !has(id, "host.namedAccounts")) problems.push(`${id}: host.dashboardSignIn says named accounts can be signed in, but host.namedAccounts is not "yes"`);
     if (yesFactsOf(specs, id, "host.firstRunSignIn")?.mode === "browser" && !has(id, "host.structuredSignIn")) problems.push(`${id}: host.firstRunSignIn offers browser controls, but host.structuredSignIn is not "yes"`);
+    if (yesFactsOf(specs, id, "host.usage")?.hostRows === true && yesFactsOf(specs, id, "host.usage")?.profileRows !== true) problems.push(`${id}: host.usage has a row for every account on the host, but not for named accounts (profileRows)`);
     if (yesFactsOf(specs, id, "host.usage")?.profileRows === true && !has(id, "host.namedAccounts")) problems.push(`${id}: host.usage has rows for named accounts, but host.namedAccounts is not "yes"`);
     const signIn = yesFactsOf(specs, id, "runtime.signIn"), rows = yesFactsOf(specs, id, "runtime.accountRows");
     if (signIn?.profile === "named" && !has(id, "runtime.namedAccounts")) problems.push(`${id}: runtime.signIn is a named account's, but runtime.namedAccounts is not "yes"`);
@@ -177,9 +186,24 @@ function checkDependencies(specs: Record<string, unknown>, ids: readonly string[
     need(id, "runtime.identity", "runtime.authStatus", "the account is read from the same status answer");
     need(id, "runtime.install", "runtime.provider", "what is not run is not installed");
     if (yesFactsOf(specs, id, "runtime.provider")?.supports && (yesFactsOf(specs, id, "runtime.provider")!.supports as { execution?: boolean }).execution === false && has(id, "runtime.signIn")) problems.push(`${id}: runtime.signIn is "yes" for a provider the Runtime does not run`);
-    const hostEnv = yesFactsOf(specs, id, "host.namedAccounts")?.env, runtimeEnv = yesFactsOf(specs, id, "runtime.namedAccounts")?.env;
+    const named = yesFactsOf(specs, id, "host.namedAccounts");
+    if (named) {
+      // How an account is told apart decides which facts it carries: a variable that moves the home, or an argument naming the folder with the file the sign-in is in and what keeps it there.
+      const byArgument = named.home === "launch-argument";
+      for (const field of ["env"]) if ((named[field] !== undefined) === byArgument) problems.push(`${id}: host.namedAccounts ${byArgument ? "is a launch argument, so it has no" : "moves a home with a variable, so it needs an"} \`${field}\``);
+      for (const field of ["arg", "store", "pin"]) if ((named[field] === undefined) === byArgument) problems.push(`${id}: host.namedAccounts ${byArgument ? "is a launch argument, so it needs" : "moves a home with a variable, so it has no"} \`${field}\``);
+    }
+    const signOut = yesFactsOf(specs, id, "host.signOut");
+    if (signOut) {
+      const command = signOut.binary !== undefined || signOut.args !== undefined, removes = signOut.remove !== undefined;
+      if (command === removes) problems.push(`${id}: host.signOut is either the CLI's own logout (binary and args) or the sign-in files AgEnD removes (remove), not both and not neither`);
+      else if (command && (signOut.binary === undefined || signOut.args === undefined)) problems.push(`${id}: host.signOut names a logout command, so it needs both \`binary\` and \`args\``);
+      if (removes && !has(id, "host.authCheck")) problems.push(`${id}: host.signOut removes files, but host.authCheck is not "yes" (nothing would say it signed out)`);
+      if (removes && named?.home !== "launch-argument") problems.push(`${id}: host.signOut removes files, which is only set up for an account kept in its own folder (host.namedAccounts as a launch argument)`);
+    }
+    const hostEnv = named?.env, runtimeEnv = yesFactsOf(specs, id, "runtime.namedAccounts")?.env;
     if (runtimeEnv !== undefined && hostEnv !== undefined && runtimeEnv !== hostEnv) problems.push(`${id}: runtime.namedAccounts points at ${String(runtimeEnv)}, host.namedAccounts at ${String(hostEnv)}`);
-    if (runtimeEnv !== undefined && hostEnv === undefined) problems.push(`${id}: runtime.namedAccounts is "yes" but host.namedAccounts is not`);
+    if (runtimeEnv !== undefined && !named) problems.push(`${id}: runtime.namedAccounts is "yes" but host.namedAccounts is not`);
   }
   return problems;
 }

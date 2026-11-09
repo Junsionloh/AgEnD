@@ -35,6 +35,10 @@ register("accountsManage", {
     err_users_unknown: "AgEnD can't read the ClassicBot settings, so it can't tell whether a room uses this account. Fix classicBot.yaml, then try again.",
     signOut: "Sign out", switchAccount: "Switch account", signOutTitle: "Sign out of {0}'s {1}?", switchTitle: "Switch {0}'s default sign-in?",
     signOutLead: "AgEnD runs {0}'s own logout for this account on the host. Its conversations stay.",
+    signOutLeadFiles: "{0} has no logout command, so AgEnD deletes this account's sign-in file on the host, then checks with {0} that it is signed out. Its conversations stay.",
+    switchLeadFiles: "{0} has no logout command, so AgEnD deletes this account's sign-in file, then opens Sign in for the account you want. Agents using it restart on the new account once you've signed in.",
+    err_still_signed_in: "The sign-in file was deleted, but {0} still says it is signed in: it keeps this sign-in somewhere AgEnD does not delete (the system's keyring). Sign out inside {0} (its /logout).",
+    signedOutUnverified: "Signed out. {0} did not answer the check afterwards, so that is not confirmed.",
     switchLead: "AgEnD signs this account out with {0}'s own logout, then opens Sign in for the account you want. Agents using it restart on the new account once you've signed in.",
     stopUsers: "Using it now — they stop working until it's signed in again:", nobody: "No agent, ClassicBot room or fleet default uses it.",
     signOutGo: "Sign out", switchGo: "Sign out and sign in", signingOut: "Signing out…", signedOut: "Signed out.",
@@ -77,6 +81,10 @@ register("accountsManage", {
     err_users_unknown: "AgEnD 無法讀取 ClassicBot 設定，所以無法確定是否有房間在使用這個帳號。請先修正 classicBot.yaml 再試一次。",
     signOut: "登出", switchAccount: "切換帳號", signOutTitle: "要登出 {0} 的{1}嗎？", switchTitle: "要切換 {0} 的預設登入嗎？",
     signOutLead: "AgEnD 會在主機上用 {0} 自己的登出指令登出這個帳號。它的對話會保留。",
+    signOutLeadFiles: "{0} 沒有登出指令，所以 AgEnD 會刪除主機上這個帳號的登入檔，再用 {0} 確認已經登出。它的對話會保留。",
+    switchLeadFiles: "{0} 沒有登出指令，所以 AgEnD 會刪除這個帳號的登入檔，然後開啟「登入」讓你登入想用的帳號。登入後，使用它的 Agent 會以新帳號重新啟動。",
+    err_still_signed_in: "登入檔已刪除，但 {0} 仍顯示已登入：它把這個登入存在 AgEnD 不會刪除的地方（系統鑰匙圈）。請在 {0} 裡自己登出（/logout）。",
+    signedOutUnverified: "已登出。之後 {0} 沒有回應檢查，所以尚未確認。",
     switchLead: "AgEnD 會用 {0} 自己的登出指令登出這個帳號，然後開啟「登入」讓你登入想用的帳號。登入後，使用它的 Agent 會以新帳號重新啟動。",
     stopUsers: "目前使用中——在重新登入前它們都無法運作：", nobody: "沒有 Agent、ClassicBot 房間或 Fleet 預設在使用它。",
     signOutGo: "登出", switchGo: "登出並登入", signingOut: "正在登出…", signedOut: "已登出。",
@@ -224,21 +232,22 @@ export function SignOutDialog({ cli, row, label, mode = "signout", onClose, onMo
   const any = users.agents.length > 0 || users.classic.length > 0 || users.fleetDefault;
   const which = row.profile ? tm("acctName", row.profile) : tm("defName");
   const machine = row.scope && row.scope.kind === "machine" ? row.scope : null;   // #3190 Part 3c: an account on a paired computer
+  const files = !machine && !!(CLI_CAPS[cli.backend] && CLI_CAPS[cli.backend].signOutFiles);   // AGEND-119: a CLI with no logout command is signed out by removing its sign-in file
   const go = async () => {
     if (busy) return;
     setBusy(true); setErr("");
     const r = await send("POST", `/ui/accounts/${encodeURIComponent(cli.backend)}/signout`, { profile: row.profile || null, confirm: true, ...(machine ? { machine: machine.id } : {}) });
     if (!live.current) return;
     setBusy(false);
-    if (!r.ok) { setErr(r.error === "failed" ? tm("err_signout_failed", label) : errText(r)); return; }
-    toast(r.keychainLeft ? tm("keychainLeft") : tm("signedOut"), !r.keychainLeft);
+    if (!r.ok) { setErr(r.error === "failed" ? tm("err_signout_failed", label) : r.error === "still_signed_in" ? tm("err_still_signed_in", label) : errText(r)); return; }
+    toast(r.keychainLeft ? tm("keychainLeft") : r.unverified ? tm("signedOutUnverified", label) : tm("signedOut"), !r.keychainLeft && !r.unverified);
     onClose(); onDone(r);
   };
   const moveBtn = (user) => html`<button type="button" class="btn btn-sm" disabled=${busy} onClick=${() => { onClose(); onMove(user); }}>${tm("move")}</button>`;
   return html`<${Dialog} title=${mode === "switch" ? tm("switchTitle", label) : tm("signOutTitle", label, which)} onClose=${onClose} busy=${busy}
     actions=${html`<button type="button" class="btn" disabled=${busy} onClick=${onClose}>${tm("cancel")}</button>
     <button type="button" class=${mode === "switch" ? "btn btn-primary" : "btn btn-danger"} disabled=${busy} onClick=${go}>${busy ? tm("signingOut") : mode === "switch" ? tm("switchGo") : tm("signOutGo")}</button>`}>
-    <p>${mode === "switch" ? tm("switchLead", label) : machine ? tm("signOutLeadMachine", machine.name, label) : tm("signOutLead", label)}</p>
+    <p>${mode === "switch" ? tm(files ? "switchLeadFiles" : "switchLead", label) : machine ? tm("signOutLeadMachine", machine.name, label) : tm(files ? "signOutLeadFiles" : "signOutLead", label)}</p>
     ${any ? html`<div class="s-account-inuse" role="status"><p><strong>${tm("stopUsers")}</strong></p><ul>
       ${users.agents.map((name) => html`<li><span>${tm("inUseAgent", name)}</span>${mode === "switch" ? null : moveBtn({ kind: "agent", name })}</li>`)}
       ${users.fleetDefault && row.profile ? html`<li><span>${machine ? tm("inUseMachineDefault") : tm("inUseDefault", label)}</span>${machine ? null : moveBtn({ kind: "default" })}</li>` : null}
