@@ -123,11 +123,19 @@ export interface HostCapabilities {
   /** The CLI has a card on Settings → Accounts (`rank`: its place there). */
   readonly accountCard: Cap<{ rank: number }>;
   /**
-   * The usage panel's row for it: its provider id and name, its place, and whether a named account has a row of its own. `pools`: the account has one quota (`single`), or several
-   * that each have a 5h and a weekly window (`several`: an Accounts row shows, for each window, the pool that is the most used, and names it).
+   * The usage panel's row for it: its provider id and name, its place, and whether a named account has a row of its own, and the SHAPE of the limits the CLI reports.
+   *  - `pools`: the account has one set of limits (`single`), or the CLI names several pools in its own answer and each has limits of its own (`several`: Antigravity's Gemini, Claude & others,
+   *    Gemini 4 Argon). A pool the CLI names is shown whatever it is called; this says only whether to expect them.
+   *  - `windows`: the kinds of window a pool's limit can have, as the CLI reports them: `session` (under two days: the 5h), `weekly`, `monthly`, and `unwindowed` (one number with no window of
+   *    its own, as agy gives a pool it only knows from per-model data). An Accounts row shows every pool and every window the account reports, in the usage panel's own order, so a
+   *    window is never hidden; this is what a CLI is expected to report, and tests/cli-registry-usage-shape.test.ts fails when a real payload carries a kind that is not listed here.
    */
-  readonly usage: Cap<{ providerId: string; name: string; rank: number; profileRows: boolean; pools: "single" | "several" }>;
+  readonly usage: Cap<{ providerId: string; name: string; rank: number; profileRows: boolean; pools: "single" | "several"; windows: readonly UsageWindowKind[] }>;
 }
+
+/** The kinds of window a usage limit can have (see `host.usage.windows`). */
+export const USAGE_WINDOW_KINDS = Object.freeze(["session", "weekly", "monthly", "unwindowed"] as const);
+export type UsageWindowKind = typeof USAGE_WINDOW_KINDS[number];
 
 /** Every capability a CLI has on a paired Windows computer, as its Runtime reports and does it. */
 /**

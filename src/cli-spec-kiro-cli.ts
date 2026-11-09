@@ -16,7 +16,7 @@ export const KIRO_CLI_SPEC = {
     signOut: yes({ binary: "kiro-cli", args: ["logout"] }),
     keepAlive: toVerify("Whether Kiro's token needs a keep-alive run (Claude Code and Codex have one) has not been checked."),
     accountCard: yes({ rank: 2 }),
-    usage: yes({ providerId: "kiro", name: "Kiro", rank: 4, profileRows: true, pools: "single" }),
+    usage: yes({ providerId: "kiro", name: "Kiro", rank: 4, profileRows: true, pools: "single", windows: ["monthly"] }),
   },
   runtime: {
     provider: yes({

@@ -271,12 +271,28 @@ describe("a sign-in with no profile (the computer's own login, which signing in 
     // And the other way round: a row that signs the computer's own login in, for a CLI whose sign-in is a named account's.
     expect(broken(specs => { specs["claude-code"].runtime.accountRows = yes({ defaultRow: "sign-in" }); })).toContainEqual(expect.stringContaining("claude-code: runtime.accountRows lets the computer's own login be signed in, but runtime.signIn is not a sign-in with no profile"));
   });
-  it("reads the account from one named field of a token file, a status that is the model listing names that listing, and several pools do not mix with named accounts", () => {
+  it("reads the account from one named field of a token file, and a status that is the model listing names that listing", () => {
     expect(broken(specs => { specs.antigravity.host.identity = yes({ source: "token-file" } as never); })).toContainEqual(expect.stringContaining("antigravity: host.identity reads a token file but names no `field`"));
     expect(broken(specs => { specs["claude-code"].host.identity = yes({ source: "status-command", field: "email" } as never); })).toContainEqual(expect.stringContaining("claude-code: host.identity has a `field` but reads the status command"));
     expect(broken(specs => { specs.antigravity.runtime.authStatus = yes({ argv: ["whoami"], source: "model-listing" }); })).toContainEqual(expect.stringContaining("antigravity: runtime.authStatus is the model listing, so its argv must be runtime.provider.modelProbe"));
-    expect(broken(specs => { specs.antigravity.host.usage = yes({ providerId: "antigravity", name: "Antigravity", rank: 5, profileRows: true, pools: "several" }); })).toContainEqual(expect.stringContaining("antigravity: host.usage has several quota pools and rows for named accounts"));
     expect(broken(specs => { specs.antigravity.host.structuredSignIn = yes({ argv: ["agy", "acp", "--login"], rank: 3, ends: "never" as never, screen: "own", answer: "code", minVersion: "one" }); }).join("\n")).toMatch(/ends` must be one of success-line, exit-code[\s\S]*minVersion` must be a version such as 1.5.0/);
+  });
+});
+
+describe("a usage fact says what limits the CLI reports (AGEND-113)", () => {
+  const broken = (change: (specs: ReturnType<typeof copy>) => void): string[] => { const specs = copy(); change(specs); return checkCliRegistry(specs); };
+  const usage = (extra: Record<string, unknown>) => yes({ providerId: "antigravity", name: "Antigravity", rank: 5, profileRows: false, pools: "several", windows: ["session", "weekly"], ...extra } as never);
+  it("every CLI with a usage row names its pools and the kinds of window it reports", () => {
+    expect(Object.fromEntries(hostIds("usage").map(id => [id, [hostFacts(id, "usage")!.pools, hostFacts(id, "usage")!.windows]]))).toEqual({
+      "claude-code": ["single", ["session", "weekly"]], codex: ["single", ["session", "weekly", "monthly"]], "kiro-cli": ["single", ["monthly"]],
+      grok: ["single", ["weekly"]], muse: ["single", ["session", "weekly"]], antigravity: ["several", ["session", "weekly", "unwindowed"]],
+    });
+  });
+  it("a usage fact without its windows, with none, with one twice or with a kind that does not exist is not a complete registry", () => {
+    const windows = (value: unknown) => broken(specs => { specs.antigravity.host.usage = usage({ windows: value }); });
+    for (const bad of [[], ["session", "session"], ["session", "daily"], "weekly", [5]]) expect(windows(bad), JSON.stringify(bad)).toContainEqual(expect.stringContaining("antigravity: host.usage `windows` must be a list of at least one of session, weekly, monthly, unwindowed, none twice"));
+    expect(broken(specs => { specs.antigravity.host.usage = yes({ providerId: "antigravity", name: "Antigravity", rank: 5, profileRows: false, pools: "several" } as never); })).toContainEqual(expect.stringContaining("antigravity: host.usage is \"yes\" but has no `windows`"));
+    expect(windows(["unwindowed", "monthly"])).toEqual([]);
   });
 });
 
