@@ -1,6 +1,6 @@
 /**
  * AGEND-113 follow-up (Settings → Accounts, Antigravity on this host):
- *  1. the account: the masked `id_token_email` of agy's token file, read locally, shown only for a sign-in the host already shows as signed in; the token itself never leaves the reader;
+ *  1. the account: the `id_token_email` (the whole address) of agy's token file, read locally, shown only for a sign-in the host already shows as signed in; the token itself never leaves the reader;
  *  2. the usage after a dashboard sign-in: read once more NOW through the panel's own forced read, so `FORCE_FLOOR_MS`, a Retry-After window and the one-fetch-at-a-time rule all still hold;
  *  3. the quota pools (Gemini, Claude & others, Gemini 4 Argon): the row shows EVERY pool and EVERY window the account reports, none picked over another.
  * Fixtures only (example.com); no network, no real credential.
@@ -30,12 +30,12 @@ const home = (text: string | null, mode = 0o600): string => {
 };
 
 describe("the account of an Antigravity sign-in", () => {
-  it("is the masked id_token_email and nothing else of the file: no token, no expiry, no plan", () => {
-    expect(parseAntigravityToken(tokenText())).toEqual({ maskedEmail: "ad***@example.com" });
+  it("is the whole id_token_email and nothing else of the file: no token, no expiry, no plan", () => {
+    expect(parseAntigravityToken(tokenText())).toEqual({ maskedEmail: EMAIL });
     const out = JSON.stringify(parseAntigravityToken(tokenText()));
-    for (const secret of [...SECRETS, EMAIL, "oauth", "2026-11-09"]) expect(out).not.toContain(secret);
-    // The same mask as Claude's (one visible character when the local part has two or fewer).
-    expect(parseAntigravityToken(tokenText({ id_token_email: "ab@example.com" }))).toEqual({ maskedEmail: "a***@example.com" });
+    for (const secret of [...SECRETS, "oauth", "2026-11-09"]) expect(out).not.toContain(secret);
+    // The same validation as Claude's: the whole address.
+    expect(parseAntigravityToken(tokenText({ id_token_email: "ab@example.com" }))).toEqual({ maskedEmail: "ab@example.com" });
     expect(parseAntigravityToken(tokenText({ id_token_email: "ada@example.com" }))?.maskedEmail).toBe(parseClaudeAuthStatus(JSON.stringify({ loggedIn: true, email: "ada@example.com" })).maskedEmail);
   });
   it("gives nothing for an address that is missing, empty, not ASCII, not one address or too long, and for text that is not a JSON object or is too big", () => {
@@ -46,11 +46,11 @@ describe("the account of an Antigravity sign-in", () => {
   });
   it("is read from agy's file under GEMINI_HOME (else the home's .gemini), locally, and gives nothing for a missing, linked or oversized file", () => {
     const dir = home(tokenText());
-    expect(readAntigravityIdentity({ GEMINI_HOME: dir }, "/nonexistent")).toEqual({ maskedEmail: "ad***@example.com" });
+    expect(readAntigravityIdentity({ GEMINI_HOME: dir }, "/nonexistent")).toEqual({ maskedEmail: EMAIL });
     const underHome = scratch(); mkdirSync(join(underHome, ".gemini", "antigravity-cli"), { recursive: true });
     writeFileSync(join(underHome, ".gemini", "antigravity-cli", "antigravity-oauth-token"), tokenText({ id_token_email: "zed@example.com" }));
-    expect(readAntigravityIdentity({}, underHome)).toEqual({ maskedEmail: "ze***@example.com" });
-    expect(readAntigravityIdentity({ GEMINI_HOME: dir }, underHome)).toEqual({ maskedEmail: "ad***@example.com" });   // GEMINI_HOME wins, as everywhere else
+    expect(readAntigravityIdentity({}, underHome)).toEqual({ maskedEmail: "zed@example.com" });
+    expect(readAntigravityIdentity({ GEMINI_HOME: dir }, underHome)).toEqual({ maskedEmail: EMAIL });   // GEMINI_HOME wins, as everywhere else
     expect(readAntigravityIdentity({ GEMINI_HOME: home(null) }, "/nonexistent")).toBeUndefined();                      // signed out: no file
     const linked = home(null); const real = join(scratch(), "real-token"); writeFileSync(real, tokenText());
     symlinkSync(real, join(linked, "antigravity-cli", "antigravity-oauth-token"));
@@ -63,7 +63,7 @@ describe("the account of an Antigravity sign-in", () => {
     for (const other of ["codex", "kiro-cli", "grok", "muse"]) expect(authIdentitySupported(other), other).toBe(false);
     const fetchSpy = vi.fn(); vi.stubGlobal("fetch", fetchSpy);
     try {
-      expect(await checkAuthIdentity("antigravity", { GEMINI_HOME: home(tokenText()) })).toEqual({ maskedEmail: "ad***@example.com" });
+      expect(await checkAuthIdentity("antigravity", { GEMINI_HOME: home(tokenText()) })).toEqual({ maskedEmail: EMAIL });
       expect(await checkAuthIdentity("antigravity", { GEMINI_HOME: home(null) })).toBeUndefined();
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally { vi.unstubAllGlobals(); }
@@ -82,14 +82,14 @@ describe("FleetManager: the account is read only for an Antigravity sign-in that
   afterEach(() => { restore(); vi.restoreAllMocks(); });
   const settle = async (fm: any) => { await Promise.all([...fm.signInIdentityReads.values()]); await new Promise(r => setTimeout(r, 5)); };
 
-  it("shows the masked address on the signed-in row, never on a signed-out one, and nothing of the token reaches the view", async () => {
+  it("shows the whole address on the signed-in row, never on a signed-out one, and nothing of the token reaches the view", async () => {
     const fm = makeFleet(home(tokenText()));
     const rows = (state: string) => vi.spyOn(fm, "backendAvailabilityRows").mockReturnValue([{ backend: "antigravity", state, version: "1.5.3" }] as never);
     rows("usable"); fm.refreshSignInIdentities(); await settle(fm);
-    expect(fm.backendSignInTargets()).toEqual([{ backend: "antigravity", state: "usable", signIn: true, identity: { maskedEmail: "ad***@example.com" } }]);
+    expect(fm.backendSignInTargets()).toEqual([{ backend: "antigravity", state: "usable", signIn: true, identity: { maskedEmail: EMAIL } }]);
     const view = buildAccountsView({ targets: fm.backendSignInTargets(), diskProfiles: new Map(), agents: [], classic: [], fleetDefaults: new Map() });
-    expect(view.clis.find(c => c.backend === "antigravity")!.rows[0]).toMatchObject({ identity: { maskedEmail: "ad***@example.com" } });
-    expect(JSON.stringify(view)).not.toMatch(new RegExp([...SECRETS, EMAIL].map(s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")));
+    expect(view.clis.find(c => c.backend === "antigravity")!.rows[0]).toMatchObject({ identity: { maskedEmail: EMAIL } });
+    expect(JSON.stringify(view)).not.toMatch(new RegExp(SECRETS.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")));
     // Signed out (the row says so): not read, not shown — even though the file is there.
     fm.forgetSignInIdentities(); rows("not_signed_in"); fm.refreshSignInIdentities(); await settle(fm);
     expect(fm.backendSignInTargets()[0]).not.toHaveProperty("identity");
@@ -99,15 +99,15 @@ describe("FleetManager: the account is read only for an Antigravity sign-in that
     const fm = makeFleet(dir);
     vi.spyOn(fm, "backendAvailabilityRows").mockReturnValue([{ backend: "antigravity", state: "usable", version: "1.5.3" }] as never);
     fm.refreshSignInIdentities(); await settle(fm);
-    expect(fm.backendSignInTargets()[0].identity).toEqual({ maskedEmail: "ad***@example.com" });
+    expect(fm.backendSignInTargets()[0].identity).toEqual({ maskedEmail: EMAIL });
     writeFileSync(join(dir, "antigravity-cli", "antigravity-oauth-token"), tokenText({ id_token_email: "grace@example.com" }));
     fm.refreshSignInIdentities(); await settle(fm);
-    expect(fm.backendSignInTargets()[0].identity).toEqual({ maskedEmail: "ad***@example.com" });      // read in the last five minutes: not read again by a page poll
+    expect(fm.backendSignInTargets()[0].identity).toEqual({ maskedEmail: EMAIL });      // read in the last five minutes: not read again by a page poll
     const done = fm.browserBackendSignIns.deps.changed;
     done({ backend: "antigravity", phase: "done" }, {}, false);                                      // the dashboard's sign-in finished: forgotten
     expect(fm.backendSignInTargets()[0]).not.toHaveProperty("identity");
     fm.refreshSignInIdentities(); await settle(fm);
-    expect(fm.backendSignInTargets()[0].identity).toEqual({ maskedEmail: "gr***@example.com" });
+    expect(fm.backendSignInTargets()[0].identity).toEqual({ maskedEmail: "grace@example.com" });
     fm.browserBackendSignIns.close?.();
   });
 });
@@ -237,10 +237,10 @@ describe("Antigravity's quota pools on its account row: every pool, every window
     expect(JSON.stringify(pooled({ label: "X", labelI18n: { key: "usage.metric.named", args: ["X"], extra: "<script>" }, other: "y" }))).not.toMatch(/script|other|extra/);
   });
   it("the row carries it (the host's Antigravity default row), beside the account", () => {
-    const view = buildAccountsView({ targets: [{ backend: "antigravity", state: "usable", signIn: true, identity: { maskedEmail: "ad***@example.com" } }], diskProfiles: new Map(), agents: [], classic: [], fleetDefaults: new Map(),
+    const view = buildAccountsView({ targets: [{ backend: "antigravity", state: "usable", signIn: true, identity: { maskedEmail: EMAIL } }], diskProfiles: new Map(), agents: [], classic: [], fleetDefaults: new Map(),
       usage: new Map([["antigravity\0", accountUsage("antigravity", AGY)!]]) });
     const row = view.clis.find((c) => c.backend === "antigravity")!.rows[0]!;
-    expect(row).toMatchObject({ identity: { maskedEmail: "ad***@example.com" } });
+    expect(row).toMatchObject({ identity: { maskedEmail: EMAIL } });
     expect(row.usageGroups!.map((g) => g.pool?.label)).toEqual(["Gemini", "Claude & others", "Gemini 4 Argon"]);
   });
 });

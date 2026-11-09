@@ -161,11 +161,11 @@ describe("what a token file says: dates and booleans, never a token", () => {
     expect(antigravityTokenMeta(JSON.stringify({ token: {} }))).toEqual({ state: "missing" });
     expect(antigravityTokenMeta("[]")).toEqual({ state: "unreadable" });
   });
-  it("an account's identity is its own token's masked e-mail; another account's e-mail is never read for it", () => {
+  it("an account's identity is its own token's e-mail (the whole address); another account's e-mail is never read for it", () => {
     const w = world(["a", "b"]);
     tokenFile(w.home("a"), { email: "alpha.person@example.com" }); tokenFile(w.home("b"), { email: "beta.person@example.com" }); tokenFile(w.def, { email: "default.person@example.com" });
     const shown = (f: string) => JSON.stringify(readAntigravityIdentityIn(f));
-    expect(shown(w.home("a"))).toContain("al"); expect(shown(w.home("a"))).not.toMatch(/alpha\.person|beta|default/);
+    expect(shown(w.home("a"))).toContain("alpha.person@example.com"); expect(shown(w.home("a"))).not.toMatch(/beta|default/);
     expect(shown(w.home("a"))).not.toBe(shown(w.home("b")));
     expect(readAntigravityIdentityIn(join(w.data, "none"))).toBeUndefined();
   });
@@ -598,7 +598,7 @@ describe("an agent on a named account", () => {
 });
 
 describe("the Accounts view names an account that has no agent yet", () => {
-  it("a named Antigravity account that is signed in on disk and used by NO agent shows its masked e-mail, as the default's does (the identity read covers the accounts on disk, not only the ones an agent uses)", async () => {
+  it("a named Antigravity account that is signed in on disk and used by NO agent shows its e-mail, as the default's does (the identity read covers the accounts on disk, not only the ones an agent uses)", async () => {
     const { FleetManager } = await import("../src/fleet-manager.js");
     const w = world(["second", "spare"]);
     tokenFile(w.home("second"), { email: "julia@gmail.com", expiresAt: Date.now() + 40 * MIN });        // signed in, no agent
@@ -613,9 +613,9 @@ describe("the Accounts view names an account that has no agent yet", () => {
     const row = await rowOf();                                                      // …and the next one has it
     expect(row.state).toBe("usable");
     expect(row.usedBy.agents).toEqual([]);
-    expect(row.identity).toEqual({ maskedEmail: "ju***@gmail.com" });
+    expect(row.identity).toEqual({ maskedEmail: "julia@gmail.com" });
     const signedOut = (await fm.accountsView(1)).clis.find(c => c.backend === "antigravity")!.rows.find(r => r.profile === "spare")!;
     expect([signedOut.state, signedOut.identity]).toEqual(["not_signed_in", undefined]);
-    expect(JSON.stringify(row)).not.toMatch(/julia|SECRET/);
+    expect(JSON.stringify(row)).not.toMatch(/SECRET/);
   });
 });
