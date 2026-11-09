@@ -6,7 +6,7 @@
  * It looks at the table only. That every `yes` has the behaviour it promises (an identity parser, a login flow, a usage reader, …) is checked in that test,
  * which may import the modules the registry itself must not.
  */
-import { CAPABILITY_PATHS, CLI_IDS, NO_REASONS, TRACKING, type CapabilityPath, type CliId } from "./cli-capability.js";
+import { CAPABILITY_PATHS, CLI_IDS, NO_REASONS, TRACKING, USAGE_WINDOW_KINDS, type CapabilityPath, type CliId } from "./cli-capability.js";
 
 type Check = (value: unknown) => string | null;
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
@@ -14,6 +14,8 @@ const text: Check = v => typeof v === "string" && v.trim() !== "" ? null : "a no
 const bool: Check = v => typeof v === "boolean" ? null : "a boolean";
 const int: Check = v => Number.isInteger(v) && (v as number) >= 0 ? null : "a whole number, 0 or more";
 const words = (min: number): Check => v => Array.isArray(v) && v.length >= min && v.every(w => typeof w === "string" && w !== "") ? null : `a list of ${min === 0 ? "" : "at least one "}non-empty strings`;
+/** A list of at least one value from a fixed set, none twice (the window kinds a usage limit can have). */
+const someOf = (...allowed: readonly string[]): Check => v => Array.isArray(v) && v.length >= 1 && new Set(v).size === v.length && v.every(w => typeof w === "string" && allowed.includes(w)) ? null : `a list of at least one of ${allowed.join(", ")}, none twice`;
 const oneOf = (...allowed: string[]): Check => v => typeof v === "string" && allowed.includes(v) ? null : `one of ${allowed.join(", ")}`;
 const version: Check = v => typeof v === "string" && /^\d+(?:\.\d+){0,3}$/.test(v) ? null : "a version such as 1.5.0"
 const envName: Check = v => typeof v === "string" && /^[A-Z][A-Z0-9_]*$/.test(v) ? null : "an environment variable name";
@@ -33,7 +35,7 @@ const FACTS: Readonly<Record<CapabilityPath, Readonly<Record<string, Check>>>> =
   "host.signOut": { binary: text, args: words(1) },
   "host.keepAlive": {},
   "host.accountCard": { rank: int },
-  "host.usage": { providerId: text, name: text, rank: int, profileRows: bool, pools: oneOf("single", "several") },
+  "host.usage": { providerId: text, name: text, rank: int, profileRows: bool, pools: oneOf("single", "several"), windows: someOf(...USAGE_WINDOW_KINDS) },
   "runtime.provider": {
     name: text, company: text, binaryNames: words(1), supports: supportsShape, readOnlySupport: bool, permission: oneOf("os-sandbox", "read-tools", "native-policy"),
     permissionNote: text, promptTransport: oneOf("stdin-text", "stdin-json", "file"), modelProbe: orNull(words(1)), "reason?": text, rank: int,
@@ -172,8 +174,6 @@ function checkDependencies(specs: Record<string, unknown>, ids: readonly string[
     if (rows?.defaultRow === "read-only" && !has(id, "runtime.namedAccounts")) problems.push(`${id}: runtime.accountRows shows the computer's named accounts, but runtime.namedAccounts is not "yes"`);
     const status = yesFactsOf(specs, id, "runtime.authStatus"), provider = yesFactsOf(specs, id, "runtime.provider");
     if (status?.source === "model-listing" && JSON.stringify(status.argv) !== JSON.stringify(provider?.modelProbe)) problems.push(`${id}: runtime.authStatus is the model listing, so its argv must be runtime.provider.modelProbe`);
-    const usage = yesFactsOf(specs, id, "host.usage");
-    if (usage?.pools === "several" && usage.profileRows === true) problems.push(`${id}: host.usage has several quota pools and rows for named accounts; an Accounts row shows one pool per window, so that is not set up yet`);
     need(id, "runtime.identity", "runtime.authStatus", "the account is read from the same status answer");
     need(id, "runtime.install", "runtime.provider", "what is not run is not installed");
     if (yesFactsOf(specs, id, "runtime.provider")?.supports && (yesFactsOf(specs, id, "runtime.provider")!.supports as { execution?: boolean }).execution === false && has(id, "runtime.signIn")) problems.push(`${id}: runtime.signIn is "yes" for a provider the Runtime does not run`);

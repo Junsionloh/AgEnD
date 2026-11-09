@@ -19,8 +19,8 @@ export const ANTIGRAVITY_SPEC = {
     signOut: none("`agy --help` lists no logout command (checked on agy 1.5.3); signing out would mean deleting its token file or Credential Manager entry, which AgEnD does not do."),
     keepAlive: toVerify("Whether Antigravity's sign-in needs a keep-alive run has not been checked."),
     accountCard: yes({ rank: 3 }),
-    // Two quota pools (Gemini; Claude & others), each with a 5h and a weekly window: an Accounts row shows the most used pool of each window and names it.
-    usage: yes({ providerId: "antigravity", name: "Antigravity", rank: 5, profileRows: false, pools: "several" }),
+    // Pools the CLI names (Gemini; Claude & others; Gemini 4 Argon), each with its own 5h and weekly limit, or one number when only per-model data exists: an Accounts row shows every pool and every window.
+    usage: yes({ providerId: "antigravity", name: "Antigravity", rank: 5, profileRows: false, pools: "several", windows: ["session", "weekly", "unwindowed"] }),
   },
   runtime: {
     provider: yes({

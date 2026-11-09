@@ -18,7 +18,7 @@ export const CODEX_SPEC = {
     signOut: yes({ binary: "codex", args: ["logout"] }),
     keepAlive: yes(),
     accountCard: yes({ rank: 1 }),
-    usage: yes({ providerId: "codex", name: "Codex", rank: 1, profileRows: true, pools: "single" }),
+    usage: yes({ providerId: "codex", name: "Codex", rank: 1, profileRows: true, pools: "single", windows: ["session", "weekly", "monthly"] }),
   },
   runtime: {
     provider: yes({
