@@ -1,0 +1,500 @@
+import { existsSync, readFileSync } from "node:fs";
+import { open, stat, type FileHandle } from "node:fs/promises";
+import { join } from "node:path";
+import { getTmuxSession } from "./config.js";
+import type { Logger } from "./logger.js";
+import {
+  DeliveryOutbox,
+  type DeliveryReconciliationCandidate,
+} from "./delivery-outbox.js";
+import { transcriptAbsenceCanProveNotSubmitted } from "./delivery-queue-evidence.js";
+import { TmuxManager } from "./tmux-manager.js";
+import { normalizeTurnText } from "./transcript-turns.js";
+
+export const RECONCILIATION_PANE_CAPTURE_TIMEOUT_MS = 2_000;
+export const RECONCILIATION_WRITE_DRAIN_TIMEOUT_MS = 15_000;
+export const RECONCILIATION_WINDOW_EXIT_TIMEOUT_MS = 15_000;
+export const RECONCILIATION_TRANSCRIPT_STABLE_TIMEOUT_MS = 10_000;
+const TRANSCRIPT_MAX_DELTA_BYTES = 64 * 1024 * 1024;
+const ENTER_MARKER = (deliveryId: string) => `[agend-delivery-id:${deliveryId}]`;
+
+export interface CapturedAttempt {
+  candidate: DeliveryReconciliationCandidate;
+  paneWindowId: string | null;
+  panePid: number | null;
+  pane: string | null;
+  paneCaptureError: string | null;
+}
+
+/** Split capture from retirement so an in-process Daemon.stop can own the kill. */
+export interface CapturedTargetReconciliation {
+  targetInstance: string;
+  sessionName: string;
+  savedWindowId: string | null;
+  attempts: CapturedAttempt[];
+}
+
+function readSavedWindowId(instanceDir: string): string | null {
+  try { return readFileSync(join(instanceDir, "window-id"), "utf-8").trim() || null; }
+  catch { return null; }
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * Capture the old pane before a stop/replacement startup can destroy it. This
+ * is per-target; callers do not gate unrelated daemon starts or dispatch lanes.
+ */
+export async function capturePendingTargetReconciliation(
+  outbox: DeliveryOutbox,
+  targetInstance: string,
+  instanceDir: string,
+  sessionName = getTmuxSession(),
+  logger?: Pick<Logger, "debug" | "warn">,
+): Promise<CapturedTargetReconciliation> {
+  const candidates = outbox.getReconciliationCandidates(targetInstance);
+  const savedWindowId = readSavedWindowId(instanceDir);
+  const uniqueWindowIds = [...new Set(candidates.map(item => item.attempt.windowId ?? savedWindowId).filter((id): id is string => !!id))];
+  const paneByWindow = new Map<string, { pane: string | null; panePid: number | null; error: string | null }>();
+  await Promise.all(uniqueWindowIds.map(async windowId => {
+    const tmux = new TmuxManager(sessionName, windowId);
+    let panePid: number | null = null;
+    let pane: string | null = null;
+    let error: string | null = null;
+    try {
+      panePid = await TmuxManager.getPanePid(sessionName, windowId, RECONCILIATION_PANE_CAPTURE_TIMEOUT_MS);
+      pane = await tmux.capturePane(RECONCILIATION_PANE_CAPTURE_TIMEOUT_MS);
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+      logger?.debug({ targetInstance, windowId, err: error }, "Could not capture old pane before durable reconciliation");
+    }
+    paneByWindow.set(windowId, { pane, panePid, error });
+  }));
+
+  return {
+    targetInstance,
+    sessionName,
+    savedWindowId,
+    attempts: candidates.map(candidate => {
+      const paneWindowId = candidate.attempt.windowId ?? savedWindowId;
+      const captured = paneWindowId ? paneByWindow.get(paneWindowId) : undefined;
+      return {
+        candidate,
+        paneWindowId,
+        panePid: captured?.panePid ?? null,
+        pane: captured?.pane ?? null,
+        paneCaptureError: captured?.error ?? (paneWindowId ? "pane capture unavailable" : "old window id unavailable"),
+      };
+    }),
+  };
+}
+
+async function processHasExited(pid: number | null): Promise<boolean> {
+  if (!pid) return true; // tmux's confirmed window removal is the remaining fence.
+  const deadline = Date.now() + RECONCILIATION_WINDOW_EXIT_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ESRCH") return true;
+      return false;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  return false;
+}
+
+/**
+ * Read exactly `length` bytes from `offset`. A read may legally return fewer bytes than asked for, so one call is not
+ * "the delta": judging a prefix would call a marker that sits in the unread tail absent. Null — could not judge — when
+ * the file ends early or a read makes no progress.
+ */
+async function readFully(fh: FileHandle, offset: number, length: number): Promise<Buffer | null> {
+  const buffer = Buffer.alloc(length);
+  let done = 0;
+  while (done < length) {
+    const { bytesRead } = await fh.read(buffer, done, length - done, offset + done);
+    if (bytesRead <= 0) return null;
+    done += bytesRead;
+  }
+  return buffer;
+}
+
+async function readTranscriptDelta(candidate: DeliveryReconciliationCandidate): Promise<"matched" | "no-match" | "unavailable"> {
+  const path = candidate.attempt.transcriptPath;
+  const offset = candidate.attempt.transcriptOffset;
+  if (!path || offset === null || !candidate.attempt.backend
+    || !["claude-code", "codex"].includes(candidate.attempt.backend)) return "unavailable";
+
+  const deadline = Date.now() + RECONCILIATION_TRANSCRIPT_STABLE_TIMEOUT_MS;
+  let previousSize = -1;
+  let stableChecks = 0;
+  let size = 0;
+  while (Date.now() < deadline) {
+    try { size = (await stat(path)).size; }
+    catch { return "unavailable"; }
+    if (size === previousSize) stableChecks++;
+    else stableChecks = 0;
+    if (stableChecks >= 2) break;
+    previousSize = size;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  if (stableChecks < 2 || size < offset || size - offset > TRANSCRIPT_MAX_DELTA_BYTES) return "unavailable";
+  try {
+    const fh = await open(path, "r");
+    try {
+      const length = size - offset;
+      if (!length) return "no-match";
+      const buffer = await readFully(fh, offset, length);
+      if (!buffer) return "unavailable";
+      const found = transcriptDeltaHasDeliveryMarker(
+        buffer.toString("utf8"),
+        candidate.attempt.backend,
+        candidate.deliveryId,
+      );
+      return found ? "matched" : "no-match";
+    } finally {
+      await fh.close();
+    }
+  } catch {
+    return "unavailable";
+  }
+}
+
+function userTextsFromEntry(entry: unknown, backend: string): string[] {
+  if (!entry || typeof entry !== "object") return [];
+  const value = entry as Record<string, any>;
+  if (backend === "claude-code") {
+    const message = value.message;
+    if (value.type !== "user" || message?.role !== "user") return [];
+    const content = message.content;
+    if (typeof content === "string") return [content];
+    if (!Array.isArray(content)) return [];
+    return content.filter((item: any) => item?.type === "text" && typeof item.text === "string")
+      .map((item: any) => item.text as string);
+  }
+  if (backend === "codex") {
+    const payload = value.payload;
+    if (value.type !== "response_item" || payload?.type !== "message" || payload?.role !== "user") return [];
+    if (!Array.isArray(payload.content)) return [];
+    return payload.content.filter((item: any) => item?.type === "input_text" && typeof item.text === "string")
+      .map((item: any) => item.text as string);
+  }
+  return [];
+}
+
+/**
+ * Claude Code persists a pasted message wrapped in `\n\n<pasted_content id="<hex>">\n` — every paste, small or large
+ * (seen on all 640 delivery entries of 2.1.284–2.1.289, none of which begins with the marker itself). The wrapper is the
+ * CLI's own, in a fixed shape, so it is the one thing allowed in front of the marker; anything else in front still
+ * disqualifies the entry.
+ */
+const CLAUDE_PASTE_WRAPPER = /^\s*<pasted_content id="[0-9a-f]+">\r?\n/;
+
+/** A unique marker counts only at the start of a persisted body (after the CLI's own paste wrapper, if it adds one). */
+function leadsWithMarker(text: string, backend: string, marker: string): boolean {
+  if (text.startsWith(marker)) return true;
+  if (backend !== "claude-code") return false;
+  const wrapper = CLAUDE_PASTE_WRAPPER.exec(text);
+  return !!wrapper && text.startsWith(marker, wrapper[0].length);
+}
+
+/**
+ * Where a delivery's marker turned up in a transcript delta:
+ * - `user` — the CLI consumed it as a user message of its own (the strongest signal);
+ * - `absorbed` — consumed INTO a running turn at a tool boundary (#1201). Claude Code 2.1.293 writes no user entry for
+ *   that: a `queue-operation` remove with `reason: "absorbed_mid_turn"` and an `attachment` of type `queued_command`
+ *   whose `prompt` is the message (tests/fixtures/claude-2.1.293-steer-consumed-mid-turn.transcript.jsonl);
+ * - `queued` — Claude Code's queue-operation enqueue: accepted into its input queue, not consumed yet.
+ * Consumed means `user` or `absorbed`.
+ */
+export type TranscriptMarkerKind = "user" | "absorbed" | "queued";
+
+/** Whether a marker kind means the CLI took the message (as its own turn, or into the running one). */
+export function markerConsumed(kind: TranscriptMarkerKind | null | undefined): kind is "user" | "absorbed" {
+  return kind === "user" || kind === "absorbed";
+}
+
+/** Claude Code's record of a queued message absorbed into the running turn: the message's own text, or null. */
+function claudeAbsorbedText(value: Record<string, any>): string | null {
+  if (value.type === "attachment" && value.attachment?.type === "queued_command" && typeof value.attachment.prompt === "string") {
+    return value.attachment.prompt;
+  }
+  if (value.type === "queue-operation" && value.operation === "remove" && value.reason === "absorbed_mid_turn"
+    && typeof value.content === "string") return value.content;
+  return null;
+}
+
+export function transcriptDeltaDeliveryMarker(rawDelta: string, backend: string, deliveryId: string): TranscriptMarkerKind | null {
+  return transcriptDeltaMarkerKind(rawDelta, backend, ENTER_MARKER(deliveryId));
+}
+
+/**
+ * #3030: the same reading for any unique leading marker — a delivery's `[agend-delivery-id:…]` or a person's
+ * `[agend-human-id:…]` (both lead the pasted body).
+ */
+export function transcriptDeltaMarkerKind(rawDelta: string, backend: string, marker: string): TranscriptMarkerKind | null {
+  let queued = false;
+  let absorbed = false;
+  for (const line of rawDelta.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const entry = JSON.parse(line) as unknown;
+      const firstUserText = userTextsFromEntry(entry, backend)[0];
+      if (firstUserText !== undefined && leadsWithMarker(firstUserText, backend, marker)) return "user";
+      const value = entry as Record<string, any> | null;
+      if (backend !== "claude-code" || !value || typeof value !== "object") continue;
+      const absorbedText = claudeAbsorbedText(value);
+      if (absorbedText !== null && leadsWithMarker(absorbedText, backend, marker)) absorbed = true;
+      if (value.type === "queue-operation" && value.operation === "enqueue"
+        && typeof value.content === "string" && leadsWithMarker(value.content, backend, marker)) queued = true;
+    } catch { /* incomplete/malformed JSONL is not proof */ }
+  }
+  return absorbed ? "absorbed" : queued ? "queued" : null;
+}
+
+/** Claude Code's closing tag after a persisted paste: `</pasted_content id="<hex>">` (seen on 2.1.29x transcripts). */
+const CLAUDE_PASTE_WRAPPER_END = /\r?\n?<\/pasted_content id="[0-9a-f]+">\s*$/;
+
+/**
+ * #1663 P1-1: the user message's ORIGINAL body when it is one piece of text and nothing else — Claude Code's string
+ * content, or a content list of exactly one text block; Codex's content of exactly one input_text. Anything else (a
+ * second block of any kind: more text, an image, a file) is not a plain text message, so it is no raw paste's own
+ * entry: null. (userTextsFromEntry, which the marker match shares, keeps only the text blocks — not this question.)
+ */
+function soleUserText(entry: unknown, backend: string): string | null {
+  if (!entry || typeof entry !== "object") return null;
+  const value = entry as Record<string, any>;
+  const sole = (content: unknown, type: string): string | null =>
+    Array.isArray(content) && content.length === 1 && content[0]?.type === type && typeof content[0].text === "string" ? content[0].text : null;
+  if (backend === "claude-code") {
+    const message = value.message;
+    if (value.type !== "user" || message?.role !== "user") return null;
+    return typeof message.content === "string" ? message.content : sole(message.content, "text");
+  }
+  if (backend === "codex") {
+    const payload = value.payload;
+    if (value.type !== "response_item" || payload?.type !== "message" || payload?.role !== "user") return null;
+    return sole(payload.content, "input_text");
+  }
+  return null;
+}
+
+/** A persisted user body without the CLI's own paste wrapper (claude-code wraps a long paste in both tags). */
+function withoutPasteWrapper(text: string, backend: string): string {
+  if (backend !== "claude-code") return text;
+  const open = CLAUDE_PASTE_WRAPPER.exec(text);
+  return open ? text.slice(open[0].length).replace(CLAUDE_PASTE_WRAPPER_END, "") : text;
+}
+
+/**
+ * What a transcript proof looks for: an enveloped delivery's id marker (a delivery id string), or — for a raw paste,
+ * which carries no envelope (a silent schedule, a system command) — its exact text (#1647).
+ */
+export type TranscriptNeedle = string | { readonly rawText: string } | { readonly marker: string };
+
+/**
+ * #1647: a raw paste's exact text as a user entry of the CLI's own — a message that, whitespace aside and without Claude
+ * Code's paste wrapper, IS the pasted text — is the record of the turn that took the paste. The delta starts at the
+ * checkpoint taken before the write, so an earlier copy of the same words (a schedule repeats them every run) is never
+ * in it. A quote of the text inside a longer message, a tool result or a queued entry is not. Raw text is not unique
+ * the way a delivery marker is: the caller must hold a transcript that belongs to the target alone (#1663 P1-2).
+ */
+export function transcriptDeltaHasRawText(rawDelta: string, backend: string, rawText: string): boolean {
+  const wanted = normalizeTurnText(rawText);
+  if (!wanted) return false;
+  for (const line of rawDelta.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      // The WHOLE user message must be the paste: its original body is one text and nothing else (#1663 P1-1).
+      const body = soleUserText(JSON.parse(line) as unknown, backend);
+      if (body !== null && normalizeTurnText(withoutPasteWrapper(body, backend)) === wanted) return true;
+    } catch { /* incomplete/malformed JSONL is not proof */ }
+  }
+  return false;
+}
+
+/** One needle against one delta: the marker's kind, `user` for a raw paste's own entry, or null. */
+export function transcriptDeltaNeedle(rawDelta: string, backend: string, needle: TranscriptNeedle): TranscriptMarkerKind | null {
+  if (typeof needle === "string") return transcriptDeltaDeliveryMarker(rawDelta, backend, needle);
+  if ("marker" in needle) return transcriptDeltaMarkerKind(rawDelta, backend, needle.marker);
+  return transcriptDeltaHasRawText(rawDelta, backend, needle.rawText) ? "user" : null;
+}
+
+/**
+ * Whether the CLI consumed the delivery: its unique marker at the start of a persisted user-message body, or of the
+ * message Claude Code absorbed into a running turn (#1201).
+ */
+export function transcriptDeltaHasDeliveryMarker(rawDelta: string, backend: string, deliveryId: string): boolean {
+  return markerConsumed(transcriptDeltaDeliveryMarker(rawDelta, backend, deliveryId));
+}
+
+/**
+ * One look at the transcript past a checkpoint — no waiting for the file to settle, for a caller that polls.
+ * `unavailable` is "could not judge" (no file, rotated or truncated below the checkpoint, unreadable, oversized),
+ * never "absent": only `no-match` means the delta was read and the delivery is not in it.
+ */
+export async function scanTranscriptForDeliveryMarker(
+  path: string,
+  offset: number,
+  backend: string,
+  needle: TranscriptNeedle,
+): Promise<TranscriptMarkerKind | "no-match" | "unavailable"> {
+  if (!["claude-code", "codex"].includes(backend)) return "unavailable";
+  let size: number;
+  try { size = (await stat(path)).size; }
+  catch { return "unavailable"; }
+  if (size < offset || size - offset > TRANSCRIPT_MAX_DELTA_BYTES) return "unavailable";
+  if (size === offset) return "no-match";
+  let fh;
+  try { fh = await open(path, "r"); }
+  catch { return "unavailable"; }
+  try {
+    const buffer = await readFully(fh, offset, size - offset);
+    if (!buffer) return "unavailable";
+    return transcriptDeltaNeedle(buffer.toString("utf8"), backend, needle) ?? "no-match";
+  } catch {
+    return "unavailable";
+  } finally {
+    await fh.close().catch(() => {});
+  }
+}
+
+/**
+ * After the old CLI is positively gone, classify the attempt. A committed
+ * Enter-start marker prevents composer-only negative proof from authorizing a
+ * replay. A stable transcript absence may retry an idle submit, but a native
+ * queue/steer handoff stays uncertain unless its exact CLI-version policy was
+ * validated not to replay that queue item after resume.
+ */
+export async function finishTargetReconciliation(
+  outbox: DeliveryOutbox,
+  captured: CapturedTargetReconciliation,
+  oldWindowGone: boolean,
+  logger?: Pick<Logger, "debug" | "warn">,
+): Promise<{ delivered: number; retry: number; uncertain: number; safeToStart: boolean }> {
+  const result = {
+    delivered: 0,
+    retry: 0,
+    uncertain: 0,
+    safeToStart: captured.attempts.length === 0 || oldWindowGone,
+  };
+  for (const item of captured.attempts) {
+    const { candidate } = item;
+    // A missing window id is not evidence that the old CLI exited: there was
+    // no object to retire or verify. Keep this target fenced rather than
+    // letting Strategy A start a replacement beside an unverified process.
+    const processExited = oldWindowGone && !!item.paneWindowId
+      && await processHasExited(item.panePid);
+    if (!processExited) result.safeToStart = false;
+    const transcript = processExited ? await readTranscriptDelta(candidate) : "unavailable";
+    let outcome: "delivered" | "retry_wait" | "uncertain";
+    let proof: string;
+    if (transcript === "matched") {
+      outcome = "delivered";
+      proof = "cli-transcript-user-entry-marker";
+    } else if (!candidate.attempt.enterStartedAt && processExited) {
+      // W1 is authoritative negative evidence for ordinary envelopes: this
+      // process cannot have sent Enter before the timestamp was committed.
+      // Raw paste additionally requires the exact bytes at the end of the
+      // pre-kill capture, where the active composer sits; a missing composer
+      // snapshot is ambiguous and must not silently turn into a replay.
+      const rawBytes = candidate.kind === "raw_paste" && typeof candidate.payload.content === "string"
+        ? candidate.payload.content
+        : null;
+      const capturedTail = item.pane?.replace(/\r\n/g, "\n").replace(/\n$/, "") ?? "";
+      const rawComposerVisible = rawBytes !== null && rawBytes.length > 0 && !rawBytes.endsWith("\n")
+        && capturedTail.endsWith(rawBytes);
+      if (candidate.kind !== "raw_paste" || rawComposerVisible) {
+        outcome = "retry_wait";
+        proof = candidate.kind === "raw_paste"
+          ? "raw-composer-exact-bytes; enter-not-started; old-process-exited"
+          : item.paneCaptureError ? "enter-not-started; pane-capture-unavailable" : "enter-not-started; pre-kill-pane-captured";
+      } else {
+        outcome = "uncertain";
+        proof = "raw-composer-bytes-not-proven; enter-not-started; old-process-exited";
+      }
+    } else if (item.panePid !== null && processExited && transcript === "no-match"
+      && transcriptAbsenceCanProveNotSubmitted(
+        candidate.attempt.submissionMode,
+        candidate.attempt.queueResumePolicy,
+      )) {
+      // A complete, stable transcript is negative evidence for an ordinary
+      // idle submit. A native queue/steer entry can be absent because it is
+      // still owned by the CLI queue, so only an exact, persisted version
+      // policy that rules out resume replay can use absence for that mode.
+      outcome = "retry_wait";
+      proof = candidate.attempt.submissionMode === "idle_submit"
+        ? "complete-transcript-no-marker; non-queued-submit"
+        : "complete-transcript-no-marker; queue-version-proven-no-resume";
+    } else {
+      outcome = "uncertain";
+      proof = !processExited
+        ? "old-cli-exit-unconfirmed"
+        : transcript === "unavailable" ? "transcript-unavailable-or-unstable"
+          : candidate.attempt.submissionMode === "native_queue_handoff" || candidate.attempt.submissionMode === "steer"
+            ? `queue-resume-policy-${candidate.attempt.queueResumePolicy ?? "unknown"}; transcript-marker-absent`
+            : "enter-may-have-started-without-transcript-marker";
+    }
+    if (outbox.reconcileAttempt(candidate.deliveryId, candidate.attempt.targetDaemonBootId, candidate.attempt.attemptNo, outcome, proof)) {
+      if (outcome === "retry_wait") result.retry++;
+      else if (outcome === "delivered") result.delivered++;
+      else result.uncertain++;
+    }
+    logger?.[outcome === "uncertain" ? "warn" : "debug"](
+      { deliveryId: candidate.deliveryId, target: candidate.targetInstance, outcome, proof, submissionMode: candidate.attempt.submissionMode },
+      "Reconciled durable delivery after target generation ended",
+    );
+  }
+  return result;
+}
+
+/** Retire and positively verify every captured old window after a Daemon.stop. */
+export async function retireCapturedTargetWindows(captured: CapturedTargetReconciliation): Promise<boolean> {
+  const windowIds = [...new Set([
+    captured.savedWindowId,
+    ...captured.attempts.map(item => item.paneWindowId),
+  ].filter((id): id is string => !!id))];
+  let gone = true;
+  for (const windowId of windowIds) {
+    const oldWindow = new TmuxManager(captured.sessionName, windowId);
+    const thisGone = await withTimeout(
+      oldWindow.killWindowConfirmed(),
+      RECONCILIATION_WINDOW_EXIT_TIMEOUT_MS,
+      "old pane retirement",
+    ).catch(() => false);
+    gone &&= thisGone;
+  }
+  return gone;
+}
+
+/** Startup path: capture first, retire the old Strategy-A window, verify exit, then read transcript. */
+export async function reconcileTargetBeforeStart(
+  outbox: DeliveryOutbox,
+  targetInstance: string,
+  instanceDir: string,
+  logger?: Pick<Logger, "debug" | "warn">,
+): Promise<{ delivered: number; retry: number; uncertain: number; safeToStart: boolean }> {
+  const captured = await capturePendingTargetReconciliation(outbox, targetInstance, instanceDir, getTmuxSession(), logger);
+  // Keep the historical Strategy-A best-effort cleanup for ordinary starts.
+  // A verified retirement barrier is required only when an in-flight durable
+  // submission needs pane/transcript reconciliation evidence.
+  if (captured.attempts.length === 0) {
+    return { delivered: 0, retry: 0, uncertain: 0, safeToStart: true };
+  }
+  const oldWindowGone = await retireCapturedTargetWindows(captured);
+  return finishTargetReconciliation(outbox, captured, oldWindowGone, logger);
+}

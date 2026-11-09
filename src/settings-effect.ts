@@ -1,0 +1,199 @@
+import { officeInputPatch } from "./dashboard-permissions.js";
+import { setNoticeMode } from "./notice-delivery.js";
+import { PUBLIC_TUNNEL_SECRET_ID } from "./public-tunnel-config.js";
+import { normalizeSettingsInstancePatch } from "./settings-instance-patch.js";
+import { basename } from "node:path";
+import { agentConflict, draftQuickstart, draftWebOnly, newConnectionConflict, planQuickstart, validateWizardInput, webOnlyConflict, withExistingAgent, withWorkingDirectory, wizardChannels, type WizardPlanInput } from "./quickstart-api.js";
+import type { FleetConfig } from "./types.js";
+import { channelWithDefaults } from "./config.js";
+import { settingsChangeDiff, type SettingsChangeDiff } from "./settings-change.js";
+import { applyAppearanceChanges, applyGuestsPatch, applyVerifiedAuthorityPatch, parseAppearanceSettingsBody, parseWebSettingsBody } from "./web-settings-patch.js";
+import { SettingsConfirmationError } from "./settings-confirmation.js";
+import { validateFleetConfig, validateClassicBotConfig } from "./config-validator.js";
+import { settingsEffectAuthority, settingsSecretAuthority, type SettingsChangeAuthority } from "./settings-authority.js";
+import { quickLinkEffective } from "./authority/web-authority.js";
+
+export interface SettingsSecretProof {
+  readonly key: string; readonly secret: string; readonly previous?: string;
+  readonly remainingMs: number; readonly binding?: { group_id: string; general_channel_id?: string | null };
+  discard(): void;
+}
+export interface SettingsEffectContext {
+  config: FleetConfig | null; classic: Record<string, any>;
+  proof?(kind: "provider" | "secret" | "binding", target: string, verification: string, binding?: string, key?: string): SettingsSecretProof | null;
+}
+export function isSettingsMutation(method: string, path: string): boolean {
+  if (method === "POST" && path === "/api/settings/public-tunnel-token/apply") return true;
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return false;
+  return /^\/api\/settings\/(?:fleet\/(?:defaults|channels|web|appearance|instances(?:\/[^/]+)?)|classic\/(?:defaults|channels\/[^/]+)|(?:provider-secrets|secrets)\/[^/]+\/apply|connections\/[^/]+\/(?:secret|binding)\/apply|quickstart\/commit)$/.test(path)
+    || path === "/ui/config" || path === "/ui/instances" || /^\/ui\/instances\/[^/]+\/delete$/.test(path);
+}
+function record(body: unknown): Record<string, any> {
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new SettingsConfirmationError(400, "invalid_settings_body");
+  return body as Record<string, any>;
+}
+/** A pure projection. Original handler validation still runs against the admitted baseline. */
+export function prepareSettingsEffect(method: string, path: string, body: unknown, context: SettingsEffectContext, binding?: string, key?: string): {
+  diff: SettingsChangeDiff | null; proof?: SettingsSecretProof;
+} {
+  const cfg = context.config, before: any = { fleet: structuredClone(cfg), classic: structuredClone(context.classic) }, after = structuredClone(before);
+  const operation = `${method} ${path}`;
+  // #2453 (§0.2): the trusted effect — the named-link option off before, on after — makes the change one its asker can't
+  // confirm (#2170 self-confirmation).
+  // §0.3: likewise the quick-link option, on its value as in force (explicit, else the release default) before and after.
+  const opensPublicLink = () => (before.fleet?.web?.verified_authority?.named_link !== true && after.fleet?.web?.verified_authority?.named_link === true)
+    || (!quickLinkEffective(before.fleet?.web?.verified_authority) && quickLinkEffective(after.fleet?.web?.verified_authority));
+  const scoped = (diff: SettingsChangeDiff | null, authority?: SettingsChangeAuthority): SettingsChangeDiff | null => diff
+    ? { ...diff, authority: authority ?? settingsEffectAuthority(before.fleet, after.fleet, before.classic, after.classic), ...(opensPublicLink() ? { noSelfConfirm: true as const } : {}) } : null;
+  const secret = (path === "/api/settings/public-tunnel-token/apply" ? `/api/settings/secrets/${PUBLIC_TUNNEL_SECRET_ID}/apply` : path).match(/^\/api\/settings\/(?:provider-secrets|secrets)\/([^/]+)\/apply$/);
+  const connection = path.match(/^\/api\/settings\/connections\/([^/]+)\/(secret|binding)\/apply$/);
+  if (secret || connection) {
+    const payload = record(body), kind = secret ? "provider" : connection![2] as "secret" | "binding", target = decodeURIComponent((secret ?? connection)![1]);
+    const proof = context.proof?.(kind, target, String(payload.verification_id ?? ""), binding, key);
+    if (!proof || !(proof.remainingMs > 0)) throw new SettingsConfirmationError(422, "verification_expired");
+    if (kind === "binding") {
+      const channels = cfg?.channels ?? (cfg?.channel ? [cfg.channel] : []), current = channels.find((item, i) => (item.id ?? item.type ?? `channel-${i}`) === target);
+      if (!current || !proof.binding) throw new SettingsConfirmationError(422, "invalid_binding_proof");
+      const candidate = { ...current, group_id: proof.binding.group_id, options: { ...current.options } };
+      if (proof.binding.general_channel_id === null) delete candidate.options.general_channel_id;
+      else if (proof.binding.general_channel_id !== undefined) candidate.options.general_channel_id = proof.binding.general_channel_id;
+      return { diff: scoped(settingsChangeDiff({ channels: [current] }, { channels: [candidate] }, { operation, force: true }),
+        { connections: [target], primaryGeneral: false, unknown: false }), proof };
+    }
+    const diff = settingsChangeDiff(null, null, { operation, secret: { key: proof.key, before: proof.previous, after: proof.secret }, force: true })!;
+    return { diff: scoped({ ...diff, affectedConnections: connection ? [target] : [] },
+      settingsSecretAuthority(cfg, connection ? target : undefined, proof.key)), proof };
+  }
+  let force = false;
+  if (path === "/api/settings/fleet/channels") {
+    if (!cfg || !Array.isArray(body)) throw new SettingsConfirmationError(400, "invalid_channels");
+    after.fleet.channels = body.map((item: unknown) => {
+      const ch = structuredClone(record(item));
+      if (typeof ch.group_id === "number") { if (!Number.isSafeInteger(ch.group_id)) throw new SettingsConfirmationError(400, "invalid_channel_id"); ch.group_id = String(ch.group_id); }
+      if (typeof ch.options?.general_channel_id === "number") { if (!Number.isSafeInteger(ch.options.general_channel_id)) throw new SettingsConfirmationError(400, "invalid_channel_id"); ch.options.general_channel_id = String(ch.options.general_channel_id); }
+      return channelWithDefaults(ch);                                       // #2211: absent = the default, as a load says
+    }); delete after.fleet.channel;
+    before.fleet.channels = cfg.channels ?? (cfg.channel ? [cfg.channel] : []); delete before.fleet.channel;
+  } else if (path === "/api/settings/fleet/defaults") {
+    if (!cfg) throw new SettingsConfirmationError(503, "fleet_unavailable");
+    after.fleet.defaults = { ...cfg.defaults, ...officeInputPatch(record(body)) };
+    if (typeof record(body).tips === "boolean" || record(body).tips === "dm") setNoticeMode(after.fleet, "tips", record(body).tips);
+    if (after.fleet.defaults.locale === null || after.fleet.defaults.locale === "") delete after.fleet.defaults.locale;
+    if (after.fleet.defaults.tool_set === null || after.fleet.defaults.tool_set === "") delete after.fleet.defaults.tool_set;
+  } else if (path === "/api/settings/fleet/web") {
+    if (!cfg) throw new SettingsConfirmationError(503, "fleet_unavailable");
+    // #1620: read as the handler reads it (one parser): what it would refuse — a read-only web field, a malformed limit —
+    // is refused here, never proposed (#1627 review). null = back to the default.
+    const parsed = parseWebSettingsBody(body);
+    if ("error" in parsed) throw new SettingsConfirmationError(400, "invalid_web_settings");
+    const { session: sessionPatch, terminal: terminalPatch } = parsed;
+    after.fleet.web = { ...cfg.web };
+    if (parsed.notifyLogin !== undefined) setNoticeMode(after.fleet, "login", parsed.notifyLogin);
+    if (parsed.echo !== undefined) after.fleet.web.echo_to_channel = parsed.echo;
+    if (parsed.logTab !== undefined) after.fleet.web.log_tab = parsed.logTab;
+    if (parsed.usageOnPublicLink !== undefined) after.fleet.web.usage_report_on_public_link = parsed.usageOnPublicLink;
+    if (parsed.officeLevels !== undefined) after.fleet.web.office_levels = parsed.officeLevels;
+    if (parsed.previewCdn !== undefined) after.fleet.web.preview_cdn = parsed.previewCdn;
+    if (parsed.publicLink && Object.keys(parsed.publicLink).length) after.fleet.web.public_link = { ...cfg.web?.public_link, ...parsed.publicLink };
+    if (sessionPatch) {
+      const local: Record<string, any> = { ...cfg.web?.session?.local, ...sessionPatch };
+      for (const k of Object.keys(local)) if (local[k] === null) delete local[k];
+      after.fleet.web.session = { ...cfg.web?.session, local };
+    }
+    if (terminalPatch) {
+      const wt: Record<string, any> = { ...cfg.web_terminal, ...terminalPatch };
+      for (const k of Object.keys(wt)) if (wt[k] === null) delete wt[k];
+      after.fleet.web_terminal = wt;
+    }
+    if (parsed.guests) {
+      const applied = applyGuestsPatch(cfg.web?.guests, parsed.guests);
+      if (applied.next) after.fleet.web.guests = applied.next; else delete after.fleet.web.guests;
+    }
+    if (parsed.verifiedAuthority) {
+      const applied = applyVerifiedAuthorityPatch(cfg.web?.verified_authority, parsed.verifiedAuthority);
+      if (applied.next) after.fleet.web.verified_authority = applied.next; else delete after.fleet.web.verified_authority;
+    }
+  } else if (path === "/api/settings/fleet/appearance") {
+    if (!cfg) throw new SettingsConfirmationError(503, "fleet_unavailable");
+    // #1629 r4.1 Q3 (b): one parser with the handler; each limit is judged by direction (settings-change.ts).
+    const parsed = parseAppearanceSettingsBody(body);
+    if ("error" in parsed) throw new SettingsConfirmationError(400, "invalid_appearance_settings");
+    const appearance = applyAppearanceChanges(cfg.web?.appearance, parsed);
+    after.fleet.web = { ...cfg.web };
+    if (appearance) after.fleet.web.appearance = appearance; else delete after.fleet.web.appearance;
+  } else if (path === "/api/settings/classic/defaults") {
+    after.classic.defaults = { ...(before.classic.defaults ?? {}), ...record(body) };
+    for (const key of ["tool_progress", "reply_completion_guard"]) if (after.classic.defaults[key] === null) delete after.classic.defaults[key];
+  } else if (path.startsWith("/api/settings/classic/channels/")) {
+    const key = decodeURIComponent(path.split("/").at(-1)!); after.classic.channels ??= {};
+    if (!Object.hasOwn(after.classic.channels, key) || !after.classic.channels[key] || typeof after.classic.channels[key] !== "object" || Array.isArray(after.classic.channels[key]))
+      throw new SettingsConfirmationError(404, "classic_channel_not_found");
+    after.classic.channels = { ...after.classic.channels, [key]: { ...after.classic.channels[key], ...record(body) } };
+    for (const key2 of ["model", "auto_pause_after", "tool_progress", "reply_completion_guard"]) if (after.classic.channels[key][key2] === null) delete after.classic.channels[key][key2];
+  } else if (path === "/ui/config") {
+    if (!cfg) throw new SettingsConfirmationError(503, "fleet_unavailable");
+    const patch = record(body);
+    if (patch.channel && cfg.channel) {
+      if (patch.channel.group_id != null) after.fleet.channel.group_id = patch.channel.group_id;
+      if (patch.channel.access) after.fleet.channel.access = patch.channel.access;
+    }
+    if (patch.defaults) {
+      if (patch.defaults.backend) after.fleet.defaults.backend = patch.defaults.backend;
+      if (patch.defaults.model) after.fleet.defaults.model = patch.defaults.model;
+    }
+    if (patch.project_roots) after.fleet.project_roots = patch.project_roots;
+  } else if (path === "/api/settings/quickstart/commit" && record(body).web_only === true) {
+    // #2233: a web-only setup — the agent alone; no connection and no secret, so nothing in the diff is one.
+    const patch = record(body);
+    if (!cfg || validateWizardInput(patch)) throw new SettingsConfirmationError(400, "invalid_quickstart");
+    if (webOnlyConflict(cfg)) throw new SettingsConfirmationError(409, "connection_exists");
+    if (agentConflict(patch as WizardPlanInput, cfg)) throw new SettingsConfirmationError(409, "agent_conflict");
+    const draft = draftWebOnly(cfg, withWorkingDirectory(patch) as WizardPlanInput);
+    before.fleet = structuredClone(cfg); after.fleet = draft;
+    return { diff: scoped(settingsChangeDiff(before.fleet, draft, { operation: `${operation} instance ${patch.instance_name} (web only)`, force: true })) };
+  } else if (path === "/api/settings/quickstart/commit") {
+    const patch = record(body); if (!cfg || typeof patch.token !== "string" || typeof patch.token_env !== "string") throw new SettingsConfirmationError(400, "invalid_quickstart");
+    if (validateWizardInput(patch)) throw new SettingsConfirmationError(400, "invalid_quickstart");
+    const channels = wizardChannels(cfg);
+    // #1519 P1 (S1): a new connection only — one that would take another's id or token env is refused, not proposed.
+    if (newConnectionConflict(patch as WizardPlanInput, { channels })) throw new SettingsConfirmationError(409, "connection_exists");
+    if (agentConflict(patch as WizardPlanInput, cfg)) throw new SettingsConfirmationError(409, "agent_conflict");
+    const input = withWorkingDirectory(patch) as WizardPlanInput;
+    const plan = planQuickstart(withExistingAgent(input, cfg), { channels, has_fleet: !!Object.keys(cfg.instances).length, backends: [] });
+    const draft = draftQuickstart(cfg, input, plan);
+    const normalizedBefore = structuredClone(cfg); normalizedBefore.channels = cfg.channels ?? (cfg.channel ? [cfg.channel] : []); delete normalizedBefore.channel;
+    const what = patch.connection_only === true ? `connection ${plan.channel_id}` : `instance ${patch.instance_name}`;
+    before.fleet = normalizedBefore; after.fleet = draft;
+    return { diff: scoped(settingsChangeDiff(normalizedBefore, draft, { operation: `${operation} ${what}`, force: true, secret: { key: patch.token_env, after: patch.token } })) };
+  } else if (path === "/ui/instances") {
+    const payload = record(body), channels = cfg?.channels ?? (cfg?.channel ? [cfg.channel] : []);
+    const name = payload.topic_name ?? (typeof payload.directory === "string" ? basename(payload.directory) : null);
+    if (typeof name !== "string" || !name) throw new SettingsConfirmationError(400, "invalid_instance_name");
+    const draft = { topic_name: name, directory: payload.directory,
+      channels: channels.slice(0, 1).map((item, index) => ({ id: item.id ?? item.type ?? `channel-${index}`, type: item.type, group_id: item.group_id })),
+      ...Object.fromEntries(Object.entries(payload).filter(([key]) => !["topic_name", "directory"].includes(key))) };
+    // Target allocation is deferred; the approved request and current owner binding stay pinned.
+    return { diff: scoped(settingsChangeDiff({}, { new_instance: draft }, { operation, force: true }),
+      { connections: [], primaryGeneral: true, unknown: false }) };
+
+  } else {
+    if (!cfg) throw new SettingsConfirmationError(503, "fleet_unavailable");
+    const payload = method === "DELETE" ? {} : record(body), pieces = path.split("/");
+    const name = path === "/ui/instances" || path === "/api/settings/fleet/instances" ? typeof payload.name === "string" ? payload.name.trim() : payload.name : decodeURIComponent(path.startsWith("/ui/") ? pieces[3] : pieces.at(-1)!);
+    if (typeof name !== "string" || !name) throw new SettingsConfirmationError(400, "invalid_instance_name");
+    const exists = Object.hasOwn(cfg.instances, name);
+    if (method === "DELETE" || path.endsWith("/delete")) { delete after.fleet.instances[name]; force = true; }
+    else {
+      const patch = { ...payload }; delete patch.name;
+      if (path === "/ui/instances") {
+        after.fleet.instances = { ...after.fleet.instances, [name]: { ...(exists ? cfg.instances[name] : {}), working_directory: payload.working_directory, backend: payload.backend ?? cfg.defaults?.backend, model: payload.model } };
+      } else {
+        after.fleet.instances = { ...after.fleet.instances, [name]: normalizeSettingsInstancePatch(exists ? cfg.instances[name] : {}, patch) };
+      }
+      force = !exists;
+    }
+  }
+  if (after.fleet && !validateFleetConfig(after.fleet).valid && validateFleetConfig(before.fleet).valid) throw new SettingsConfirmationError(400, "invalid_settings_effect");
+  if (!validateClassicBotConfig(after.classic).valid && validateClassicBotConfig(before.classic).valid) throw new SettingsConfirmationError(400, "invalid_classic_effect");
+  return { diff: scoped(settingsChangeDiff(before, after, { operation, force })) };
+}
