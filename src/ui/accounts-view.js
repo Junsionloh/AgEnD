@@ -369,7 +369,7 @@ function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, ope
       <${UsedBy} row=${row} label=${usedText(row)} openAgent=${openAgent} />
       ${machine ? html`<small class="s-account-usage is-none" title=${tx("machineNoUsageHint")}>${tx("machineNoUsage")}</small>` : null}
     </div>
-    ${usageGroups.length ? html`<${UsageBlock} groups=${usageGroups} stale=${row.usageStale === true} tagOf=${usageTag} label=${tx("usageLabel")} staleText=${tx("winStale")} />` : null}
+    ${usageGroups.length ? html`<${UsageBlock} groups=${usageGroups} stale=${row.usageStale === true} staleInfo=${row.usageStaleInfo} tagOf=${usageTag} label=${tx("usageLabel")} staleText=${tx("winStale")} />` : null}
     ${why ? html`<p class="note s-account-why">${why}</p>` : null}
     ${machine && capsOf(row.backend) && capsOf(row.backend).runtimeDefaultLogin && row.signIn && !readOnly ? html`<p class="note s-account-why">${tx("machineOneLogin", machine.name, cliLabel(row.backend))}</p>` : null}
     ${!readOnly && !machine && !row.signIn && row.update && row.state !== "too_old" ? html`<p class="note s-account-why">${tx("updateHint", cliLabel(row.backend))} <code>${row.update}</code></p>` : null}

@@ -55,8 +55,13 @@ export interface AccountUsagePool { label: string; labelI18n?: { key: string; ar
 export interface AccountUsageWindow { kind: UsageWindowKind; percent: number; windowMs?: number; resetsAt?: string; resetPassed?: true }
 /** The windows of one pool, in the usage panel's own order; a provider with one set of limits has one group and no `pool`. */
 export interface AccountUsageGroup { pool?: AccountUsagePool; windows: AccountUsageWindow[] }
-/** Everything an account reports about its limits: every pool and every window, none picked over another. `stale`: the last known numbers, the live read failed. */
-export interface AccountUsage { groups: AccountUsageGroup[]; stale?: true }
+/**
+ * Why the numbers are the last known ones (AGEND-119): the usage panel's own `staleCause` (an expiry, a transient failure, another error), when they were read, and what the read said
+ * (`hint`, with its reference into the panel's words). Only those four are passed on; no token, path or output of a CLI is in it.
+ */
+export interface AccountUsageStale { cause: "expired" | "transient" | "error"; cachedAt: string; hint?: string; hintI18n?: { key: string; args?: string[] } }
+/** Everything an account reports about its limits: every pool and every window, none picked over another. `stale`: the last known numbers, the live read failed (`staleInfo`: why, and when they were read). */
+export interface AccountUsage { groups: AccountUsageGroup[]; stale?: true; staleInfo?: AccountUsageStale }
 export interface AccountRow {
   scope: AccountScope;
   backend: string;
@@ -77,6 +82,8 @@ export interface AccountRow {
   usageGroups?: AccountUsageGroup[];
   /** The numbers are the last known ones (the live read failed). */
   usageStale?: true;
+  /** AGEND-119: why they are, and when they were read (the usage panel's `staleCause`/`cachedAt`/`hint`); absent from an older server's row, whose page then says only that they are old. */
+  usageStaleInfo?: AccountUsageStale;
   /** #3292: "Keep sign-in alive" (Claude Code and Codex host rows): the setting, its last run, the dates the sign-in's file says. */
   keepAlive?: AccountKeepAlive;
 }
@@ -195,7 +202,7 @@ export function buildAccountsView(input: AccountsInput): AccountsView {
       classic: sorted(classic.filter(c => c.profile === profile).map(c => c.key)),
       fleetDefault: fleetDefault === profile || (profile === null && fleetDefault === null),
     });
-    const usageOf = (profile: string | null) => { const u = input.usage?.get(key(backend, profile)); return u ? { usageGroups: u.groups, ...(u.stale ? { usageStale: true as const } : {}) } : {}; };
+    const usageOf = (profile: string | null) => { const u = input.usage?.get(key(backend, profile)); return u ? { usageGroups: u.groups, ...(u.stale ? { usageStale: true as const } : {}), ...(u.stale && u.staleInfo ? { usageStaleInfo: u.staleInfo } : {}) } : {}; };
     const keepAlive = (profile: string | null) => { const k = input.keepAlive?.get(key(backend, profile)); return k ? { keepAlive: k } : {}; };
     // A card that is only here for a paired computer (nothing on the host uses this CLI) shows no host rows.
     if (hostRelevant) rows.push({
@@ -277,7 +284,7 @@ const resetElapsed = (m: Record<string, unknown>, now: number): boolean => typeo
  *  - `kind` is `usageWindowKind`: what cli-capability.ts calls the kinds of window, which `host.usage.windows` lists for the CLI. tests/cli-registry-usage-shape.test.ts holds real payloads to it.
  * The percent is rounded and kept within 0–100. Undefined when the payload has no such window.
  */
-export function accountUsage(backend: string, provider: { metrics?: ReadonlyArray<Record<string, unknown>>; stale?: boolean } | undefined, now: number = Date.now()): AccountUsage | undefined {
+export function accountUsage(backend: string, provider: { metrics?: ReadonlyArray<Record<string, unknown>>; stale?: boolean; staleCause?: unknown; cachedAt?: unknown; hint?: unknown; hintI18n?: unknown } | undefined, now: number = Date.now()): AccountUsage | undefined {
   if (!provider || !Array.isArray(provider.metrics)) return undefined;
   const several = hostFacts(backend, "usage")?.pools === "several";
   const groups = new Map<string, AccountUsageGroup>();
@@ -294,6 +301,21 @@ export function accountUsage(backend: string, provider: { metrics?: ReadonlyArra
       ...(resetsAt ? { resetsAt } : {}), ...(m.resetPassed === true || resetElapsed(m, now) ? { resetPassed: true as const } : {}),
     });
   }
-  return groups.size ? { groups: [...groups.values()], ...(provider.stale ? { stale: true as const } : {}) } : undefined;
+  const staleInfo = provider.stale ? staleInfoOf(provider) : undefined;
+  return groups.size ? { groups: [...groups.values()], ...(provider.stale ? { stale: true as const } : {}), ...(staleInfo ? { staleInfo } : {}) } : undefined;
 }
 
+/** The part of a stale usage row a page may show: its cause (one of the three words), when it was read (an ISO time) and what the read said (bounded text, and a reference into the panel's own words). */
+function staleInfoOf(p: { staleCause?: unknown; cachedAt?: unknown; hint?: unknown; hintI18n?: unknown }): AccountUsageStale | undefined {
+  const cause = p.staleCause;
+  if (cause !== "expired" && cause !== "transient" && cause !== "error") return undefined;
+  if (typeof p.cachedAt !== "string" || !Number.isFinite(Date.parse(p.cachedAt))) return undefined;
+  const ref = p.hintI18n as { key?: unknown; args?: unknown } | null | undefined;
+  const args = ref && Array.isArray(ref.args) ? ref.args : [];
+  const refOk = !!ref && typeof ref.key === "string" && /^usage\.(?:hint|error)\.[a-z0-9_]{1,48}$/.test(ref.key) && args.length <= 3 && args.every(a => typeof a === "string" && a.length <= 64);
+  return {
+    cause, cachedAt: new Date(p.cachedAt).toISOString(),
+    ...(typeof p.hint === "string" && p.hint.trim() ? { hint: p.hint.trim().slice(0, 240) } : {}),
+    ...(refOk ? { hintI18n: { key: ref!.key as string, ...(args.length ? { args: args as string[] } : {}) } } : {}),
+  };
+}
