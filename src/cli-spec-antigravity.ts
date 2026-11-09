@@ -19,6 +19,8 @@ export const ANTIGRAVITY_SPEC = {
     // sign-in in `<folder>/antigravity-oauth-token`. Its keyring is shared by every folder (the folder is ignored there), so each launch also carries `pin`: `SSH_CONNECTION` makes agy 1.5.3 log
     // "Using file-based token storage because SSH session detected" and keep the sign-in in the file (checked on Linux and on Windows; a sign-in first proves it, see structured-signin.ts). A Move starts
     // a new conversation: agy keeps them in the same folder as the sign-in.
+    // Side effect to know: there is no agy-only switch for this (agy 1.5.3's strings on Linux and Windows hold no AGY_*/flag for the token store: AGY_ACCOUNT, AGY_ADC_AUTH, AGY_BROWSER_WS_URL, AGY_CLI_*, AGY_LLM_GATEWAY_*,
+    // AGY_PROXY_STRICT_SSL … none of them), so `pin` is a variable that means "an SSH session" to every program the agent starts: an agent on a named account sees SSH_CONNECTION in its shell, tools and MCP servers.
     namedAccounts: yes({ home: "launch-argument", arg: "--app_data_dir", store: "antigravity-oauth-token", pin: { SSH_CONNECTION: "127.0.0.1 0 127.0.0.1 0" }, carry: "handover" }),
     // agy has no logout command (the TUI's `/logout` is interactive only): AgEnD removes the account's token file and then asks `agy models`, so a sign-out that did not take effect (a sign-in kept in the system
     // keyring) is reported as that. The default sign-in is `~/.gemini/antigravity-cli/antigravity-oauth-token`; a named account's is the same file in its own folder.
