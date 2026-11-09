@@ -2,7 +2,7 @@
  * AGEND-113 follow-up (Settings → Accounts, Antigravity on this host):
  *  1. the account: the masked `id_token_email` of agy's token file, read locally, shown only for a sign-in the host already shows as signed in; the token itself never leaves the reader;
  *  2. the usage after a dashboard sign-in: read once more NOW through the panel's own forced read, so `FORCE_FLOOR_MS`, a Retry-After window and the one-fetch-at-a-time rule all still hold;
- *  3. the two quota pools (Gemini, Claude & others): each window shows the most used pool and says which one it is.
+ *  3. the quota pools (Gemini, Claude & others, Gemini 4 Argon): the row shows EVERY pool and EVERY window the account reports, none picked over another.
  * Fixtures only (example.com); no network, no real credential.
  */
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseAntigravityToken, parseClaudeAuthStatus } from "../src/claude-auth-status.js";
 import { readAntigravityIdentity } from "../src/antigravity-identity.js";
 import { authIdentitySupported, checkAuthIdentity } from "../src/login-flows.js";
-import { buildAccountsView, shortUsage, weeklyUsage } from "../src/accounts-view.js";
+import { accountUsage, buildAccountsView } from "../src/accounts-view.js";
 import { clearUsageSignInRefreshForTests, getUsageSnapshot, refreshUsageAfterSignIn, setUsageFetcherForTests } from "../src/usage/usage-api.js";
 import { FleetManager } from "../src/fleet-manager.js";
 
@@ -200,34 +200,34 @@ const AGY = { metrics: [
   metric("Claude & others (session)", "Claude & others", 0, 5), metric("Claude & others (weekly)", "Claude & others", 38.58, 168),
   metric("Gemini 4 Argon", "Gemini 4 Argon", 0.3, null),
 ] };
-describe("Antigravity's two quota pools on its account row", () => {
-  it("each window shows the most used pool and says which one: the week is Claude & others at 39%, not Gemini's 13%", () => {
-    expect(weeklyUsage(AGY)).toEqual({ percent: 39, windowMs: 168 * 3_600_000, resetsAt: "2026-11-11T01:56:41Z", pool: { label: "Claude & others", labelI18n: { key: "usage.metric.agy_claude_others" } } });
-    expect(shortUsage(AGY)).toMatchObject({ percent: 0, windowMs: 5 * 3_600_000, pool: { label: "Gemini", labelI18n: { key: "usage.metric.named", args: ["Gemini"] } } });   // 0.26% beats 0%
+describe("Antigravity's quota pools on its account row: every pool, every window", () => {
+  it("the real shape: Gemini's 5h AND week, Claude & others' 5h AND week, and Argon's one number — the row used to show Gemini's 5h and Claude & others' week only", () => {
+    const groups = accountUsage("antigravity", AGY)!.groups;
+    expect(groups.map((g) => g.pool?.label)).toEqual(["Gemini", "Claude & others", "Gemini 4 Argon"]);
+    expect(groups.map((g) => g.windows.map((w) => [w.kind, w.percent]))).toEqual([[["session", 0], ["weekly", 13]], [["session", 0], ["weekly", 39]], [["unwindowed", 0]]]);
+    expect(groups[0]!.windows[0]).toMatchObject({ windowMs: 5 * 3_600_000, resetsAt: "2026-11-11T01:56:41Z" });
+    expect(groups[2]!.windows[0]).not.toHaveProperty("windowMs");
   });
-  it("follows the numbers: when Gemini is the more used, it is Gemini", () => {
-    const flip = { metrics: AGY.metrics.map(m => (m.label === "Gemini (weekly)" ? { ...m, used: 71 } : m)) };
-    expect(weeklyUsage(flip)).toMatchObject({ percent: 71, pool: { label: "Gemini" } });
+  it("follows the numbers and not their size: a pool that is the less used is still there, and so is its week", () => {
+    const flip = { metrics: AGY.metrics.map((m) => (m.label === "Gemini (weekly)" ? { ...m, used: 71 } : m)) };
+    expect(accountUsage("antigravity", flip)!.groups.map((g) => g.windows.map((w) => w.percent))).toEqual([[0, 71], [0, 39], [0]]);
   });
-  it("a tie keeps the first pool (the row does not flicker between equal pools)", () => {
+  it("a pool is a group in the order the payload (and so the full card) lists it, whatever its numbers", () => {
     const tie = { metrics: [metric("A (weekly)", "A", 20, 168), metric("B (weekly)", "B", 20, 168)] };
-    expect(weeklyUsage(tie)?.pool?.label).toBe("A");
-    expect(weeklyUsage({ metrics: [...tie.metrics].reverse() })?.pool?.label).toBe("B");
+    expect(accountUsage("antigravity", tie)!.groups.map((g) => g.pool?.label)).toEqual(["A", "B"]);
+    expect(accountUsage("antigravity", { metrics: [...tie.metrics].reverse() })!.groups.map((g) => g.pool?.label)).toEqual(["B", "A"]);
   });
-  it("within a pool the window is chosen as before (closest to a week, shortest under two days); a window that has reset is not the short one; a model quota is never one", () => {
-    const m = { metrics: [metric("p-5h", "P", 10, 5), metric("p-1h", "P", 50, 1), metric("p-w", "P", 5, 168), metric("p-30d", "P", 90, 720), metric("q-w", "Q", 4, 168), metric("q-5h", "Q", 99, 5, { resetPassed: true }), metric("q-model", "Q", 99, 168, { scope: "model" })] };
-    expect(weeklyUsage(m)).toMatchObject({ percent: 5, pool: { label: "P" } });
-    expect(shortUsage(m)).toMatchObject({ percent: 50, windowMs: 3_600_000, pool: { label: "P" } });
+  it("a model quota is never a window of a pool, and a pool whose 5h window has reset keeps its week", () => {
+    const m = { metrics: [metric("p-5h", "P", 10, 5), metric("p-w", "P", 5, 168), metric("q-5h", "Q", 99, 5, { resetPassed: true }), metric("q-w", "Q", 4, 168), metric("q-model", "Q", 99, 168, { scope: "model" })] };
+    expect(accountUsage("antigravity", m)!.groups.map((g) => g.windows.map((w) => [w.percent, w.resetPassed === true]))).toEqual([[[10, false], [5, false]], [[99, true], [4, false]]]);
   });
-  it("a provider with one pool, or none, reads exactly as before and carries no pool (Claude, Codex)", () => {
+  it("a provider with one set of limits carries no pool (Claude, Codex)", () => {
     const claude = { metrics: [metric("Session", null, 11, 5), metric("Weekly", null, 27, 168)] };
-    expect(weeklyUsage(claude)).toEqual({ percent: 27, windowMs: 168 * 3_600_000, resetsAt: "2026-11-11T01:56:41Z" }); expect(shortUsage(claude)).not.toHaveProperty("pool");
-    const single = { metrics: [metric("Gemini (weekly)", "Gemini", 13, 168)] };
-    expect(weeklyUsage(single)).not.toHaveProperty("pool");
-    expect(weeklyUsage({ metrics: [] })).toBeUndefined(); expect(shortUsage(undefined)).toBeUndefined();
+    expect(accountUsage("claude-code", claude)!.groups).toEqual([{ windows: [{ kind: "session", percent: 11, windowMs: 5 * 3_600_000, resetsAt: "2026-11-11T01:56:41Z" }, { kind: "weekly", percent: 27, windowMs: 168 * 3_600_000, resetsAt: "2026-11-11T01:56:41Z" }] }]);
+    expect(accountUsage("claude-code", { metrics: [] })).toBeUndefined(); expect(accountUsage("antigravity", undefined)).toBeUndefined();
   });
   it("passes on only a bounded pool: a short label and the panel's own `usage.metric.*` reference with up to three short string arguments; anything else is dropped", () => {
-    const pooled = (pool: unknown) => weeklyUsage({ metrics: [{ ...metric("a", null, 50, 168), pool }, metric("b (weekly)", "B", 10, 168)] })?.pool;
+    const pooled = (pool: unknown) => accountUsage("antigravity", { metrics: [{ ...metric("a", null, 50, 168), pool }, metric("b (weekly)", "B", 10, 168)] })!.groups[0]!.pool;
     expect(pooled({ label: "X", labelI18n: { key: "usage.metric.named", args: ["X"] } })).toEqual({ label: "X", labelI18n: { key: "usage.metric.named", args: ["X"] } });
     expect(pooled({ label: "X", labelI18n: { key: "usage.hint.login_agy" } })).toEqual({ label: "X" });                          // not a metric word
     expect(pooled({ label: "X", labelI18n: { key: "usage.metric.named", args: [5] } })).toEqual({ label: "X" });
@@ -238,7 +238,9 @@ describe("Antigravity's two quota pools on its account row", () => {
   });
   it("the row carries it (the host's Antigravity default row), beside the account", () => {
     const view = buildAccountsView({ targets: [{ backend: "antigravity", state: "usable", signIn: true, identity: { maskedEmail: "ad***@example.com" } }], diskProfiles: new Map(), agents: [], classic: [], fleetDefaults: new Map(),
-      usage: new Map([["antigravity\0", weeklyUsage(AGY)!]]), shortUsage: new Map([["antigravity\0", shortUsage(AGY)!]]) });
-    expect(view.clis.find(c => c.backend === "antigravity")!.rows[0]).toMatchObject({ identity: { maskedEmail: "ad***@example.com" }, usage: { percent: 39, pool: { label: "Claude & others" } }, shortUsage: { pool: { label: "Gemini" } } });
+      usage: new Map([["antigravity\0", accountUsage("antigravity", AGY)!]]) });
+    const row = view.clis.find((c) => c.backend === "antigravity")!.rows[0]!;
+    expect(row).toMatchObject({ identity: { maskedEmail: "ad***@example.com" } });
+    expect(row.usageGroups!.map((g) => g.pool?.label)).toEqual(["Gemini", "Claude & others", "Gemini 4 Argon"]);
   });
 });

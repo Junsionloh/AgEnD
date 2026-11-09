@@ -2,8 +2,8 @@
  * #3212 PR 1: Settings → Agents → **Accounts**, one card per CLI. Each card lists the CLI's default sign-in and its named
  * credential profiles — the ones agents use AND the ones only on disk (a profile added but not used yet) — with its
  * state, which account it is (a masked e-mail and a plan, #3190 N1–N5: Claude Code only, from the host's own
- * `claude auth status`), who uses it (agents, ClassicBot channels, the fleet default) and its weekly usage where the
- * usage panel has it.
+ * `claude auth status`), who uses it (agents, ClassicBot channels, the fleet default) and its limits (every pool and window it
+ * reports) where the usage panel has them.
  *
  * Every row carries a `scope`. PR 1 filled in only `{ kind: "host" }`; #3190 Part 3c adds a paired computer's rows as
  * `{ kind: "machine", … }` (Claude Code first), as rows, never by reshaping these. An older page ignores a scope it does not know.
@@ -15,6 +15,7 @@
 import { lstatSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { hostFacts, hostIds, hostIdsByRank, runtimeFacts, runtimeIds } from "./cli-registry.js";
+import type { UsageWindowKind } from "./cli-capability.js";
 import type { AccountIdentity } from "./claude-auth-status.js";
 import type { SignInTarget } from "./web-backend-login.js";
 
@@ -43,11 +44,19 @@ export const MACHINE_ACCOUNT_CLIS: ReadonlySet<string> = new Set(runtimeIds("acc
  */
 export const MACHINE_DEFAULT_LOGIN_CLIS: ReadonlySet<string> = new Set(runtimeIds("accountRows").filter(id => runtimeFacts(id, "accountRows")!.defaultRow === "sign-in"));
 /**
- * AGEND-113: the quota a window belongs to, when a provider has several (Antigravity: "Gemini" and "Claude & others", each with its own 5h and weekly limit). `labelI18n` is the usage panel's
- * own reference (its words are the panel's, in both languages); `label` is the fallback. Only the shape and bounds below are passed on: whatever else a vendor's text carries is dropped.
+ * AGEND-113: the quota pool a group of windows belongs to, when a provider has several (Antigravity: "Gemini", "Claude & others", "Gemini 4 Argon", each with limits of its own). `labelI18n` is the usage
+ * panel's own reference (its words are the panel's, in both languages); `label` is the fallback. Only the shape and bounds below are passed on: whatever else a vendor's text carries is dropped.
  */
 export interface AccountUsagePool { label: string; labelI18n?: { key: string; args?: string[] } }
-export interface AccountUsage { percent: number; resetsAt?: string; windowMs?: number; stale?: boolean; /** Present only when the provider has more than one pool: which one this window is. */ pool?: AccountUsagePool }
+/**
+ * One window of an account's usage as the usage panel reports it: its kind (cli-capability.ts `UsageWindowKind`: the 5h is `session`; `unwindowed` is one number with no window of its own), the
+ * percent used and, when the CLI says so, the window's length and when it resets. `resetPassed`: it has reset since the numbers were read, so its percent is the old window's and is not shown as current.
+ */
+export interface AccountUsageWindow { kind: UsageWindowKind; percent: number; windowMs?: number; resetsAt?: string; resetPassed?: true }
+/** The windows of one pool, in the usage panel's own order; a provider with one set of limits has one group and no `pool`. */
+export interface AccountUsageGroup { pool?: AccountUsagePool; windows: AccountUsageWindow[] }
+/** Everything an account reports about its limits: every pool and every window, none picked over another. `stale`: the last known numbers, the live read failed. */
+export interface AccountUsage { groups: AccountUsageGroup[]; stale?: true }
 export interface AccountRow {
   scope: AccountScope;
   backend: string;
@@ -61,10 +70,13 @@ export interface AccountRow {
   install?: string;
   update?: string;
   usedBy: { agents: string[]; classic: string[]; fleetDefault: boolean };
-  /** The week's usage (the window closest to a week; see `weeklyUsage`). */
-  usage?: AccountUsage;
-  /** #3212: the short window's usage (the "5h" one; see `shortUsage`), beside the week's. Absent when the CLI reports none. */
-  shortUsage?: AccountUsage;
+  /**
+   * Every pool and every window the account reports (see `accountUsage`), as the page draws them: it is the page's to lay out, not the server's to pick from. A page that predates this field
+   * ignores it (it used to be two fixed windows, `usage` and `shortUsage`, which hid every pool but one).
+   */
+  usageGroups?: AccountUsageGroup[];
+  /** The numbers are the last known ones (the live read failed). */
+  usageStale?: true;
   /** #3292: "Keep sign-in alive" (Claude Code and Codex host rows): the setting, its last run, the dates the sign-in's file says. */
   keepAlive?: AccountKeepAlive;
 }
@@ -109,10 +121,8 @@ export interface AccountsInput {
   classic: ReadonlyArray<{ key: string; backend: string; profile: string | null }>;
   /** The fleet default's profile per backend (defaults.backend_options.<backend>.credential_profile). */
   fleetDefaults: ReadonlyMap<string, string>;
-  /** Weekly (or longer) usage per row, by `backend\0profile` ("" for the default). */
+  /** Each row's usage, by `backend\0profile` ("" for the default). */
   usage?: ReadonlyMap<string, AccountUsage>;
-  /** #3212: the short window's usage per row, by the same `backend\0profile` key. */
-  shortUsage?: ReadonlyMap<string, AccountUsage>;
   /** #3190 Part 3c: paired computers' accounts, as rows under their own scope. Absent: no computer. */
   machines?: readonly MachineAccountsInput[];
   /**
@@ -185,15 +195,14 @@ export function buildAccountsView(input: AccountsInput): AccountsView {
       classic: sorted(classic.filter(c => c.profile === profile).map(c => c.key)),
       fleetDefault: fleetDefault === profile || (profile === null && fleetDefault === null),
     });
-    const usage = (profile: string | null) => input.usage?.get(key(backend, profile));
-    const shortOf = (profile: string | null) => input.shortUsage?.get(key(backend, profile));
+    const usageOf = (profile: string | null) => { const u = input.usage?.get(key(backend, profile)); return u ? { usageGroups: u.groups, ...(u.stale ? { usageStale: true as const } : {}) } : {}; };
     const keepAlive = (profile: string | null) => { const k = input.keepAlive?.get(key(backend, profile)); return k ? { keepAlive: k } : {}; };
     // A card that is only here for a paired computer (nothing on the host uses this CLI) shows no host rows.
     if (hostRelevant) rows.push({
       scope: { kind: "host" }, backend, profile: null, state: def?.state ?? "unknown", signIn: !!def?.signIn,
       ...(def?.identity ? { identity: def.identity } : {}), ...(def?.hostCommand ? { hostCommand: def.hostCommand } : {}),
       ...(def?.install ? { install: def.install } : {}), ...(def?.update ? { update: def.update } : {}),
-      usedBy: usedBy(null), ...(usage(null) ? { usage: usage(null) } : {}), ...(shortOf(null) ? { shortUsage: shortOf(null) } : {}), ...keepAlive(null),
+      usedBy: usedBy(null), ...usageOf(null), ...keepAlive(null),
     });
     if (hostRelevant && PROFILE_CLIS.has(backend)) {
       const names = new Set<string>();
@@ -209,7 +218,7 @@ export function buildAccountsView(input: AccountsInput): AccountsView {
         rows.push({
           scope: { kind: "host" }, backend, profile, state: src?.state ?? "not_signed_in", signIn: !!src?.signIn,
           ...(src?.identity ? { identity: src.identity } : {}), ...(src?.hostCommand ? { hostCommand: src.hostCommand } : {}),
-          usedBy: usedBy(profile), ...(usage(profile) ? { usage: usage(profile) } : {}), ...(shortOf(profile) ? { shortUsage: shortOf(profile) } : {}), ...keepAlive(profile),
+          usedBy: usedBy(profile), ...usageOf(profile), ...keepAlive(profile),
         });
       }
     }
@@ -235,7 +244,7 @@ export function profilesOnDisk(dataDir: string, backend: string): string[] {
   } catch { return []; }
 }
 
-const TWO_DAYS = 2 * 86_400_000;
+const TWO_DAYS = 2 * 86_400_000, TEN_DAYS = 10 * 86_400_000;
 /** The pool of a metric, in the bounded form a page may be sent: a short label, and the panel's own word reference (`usage.metric.*`, up to three short string arguments). Else none. */
 function poolOf(metric: Record<string, unknown>): AccountUsagePool | undefined {
   const pool = metric.pool;
@@ -247,69 +256,44 @@ function poolOf(metric: Record<string, unknown>): AccountUsagePool | undefined {
   const ok = ref && typeof ref.key === "string" && /^usage\.metric\.[a-z_]{1,48}$/.test(ref.key) && args.length <= 3 && args.every(a => typeof a === "string" && a.length <= 64);
   return { label: label.trim(), ...(ok ? { labelI18n: { key: ref!.key as string, ...(args.length ? { args: args as string[] } : {}) } } : {}) };
 }
-/**
- * One window per pool, then the pool whose window is the most used: the one that will run out first is the one worth showing. A provider with a single pool (or none) is read as it always was
- * and carries no pool; with several, the chosen window says which one it is. Ties keep the first, so the answer does not flicker between equal pools.
- */
-function pickWindow(provider: { metrics?: ReadonlyArray<Record<string, unknown>>; stale?: boolean }, accept: (m: Record<string, unknown>) => boolean,
-  better: (a: Record<string, unknown>, b: Record<string, unknown>) => boolean): AccountUsage | undefined {
-  const bests = new Map<string, Record<string, unknown>>();
-  for (const m of provider.metrics ?? []) {
-    if (!accept(m)) continue;
-    const key = poolOf(m)?.label ?? "";
-    const best = bests.get(key);
-    if (!best || better(m, best)) bests.set(key, m);
-  }
-  if (!bests.size) return undefined;
-  let chosen: Record<string, unknown> | undefined;
-  for (const m of bests.values()) if (!chosen || (m.used as number) > (chosen.used as number)) chosen = m;
-  // "Has several pools" is a fact about the provider, not about this window: a pool whose 5h window is missing or has reset is still a pool, and the one shown is named all the same.
-  const pools = new Set<string>();
-  for (const m of provider.metrics ?? []) if (m.scope !== "model" && m.type === "percent" && typeof m.windowMs === "number") { const label = poolOf(m)?.label; if (label !== undefined) pools.add(label); }
-  const pool = pools.size > 1 ? poolOf(chosen!) : undefined;
-  return { ...usageOf(chosen!, provider), ...(pool ? { pool } : {}) };
+/** A usage metric's window kind (cli-capability.ts `UsageWindowKind`): by its length when the CLI gives one, else by the period the CLI names; a number with neither is `unwindowed`. */
+export function usageWindowKind(m: Record<string, unknown>): UsageWindowKind {
+  const ms = m.windowMs;
+  if (typeof ms === "number" && Number.isFinite(ms) && ms > 0) return ms < TWO_DAYS ? "session" : ms <= TEN_DAYS ? "weekly" : "monthly";
+  const period = m.quotaPeriod;
+  return period === "monthly" ? "monthly" : period === "weekly" ? "weekly" : period === "hourly" || period === "session" || period === "daily" ? "session" : "unwindowed";
 }
-/**
- * A window's pool is shown only for a CLI whose spec says it has several (cli-registry.ts: `host.usage.pools === "several"`; Antigravity). The pick above names a pool whenever a payload's metrics
- * carry two; this is where the registry decides whether that is meant, so a vendor adding a `pool` to another CLI's payload shows nothing new until its spec says so.
- */
-export function usageWithPool(backend: string, usage: AccountUsage | undefined): AccountUsage | undefined {
-  if (!usage || !usage.pool || hostFacts(backend, "usage")?.pools === "several") return usage;
-  const { pool: _pool, ...rest } = usage;
-  return rest;
-}
-const usageOf = (m: Record<string, unknown>, provider: { stale?: boolean }): AccountUsage => {
-  const resetsAt = typeof m.resetsAt === "string" ? m.resetsAt : undefined;
-  return { percent: Math.max(0, Math.min(100, Math.round(m.used as number))), windowMs: m.windowMs as number, ...(resetsAt ? { resetsAt } : {}), ...(provider.stale ? { stale: true } : {}) };
-};
-
 /** A window whose reset time is already behind `now` — a reset, unlike an expiry (`resetKind: "expiry"`); an unreadable time is not one. */
 const resetElapsed = (m: Record<string, unknown>, now: number): boolean => typeof m.resetsAt === "string" && m.resetKind !== "expiry" && Date.parse(m.resetsAt) <= now;
 
 /**
- * The usage row's weekly metric: the percent metric whose window is closest to a week (at least two days). From a
- * usage payload's providers (ProviderUsage), by the provider id the usage panel gives a backend (and `:<profile>`).
- * A provider with several pools (Antigravity: Gemini, Claude & others) gives the pool whose weekly window is the most used, and says which one (`pool`): see `pickWindow`.
+ * An account's limits for its row: EVERY pool and EVERY window a usage payload (ProviderUsage) reports for it, in the order the usage panel's full card draws them (the payload's own order),
+ * grouped by pool. Nothing is picked: a row that showed one window per kind hid Gemini's week behind Claude's and the other way round, and a pool is counted on its own.
+ *  - The windows are the percent metrics with a number, never a per-model quota (`scope: "model"`) and never a count or an amount (the full card has those lines; a row draws meters).
+ *  - A pool is named only for a CLI whose spec says it has several (cli-registry.ts `host.usage.pools`); for any other the payload's pool tags are ignored, so a vendor adding one to another
+ *    CLI's payload changes nothing until its spec says so. A window that has no pool in such a payload sits in a group of its own with no name.
+ *  - A window that has reset since the read (marked `resetPassed`, or its reset time is behind `now`: a snapshot is served unchanged inside its TTL) is kept, flagged, with no number to trust: the pool
+ *    and the window are still there.
+ *  - `kind` is `usageWindowKind`: what cli-capability.ts calls the kinds of window, which `host.usage.windows` lists for the CLI. tests/cli-registry-usage-shape.test.ts holds real payloads to it.
+ * The percent is rounded and kept within 0–100. Undefined when the payload has no such window.
  */
-export function weeklyUsage(provider: { metrics?: ReadonlyArray<Record<string, unknown>>; stale?: boolean } | undefined): AccountUsage | undefined {
+export function accountUsage(backend: string, provider: { metrics?: ReadonlyArray<Record<string, unknown>>; stale?: boolean } | undefined, now: number = Date.now()): AccountUsage | undefined {
   if (!provider || !Array.isArray(provider.metrics)) return undefined;
-  const WEEK = 7 * 86_400_000;
-  return pickWindow(provider,
-    m => m.scope !== "model" && m.type === "percent" && typeof m.used === "number" && typeof m.windowMs === "number" && m.windowMs >= TWO_DAYS,
-    (a, b) => Math.abs((a.windowMs as number) - WEEK) < Math.abs((b.windowMs as number) - WEEK));
+  const several = hostFacts(backend, "usage")?.pools === "several";
+  const groups = new Map<string, AccountUsageGroup>();
+  for (const m of provider.metrics) {
+    if (!m || m.scope === "model" || m.type !== "percent" || typeof m.used !== "number" || !Number.isFinite(m.used)) continue;
+    const pool = several ? poolOf(m) : undefined;
+    const name = pool?.label ?? "";
+    let group = groups.get(name);
+    if (!group) { group = { ...(pool ? { pool } : {}), windows: [] }; groups.set(name, group); }
+    const resetsAt = typeof m.resetsAt === "string" ? m.resetsAt : undefined;
+    group.windows.push({
+      kind: usageWindowKind(m), percent: Math.max(0, Math.min(100, Math.round(m.used))),
+      ...(typeof m.windowMs === "number" && Number.isFinite(m.windowMs) && m.windowMs > 0 ? { windowMs: m.windowMs } : {}),
+      ...(resetsAt ? { resetsAt } : {}), ...(m.resetPassed === true || resetElapsed(m, now) ? { resetPassed: true as const } : {}),
+    });
+  }
+  return groups.size ? { groups: [...groups.values()], ...(provider.stale ? { stale: true as const } : {}) } : undefined;
 }
 
-/**
- * #3212: the usage row's short window ("5h"): the percent metric whose window is under two days — the shortest one when
- * there are several — as the usage panel's compact line picks it (`compactSlots`). Never a per-model quota, and never a
- * window that has reset since the read (its percent would be the old window's): one already marked `resetPassed`, and one whose
- * `resetsAt` is not ahead of `now`. The usage snapshot is served unchanged inside its TTL and while it is revalidated, so a
- * window read just before it reset must not be projected after it. An expiry (`resetKind: "expiry"`) is not a reset and a
- * time that cannot be read says nothing, as `ageMetric` (usage-api.ts) has it. Same shape as `weeklyUsage`, and for a provider with several pools the most used pool's, named.
- */
-export function shortUsage(provider: { metrics?: ReadonlyArray<Record<string, unknown>>; stale?: boolean } | undefined, now: number = Date.now()): AccountUsage | undefined {
-  if (!provider || !Array.isArray(provider.metrics)) return undefined;
-  return pickWindow(provider,
-    m => m.scope !== "model" && m.type === "percent" && typeof m.used === "number" && !m.resetPassed && !resetElapsed(m, now) && typeof m.windowMs === "number" && m.windowMs > 0 && m.windowMs < TWO_DAYS,
-    (a, b) => (a.windowMs as number) < (b.windowMs as number));
-}
