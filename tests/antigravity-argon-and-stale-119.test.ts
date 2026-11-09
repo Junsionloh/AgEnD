@@ -32,6 +32,18 @@ describe("Gemini 4 Argon: a pool of its own only when the data says it has a lim
     expect(labels(ultraSummary, ultraModels)).toEqual(["Gemini (session)", "Gemini (weekly)", "Claude & others (session)", "Claude & others (weekly)"]);
   });
 
+  it("the summary is a little fresher than the model list for the same pool (measured live: 0.8936 against 0.8911, one reset time): still the pool's quota, still no Argon line", () => {
+    const fresher = JSON.parse(JSON.stringify(ultraSummary));
+    for (const b of fresher.groups[0].buckets) if (b.bucketId === "gemini-5h") b.remainingFraction -= 0.0025;
+    expect(labels(fresher, ultraModels)).toEqual(["Gemini (session)", "Gemini (weekly)", "Claude & others (session)", "Claude & others (weekly)"]);
+  });
+
+  it("Argon models that differ from the other Gemini models of the same answer are a limit of their own, even when the summary is silent about them", () => {
+    const own = JSON.parse(JSON.stringify(ultraModels));
+    for (const [id, m] of Object.entries<any>(own.models)) if (/argon/i.test(id)) m.quotaInfo = { remainingFraction: 0.31, resetTime: "2026-11-09T07:00:00Z" };
+    expect(labels(ultraSummary, own).filter(l => l.includes("Argon"))).toEqual(["Gemini 4 Argon"]);
+  });
+
   it("Pro: the summary names an Argon group, so Argon's own weekly line stays (agy 1.4.3's real answer)", () => {
     expect(labels(proSummary, null)).toContain("Gemini 4 Argon (weekly)");
     // …and the models' own Argon quotas (synthetic, equal to Gemini's) are not a second Argon line beside the group.
