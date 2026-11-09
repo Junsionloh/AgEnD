@@ -410,7 +410,7 @@ function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, ope
       <${UsedBy} row=${row} label=${usedText(row)} openAgent=${openAgent} />
       ${machine ? html`<small class="s-account-usage is-none" title=${tx("machineNoUsageHint")}>${tx("machineNoUsage")}</small>` : null}
     </div>
-    ${usageGroups.length ? html`<${UsageBlock} groups=${usageGroups} stale=${row.usageStale === true} tagOf=${usageTag} label=${tx("usageLabel")} staleText=${tx("winStale")} />` : null}
+    ${usageGroups.length ? html`<${UsageBlock} groups=${usageGroups} stale=${row.usageStale === true} staleInfo=${row.usageStaleInfo} tagOf=${usageTag} label=${tx("usageLabel")} staleText=${tx("winStale")} />` : null}
     ${why ? html`<p class="note s-account-why">${why}</p>` : null}
     ${canInstall && !installRun ? html`<p class="note s-account-why">${hostInstallText("notInstalled")}</p>` : null}
     ${!machine && !row.profile && !readOnly ? html`<${VersionLine} row=${row} label=${cliLabel(row.backend)} blocked=${running} />` : null}

@@ -44,10 +44,21 @@ function UsageWindow({ w, tag }) {
 }
 
 /**
- * The usage block. `groups`: the server's `usageGroups` (each `{ pool?, windows: [{ kind, percent, windowMs?, resetsAt?, resetPassed? }] }`); `tagOf(window)`: the window's short name in the
- * page's language (the Accounts view's own words); `stale`/`staleText`: the numbers are the last known ones.
+ * AGEND-119: what a row of last-known numbers says about why they are: the usage panel's own words for the cause ("expired · cached at 14:05") and, for anything but a transient failure, what the read
+ * said ("Access token expired …"). `info` is the server's `usageStaleInfo` (`{ cause, cachedAt, hint?, hintI18n? }`); a row from an older server has none, and then there is only the page's own mark.
  */
-export function UsageBlock({ groups, stale, tagOf, label, staleText }) {
+export function staleParts(info) {
+  if (!info || !["expired", "transient", "error"].includes(info.cause) || !info.cachedAt) return { cause: "", detail: "" };
+  const cause = usageText("", { key: `usage.stale.${info.cause}`, args: [usageClock(info.cachedAt)] });
+  const detail = info.cause !== "transient" && (info.hint || info.hintI18n) ? usageText(info.hint || "", info.hintI18n) : "";
+  return { cause, detail };
+}
+
+/**
+ * The usage block. `groups`: the server's `usageGroups` (each `{ pool?, windows: [{ kind, percent, windowMs?, resetsAt?, resetPassed? }] }`); `tagOf(window)`: the window's short name in the
+ * page's language (the Accounts view's own words); `stale`/`staleText`: the numbers are the last known ones, `staleInfo` (AGEND-119): why, and when they were read.
+ */
+export function UsageBlock({ groups, stale, tagOf, label, staleText, staleInfo }) {
   const pooled = groups.length > 1 || groups.some((g) => g.pool);
   if (pooled) linkPoolCss();
   const cls = `s-account-usage${stale ? " is-stale" : ""}${pooled ? " is-pooled" : ""}`;
@@ -59,6 +70,7 @@ export function UsageBlock({ groups, stale, tagOf, label, staleText }) {
         ${g.windows.map((w, j) => html`<${UsageWindow} key=${j} w=${w} tag=${tagOf(w)} />`)}
       </div>`;
     }) : groups[0].windows.map((w, j) => html`<${UsageWindow} key=${j} w=${w} tag=${tagOf(w)} />`)}
-    ${stale ? html`<small class="s-usage-stale">${staleText}</small>` : null}
+    ${stale ? (() => { const why = staleParts(staleInfo);
+      return html`<small class="s-usage-stale" title=${why.detail || undefined}>${staleText}${why.cause ? html` <span class="s-usage-stale-cause">${why.cause}</span>` : null}${why.detail ? html`<span class="s-usage-stale-detail">${why.detail}</span>` : null}</small>`; })() : null}
   </div>`;
 }

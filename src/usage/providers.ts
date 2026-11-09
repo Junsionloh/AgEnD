@@ -733,7 +733,19 @@ export function agyModelBuckets(body: AgyModels): AgyBucket[] {
 export function agyUsageBuckets(summary: AgyQuotaSummary, models: AgyModels | null): AgyBucket[] {
   const fromSummary = agyQuotaBuckets(summary);
   const named = new Set(fromSummary.map(b => { const id = agyBucketId(b); return id ? agyPool(b, id) : null; }));
-  return [...fromSummary, ...(models ? agyModelBuckets(models).filter(b => !named.has(agyPool(b, b.bucketId!))) : [])];
+  const fromModels = models ? agyModelBuckets(models).filter(b => !named.has(agyPool(b, b.bucketId!))) : [];
+  // AGEND-119: Gemini 4 Argon has a limit of its own only on some plans. The summary says so (a group of its own, as on a Pro plan); the models' quotas alone do not: on an Ultra
+  // plan (checked live 2026-11-09) the summary has no Argon group and every Argon model's quota is exactly the Gemini five-hour pool's (same fraction, same reset), so a pool made
+  // of them would be that pool shown twice under another name. An Argon model whose quota repeats another pool's bucket is that pool's, not a limit of Argon's own; one whose quota
+  // differs from every other bucket's is a limit of its own and stays. What is read is the data's, never a plan's name.
+  const others = [...fromSummary, ...fromModels.filter(b => !agyArgonPool(b.group) && !agyArgonPool(b.bucketId))];
+  return [...fromSummary, ...fromModels.filter(b => !(agyArgonPool(b.group) ?? agyArgonPool(b.bucketId)) || !others.some(o => sameQuota(o, b)))];
+}
+
+/** Two buckets that count against one limit: the same remaining fraction and the same reset (a rolling window of its own never ties to the second with another's). */
+function sameQuota(a: AgyBucket, b: AgyBucket): boolean {
+  return typeof a.remainingFraction === "number" && typeof b.remainingFraction === "number" && Math.abs(a.remainingFraction - b.remainingFraction) < 1e-9
+    && !!a.resetTime && a.resetTime === b.resetTime;
 }
 
 function agyBucketId(b: AgyBucket): string | undefined {
