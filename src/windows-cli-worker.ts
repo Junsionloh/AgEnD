@@ -15,7 +15,8 @@ import { runtimeFacts, type RuntimeDefaultLoginCli } from "./cli-registry.js";
 import { nativeUpdateGuard, boundNativeModelOptions, buildNativeInvocation, isNativeProviderId, nativeMcpServerConfig, nativeProvider, NATIVE_PROVIDER_IDS, parseNativeAuthResult, parseNativeModels, validateNativeMcpConnection, validateNativeModel, type NativeMcpLaunch, type NativeModelOption, type NativeProviderDescriptor, type NativeProviderId } from "./windows-cli-providers.js";
 import { claudeDocumentedModels } from "./model-catalog-defaults.js";
 import { identityOf, parseClaudeAuthStatus, type AccountIdentity } from "./claude-auth-status.js";
-import { credentialProfileLaunch, isCredentialProfileCli, type CredentialProfileCli } from "./runtime-credential-profiles.js";
+import { credentialProfileLaunch, credentialProfileStore, isCredentialProfileCli, type CredentialProfileCli } from "./runtime-credential-profiles.js";
+import { readAntigravityIdentityIn } from "./antigravity-identity.js";
 import { MANAGED_CLI_ROOT_ENV, managedCliExecutable } from "./runtime-cli-install.js";
 
 const exec = promisify(execFile);
@@ -316,7 +317,9 @@ export interface CredentialProfileAnswer { loggedIn: boolean | null; /** Masked 
 export async function probeCredentialProfileStatus(cli: CredentialProfileCli, directory: string, find: (id: NativeCliId) => Promise<NativeCliExecutable | null> = findCli,
   run: (executable: NativeCliExecutable, args: string[], env: NodeJS.ProcessEnv) => Promise<NativeCommandOutput> = (entry, args, env) => output(entry.command, [...entry.args, ...args], 15_000, env),
   /** The requester's live check (an install's consent and connection): asked before the CLI is looked for and again before its status program is started. */
-  authorized?: () => boolean): Promise<CredentialProfileAnswer> {
+  authorized?: () => boolean,
+  /** The account's masked e-mail is read from its folder when it is signed in (a NAMED account of a CLI that keeps its sign-in in a file). The isolation probe's scratch folder never is. */
+  withIdentity = true): Promise<CredentialProfileAnswer> {
   const provider = nativeProvider(cli);
   if (!isCredentialProfileCli(cli)) return { loggedIn: null };
   // A CLI that has no status command and answers with its model listing (Antigravity, `runtime.authStatus.source`): the listing's exit code and words, read by the shared parser, under the account's own launch.
@@ -332,7 +335,10 @@ export async function probeCredentialProfileStatus(cli: CredentialProfileCli, di
     const args = [...launch.args, ...nativeUpdateGuard(cli), ...listing];
     let answer = await run(executable, args, launch.env);
     if (answer.ok && !answer.text.trim()) answer = await run(executable, args, launch.env);
-    return { loggedIn: parseNativeAuthResult(cli, answer.ok, answer.text) };
+    const loggedIn = parseNativeAuthResult(cli, answer.ok, answer.text);
+    // AGEND-124: the one field of the account's own token file that names the account, masked here (agy has no command that does): only for a folder the CLI just said is signed in, only when asked.
+    const identity = withIdentity && loggedIn === true && credentialProfileStore(cli) !== undefined ? readAntigravityIdentityIn(directory) : undefined;
+    return { loggedIn, ...(identity ? { identity } : {}) };
   }
   const result = await run(executable, [...launch.args, ...nativeUpdateGuard(cli), ...provider.authProbe!], launch.env);
   const status = parseClaudeAuthStatus(result.text), identity = status.loggedIn === true && result.ok ? identityOf(status) : undefined;
@@ -351,8 +357,9 @@ export async function probeCredentialIsolation(cli: CredentialProfileCli, scratc
   try {
     mkdirSync(scratchRoot, { recursive: true, mode: 0o700 });
     scratch = mkdtempSync(join(scratchRoot, ".isolation-"));
-    let answer = (await probeCredentialProfileStatus(cli, scratch, find, run, authorized)).loggedIn;
-    if (answer === null) answer = (await probeCredentialProfileStatus(cli, scratch, find, run, authorized)).loggedIn;
+    // The scratch folder is not an account: it never has its identity read (`withIdentity` false).
+    let answer = (await probeCredentialProfileStatus(cli, scratch, find, run, authorized, false)).loggedIn;
+    if (answer === null) answer = (await probeCredentialProfileStatus(cli, scratch, find, run, authorized, false)).loggedIn;
     return answer === false;
   } catch { return false; }
   finally {

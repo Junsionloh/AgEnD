@@ -13,7 +13,7 @@ import { existsSync, lstatSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { CliInstallError } from "./runtime-cli-install.js";
 import { parseAccountIdentity, type AccountIdentity } from "./claude-auth-status.js";
-import { CredentialProfileRefusal, PROFILE_CLI_NAMES, credentialProfileCaseClash, credentialProfileDirectory, credentialProfileLaunch, isCredentialProfileCli, rememberCredentialStatus, withCredentialProfile,
+import { CredentialProfileRefusal, PROFILE_CLI_NAMES, credentialProfileCaseClash, credentialProfileDirectory, credentialProfileLaunch, credentialProfileStore, isCredentialProfileCli, rememberCredentialStatus, withCredentialProfile,
   type CredentialProfileCli } from "./runtime-credential-profiles.js";
 import { ProfileOwnershipRefusal, createRuntimeProfile, deleteProfileBackups, removeOwnedProfile, requireOwnedProfile, withIsolatedOwnedProfile, type OwnedProfileOptions } from "./runtime-profile-ownership.js";
 import { AuditLog, RemoteSetupRefusal, readRemoteSwitches, requireRemoteSwitch, validAuditActor, type AuditAction, type AuditEntry, type AuditReason, type RemoteSwitchName } from "./runtime-remote-setup.js";
@@ -119,7 +119,7 @@ function reasonOf(error: unknown): AuditReason {
 const NEEDS_ACCOUNTS: readonly RuntimeRemoteOperation[] = ["signin.start", "signin.capture", "signin.status", "signin.write", "accounts.check", "accounts.signout", "accounts.remove"];
 
 /** `profile` is absent for Antigravity's sign-in: the computer's own default login (there is no profile folder for it). */
-interface Meta { id: string; actor: string; cli: SignInCli; profile?: string; signedIn?: boolean }
+interface Meta { id: string; actor: string; cli: SignInCli; profile?: string; signedIn?: boolean; /** The command ended well but the account's folder holds no sign-in (AGEND-124). */ notIsolated?: true }
 /** The key of "a CLI's own login" in the pace table (no profile name can hold a NUL). */
 const DEFAULT_KEY = "\0default-login:";
 /** Deletes one plain file of an account's folder, by the registry's exact name: not a link, not a folder, and nothing else. A file that is not there is already signed out. */
@@ -362,7 +362,7 @@ export class RemoteAccounts {
     if (this.slot.current() && !readRemoteSwitches(this.deps.pairingDirectory, this.now()).accounts.on) await this.endSignIn(this.meta!.id, "switch_off").catch(() => {});
     switch (operation) {
       case "signin.capture": { const input = this.parse(operation, payload); this.needSwitch(); return { screen: this.slot.find(input.sessionId).capture() }; }
-      case "signin.status": { const input = this.parse(operation, payload); this.needSwitch(); return this.slot.find(input.sessionId).status(); }
+      case "signin.status": { const input = this.parse(operation, payload); this.needSwitch(); return this.signInStatus(input.sessionId); }
       case "signin.write": return this.writeCode(this.parse(operation, payload), ctx);
       case "signin.start": return this.startSignIn(this.parse(operation, payload), ctx);
       case "accounts.check": return this.check(this.parse(operation, payload), ctx);
@@ -482,6 +482,21 @@ export class RemoteAccounts {
       run: async () => { this.gate(ctx, "accounts"); await session.write(input.input); return { accepted: true as const }; },
     });
   }
+  /**
+   * `signin.status`, and (AGEND-124) the proof after the fact for a NAMED account of a CLI told its account by an argument: when its command has ended with exit 0, the account's own folder must hold the CLI's
+   * sign-in file as a plain file. The pre-flight probe only shows the pin worked for an EMPTY folder while the Windows user was signed in; a CLI that stopped honouring the pin would have kept this login in the
+   * Credential Manager, as the Windows user's OWN login. Then the answer carries `isolated: false`, the dashboard ends the sign-in as `not_isolated`, and the record says so.
+   */
+  private signInStatus(sessionId: string): { alive: boolean; exitCode?: number; isolated?: false } {
+    const session = this.slot.find(sessionId), status = session.status(), meta = this.meta;
+    if (meta && meta.id === sessionId && meta.profile !== undefined && !status.alive && status.exitCode === 0 && isCredentialProfileCli(meta.cli) && RemoteAccounts.byArgument(meta.cli)) {
+      const store = credentialProfileStore(meta.cli);
+      let kept = false;
+      try { const stat = lstatSync(join(credentialProfileDirectory(this.deps.credentialRoot, meta.cli, meta.profile), store!)); kept = stat.isFile() && !stat.isSymbolicLink(); } catch { kept = false; }
+      if (!kept) { meta.notIsolated = true; meta.signedIn = false; return { ...status, isolated: false }; }
+    }
+    return status;
+  }
   /** While a sign-in is open, look at its switch every few seconds: a switch that was turned off, or that ran out, ends it and says so in the record. */
   private watchSwitch(id: string): void {
     this.stopWatching();
@@ -511,7 +526,7 @@ export class RemoteAccounts {
     if (meta && meta.id === sessionId) {
       this.meta = null;
       this.record({ actor: meta.actor, action: "signin", cli: meta.cli, profile: meta.profile, outcome: how === "closed" && meta.signedIn === true ? "ok" : "failed",
-        ...(how === "closed" ? (meta.signedIn === true ? {} : { reason: "failed" as const }) : { reason: how === "timeout" ? "timeout" as const : "switch_off" as const }) }, false);
+        ...(how === "closed" ? (meta.signedIn === true ? {} : { reason: meta.notIsolated ? "not_isolated" as const : "failed" as const }) : { reason: how === "timeout" ? "timeout" as const : "switch_off" as const }) }, false);
     }
     return { closed: true };
   }

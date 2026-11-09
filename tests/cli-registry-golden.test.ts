@@ -182,7 +182,7 @@ describe("the Windows Runtime's lists, as they were", () => {
     expect(runtimeDefaultLoginIds()).toEqual(["antigravity"]);
     expect(runtimeSignInCapabilities()).toEqual(["signin-antigravity"]);
     expect(runtimeFacts("antigravity", "authStatus")).toMatchObject({ argv: ["models"], source: "model-listing" });
-    expect(runtimeIds("identity")).toEqual(["claude-code"]);
+    expect(runtimeIds("identity")).toEqual(["claude-code", "antigravity"]);   // AGEND-124: a named Antigravity account names its account (masked)
     expect(runtimeIds("usage")).toEqual([]);
   });
 });

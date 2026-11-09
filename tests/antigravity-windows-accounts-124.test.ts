@@ -7,13 +7,15 @@
  *  - the local `accounts` switch, one-at-a-time, the pace and the audit record apply, and only the Runtime's own accounts can be touched.
  */
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
-import { join, win32 } from "node:path";
+import { dirname, join, win32 } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AUDIT_FILE, setRemoteSwitch } from "../src/runtime-remote-setup.js";
 import { ISOLATION_SCRATCH, PROFILE_OP_MIN_GAP_MS } from "../src/runtime-remote-accounts.js";
 import { CREDENTIAL_PROFILE_CLIS, credentialProfileLaunch, credentialProfileReport, credentialProfileStore, parseCredentialProfileReport, withCredentialProfile } from "../src/runtime-credential-profiles.js";
 import { buildAccountsView } from "../src/accounts-view.js";
 import { probeCredentialIsolation, probeCredentialProfileStatus } from "../src/windows-cli-worker.js";
+import { RuntimeClient } from "../src/runtime-client.js";
+import { paneLedgerFiles } from "../src/runtime-pane-store.js";
 import { AGY_CODE, AGY_SCREEN, ACTOR, ID, cleanScratch, runtimeRig, scratch, waitFor, type Rig } from "./helpers/machine-runtime.js";
 
 afterEach(() => cleanScratch());
@@ -119,6 +121,7 @@ describe("a named Antigravity account's sign-in on the computer", () => {
     const login = f.signIns.snapshot(f.owner, f.agyNamed("work")).login!;
     await f.signIns.input(f.owner, f.agyNamed("work"), login.id, login.revision, { kind: "code", value: AGY_CODE });
     expect(f.children[0]!.written).toBe(`${AGY_CODE}\n`);
+    writeFileSync(join(agyDir(f, "work"), TOKEN), "FIXTURE-NOT-A-TOKEN");      // agy kept the login in the account's own file
     f.children[0]!.end(0);
     await waitFor(() => expect(f.signIns.snapshot(f.owner, f.agyNamed("work")).login?.phase).toBe("done"));
     expect(f.sent.map(s => s.operation)).toContain("accounts.check");
@@ -330,5 +333,119 @@ describe("the server's side of Sign out and Remove for a computer's Antigravity"
     expect(await f.accounts.add("antigravity", "fresh", ID, "t")).toEqual({ ok: true });
     expect(f.sent.every(s => s.operation === "accounts.switches")).toBe(true);          // only the owner's switch was read
     await old.stop(); await f.stop();
+  });
+});
+
+describe("a named account's e-mail, read from its own token file on the computer (AGEND-124 stage 2A)", () => {
+  const exe = { path: "agy.exe", command: "agy.exe", args: [] as string[] };
+  const listing = async () => ({ ok: true, text: "gemini-3-pro  Gemini 3 Pro\n" });
+  const signedOut = async () => ({ ok: false, text: "Please sign in to view available models" });
+  const SECRETS = ["ACCESS-FIXTURE-aaa", "REFRESH-FIXTURE-bbb", "ID-TOKEN-FIXTURE-ccc"];
+  const tokenFile = (extra: Record<string, unknown> = {}) => JSON.stringify({ token: { access_token: SECRETS[0], refresh_token: SECRETS[1], expiry: "2030-01-01T00:00:00Z" }, id_token: SECRETS[2], id_token_email: "juan@example.com", ...extra });
+  const folder = (content?: string | ((dir: string) => void)) => { const dir = join(scratch(), "work"); mkdirSync(dir, { recursive: true }); if (typeof content === "string") writeFileSync(join(dir, TOKEN), content); else content?.(dir); return dir; };
+  it("is the masked address of `id_token_email` and nothing else of the file: no token, no other field, not the unmasked address", async () => {
+    const answer = await probeCredentialProfileStatus("antigravity", folder(tokenFile({ name: "Juan Fixture", picture: "https://example.com/p.png", id_token_name: "Juan" })), async () => exe, listing);
+    expect(answer).toEqual({ loggedIn: true, identity: { maskedEmail: "ju***@example.com" } });
+    const text = JSON.stringify(answer);
+    for (const secret of [...SECRETS, "juan@example.com", "Juan", "picture"]) expect(text).not.toContain(secret);
+  });
+  it("is nothing for a file with no such field, a field that is not an address, a file that is not JSON, one too big, and a link", async () => {
+    const none = async (dir: string) => (await probeCredentialProfileStatus("antigravity", dir, async () => exe, listing));
+    expect(await none(folder(JSON.stringify({ token: { access_token: SECRETS[0] } })))).toEqual({ loggedIn: true });
+    expect(await none(folder(JSON.stringify({ id_token_email: "not-an-address" })))).toEqual({ loggedIn: true });
+    expect(await none(folder(JSON.stringify({ id_token_email: 5 })))).toEqual({ loggedIn: true });
+    expect(await none(folder("{not json"))).toEqual({ loggedIn: true });
+    expect(await none(folder(tokenFile({ pad: "x".repeat(70 * 1024) })))).toEqual({ loggedIn: true });
+    const linked = folder(dir => { const outside = join(scratch(), "outside.json"); writeFileSync(outside, tokenFile()); try { symlinkSync(outside, join(dir, TOKEN)); } catch { writeFileSync(join(dir, TOKEN), "x"); } });
+    expect(await none(linked)).toEqual({ loggedIn: true });
+  });
+  it("is read only for a folder the CLI says is signed in, and never for the isolation probe's scratch folder", async () => {
+    const dir = folder(tokenFile());
+    expect(await probeCredentialProfileStatus("antigravity", dir, async () => exe, signedOut)).toEqual({ loggedIn: false });
+    expect(await probeCredentialProfileStatus("antigravity", dir, async () => exe, listing, undefined, false)).toEqual({ loggedIn: true });   // withIdentity off
+    // The isolation probe passes that off: a scratch folder holding a token (a CLI that ignores the folder) is "signed in", not proof, and names nobody.
+    expect(await probeCredentialIsolation("antigravity", dirname(dir), async () => exe, listing)).toBe(false);
+  });
+  it("reaches the page: a check reports it masked, the cache keeps it, and the Accounts row shows it; the computer's own login names nobody", async () => {
+    const f = runtimeRig({ agy: { authenticated: true }, agyCreated: ["work"], status: (cli, dir) => probeCredentialProfileStatus(cli, dir, async () => exe, listing) });
+    writeFileSync(join(agyDir(f, "work"), TOKEN), tokenFile());
+    expect(await f.runtime.handle("accounts.check", { cli: "antigravity", profile: "work" })).toEqual({ loggedIn: true, identity: { maskedEmail: "ju***@example.com" } });
+    const cache = readFileSync(join(f.root, "status.json"), "utf8");
+    expect(cache).toContain("ju***@example.com"); for (const secret of [...SECRETS, "juan@example.com"]) expect(cache).not.toContain(secret);
+    const report = credentialProfileReport(f.root, undefined, () => true);
+    expect(report.byCli!.antigravity![0]).toMatchObject({ name: "work", identity: { maskedEmail: "ju***@example.com" } });
+    f.reportAgy(report.byCli!.antigravity!);
+    const rows = (await buildAccountsView({ targets: [], diskProfiles: new Map(), agents: [], classic: [], fleetDefaults: new Map(), machines: await f.accounts.list() })).clis.find(c => c.backend === "antigravity")!.rows;
+    expect(rows.map(r => [r.profile, (r.identity as { maskedEmail?: string } | undefined)?.maskedEmail ?? null])).toEqual([[null, null], ["work", "ju***@example.com"]]);
+    await f.stop();
+  });
+  it("a report row with an unmasked address is refused as a protocol error (the server never shows what the Runtime did not mask)", () => {
+    expect(() => parseCredentialProfileReport({ profiles: [], byCli: { antigravity: [{ name: "work", loggedIn: true, identity: { maskedEmail: "juan@example.com" } }] } })).toThrow(/Invalid credential profile report/);
+  });
+});
+
+describe("a named sign-in that ended well must have left its sign-in in the account's own folder (P2-1)", () => {
+  const finish = async (f: Rig, before?: (dir: string) => void) => {
+    await f.signIns.begin(f.owner, f.agyNamed("work"));
+    f.children[0]!.say(AGY_SCREEN);
+    await waitFor(() => expect(f.signIns.snapshot(f.owner, f.agyNamed("work")).login?.phase).toBe("code"));
+    const login = f.signIns.snapshot(f.owner, f.agyNamed("work")).login!;
+    await f.signIns.input(f.owner, f.agyNamed("work"), login.id, login.revision, { kind: "code", value: AGY_CODE });
+    before?.(agyDir(f, "work"));
+    f.children[0]!.end(0);
+  };
+  it("no file in the folder: the sign-in is `not_isolated` (even though the CLI's status says signed in, from a store every folder shares), and the record says so", async () => {
+    const { f } = proven(); f.answer({ loggedIn: true });
+    await finish(f);
+    await waitFor(() => expect(f.signIns.snapshot(f.owner, f.agyNamed("work")).login).toMatchObject({ phase: "failed", reason: "not_isolated" }));
+    expect(f.sent.filter(s => s.operation === "accounts.check")).toHaveLength(1);        // only the check that came before the command; none after it ended
+    await f.signIns.cancel(f.owner, f.agyNamed("work"));
+    expect(audit(f).filter(r => r.action === "signin" && r.outcome === "failed").at(-1)).toMatchObject({ cli: "antigravity", profile: "work", reason: "not_isolated" });
+    await f.stop();
+  });
+  it("a link or a folder where the file should be is no sign-in either", async () => {
+    for (const make of [(dir: string) => mkdirSync(join(dir, TOKEN)), (dir: string) => { const outside = join(scratch(), "o.json"); writeFileSync(outside, "x"); symlinkSync(outside, join(dir, TOKEN)); }]) {
+      const { f } = proven(); f.answer({ loggedIn: true });
+      try { await finish(f, make); } catch { await f.stop(); continue; }
+      await waitFor(() => expect(f.signIns.snapshot(f.owner, f.agyNamed("work")).login).toMatchObject({ phase: "failed", reason: "not_isolated" }));
+      await f.stop();
+    }
+  });
+  it("a plain file makes it succeed; a command that failed is not asked about the file at all; the computer's own login has no folder to ask", async () => {
+    const { f } = proven(); f.answer({ loggedIn: true });
+    await finish(f, dir => writeFileSync(join(dir, TOKEN), "FIXTURE-NOT-A-TOKEN"));
+    await waitFor(() => expect(f.signIns.snapshot(f.owner, f.agyNamed("work")).login?.phase).toBe("done"));
+    await f.stop();
+    const own = runtimeRig({ agy: true }); own.agyAnswer(false);
+    await own.signIns.begin(own.owner, own.agyTarget);
+    own.children[0]!.say(AGY_SCREEN);
+    await waitFor(() => expect(own.signIns.snapshot(own.owner, own.agyTarget).login?.phase).toBe("code"));
+    const login = own.signIns.snapshot(own.owner, own.agyTarget).login!;
+    await own.signIns.input(own.owner, own.agyTarget, login.id, login.revision, { kind: "code", value: AGY_CODE });
+    own.agyAnswer(true); own.children[0]!.end(0);
+    await waitFor(() => expect(own.signIns.snapshot(own.owner, own.agyTarget).login?.phase).toBe("done"));
+    await own.stop();
+  });
+  it("the Runtime answers `isolated: false` only for that case, and the transport refuses any other value", async () => {
+    const { f } = proven();
+    const { sessionId } = await f.runtime.handle("signin.start", { cli: "antigravity", profile: "work", method: "subscription", actor: ACTOR }) as { sessionId: string };
+    expect(await f.runtime.handle("signin.status", { sessionId })).toEqual({ alive: true });
+    f.children[0]!.end(0);
+    expect(await f.runtime.handle("signin.status", { sessionId })).toEqual({ alive: false, exitCode: 0, isolated: false });
+    await f.runtime.handle("signin.close", { sessionId }); await f.stop();
+  });
+});
+
+describe("signing the computer's own login out while an Antigravity terminal is open (P3-1)", () => {
+  const ledger = (rows: unknown, clientDirectory = scratch()) => { const file = paneLedgerFiles(clientDirectory)[1]!; mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, JSON.stringify({ panes: rows })); return clientDirectory; };
+  const running = (directory: string) => (RuntimeClient.prototype as unknown as { cliTerminalRunning(this: unknown, cli: string): boolean }).cliTerminalRunning.call({ options: { store: { directory } }, computerBootValue: "boot-1" }, "antigravity");
+  it("refuses for an open Antigravity terminal of any account, and for a ledger it cannot read; not for exited ones, other CLIs' terminals, or another boot's", () => {
+    expect(running(scratch())).toBe(false);                                                                      // no ledger: none
+    expect(running(ledger({ a: { launch: { cli: "antigravity" }, snapshot: { state: "running" }, systemBootId: "boot-1" } }))).toBe(true);
+    expect(running(ledger({ a: { launch: { cli: "antigravity", credentialProfile: "work" }, snapshot: { state: "running" } } }))).toBe(true);
+    expect(running(ledger({ a: { launch: { cli: "antigravity" }, snapshot: { state: "exited" } }, b: { launch: { cli: "claude-code" }, snapshot: { state: "running" } },
+      c: { launch: { cli: "antigravity" }, snapshot: { state: "running" }, systemBootId: "boot-0" } }))).toBe(false);
+    const broken = scratch(); const file = paneLedgerFiles(broken)[1]!; mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, "{not json");
+    expect(running(broken)).toBe(true);
   });
 });
