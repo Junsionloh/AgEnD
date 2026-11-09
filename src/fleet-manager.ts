@@ -24210,7 +24210,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       const binding = this.webModelBinding(backend, name);
       // A named agy account has no verified relocation/discovery contract. In particular,
       // never publish the ambient account's models under that profile (#3526 / D7).
-      if (!binding || (binding.profile && !credentialHomeSpec(backend))) continue;
+      if (!binding || (binding.profile && (!credentialHomeSpec(backend) || backend === "antigravity"))) continue;   // preview: this build has named agy accounts, but agy's probe cannot be pointed at one — same D7 refusal
       // A description/defaults save can retire a scoped answer's full binding even
       // though its account signature is unchanged. Keep the conservative fence and
       // re-arm the current binding, unless its answer or flight is already present.
@@ -25351,7 +25351,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   /** Explicit, bounded vendor rediscovery. Never publish an answer under a different account/config/instance. */
   async refreshModelCatalogFor(backend: string, instance: string | null, selection?: {profile?:string}): Promise<{ models: import("./backend/types.js").ModelOption[]; refreshed: boolean }> {
     const binding = this.webModelBinding(backend, instance, selection);
-    if (!binding || this.shuttingDown) return { models: [], refreshed: false };
+    // Preview: named agy accounts exist here (AGEND-113/124) but `agy models` cannot be pointed at one: refuse, never publish the default account's list under it (#3526 D7).
+    if (!binding || this.shuttingDown || (backend === "antigravity" && binding.profile)) return { models: [], refreshed: false };
     const pending = this.webModelRefreshes.get(binding.key);
     if (pending) return pending;
     const epoch = this.cliEnvProbeEpoch;
