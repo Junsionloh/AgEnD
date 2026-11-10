@@ -66,7 +66,7 @@ register("agentPage", {
     tip_classicReplyTriggers: "Off: only @bot triggers the room; on: a single-level reply to the bot counts too.", tip_classicCollab: "Let the bots in this room work with each other.",
     tip_classicWebEcho: "Also post messages sent from the web chat into this room.", tip_classicContext: "How many recent chat lines are sent along with each message.",
     // Instructions (AGEND-162)
-    cardInstructions: "Instructions", lbl_instructions: "Instructions",
+    cardInstructions: "Agent Instructions", lbl_instructions: "Instructions",
     tip_instructions: "Markdown you write for this agent — who it is, how it should work, rules to follow. Separate from the System prompt, which stays exactly as it is; AgEnD puts it at the very end of what the AI is told, under \"Agent Instructions\". Up to 24,000 characters. Read when the agent next starts.",
     note_instructions: "Plain Markdown; no header block needed. The AI reads it when the agent next starts — a session already running keeps what it has.",
     instrEdit: "Edit", instrPreview: "Preview", instrPlaceholder: "# Role\n\nWhat this agent is for, how it should work, rules it must follow…",
@@ -131,7 +131,7 @@ register("agentPage", {
     tip_classicReplyTriggers: "Off：只有 @bot 才觸發房間；On：也接受對該 bot 的單層回覆。", tip_classicCollab: "讓房間內的多個 bot 互相協作。",
     tip_classicWebEcho: "把網頁聊天室送出的訊息也貼到這個房間。", tip_classicContext: "每次送給 AI 時附上的最近聊天行數。",
     // Instructions（AGEND-162）
-    cardInstructions: "Instructions", lbl_instructions: "Instructions",
+    cardInstructions: "Agent Instructions", lbl_instructions: "Instructions",
     tip_instructions: "寫給這個 Agent 的 Markdown：它是誰、怎麼做事、要遵守的規則。和「System prompt」分開（System prompt 照舊不動）；AgEnD 會把它放在給 AI 的指令最後面，標題是「Agent Instructions」。上限 24,000 字元。Agent 下次啟動時讀取。",
     note_instructions: "純 Markdown，不需要檔頭。AI 在 Agent 下次啟動時讀到；正在跑的對話不會重讀。",
     instrEdit: "編輯", instrPreview: "預覽", instrPlaceholder: "# 角色\n\n這個 Agent 負責什麼、怎麼做事、必須遵守的規則…",
