@@ -129,9 +129,28 @@ describe("Settings → Agents → Accounts (#3212)", () => {
     await p.mount(h(A.AccountSelect, { id: "ag-account", backend: "claude-code", value: "", onChange: (v: string) => { picked = v; } }));
     await settle(8);
     const opts = [...p.root.querySelectorAll("#ag-account option")] as any[];
-    expect(opts.map((o) => [o.value ?? o.getAttribute("value") ?? "", text(o), !!o.disabled])).toEqual([["", "Fleet default (default connection)", false], ["personal", "personal — not connected", true], ["work", "work", false]]);
+    expect(opts.map((o) => [o.value ?? o.getAttribute("value") ?? "", text(o), !!o.disabled])).toEqual([["", "Fleet default (default connection) · ab***@example.com · Max", false], ["personal", "personal — not connected", true], ["work", "work · cd***@corp.example · Team", false]]);
     const sel = p.root.querySelector("#ag-account"); sel.value = "work"; fire(sel, "change"); await settle(2);
     expect(picked).toBe("work");
+  });
+
+  const optionTexts = () => ([...p.root.querySelectorAll("#ag-account option")] as any[]).map((o) => [text(o), !!o.disabled]);
+  const mountSelect = async (v: unknown) => { await p.unmount(); view = v; A.accountsStore.set({ loaded: false, failed: false, view: null });
+    await p.mount(h(A.AccountSelect, { id: "ag-account", backend: "claude-code", value: "", onChange: () => {} })); await settle(8); };
+  const withCli = (patch: (cli: any) => void) => { const c = JSON.parse(JSON.stringify(VIEW)); patch(c.clis[0]); return c; };
+
+  it("the Account field: the fleet default follows the named account it points at, and an option without an identity shows none", async () => {
+    await mountSelect(withCli((cli) => { cli.fleetDefault = "work"; }));
+    expect(optionTexts()[0]).toEqual(["Fleet default (work) · cd***@corp.example · Team", false]);
+    // No identity sent (not a local admin session, or an old server): the plain label, never a placeholder.
+    await mountSelect(withCli((cli) => { for (const r of cli.rows) delete r.identity; }));
+    expect(optionTexts()).toEqual([["Fleet default (default connection)", false], ["personal — not connected", true], ["work", false]]);
+    // An API key says so, the same words as the Accounts page.
+    await mountSelect(withCli((cli) => { cli.rows[0].identity = { apiKey: true }; }));
+    expect(optionTexts()[0]).toEqual(["Fleet default (default connection) · No account email (API key)", false]);
+    // A fleet default that is signed out names no one.
+    await mountSelect(withCli((cli) => { cli.fleetDefault = "personal"; }));
+    expect(optionTexts()[0]).toEqual(["Fleet default (personal)", false]);
   });
 
   it("no Account field for a CLI without accounts, and the view says when it could not be read", async () => {

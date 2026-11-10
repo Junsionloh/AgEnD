@@ -19,7 +19,7 @@ import { Menu } from "/assets/ui-menu.js";
 import { ErrorState, Skeleton } from "/assets/ui-states.js";
 import { CompactMeter } from "/assets/usage-meter.js";   // #3321: the Usage panel's meter, not a second one (its own module: a tab that kept an older usage-dialog.js still links)
 import { CliProductMark, cliLabel } from "./cli-picker.js";
-import { identityText } from "./account-identity.js";
+import { identityText, withIdentity } from "./account-identity.js";
 import { openSignIn, refreshSignIn, signInStore } from "./backend-signin.js";
 import { capsOf } from "./cli-caps.js";
 import { toast } from "/assets/ui-toast.js";
@@ -185,11 +185,17 @@ export function defaultsBackendOptions(saved, staged, backend, profile) {
   return same(out, copy(saved)) ? null : out;
 }
 
-/** The choices for an agent's Account field: its CLI's named, host profiles (signed-out ones listed, not choosable). */
+/**
+ * The choices for an agent's Account field: its CLI's named, host profiles (signed-out ones listed, not choosable), and
+ * `fleetDefaultIdentity`, the identity of the account "Fleet default" really is: the named account the fleet default
+ * points at, or the default sign-in's when it names none (undefined when the server sent none).
+ */
 export function accountChoices(view, backend) {
   const cli = view && Array.isArray(view.clis) ? view.clis.find((c) => c.backend === backend) : null;
   if (!cli || !cli.profiles) return null;
-  return { fleetDefault: cli.fleetDefault, rows: cli.rows.filter((r) => r.scope && r.scope.kind === "host" && r.profile) };
+  const hostRows = cli.rows.filter((r) => r.scope && r.scope.kind === "host");
+  const target = hostRows.find((r) => (cli.fleetDefault ? r.profile === cli.fleetDefault : !r.profile));
+  return { fleetDefault: cli.fleetDefault, fleetDefaultIdentity: target && target.state !== "not_signed_in" ? target.identity : undefined, rows: hostRows.filter((r) => r.profile) };
 }
 
 /**
@@ -452,11 +458,11 @@ export function AccountSelect({ id, backend, value, onChange, creating = false, 
   useEffect(() => { if (!loaded) void refreshAccounts(); }, []);
   const choices = accountChoices(view, backend);
   if (!choices) return null;
-  const inherit = choices.fleetDefault ? tx("acctInherit", choices.fleetDefault) : tx("acctInheritDefault");
+  const inherit = withIdentity(choices.fleetDefault ? tx("acctInherit", choices.fleetDefault) : tx("acctInheritDefault"), choices.fleetDefaultIdentity);
   return html`<div class="field s-account-select"><label for=${id}>${tx("acctLabel")}</label>
     <select id=${id} value=${value || ""} disabled=${disabled} onChange=${(e) => onChange(e.target.value)}>
       <option value="">${inherit}</option>
-      ${choices.rows.map((r) => html`<option value=${r.profile} disabled=${r.state === "not_signed_in" && r.profile !== value}>${r.state === "not_signed_in" ? tx("acctNotSignedIn", r.profile) : r.profile}</option>`)}
+      ${choices.rows.map((r) => html`<option value=${r.profile} disabled=${r.state === "not_signed_in" && r.profile !== value}>${r.state === "not_signed_in" ? tx("acctNotSignedIn", r.profile) : withIdentity(r.profile, r.identity)}</option>`)}
     </select>
     <p class="note">${tx(creating ? "acctHintCreate" : "acctHint")}${choices.fleetDefault ? ` ${tx("acctDefaultBlocked", cliLabel(backend), choices.fleetDefault)}` : ""}</p></div>`;
 }
