@@ -1,0 +1,131 @@
+[
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + current CSS",
+  "shellUp": "yes",
+  "Sign out": 44,
+  "Manage devices": 44,
+  "Re-bind": 44,
+  "code box": 44,
+  "Bind": 44
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + base CSS (retained app.css)",
+  "shellUp": "yes",
+  "Sign out": 36,
+  "Manage devices": 36,
+  "Re-bind": 36,
+  "code box": 42,
+  "Bind": 36
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + base web-authorize.js (retained)",
+  "shellUp": "yes",
+  "Sign out": 44,
+  "Manage devices": 44,
+  "Re-bind": "—",
+  "code box": "—",
+  "Bind": "—"
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + base CSS + base web-authorize.js",
+  "shellUp": "yes",
+  "Sign out": 36,
+  "Manage devices": 36,
+  "Re-bind": "—",
+  "code box": "—",
+  "Bind": "—"
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + current CSS",
+  "shellUp": "yes",
+  "Sign out": 44,
+  "Manage devices": 44,
+  "Re-bind": 44,
+  "code box": 44,
+  "Bind": 44
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + base CSS (retained app.css)",
+  "shellUp": "yes",
+  "Sign out": 36,
+  "Manage devices": 36,
+  "Re-bind": 36,
+  "code box": 42,
+  "Bind": 36
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + base web-authorize.js (retained)",
+  "shellUp": "yes",
+  "Sign out": 44,
+  "Manage devices": 44,
+  "Re-bind": "—",
+  "code box": "—",
+  "Bind": "—"
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + base CSS + base web-authorize.js",
+  "shellUp": "yes",
+  "Sign out": 36,
+  "Manage devices": 36,
+  "Re-bind": "—",
+  "code box": "—",
+  "Bind": "—"
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + current CSS",
+  "settings: Revoke (btn-danger)": 44,
+  "settings: Sign out everywhere (btn-danger)": 44
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + base CSS (retained app.css)",
+  "settings: Revoke (btn-danger)": 36,
+  "settings: Sign out everywhere (btn-danger)": 44
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + base web-authorize.js (retained)",
+  "settings: Revoke (btn-danger)": 44,
+  "settings: Sign out everywhere (btn-danger)": 44
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + base CSS + base web-authorize.js",
+  "settings: Revoke (btn-danger)": 36,
+  "settings: Sign out everywhere (btn-danger)": 44
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + current CSS",
+  "settings: Revoke (btn-danger)": 44,
+  "settings: Sign out everywhere (btn-danger)": 44
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + base CSS (retained app.css)",
+  "settings: Revoke (btn-danger)": 36,
+  "settings: Sign out everywhere (btn-danger)": 44
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + base web-authorize.js (retained)",
+  "settings: Revoke (btn-danger)": 44,
+  "settings: Sign out everywhere (btn-danger)": 44
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + base CSS + base web-authorize.js",
+  "settings: Revoke (btn-danger)": 36,
+  "settings: Sign out everywhere (btn-danger)": 44
+ }
+]
+{"phone 390 | current JS + current CSS":[],"phone 390 | current JS + base CSS (retained app.css)":[],"phone 390 | current JS + base web-authorize.js (retained)":[],"phone 390 | current JS + base CSS + base web-authorize.js":[],"phone 500 | current JS + current CSS":[],"phone 500 | current JS + base CSS (retained app.css)":[],"phone 500 | current JS + base web-authorize.js (retained)":[],"phone 500 | current JS + base CSS + base web-authorize.js":[]}

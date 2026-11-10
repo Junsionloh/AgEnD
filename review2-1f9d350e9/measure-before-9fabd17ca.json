@@ -1,0 +1,111 @@
+[
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + current CSS",
+  "shellUp": "yes",
+  "Sign out": 36,
+  "Manage devices": 36,
+  "Re-bind": 26,
+  "code box": 30,
+  "Bind": 30
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + base CSS (retained app.css)",
+  "shellUp": "yes",
+  "Sign out": 36,
+  "Manage devices": 36,
+  "Re-bind": 26,
+  "code box": 30,
+  "Bind": 26
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + base web-authorize.js (retained)",
+  "shellUp": "NO"
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + base CSS + base web-authorize.js",
+  "shellUp": "NO"
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + current CSS",
+  "shellUp": "yes",
+  "Sign out": 36,
+  "Manage devices": 36,
+  "Re-bind": 26,
+  "code box": 30,
+  "Bind": 30
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + base CSS (retained app.css)",
+  "shellUp": "yes",
+  "Sign out": 36,
+  "Manage devices": 36,
+  "Re-bind": 26,
+  "code box": 30,
+  "Bind": 26
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + base web-authorize.js (retained)",
+  "shellUp": "NO"
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + base CSS + base web-authorize.js",
+  "shellUp": "NO"
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + current CSS",
+  "settings: Revoke (btn-danger)": 36,
+  "settings: Sign out everywhere (btn-danger)": 44
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + base CSS (retained app.css)",
+  "settings: Revoke (btn-danger)": 36,
+  "settings: Sign out everywhere (btn-danger)": 44
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + base web-authorize.js (retained)",
+  "settings: Revoke (btn-danger)": "—",
+  "settings: Sign out everywhere (btn-danger)": "—"
+ },
+ {
+  "viewport": "phone 390",
+  "combo": "current JS + base CSS + base web-authorize.js",
+  "settings: Revoke (btn-danger)": "—",
+  "settings: Sign out everywhere (btn-danger)": "—"
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + current CSS",
+  "settings: Revoke (btn-danger)": 36,
+  "settings: Sign out everywhere (btn-danger)": 44
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + base CSS (retained app.css)",
+  "settings: Revoke (btn-danger)": 36,
+  "settings: Sign out everywhere (btn-danger)": 44
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + base web-authorize.js (retained)",
+  "settings: Revoke (btn-danger)": "—",
+  "settings: Sign out everywhere (btn-danger)": "—"
+ },
+ {
+  "viewport": "phone 500",
+  "combo": "current JS + base CSS + base web-authorize.js",
+  "settings: Revoke (btn-danger)": "—",
+  "settings: Sign out everywhere (btn-danger)": "—"
+ }
+]
+{"phone 390 | current JS + current CSS":[],"phone 390 | current JS + base CSS (retained app.css)":[],"phone 390 | current JS + base web-authorize.js (retained)":["The requested module './web-authorize.js' does not provide an export named 'roleName'"],"phone 390 | current JS + base CSS + base web-authorize.js":["The requested module './web-authorize.js' does not provide an export named 'roleName'"],"phone 500 | current JS + current CSS":[],"phone 500 | current JS + base CSS (retained app.css)":[],"phone 500 | current JS + base web-authorize.js (retained)":["The requested module './web-authorize.js' does not provide an export named 'roleName'"],"phone 500 | current JS + base CSS + base web-authorize.js":["The requested module './web-authorize.js' does not provide an export named 'roleName'"]}
