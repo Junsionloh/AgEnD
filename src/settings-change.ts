@@ -452,7 +452,9 @@ export function settingsChangeDiff(before: unknown, after: unknown, options: {
     // each version is, its fingerprint and its first words, so a long text neither fills the 4,096 the card holds
     // (confirmation_diff_too_large) nor changes without the person seeing that it changed. The change's own fingerprint
     // (below) still covers every character: what is confirmed is exactly this text.
-    if (path.length === 4 && path[0] === "fleet" && path[1] === "instances" && path[3] === "instructions"
+    // The card is judged from the fleet's root (fleet.instances.<name>.…); the authority classifier (settings-authority.ts) judges
+    // the same change from `instances.<name>.…` — both must be this short line, or the long text would be listed there.
+    if (path.at(-1) === "instructions" && path.at(-3) === "instances" && (path.length === 3 || (path.length === 4 && path[0] === "fleet"))
       && (old === undefined || old === null || typeof old === "string") && (next === undefined || next === null || typeof next === "string")) {
       add(`${settingsDisplay(path.join("."))}: ${longTextSummary(old)} → ${longTextSummary(next)}`);
       return;
