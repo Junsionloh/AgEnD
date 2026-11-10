@@ -60,22 +60,22 @@ const actions = (row: any) => labels(row.querySelector(".s-actions"));
 describe("this host's Antigravity row", () => {
   it("has Sign in again (it is signed in) and opens the same dialog Claude's default row opens; Sign in for a login that is not there", async () => {
     await mount();
-    expect(actions(hostBox())).toContain("Sign in again");
-    btn(hostBox(), "Sign in again").click(); await settle(6);
+    expect(actions(hostBox())).toContain("Reconnect");
+    btn(hostBox(), "Reconnect").click(); await settle(6);
     expect(shell.shellStore.get().dialog?.props).toEqual({ backend: "antigravity" });
     expect(shell.shellStore.get().dialog?.Component).toBe(S.BrowserSignInDialog);
     shell.shellStore.set({ dialog: null });
     current = view([hostRow({ state: "not_signed_in" })]); A.accountsStore.set({ loaded: false, failed: false, view: null }); await p.unmount(); await mount();
-    expect(actions(hostBox())).toContain("Sign in");
+    expect(actions(hostBox())).toContain("Connect");
   });
   it("an agy older than 1.5.0 keeps the command to run (the older row), and is told to update, with the command", async () => {
     current = view([hostRow({ state: "not_signed_in", signIn: false, hostCommand: "agy", update: INSTALL })]);
     await mount();
-    expect(actions(hostBox())).not.toContain("Sign in"); expect(actions(hostBox())).not.toContain("Sign in again");
-    expect(text(hostBox().querySelector("summary"))).toBe("Sign in from chat");   // the older row, as upstream words it (a host row shows no command, a computer's does)
-    expect(text(hostBox())).toContain("Antigravity needs a newer version before it can be signed in from here. Update it on the host:"); expect(text(hostBox())).toContain(INSTALL);
+    expect(actions(hostBox())).not.toContain("Connect"); expect(actions(hostBox())).not.toContain("Reconnect");
+    expect(text(hostBox().querySelector("summary"))).toBe("Connect from chat");   // the older row, as upstream words it (a host row shows no command, a computer's does)
+    expect(text(hostBox())).toContain("Antigravity needs a newer version before it can be connected from here. Update it on the host:"); expect(text(hostBox())).toContain(INSTALL);
     i18n.setLang("zh-TW", { store: false }); await p.unmount(); await mount();
-    expect(text(hostBox())).toContain("Antigravity 需要更新到較新的版本，才能從這裡登入。請在主機上更新："); expect(text(hostBox().querySelector("summary"))).toBe("從聊天登入");
+    expect(text(hostBox())).toContain("Antigravity 需要更新到較新的版本，才能從這裡連接。請在主機上更新："); expect(text(hostBox().querySelector("summary"))).toBe("從聊天連接");
   });
   it("a version that was not read yet shows the host command and no update hint", async () => {
     current = view([hostRow({ state: "not_signed_in", signIn: false, hostCommand: "agy" })]); await mount();
@@ -84,9 +84,9 @@ describe("this host's Antigravity row", () => {
   it("the dialog offers Sign in for Antigravity (the first-run list keeps it on the console fallback) and posts a start for it", async () => {
     await p.mount(h(S.BrowserSignInDialog, { backend: "antigravity", onClose: () => {} })); await settle(12);
     const d = dialog() ?? p.root;
-    expect(text(d)).toContain("Sign-in needed"); expect(text(d)).not.toContain("console fallback, or sign in later"); expect(text(d.querySelector("section h3"))).toBe("Antigravity");
+    expect(text(d)).toContain("Not connected"); expect(text(d)).not.toContain("console fallback, or connect later"); expect(text(d.querySelector("section h3"))).toBe("Antigravity");
     expect(text(d)).not.toContain("Use console fallback");      // chat's /login agy is declined, so there is no console fallback to offer for it
-    await btn(d, "Sign in").onclick(); await settle(8);
+    await btn(d, "Connect account").onclick(); await settle(8);
     const start = calls.find(c => c.method === "POST" && c.url.startsWith("/ui/browser-backend-signins"))!;
     expect(start.url).toBe("/ui/browser-backend-signins"); expect(start.body).toEqual({ operation: "start", backend: "antigravity", relogin: false });
   });
@@ -96,16 +96,16 @@ describe("a computer's Antigravity login", () => {
   it("is one row under the computer's name: Sign in, no Add account, Sign out or Remove, and a note that it replaces that computer's login", async () => {
     await mount();
     expect(text(machineBox().querySelector(".s-account-machine-head strong"))).toBe("On Desk PC");
-    expect(actions(mrow())).toEqual(["Sign in"]);
+    expect(actions(mrow())).toEqual(["Connect"]);
     expect(labels(card().querySelector(".s-account-head"))).toEqual([]);          // no + Add account on this card
-    expect(text(mrow())).toContain("This is the Windows user's own Antigravity sign-in on Desk PC, one for the whole computer. Signing in here replaces it; use + Add account to keep another one beside it.");
+    expect(text(mrow())).toContain("This is the Windows user's own Antigravity connection on Desk PC, one for the whole computer. Connecting here replaces it; use + Add account to keep another one beside it.");
     expect(machineBox().querySelectorAll(".s-account-row").length).toBe(1);
     current = view([machineRow({ state: "usable" })]); await p.unmount(); A.accountsStore.set({ loaded: false, failed: false, view: null }); await mount();
-    expect(actions(mrow())).toEqual(["Sign in again"]);
+    expect(actions(mrow())).toEqual(["Reconnect"]);
   });
   it("says why when it cannot be signed in from here: an old agy, a missing agy, an old Runtime, the owner's switch", async () => {
     const cases: Array<[Record<string, unknown>, string]> = [
-      [{ signIn: false }, "Antigravity on Desk PC is too old to sign in from here (it needs 1.5.0 or newer). Update it on that computer."],
+      [{ signIn: false }, "Antigravity on Desk PC is too old to connect from here (it needs 1.5.0 or newer). Update it on that computer."],
       [{ signIn: false }, "Antigravity is not installed on Desk PC."],
       [{ signIn: false }, "Desk PC's Runtime is too old to manage accounts from here. Update the Runtime on that computer."],
       [{ signIn: false }, "The owner of Desk PC has not allowed account changes from AgEnD. On that computer run: agend-runtime remote-setup accounts on"],
@@ -116,19 +116,19 @@ describe("a computer's Antigravity login", () => {
       expect(actions(mrow()), reasons[i]).toEqual([]); expect(text(card().querySelector(".s-account-machine")), reasons[i]).toContain(words);
     }
     i18n.setLang("zh-TW", { store: false }); current = view([machineRow({ signIn: false }, { readOnlyReason: "cli_old" })]); A.accountsStore.set({ loaded: false, failed: false, view: null }); await p.unmount(); await mount();
-    expect(text(mrow())).toContain("Desk PC 上的 Antigravity 版本太舊，無法從這裡登入（需要 1.5.0 或更新）。請在那台電腦上更新它。");
+    expect(text(mrow())).toContain("Desk PC 上的 Antigravity 版本太舊，無法從這裡連接（需要 1.5.0 或更新）。請在那台電腦上更新它。");
   });
   it("asks BEFORE anything opens: it replaces the login of that computer's Windows user; Cancel opens nothing, Continue opens the dialog for the computer with no profile", async () => {
     await mount();
-    btn(mrow(), "Sign in").click(); await settle(6);
+    btn(mrow(), "Connect").click(); await settle(6);
     expect(shell.shellStore.get().dialog).toBeFalsy();
     let q = C.confirmStore.get().queue;
     expect(q).toHaveLength(1);
-    expect(q[0].title).toBe("Change Antigravity's sign-in on Desk PC?");
-    expect(q[0].message).toBe("This changes the Antigravity sign-in on Desk PC. One computer can only have one Antigravity account, so the account that is signed in there now is replaced.");
+    expect(q[0].title).toBe("Change Antigravity's connection on Desk PC?");
+    expect(q[0].message).toBe("This changes the Antigravity connection on Desk PC. One computer can only have one Antigravity account, so the account that is connected there now is replaced.");
     C.answerConfirm(q[0].id, false); await settle(6);
     expect(shell.shellStore.get().dialog).toBeFalsy(); expect(calls).toEqual([]);
-    btn(mrow(), "Sign in").click(); await settle(6);
+    btn(mrow(), "Connect").click(); await settle(6);
     q = C.confirmStore.get().queue; C.answerConfirm(q[0].id, true); await settle(6);
     expect(shell.shellStore.get().dialog?.props).toEqual({ machine: { id: "m1", name: "Desk PC" }, backend: "antigravity" });
     expect(shell.shellStore.get().dialog?.Component).toBe(M.MachineSignInDialog);
@@ -136,10 +136,10 @@ describe("a computer's Antigravity login", () => {
   });
   it("the question is in 繁體中文 too", async () => {
     i18n.setLang("zh-TW", { store: false }); await mount();
-    btn(mrow(), "登入").click(); await settle(6);
+    btn(mrow(), "連接").click(); await settle(6);
     const q = C.confirmStore.get().queue[0];
-    expect([q.title, q.confirmLabel]).toEqual(["要更改 Desk PC 上的 Antigravity 登入嗎？", "繼續"]);
-    expect(q.message).toBe("這會更改 Desk PC 上的 Antigravity 登入。一台電腦只能有一個 Antigravity 帳號，所以目前登入在那裡的帳號會被取代。");
+    expect([q.title, q.confirmLabel]).toEqual(["要更改 Desk PC 上的 Antigravity 連接嗎？", "繼續"]);
+    expect(q.message).toBe("這會更改 Desk PC 上的 Antigravity 連接。一台電腦只能有一個 Antigravity 帳號，所以目前連接在那裡的帳號會被取代。");
   });
   const mountDialog = async () => { await p.unmount(); await p.mount(h(M.MachineSignInDialog, { machine: { id: "m1", name: "Desk PC" }, backend: "antigravity", onClose: () => {} })); await settle(12); };
   it("the dialog is the host's controls on `?machine=&backend=antigravity`: titled for the computer, no profile name and no Claude Console hint", async () => {
@@ -149,16 +149,16 @@ describe("a computer's Antigravity login", () => {
     await mountDialog();
     const d = dialog() ?? p.root;
     expect(gets).toContain("/ui/browser-backend-signins?machine=m1&backend=antigravity");
-    expect(text(d)).toContain("Sign in Antigravity on Desk PC");
-    expect(text(d)).toContain("This replaces the Antigravity sign-in of the Windows user on that computer");
-    expect(text(d)).not.toContain("agend-runtime login"); expect(text(d)).not.toContain("account “"); expect(text(d)).not.toContain("Sign in later");
-    expect(text(d)).toContain("Sign-in needed"); expect(text(d.querySelector("section h3"))).toBe("Antigravity");   // not "(console fallback)": it signs in here
+    expect(text(d)).toContain("Connect Antigravity on Desk PC");
+    expect(text(d)).toContain("This replaces the Antigravity connection of the Windows user on that computer");
+    expect(text(d)).not.toContain("agend-runtime login"); expect(text(d)).not.toContain("account “"); expect(text(d)).not.toContain("Connect later");
+    expect(text(d)).toContain("Not connected"); expect(text(d.querySelector("section h3"))).toBe("Antigravity");   // not "(console fallback)": it signs in here
     i18n.setLang("zh-TW", { store: false }); await mountDialog();
-    expect(text(dialog() ?? p.root)).toContain("在 Desk PC 登入 Antigravity");
+    expect(text(dialog() ?? p.root)).toContain("在 Desk PC 連接 Antigravity");
   });
   it("Sign in posts a start for Antigravity to that address, with nothing about a profile, method, command or path", async () => {
     await mountDialog();
-    await btn(dialog() ?? p.root, "Sign in").onclick(); await settle(8);
+    await btn(dialog() ?? p.root, "Connect account").onclick(); await settle(8);
     const start = calls.find(c => c.method === "POST" && c.url.startsWith("/ui/browser-backend-signins"))!;
     expect(start.url).toBe("/ui/browser-backend-signins?machine=m1&backend=antigravity");
     expect(start.body).toEqual({ operation: "start", backend: "antigravity", relogin: false });
@@ -167,7 +167,7 @@ describe("a computer's Antigravity login", () => {
     await p.unmount(); await p.mount(h(M.MachineSignInDialog, { machine: { id: "m1", name: "Desk PC" }, profile: "work", onClose: () => {} })); await settle(12);
     const d = dialog() ?? p.root;
     expect(gets).toContain("/ui/browser-backend-signins?machine=m1&profile=work");
-    expect(text(d)).toContain("Sign in Claude Code account “work” on Desk PC"); expect(text(d)).toContain("Run this on that computer: agend-runtime login claude-code work");
+    expect(text(d)).toContain("Connect Claude Code account “work” on Desk PC"); expect(text(d)).toContain("Run this on that computer: agend-runtime login claude-code work");
   });
 });
 

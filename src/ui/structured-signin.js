@@ -59,7 +59,7 @@ export const SIGNIN_STRINGS = {
     error_signin_cleanup_failed: "無法確認登入程序已關閉。請在主機上關閉它，並重新開始設定後再試。",
     error_signin_action_stale: "這個畫面已改變或已回答過。請重新整理狀態，不要再送一次。",
     error_signin_action_invalid: "這不是有效的輸入。請檢查後再試一次。",
-    codeOnly: "只貼上頁面顯示的代碼，不要貼網址。",
+    codeOnly: "只貼上頁面顯示的授權碼，不要貼網址。",
     error_signin_console_only: "這個後端使用主控台備援。",
     error_backend_signin_local_only: "AI 帳號只能在這台電腦上連接。請使用本機的設定頁，或稍後連接。",
     error_signin_session_expired: "這個設定工作階段已結束。請在主機上重新開啟設定。",

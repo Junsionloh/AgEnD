@@ -940,7 +940,7 @@ async function agyAccessToken(storeHome?: string): Promise<{ token: string } | {
     return {
       error: client
         ? "Access token expired and no refresh token is stored. Run `agy` once."
-        : "Access token expired. Turn on Keep sign-in alive for this account (Settings → Accounts) to renew it every hour, or run `agy` once.",
+        : "Access token expired. Turn on Keep connection alive for this account (Settings → Accounts) to renew it every hour, or run `agy` once.",
       errorI18n: client
         ? i18n("usage.error.agy_no_refresh")
         : i18n("usage.error.agy_token_expired"),

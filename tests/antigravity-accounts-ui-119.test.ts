@@ -79,13 +79,13 @@ describe("Antigravity's card", () => {
     await mount();
     expect(text(rowOf("default").querySelector(".s-account-identity"))).toContain("pe***@example.com");
     const stale = text(rowOf("default").querySelector(".s-usage-stale"));
-    expect(stale).toMatch(/^\(stale\) expired · cached at \d{1,2}:\d\d/);
-    expect(stale).toContain("Keep sign-in alive");
+    expect(stale).toMatch(/^\(stale\) expired · cached at (?:\d{1,2}\/\d{1,2} )?\d{1,2}:\d\d/);
+    expect(stale).toContain("Keep connection alive");
     expect([...rowOf("default").querySelectorAll(".s-usage-pool")].map(text)).toEqual(["Gemini", "Claude & others"]);
   });
   it("Keep sign-in alive is there for each host account, with Antigravity's own words", async () => {
     await mount();
-    for (const acct of ["default", "work", "spare"]) expect(text(rowOf(acct)), acct).toContain("Keep sign-in alive");
+    for (const acct of ["default", "work", "spare"]) expect(text(rowOf(acct)), acct).toContain("Keep connection alive");
     expect(rowOf("work").querySelector('[data-tip], .info-tip, button[aria-label]')).toBeTruthy();
   });
 });
@@ -96,30 +96,30 @@ describe("Sign out: agy has no logout command", () => {
     rowOf("work").querySelector(".s-account-signout").click(); await settle(6);
     expect(text(dialog())).toContain("has no logout command");
     expect(text(dialog())).not.toContain("own logout");
-    btn(dialog(), "Sign out").click(); await settle(12);
+    btn(dialog(), "Disconnect").click(); await settle(12);
     expect(calls).toEqual([{ method: "POST", url: "/ui/accounts/antigravity/signout", body: { profile: "work", confirm: true } }]);
-    expect(toastText()).toContain("Signed out.");
+    expect(toastText()).toContain("Disconnected.");
   });
   it("a sign-out that did not take effect (kept in the system's keyring) is said as that, and the dialog stays", async () => {
     await mount();
     answer = () => ({ status: 409, body: { error: "still_signed_in" } });
     rowOf("default").querySelector(".s-account-signout").click(); await settle(6);
-    btn(dialog(), "Sign out").click(); await settle(10);
-    expect(text(dialog().querySelector(".err"))).toContain("still says it is signed in");
+    btn(dialog(), "Disconnect").click(); await settle(10);
+    expect(text(dialog().querySelector(".err"))).toContain("still says it is connected");
     expect(text(dialog().querySelector(".err"))).toContain("keyring");
   });
   it("one agy could not confirm is said as unconfirmed", async () => {
     await mount();
     answer = () => ({ status: 200, body: { signedOut: "work", unverified: true } });
     rowOf("work").querySelector(".s-account-signout").click(); await settle(6);
-    btn(dialog(), "Sign out").click(); await settle(12);
+    btn(dialog(), "Disconnect").click(); await settle(12);
     expect(toastText()).toContain("not confirmed");
   });
   it("Switch account says the same, then opens Sign in", async () => {
     await mount();
     rowOf("default").querySelector(".s-account-switch").click(); await settle(6);
     expect(text(dialog())).toContain("has no logout command");
-    btn(dialog(), "Sign out and sign in").click(); await settle(14);
+    btn(dialog(), "Disconnect and reconnect").click(); await settle(14);
     expect(calls[0]).toEqual({ method: "POST", url: "/ui/accounts/antigravity/signout", body: { profile: null, confirm: true } });
     expect(shell.shellStore.get().dialog?.props).toEqual({ backend: "antigravity" });
   });
@@ -129,8 +129,8 @@ describe("Sign out: agy has no logout command", () => {
     rowOf("work").querySelector(".s-account-signout").click(); await settle(6);
     expect(text(dialog())).toContain("沒有登出指令");
     answer = () => ({ status: 409, body: { error: "still_signed_in" } });
-    btn(dialog(), "登出").click(); await settle(10);
-    expect(text(dialog().querySelector(".err"))).toContain("仍顯示已登入");
+    btn(dialog(), "撤銷連接").click(); await settle(10);
+    expect(text(dialog().querySelector(".err"))).toContain("仍顯示已連接");
   });
 });
 
@@ -138,9 +138,9 @@ describe("Remove", () => {
   it("says the account's conversations go with its sign-in (its whole folder), in both languages", async () => {
     await mount();
     rowOf("work").querySelector(".s-account-remove").click(); await settle(6);
-    expect(text(dialog())).toContain("its sign-in and its own conversations");
+    expect(text(dialog())).toContain("its connection and its own conversations");
     await p.unmount(); i18n.setLang("zh-TW", { store: false }); A.accountsStore.set({ loaded: false, failed: false, view: null }); await mount();
     rowOf("work").querySelector(".s-account-remove").click(); await settle(6);
-    expect(text(dialog())).toContain("它的登入，以及它自己的對話");
+    expect(text(dialog())).toContain("它的連接，以及它自己的對話");
   });
 });

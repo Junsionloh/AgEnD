@@ -111,7 +111,7 @@ describe("the row says why in the person's language", () => {
   it("English: the mark, the cause with the time, and what the read said", async () => {
     await mount({ cause: "expired", cachedAt: "2026-11-09T06:55:00", hint: "Access token expired.", hintI18n: { key: "usage.error.agy_token_expired" } });
     const line = text(p.root.querySelector(".s-usage-stale"));
-    expect(line).toMatch(/^\(stale\) expired · cached at \d{1,2}:\d\d/);
+    expect(line).toMatch(/^\(stale\) expired · cached at (?:\d{1,2}\/\d{1,2} )?\d{1,2}:\d\d/);
     expect(line).toContain("Access token expired");
   });
   it("繁體中文: the same, in the usage panel's own words", async () => {

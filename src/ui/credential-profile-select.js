@@ -13,16 +13,16 @@ register("claudeAccount", {
     old:"Update the Runtime on that computer to choose a Claude account for this agent.",
     empty:"No Claude accounts reported yet. On that computer run agend-runtime login claude-code NAME, then choose Detect again in that computer's CLI diagnostics (Settings → Runtime).",
     hint:"The account is chosen by name; its connection stays on that computer. A name that does not exist or is not connected there is refused, never replaced by another account.",
-    changeNote:"Changing the account starts a new conversation." },
+    changeNote:"Changing the account starts a new conversation.",
+    labelOther:"{0} account", noneOther:"This computer's own {0} connection", oldOther:"Update the Runtime on that computer to choose a {0} account for this agent.",
+    emptyOther:"No {0} accounts reported yet. Add one in Settings → Agent → Accounts, under that computer's name." },
   "zh-TW": { label:"Claude 帳號", none:"這台電腦的預設連接", default:"預設", signedOut:"尚未連接", unchecked:"未確認", notReported:"未回報",
     old:"請更新那台電腦上的 Runtime，才能為這個 Agent 選擇 Claude 帳號。",
     empty:"尚未回報任何 Claude 帳號。請在那台電腦執行 agend-runtime login claude-code 名稱，再到設定 → Runtime，在該電腦的「CLI 診斷」按「重新偵測」。",
     hint:"帳號以名稱選擇，連接資料只保留在那台電腦。不存在或尚未連接的名稱會被拒絕，不會改用其他帳號。",
-    changeNote:"更換帳號會開始新的對話。" },
-    labelOther:"{0} account", noneOther:"This computer's own {0} connection", oldOther:"Update the Runtime on that computer to choose a {0} account for this agent.",
-    emptyOther:"No {0} accounts reported yet. Add one in Settings → Agent → Accounts, under that computer's name.",
+    changeNote:"更換帳號會開始新的對話。",
     labelOther:"{0} 帳號", noneOther:"這台電腦自己的 {0} 連接", oldOther:"請更新那台電腦上的 Runtime，才能為這個 Agent 選擇 {0} 帳號。",
-    emptyOther:"尚未回報任何 {0} 帳號。請到設定 → Agent → 帳號，在該電腦的名稱下新增。",
+    emptyOther:"尚未回報任何 {0} 帳號。請到設定 → Agent → 帳號，在該電腦的名稱下新增。" },
 });
 export const accountText = (key, ...values) => t(`claudeAccount.${key}`, ...values);
 
