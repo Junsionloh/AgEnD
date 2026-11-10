@@ -58,6 +58,7 @@ import { isWsl } from "./wsl-detect.js";
 import type { GuestLoginCodes, LoginCodeOwner, LoginCodeRecipient, LoginRedeemResult, WebLoginCodes } from "./web-login.js";
 import { buildDeviceCookie, readDeviceCookies, DEVICE_COOKIE, DEVICE_COOKIE_SECURE, type ReturningDevice } from "./web-returning-device.js";
 import { fleetCookieName } from "./web-cookie-names.js";
+import { buildSigninCookie, isSigninBrowserId, newSigninBrowserId, readSigninCookie } from "./web-signin-device.js";
 import { buildDeviceLoginCookie, clearDeviceLoginCookie, DEVICE_LOGIN_TTL_MS, peerKeyOf, readDeviceLoginCookie, type DeviceLoginRequests } from "./web-device-login.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -70,7 +71,8 @@ const MAX_LOGIN_BODY = 1024;
 
 /** AGEND-146: what FleetManager.totpSignIn answers (the route turns each into one response; `wrong` is the one answer for every way of not getting in). */
 export type TotpSignInResult =
-  | { kind: "ok"; session: { owner?: { adapterId: string; userId: string }; remote?: "totp" }; commit(record: SessionRecord, label: string): boolean }
+  /** `knownCookie`: the value of the browser's "known device" mark after this sign-in (web-signin-device.ts); a mark vouches for nothing by itself. */
+  | { kind: "ok"; session: { owner?: { adapterId: string; userId: string }; remote?: "totp" }; knownCookie: string; commit(record: SessionRecord, label: string): boolean }
   | { kind: "wrong" }
   | { kind: "paused"; retryAfterMs: number }
   | { kind: "closed" }
@@ -104,7 +106,7 @@ export interface AuthApiContext {
    * direct connection or a link where it is open. "ok" says what kind of session to make and gives `commit`, which the caller runs
    * on the session it made (false: end it — nothing was admitted).
    */
-  totpSignIn?(input: { exposureId: string | undefined; peer: WebPeer; account: string | undefined; code: string }): TotpSignInResult;
+  totpSignIn?(input: { exposureId: string | undefined; peer: WebPeer; account: string | undefined; code: string; browser: { id: string; address: string | undefined }; knownCookie: string | undefined }): TotpSignInResult;
   /** #3008: this exposure is the link "Allow connections from outside" opened, open now (its sign-in asks for the code). */
   isOutsideLink?(exposureId: string): boolean;
   /** #1570: record this browser as a returning device of the code's owner; the cookie value, or null when not kept. */
@@ -418,14 +420,22 @@ export function handleAuthRequest(
         json(res, 400, { error: "expected {\"code\": \"123456\", \"account\": \"name\"}" }); return;
       }
       if (!isWebRequestCurrent(req) || ctx.webToken !== token) { json(res, 401, { error: "wrong_code" }); return; }
-      const result = signIn({ exposureId: gateway?.exposureId, peer, account: body.account as string | undefined, code: body.code });
+      // This browser's id (for its own wrong-code limit): the one it sent, else a new one handed out with the answer. Never trusted for
+      // anything else; a browser that drops it is a new browser to that limit, which is what the shared ceilings are for.
+      const cookieHeader = typeof req.headers.cookie === "string" ? req.headers.cookie : undefined, secure = isSecureRequest(gateReq);
+      const sent = readSigninCookie(cookieHeader, "browser", !!gateway, token), browserId = isSigninBrowserId(sent) ? sent : newSigninBrowserId();
+      const issued: string[] = isSigninBrowserId(sent) ? [] : [buildSigninCookie("browser", browserId, secure, token)];
+      const knownCookie = readSigninCookie(cookieHeader, "known", !!gateway, token);
+      const address = gateway ? undefined : peerKeyOf(req.socket?.remoteAddress ?? "unknown");
+      const result = signIn({ exposureId: gateway?.exposureId, peer, account: body.account as string | undefined, code: body.code, browser: { id: browserId, address }, knownCookie });
+      const withCookies = (extra: Record<string, string | string[]> = {}): Record<string, string | string[]> => ({ ...extra, ...(issued.length ? { "Set-Cookie": issued } : {}) });
       if (result.kind === "paused") {
-        json(res, 429, { error: "paused", retryAfterMs: result.retryAfterMs }, { "Retry-After": String(Math.ceil(result.retryAfterMs / 1000)) });
+        json(res, 429, { error: "paused", retryAfterMs: result.retryAfterMs }, withCookies({ "Retry-After": String(Math.ceil(result.retryAfterMs / 1000)) }));
         return;
       }
       if (result.kind === "closed") { json(res, 404, { error: "not_found" }); return; }
-      if (result.kind === "unavailable") { json(res, 503, { error: "unavailable" }); return; }
-      if (result.kind === "wrong") { ctx.logger.debug("authenticator sign-in refused"); json(res, 401, { error: "wrong_code" }); return; }
+      if (result.kind === "unavailable") { json(res, 503, { error: "unavailable" }, withCookies()); return; }
+      if (result.kind === "wrong") { ctx.logger.debug("authenticator sign-in refused"); json(res, 401, { error: "wrong_code" }, withCookies()); return; }
       for (const previous of readSessionCookies(gateReq, token)) {
         if (sessions.authenticate(previous, tokenEpoch(token), { touch: false, surface: gateway?.surface ?? "local", exposureId: gateway?.exposureId })) sessions.revokeById(previous);
       }
@@ -440,9 +450,11 @@ export function handleAuthRequest(
       // Admitted (and its Notice posted) by the fleet, or no session at all.
       let admitted = false;
       try { admitted = result.commit(record, label) === true; } catch (err) { ctx.logger.debug({ err }, "authenticator sign-in not admitted"); }
-      if (!admitted || !isWebRequestCurrent(req)) { sessions.revokeById(sessionId); json(res, 503, { error: "unavailable" }); return; }
-      const session = buildSessionCookie(sessionId, isSecureRequest(gateReq), (record.absoluteExpiry - record.created) / 1000, token);
-      json(res, 200, { ok: true, csrf: csrfTokenFor(sessionId), tier: record.tier, expiresAt: record.absoluteExpiry }, { "Set-Cookie": session });
+      if (!admitted || !isWebRequestCurrent(req)) { sessions.revokeById(sessionId); json(res, 503, { error: "unavailable" }, withCookies()); return; }
+      const session = buildSessionCookie(sessionId, secure, (record.absoluteExpiry - record.created) / 1000, token);
+      // The session, and this browser's marks: its id (when new) and the "known device" mark for this admin (it grants nothing by itself).
+      json(res, 200, { ok: true, csrf: csrfTokenFor(sessionId), tier: record.tier, expiresAt: record.absoluteExpiry },
+        { "Set-Cookie": [session, ...issued, buildSigninCookie("known", result.knownCookie, secure, token)] });
     }).catch(() => { if (!res.destroyed && !res.headersSent) json(res, 500, { error: "sign-in failed" }); });
     return true;
   }

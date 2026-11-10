@@ -409,6 +409,7 @@ import { guestSessionPolicy, localSessionPolicy, sessionVia, tokenEpoch, WebSess
 import { WebNotices, WEB_NOTICES_FILE, type NoticeKind } from "./web-notices.js";
 import { enrolledRuntimeNotice } from "./runtime-enroll-notice.js";
 import { DeviceLoginRequests } from "./web-device-login.js";
+import { signinKnownDevice, addSigninKnownDevice } from "./web-signin-device.js";
 import { adminKey, HOST_ADMIN_KEY, isOutsideLinkOwner, OUTSIDE_LINK_OWNER, OUTSIDE_LINK_RETRY_MS, OUTSIDE_OWN_CLOSES, outsideDuration, outsideTimer, TOTP_SIGNIN_OVER_PUBLIC_LINK, TOTP_STEP_SECONDS, WEB_REMOTE_ACCESS_FILE, WebRemoteAccess } from "./web-remote-access.js";
 import { evaluateSettingsRole, type SettingsRole } from "./authority/settings-role.js";
 import { authorityNow, classifyWebPeer, evaluateWebAuthority, HOST_OPERATOR, hostSessionHere, VERIFIED_SESSION_HOURS, webAuthorityPolicy, type HumanAuthority, type WebAuthorityRefusal, type WebAuthorityResult, type WebPeer } from "./authority/web-authority.js";
@@ -18969,31 +18970,35 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
    * fleet's is that fleet's admin session (and over the outside link the #3008 `remote` one, authorized as before). No authority beyond
    * that: no "Authorize this browser", nothing an agent would take as a go-ahead. Every success tells every admin (a Notice).
    */
-  totpSignIn(input: { exposureId: string | undefined; peer: WebPeer; account: string | undefined; code: string }): TotpSignInResult {
+  totpSignIn(input: { exposureId: string | undefined; peer: WebPeer; account: string | undefined; code: string; browser: { id: string; address: string | undefined }; knownCookie: string | undefined }): TotpSignInResult {
     const store = this.webRemoteAccess(), webOnly = this.isWebOnlyFleet(), { exposureId, peer } = input;
     if (!store || !this.webToken || !this.totpSignInOpen(exposureId, peer)) return { kind: "closed" };
     const { who, ident } = this.resolveSignInAdmin(store, webOnly, input.account);
     const enrollment = who ? store.enrollmentOf(who) : null;
-    const v = store.signIn(who, ident, input.code);
+    const epoch = this.webAuthorityState().epoch, now = Date.now();
+    // This browser: its cookie id, and on a direct connection the address too (over a link the gateway's peer is the tunnel, so the cookie alone).
+    const browser = { key: createHash("sha256").update(`agend-signin-browser\0${input.browser.id}\0${input.browser.address ?? "link"}`).digest("hex"),
+      known: signinKnownDevice(this.webToken, input.knownCookie, who, enrollment, epoch, now) };
+    const v = store.signIn(who, ident, input.code, browser);
     if (v.kind === "unavailable") return v;
-    if (v.kind === "paused") {
-      // A wait that starts is said to the admins when it is the whole sign-in's or a real admin's — never for a name that is nobody's (a flood of those must not be a flood of Notices).
-      if (v.fresh && (v.scope === "fleet" || who)) {
-        this.logger.warn({ waitMs: v.retryAfterMs, scope: v.scope }, "Sign-in with authenticator codes paused after wrong codes");
-        this.postFleetSecurityNotice(t("signin.totp_notice_paused", outsideDuration(v.retryAfterMs)));
+    if (v.kind !== "ok") {
+      // A shared wait that starts is said to the admins when it is the whole sign-in's or a real admin's — never for a name that is nobody's (a flood of those must not be a flood of Notices).
+      if (v.began.fleet || v.began.admin) {
+        this.logger.warn({ fleet: v.began.fleet }, "Sign-in with authenticator codes paused after wrong codes");
+        this.postFleetSecurityNotice(t("signin.totp_notice_paused", outsideDuration(v.began.waitMs)));
       }
-      return { kind: "paused", retryAfterMs: v.retryAfterMs };
-    }
-    if (v.kind !== "ok" || !who || !enrollment) {
-      if (v.kind === "wrong" && v.skewSteps !== undefined) this.logger.warn({ offsetSeconds: v.skewSteps * TOTP_STEP_SECONDS }, "A wrong authenticator code matched a nearby time step: this computer's clock may be off");
+      if (v.kind === "paused") return { kind: "paused", retryAfterMs: v.retryAfterMs };
+      if (v.skewSteps !== undefined) this.logger.warn({ offsetSeconds: v.skewSteps * TOTP_STEP_SECONDS }, "A wrong authenticator code matched a nearby time step: this computer's clock may be off");
       this.logger.debug("Sign-in with an authenticator code refused");
       return { kind: "wrong" };
     }
+    if (!who || !enrollment) return { kind: "wrong" };
     const actor = who === HOST_ADMIN_KEY ? null : (() => { const [adapterId, userId] = who.split("\u0000"); return adapterId && userId ? { adapterId, userId } : null; })();
     if (!actor && who !== HOST_ADMIN_KEY) return { kind: "wrong" };
     const outside = webOnly && exposureId !== undefined;
     return {
       kind: "ok",
+      knownCookie: addSigninKnownDevice(this.webToken, input.knownCookie, who, enrollment, epoch, now),
       session: outside ? { remote: "totp" } : actor ? { owner: actor } : {},
       // Asked again as the session is made: the same app, still an admin, still allowed here.
       commit: (record, label) => {

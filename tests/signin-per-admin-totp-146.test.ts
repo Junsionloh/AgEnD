@@ -22,7 +22,8 @@ import { bindGatewayRequest } from "../src/web-request-context.js";
 import { WEB_CSRF_HEADER } from "../src/web-auth.js";
 import { csrfTokenFor, tokenEpoch } from "../src/web-session.js";
 import { evaluateSettingsRole } from "../src/authority/settings-role.js";
-import { base32Decode, base32Encode, hotp, totpStep, adminKey, HOST_ADMIN_KEY, OUTSIDE_LINK_OWNER, SIGNIN_FLEET_WRONG_LIMIT, SIGNIN_WRONG_LIMIT, TOTP_SIGNIN_OVER_PUBLIC_LINK, WebRemoteAccess, WEB_REMOTE_ACCESS_FILE } from "../src/web-remote-access.js";
+import { base32Decode, base32Encode, hotp, totpStep, adminKey, HOST_ADMIN_KEY, OUTSIDE_LINK_OWNER, SIGNIN_BROWSER_WRONG_LIMIT, SIGNIN_FLEET_WRONG_LIMIT, SIGNIN_WRONG_LIMIT, TOTP_SIGNIN_OVER_PUBLIC_LINK, WebRemoteAccess, WEB_REMOTE_ACCESS_FILE } from "../src/web-remote-access.js";
+import { addSigninKnownDevice, signinKnownDevice } from "../src/web-signin-device.js";
 import { setLocale } from "../src/locale.js";
 
 const TOKEN = "d".repeat(48), ADMIN = "100", ADMIN_B = "200", NO_APP = "300", STRANGER = "999";
@@ -68,11 +69,11 @@ function fleet(o: { chat?: boolean; hostApp?: boolean; admins?: string[]; allowe
   /** The link a public request arrives over (the gateway's own binding), as `openSignin` reports it. */
   const openLink = (owner?: unknown) => { any.publicWebLink = { openSignin: () => ({ exposureId: "x", owner, url: "https://x.trycloudflare.com/signin" }), whenClosed: async () => {}, close: async () => {}, endOf: () => null }; };
   /** POST /auth/totp through the real handler. */
-  const totp = (body: unknown, opts: { where?: Where; link?: "quick" | "named"; raw?: string } = {}) => new Promise<{ status: number; headers: Record<string, any>; json: any }>((resolve, reject) => {
+  const totp = (body: unknown, opts: { where?: Where; link?: "quick" | "named"; raw?: string; cookie?: string } = {}) => new Promise<{ status: number; headers: Record<string, any>; json: any }>((resolve, reject) => {
     const link = !!opts.link, w = WHERE[opts.where ?? "lan"];
     const host = link ? "x.trycloudflare.com" : w.host, origin = link ? "https://x.trycloudflare.com" : `http://${w.host}`;
     const req: any = Object.assign(Readable.from([Buffer.from(opts.raw ?? JSON.stringify(body))]), { method: "POST", url: "/auth/totp", socket: { remoteAddress: link ? "127.0.0.1" : w.remoteAddress },
-      headers: { host, origin, "content-type": "application/json", "sec-fetch-site": "same-origin", "user-agent": "Mozilla/5.0 (iPhone) Safari", ...(link ? {} : w.extra) } });
+      headers: { host, origin, "content-type": "application/json", "sec-fetch-site": "same-origin", "user-agent": "Mozilla/5.0 (iPhone) Safari", ...(opts.cookie ? { cookie: opts.cookie } : {}), ...(link ? {} : w.extra) } });
     if (link) bindGatewayRequest(req, { surface: "gateway", exposureId: "x", expectedOrigin: origin, isCurrent: () => true, named: opts.link === "named" } as any);
     const res: any = { destroyed: false, headersSent: false, writeHead(s: number, h: Record<string, any>) { this.s = s; this.h = h; }, end(b: string) { resolve({ status: this.s, headers: this.h, json: b ? JSON.parse(b) : null }); } };
     try { if (!handleAuthRequest(req, res, new URL(req.url, origin), any)) reject(new Error("not handled")); } catch (err) { reject(err); }
@@ -85,9 +86,20 @@ function fleet(o: { chat?: boolean; hostApp?: boolean; admins?: string[]; allowe
     if (link) bindGatewayRequest(req, { surface: "gateway", exposureId: "x", expectedOrigin: origin, isCurrent: () => true, named: link === "named" } as any);
     return { req, sessionId, record: any.webSessions.authenticate(sessionId, tokenEpoch(TOKEN), { touch: false, ...(link ? { surface: "gateway", exposureId: "x" } : { surface: "local" }) }) };
   };
+  /** One person's browser: its cookies (the ids and marks the route hands out, and the session) kept between requests, as a browser keeps them. */
+  const browser = (where: Where = "lan", link?: "quick" | "named") => {
+    const jar = new Map<string, string>();
+    return { jar, post: async (body: unknown) => {
+      const r = await totp(body, { where, ...(link ? { link } : {}), cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; ") });
+      const set = r.headers["Set-Cookie"];
+      for (const c of Array.isArray(set) ? set : set ? [set] : []) { const [kv] = String(c).split(";"); const eq = kv!.indexOf("="); jar.set(kv!.slice(0, eq), kv!.slice(eq + 1)); }
+      return r;
+    } };
+  };
+  const restart = () => { any.webRemoteAccessState?.close(); any.webRemoteAccessState = null; };   // the store read again from its file, as after a restart
   const access = (): WebRemoteAccess => any.webRemoteAccess();
   const feed = () => (any.webNoticesFeed()?.view().items ?? []).map((n: { text: string }) => n.text);
-  return { fm, any, dir, totp, withCookie, openLink, access, notified, feed };
+  return { fm, any, dir, totp, browser, restart, withCookie, openLink, access, notified, feed };
 }
 
 const WRONG = { status: 401, json: { error: "wrong_code" } };
@@ -188,7 +200,8 @@ describe("nothing tells admins from strangers: one answer, the same counting", (
       f.totp({ account: STRANGER, code: good }),                          // an account that is not an admin
       f.totp({ account: "twin", code: good }),                            // a name two admins answer to: nobody's
     ]);
-    for (const a of answers) expect([a.status, a.json, a.headers]).toEqual([401, { error: "wrong_code" }, { "Content-Type": "application/json" }]);
+    // The same headers too: what a browser with no cookies is handed (its own id, once) is the same for every name.
+    for (const a of answers) expect([a.status, a.json, Object.keys(a.headers).sort(), a.headers["Content-Type"]]).toEqual([401, { error: "wrong_code" }, ["Content-Type", "Set-Cookie"], "application/json"]);
     expect(f.any.webSessions.list(undefined, () => true)).toEqual([]);
     // …and they stay answerable by the unambiguous form.
     expect((await f.totp({ account: "a:200", code: codeOf(secretFor(ADMIN_B), 1) })).status).toBe(200);
@@ -213,11 +226,13 @@ describe("nothing tells admins from strangers: one answer, the same counting", (
     expect(saved().admins[adminKey("a", ADMIN_B)].lim.wrong).toBe(1);                         // the real admin's own count; a ghost has none to show
     expect(saved().admins[adminKey("a", ADMIN)].lim).toBeUndefined();
   });
-  it("timing: the same work for both — a decoy secret is compared when there is no admin (the store's verdicts are the same shape)", () => {
+  it("the store answers the same shape for a real admin, no name, and a key with no record (a decoy secret is compared when there is no admin)", () => {
     const store = new WebRemoteAccess(join(fleet().dir, WEB_REMOTE_ACCESS_FILE), { warn: () => {} });
-    expect(store.signIn(adminKey("a", ADMIN), "x", "000000")).toEqual({ kind: "wrong" });
-    expect(store.signIn(null, "y", "000000")).toEqual({ kind: "wrong" });
-    expect(store.signIn(adminKey("a", "nobody"), "z", "000000")).toEqual({ kind: "wrong" });  // a key with no record: the same as none
+    const b = (n: string) => ({ key: n, known: false });
+    const answer = (v: ReturnType<WebRemoteAccess["signIn"]>) => ({ ...v, began: undefined, skewSteps: undefined });
+    expect(answer(store.signIn(adminKey("a", ADMIN), "x", "000000", b("1")))).toEqual({ kind: "wrong", began: undefined, skewSteps: undefined });
+    expect(answer(store.signIn(null, "y", "000000", b("2")))).toEqual({ kind: "wrong", began: undefined, skewSteps: undefined });
+    expect(answer(store.signIn(adminKey("a", "nobody"), "z", "000000", b("3")))).toEqual({ kind: "wrong", began: undefined, skewSteps: undefined });
   });
   it("a body that is not {code, account} strings is a 400 (and says nothing about admins); a cross-site or non-JSON POST is refused", async () => {
     const f = fleet();
@@ -248,62 +263,196 @@ describe("one use per time step, shared with the admin's confirmations", () => {
   });
 });
 
-describe("limits: per admin, per name typed, and fleet-wide", () => {
-  it("five wrong codes for one admin pause THEM (429 with the wait), the right code included; another admin is not paused", async () => {
-    const f = fleet();
-    for (let n = 1; n < SIGNIN_WRONG_LIMIT; n++) expect((await f.totp({ account: "bob", code: "000000" })).status).toBe(401);
-    const fifth = await f.totp({ account: "bob", code: "000000" });
-    expect([fifth.status, fifth.json.error, fifth.headers["Retry-After"]]).toEqual([429, "paused", "900"]);
-    expect(fifth.json.retryAfterMs).toBe(15 * 60_000);
-    const during = await f.totp({ account: "bob", code: codeOf(secretFor(ADMIN_B)) });
-    expect(during.status).toBe(429);
-    // Their other names (id) share the admin's own count, so the pause cannot be walked around…
-    expect((await f.totp({ account: ADMIN_B, code: codeOf(secretFor(ADMIN_B), 1) })).status).toBe(429);
-    // …and another admin signs in as usual.
-    expect((await f.totp({ account: "alice_tg", code: codeOf(secretFor(ADMIN)) })).status).toBe(200);
-    // A Notice says it (to the admins), once.
-    expect(f.notified.filter(t => /paused/.test(t)).length).toBe(1);
+const STATUSES = async (f: ReturnType<typeof fleet>, names: string[], n: number, mid?: () => void) => {
+  const out: number[] = [];
+  for (let k = 0; k < n; k++) { if (mid && k === Math.floor(n / 2)) mid(); out.push((await f.totp({ account: names[k % names.length], code: "000000" })).status); }
+  return out;
+};
+
+describe("limits: this browser first, then the shared ceilings (the admin's, the name's, the whole sign-in's)", () => {
+  it("one browser's five wrong codes pause THAT browser alone (429, 5 minutes); another browser signs in at once", async () => {
+    const f = fleet(), mine = f.browser();
+    for (let n = 1; n < SIGNIN_BROWSER_WRONG_LIMIT; n++) expect((await mine.post({ account: "bob", code: "000000" })).status).toBe(401);
+    const fifth = await mine.post({ account: "bob", code: "000000" });
+    expect([fifth.status, fifth.json.error, fifth.headers["Retry-After"], fifth.json.retryAfterMs]).toEqual([429, "paused", "300", 5 * 60_000]);
+    expect((await mine.post({ account: "bob", code: codeOf(secretFor(ADMIN_B)) })).status).toBe(429);       // the right code waits too, in this browser
+    // …someone else's browser is not held by it: bob (the same admin) signs in from another one.
+    expect((await f.browser().post({ account: "bob", code: codeOf(secretFor(ADMIN_B)) })).status).toBe(200);
+    expect(f.notified.filter(t => /paused/.test(t)).length).toBe(0);                                          // a browser's own wait is nobody's Notice
   });
-  it("a name that is nobody's is paused the same way after the same number of tries (so the pause itself says nothing)", async () => {
-    const f = fleet();
-    for (let n = 1; n < SIGNIN_WRONG_LIMIT; n++) expect((await f.totp({ account: "ghost", code: "000000" })).status).toBe(401);
-    expect((await f.totp({ account: "ghost", code: "000000" })).status).toBe(429);
-    expect(f.notified.filter(t => /paused/.test(t)).length).toBe(0);                        // a stranger's name is no Notice (a flood must not flood)
+  it("the same for a name that is nobody's: the browser's pause comes after the same number of tries", async () => {
+    const f = fleet(), mine = f.browser();
+    const seen: number[] = [];
+    for (let n = 0; n < SIGNIN_BROWSER_WRONG_LIMIT; n++) seen.push((await mine.post({ account: "ghost", code: "000000" })).status);
+    expect(seen).toEqual([401, 401, 401, 401, 429]);
   });
-  it("the whole sign-in has one limit, and names that are nobody's count in it: past it everyone is paused, the right code too", async () => {
+  it("clearing cookies does not clear the shared ceilings: new browsers keep adding to the admin's and the name's count (429 at the limit, the right code too)", async () => {
     const f = fleet();
-    // 4 wrong codes for each of several different names stays under every per-name limit, and only the fleet-wide one stops it.
+    for (let n = 1; n < SIGNIN_WRONG_LIMIT; n++) expect((await f.totp({ account: "bob", code: "000000" })).status).toBe(401);    // no cookie sent: a new browser each time
+    const tenth = await f.totp({ account: "bob", code: "000000" });
+    expect([tenth.status, tenth.json.error, tenth.headers["Retry-After"]]).toEqual([429, "paused", "900"]);
+    expect((await f.totp({ account: "bob", code: codeOf(secretFor(ADMIN_B)) })).status).toBe(429);
+    expect((await f.totp({ account: "alice_tg", code: codeOf(secretFor(ADMIN)) })).status).toBe(200);          // another admin is not held
+    expect(f.notified.filter(t => /paused/.test(t)).length).toBe(1);                                          // said once, to the admins (a real admin's)
+  });
+  it("a name that is nobody's is held by the same ceiling after the same number of tries — and says no Notice (a flood must not flood)", async () => {
+    const f = fleet();
+    expect(await STATUSES(f, ["ghost"], SIGNIN_WRONG_LIMIT)).toEqual([...Array(SIGNIN_WRONG_LIMIT - 1).fill(401), 429]);
+    expect(f.notified.filter(t => /paused/.test(t)).length).toBe(0);
+  });
+  it("the whole sign-in's ceiling counts names that are nobody's: past it everyone new is paused, the right code too", async () => {
+    const f = fleet();
     let last = 0, n = 0;
     while (last !== 429 && n < SIGNIN_FLEET_WRONG_LIMIT + 5) { last = (await f.totp({ account: `ghost${Math.floor(n / 4)}`, code: "000000" })).status; n++; }
     expect(n).toBe(SIGNIN_FLEET_WRONG_LIMIT);
     const real = await f.totp({ account: "alice_tg", code: codeOf(secretFor(ADMIN)) });
     expect([real.status, real.json.error]).toEqual([429, "paused"]);
-    expect(f.notified.filter(t => /paused/.test(t)).length).toBe(1);                        // the fleet-wide one is said
+    expect(f.notified.filter(t => /paused/.test(t)).length).toBe(1);
   });
-  it("a correct code ends that admin's own count (and the fleet-wide one)", async () => {
+  it("the admin's own ceiling never changes an answer: with two names of one admin it holds the code back and answers 401 exactly like a stranger's name does", async () => {
+    // A real admin typed under rotating names and a name nobody has, 55 times, with a restart in the middle: the same statuses at every step.
+    const real = fleet(), ghost = fleet();
+    const a = await STATUSES(real, ["bob", ADMIN_B, "a:200"], 55, () => real.restart());
+    const b = await STATUSES(ghost, ["g1", "g2", "g3"], 55, () => ghost.restart());
+    expect(a).toEqual(b);
+    expect(a.filter(x => x === 429).length).toBeGreaterThan(0);                                                // …and it did pause, at the names' ceilings, for both
+    // …and the held admin's right code, under a name not yet paused, is not tried: 401, no session (the ceiling's job).
+    const held = fleet();
+    for (let n = 0; n < SIGNIN_WRONG_LIMIT; n++) await held.totp({ account: ["bob", ADMIN_B][n % 2], code: "000000" });    // 5 + 5: each name under its own limit, the admin at its
+    const r = await held.totp({ account: "a:200", code: codeOf(secretFor(ADMIN_B)) });
+    expect([r.status, r.json]).toEqual([401, { error: "wrong_code" }]);
+    expect(held.any.webSessions.list(undefined, () => true)).toEqual([]);
+    expect(held.notified.filter(t => /paused/.test(t)).length).toBe(1);                                       // the admins hear of it
+  });
+  it("a restart changes nothing: a real admin and a name nobody has are paused at the same attempt (the names' counts are saved)", async () => {
+    for (const name of ["bob", "ghost"]) {
+      const f = fleet();
+      for (let n = 0; n < SIGNIN_WRONG_LIMIT - 1; n++) await f.totp({ account: name, code: "000000" });
+      f.restart();
+      expect((await f.totp({ account: name, code: "000000" })).status).toBe(429);
+    }
+    const f = fleet();
+    for (let n = 0; n < SIGNIN_WRONG_LIMIT; n++) await f.totp({ account: "bob", code: "000000" });
+    const reopened = new WebRemoteAccess(join(f.dir, WEB_REMOTE_ACCESS_FILE), { warn: () => {} });
+    expect(reopened.signIn(adminKey("a", ADMIN_B), "bob", codeOf(secretFor(ADMIN_B)), { key: "k", known: false })).toMatchObject({ kind: "paused" });
+    expect(Object.keys(JSON.parse(readFileSync(join(f.dir, WEB_REMOTE_ACCESS_FILE), "utf8")).idents)).toHaveLength(1);
+  });
+  it("a correct code clears that admin's own count and that name's — not the whole sign-in's, which only time lowers", async () => {
     const f = fleet();
     for (let n = 0; n < SIGNIN_WRONG_LIMIT - 1; n++) await f.totp({ account: "bob", code: "000000" });
     expect((await f.totp({ account: ADMIN_B, code: codeOf(secretFor(ADMIN_B)) })).status).toBe(200);
     const saved = JSON.parse(readFileSync(join(f.dir, WEB_REMOTE_ACCESS_FILE), "utf8"));
-    expect([saved.signin, saved.admins[adminKey("a", ADMIN_B)].lim]).toEqual([undefined, undefined]);
+    expect(saved.admins[adminKey("a", ADMIN_B)].lim).toBeUndefined();
+    expect(saved.signin.wrong).toBe(SIGNIN_WRONG_LIMIT - 1);
   });
-  it("a limiter survives a restart (it is saved with the app file)", async () => {
-    const f = fleet();
+  it("time: a count is forgotten after an hour without wrong codes, and the doubling steps down a level per quiet day", () => {
+    let clock = 1_800_000_000_000;
+    const dir = mkdtempSync(join(tmpdir(), "agend-146-t-")); roots.push(dir);
+    const store = new WebRemoteAccess(join(dir, WEB_REMOTE_ACCESS_FILE), { warn: () => {} }, () => clock);
+    const b = { key: "k", known: false }, wrongOnce = (i: number) => store.signIn(null, "x", "000000", { key: `k${i}`, known: false });
+    const burst = (): number => { let last: ReturnType<typeof wrongOnce> = { kind: "unavailable" }; for (let n = 0; n < SIGNIN_WRONG_LIMIT; n++) last = wrongOnce(n); return last.kind === "paused" ? last.retryAfterMs : 0; };
+    expect(burst()).toBe(15 * 60_000);
+    clock += 15 * 60_000 + 1; expect(burst()).toBe(30 * 60_000);                 // a second wait right after: doubled
+    clock += 30 * 60_000 + 3 * 24 * 60 * 60_000; expect(burst()).toBe(15 * 60_000);   // three quiet days later the level is back to the first
+    clock += 2 * 60 * 60_000;
+    for (let n = 0; n < SIGNIN_WRONG_LIMIT - 1; n++) wrongOnce(n);
+    clock += 61 * 60_000;                                                             // an hour of quiet: the count is forgotten …
+    for (let n = 0; n < SIGNIN_WRONG_LIMIT - 1; n++) expect(wrongOnce(n).kind).toBe("wrong");   // … so nine more do not pause
+    expect(b.known).toBe(false);
+  });
+});
+
+describe("a browser that signed in before (the known-device mark)", () => {
+  const signIn = async (br: ReturnType<ReturnType<typeof fleet>["browser"]>, user = ADMIN_B, offset = 0) => br.post({ account: user === ADMIN ? "alice_tg" : "bob", code: codeOf(secretFor(user), offset) });
+  it("the first success hands out the browser's id and its mark (HttpOnly, SameSite=Strict, long-lived); the mark names no one", async () => {
+    const f = fleet(), mine = f.browser(), r = await signIn(mine);
+    expect(r.status).toBe(200);
+    const cookies = (r.headers["Set-Cookie"] as string[]);
+    const known = cookies.find(c => /^agend_signin_known/.test(c))!, id = cookies.find(c => /^agend_signin_browser/.test(c))!;
+    for (const c of [known, id]) expect(c).toMatch(/HttpOnly; SameSite=Strict; Max-Age=\d+/);
+    expect(Number(/Max-Age=(\d+)/.exec(known)![1])).toBe(90 * 24 * 3600);
+    expect(known).not.toContain(ADMIN_B); expect(known).not.toContain("bob");
+  });
+  it("another browser's wrong codes (even to the name's ceiling) do not hold a known device; it still needs the right code", async () => {
+    const f = fleet(), mine = f.browser();
+    expect((await signIn(mine)).status).toBe(200);
+    for (let n = 0; n < SIGNIN_WRONG_LIMIT; n++) await f.totp({ account: "bob", code: "000000" });          // strangers: the admin's, the name's ceiling are in force
+    expect((await f.totp({ account: "bob", code: codeOf(secretFor(ADMIN_B), 1) })).status).toBe(429);       // a new browser waits
+    expect((await mine.post({ account: "bob", code: "000000" })).status).toBe(401);                          // the known one is let try — and a wrong code is wrong
+    expect((await signIn(mine, ADMIN_B, 1)).status).toBe(200);                                               // …and the right one signs in
+  });
+  it("the whole sign-in's ceiling does not hold it either; and it is not a way round its own browser's limit", async () => {
+    const f = fleet(), mine = f.browser();
+    expect((await signIn(mine)).status).toBe(200);
+    for (let n = 0; n < SIGNIN_FLEET_WRONG_LIMIT; n++) await f.totp({ account: `ghost${Math.floor(n / 4)}`, code: "000000" });
+    expect((await f.totp({ account: "alice_tg", code: codeOf(secretFor(ADMIN)) })).status).toBe(429);
+    expect((await signIn(mine, ADMIN_B, 1)).status).toBe(200);
+    for (let n = 1; n < SIGNIN_BROWSER_WRONG_LIMIT; n++) expect((await mine.post({ account: "bob", code: "000000" })).status).toBe(401);
+    expect((await mine.post({ account: "bob", code: "000000" })).status).toBe(429);                          // its own browser's limit still holds
+    expect((await signIn(mine, ADMIN_B, 2)).status).toBe(429);
+  });
+  it("it vouches only for the admin it was made for: Bob's browser is held like any other under Alice's name", async () => {
+    const f = fleet(), mine = f.browser();
+    expect((await signIn(mine)).status).toBe(200);                                                          // Bob's mark
+    for (let n = 0; n < SIGNIN_WRONG_LIMIT; n++) await f.totp({ account: "alice_tg", code: "000000" });
+    expect((await mine.post({ account: "alice_tg", code: codeOf(secretFor(ADMIN)) })).status).toBe(429);
+  });
+  it("the mark vouches by itself (its browser id is only for the browser's own limit); a forged one is nothing", async () => {
+    const f = fleet(), mine = f.browser();
+    expect((await signIn(mine)).status).toBe(200);
+    const known = [...mine.jar].find(([k]) => /^agend_signin_known/.test(k))!;
     for (let n = 0; n < SIGNIN_WRONG_LIMIT; n++) await f.totp({ account: "bob", code: "000000" });
-    const reopened = new WebRemoteAccess(join(f.dir, WEB_REMOTE_ACCESS_FILE), { warn: () => {} });
-    expect(reopened.signIn(adminKey("a", ADMIN_B), "other-name", codeOf(secretFor(ADMIN_B)))).toMatchObject({ kind: "paused" });
+    const r = await f.totp({ account: "bob", code: codeOf(secretFor(ADMIN_B), 1) }, { cookie: `${known[0]}=${known[1]}` });   // the mark alone: a fresh browser id, still exempt from the shared ceilings (it is the mark that vouches)
+    expect(r.status).toBe(200);
+    for (let n = 0; n < SIGNIN_WRONG_LIMIT; n++) await f.totp({ account: "bob", code: "000000" });                      // a success clears the counts: held again
+    const forged = await f.totp({ account: "bob", code: codeOf(secretFor(ADMIN_B), 2) }, { cookie: `${known[0]}=${"9999999999999.".concat("0".repeat(32))}` });
+    expect(forged.status).toBe(429);
+  });
+  it("it stops vouching when the admin is demoted, their app is replaced or removed, or authority is revoked (the epoch moves)", async () => {
+    const f = fleet(), mine = f.browser();
+    expect((await signIn(mine)).status).toBe(200);
+    const trip = async () => { for (let n = 0; n < SIGNIN_WRONG_LIMIT; n++) await f.totp({ account: "bob", code: "000000" }); };
+    await trip();
+    expect((await signIn(mine, ADMIN_B, 1)).status).toBe(200);                                              // exempt while all stands
+    await trip();                                                                                           // a success clears the counts: held again
+    // the app replaced
+    const b = f.access().beginEnrollment("h", "x", adminKey("a", ADMIN_B));
+    expect(f.access().confirmEnrollment("h", codeOf(b.secret, -1))).toBe("ok");
+    expect((await mine.post({ account: "bob", code: codeOf(b.secret, 2) })).status).toBe(429);              // the new app: no longer exempt
+    // demoted: not an admin, the name resolves to nobody
+    f.fm.fleetConfig!.channels![0]!.access!.allowed_users = [ADMIN];
+    expect(summary(await mine.post({ account: "bob", code: codeOf(b.secret, 3) }))).toMatchObject({ status: expect.any(Number) });
+    expect((await mine.post({ account: "bob", code: codeOf(b.secret, 3) })).status).not.toBe(200);
+    // revoked: the epoch moves
+    const g = fleet(), mine2 = g.browser();
+    expect((await signIn(mine2)).status).toBe(200);
+    vi.spyOn(g.any, "webAuthorityState").mockReturnValue({ ...g.any.webAuthorityState(), epoch: g.any.webAuthorityState().epoch + 1 });
+    for (let n = 0; n < SIGNIN_WRONG_LIMIT; n++) await g.totp({ account: "bob", code: "000000" });
+    expect((await mine2.post({ account: "bob", code: codeOf(secretFor(ADMIN_B), 1) })).status).toBe(429);
+  });
+  it("the mark, as a pure function: other admin / other app / other epoch / other web token / expired / tampered each fail; renewal keeps other admins' entries", () => {
+    const token = "t".repeat(48), now = 1_800_000_000_000, who = adminKey("a", ADMIN_B), other = adminKey("a", ADMIN);
+    const mark = addSigninKnownDevice(token, undefined, who, "enr1", 3, now);
+    expect(signinKnownDevice(token, mark, who, "enr1", 3, now + 1000)).toBe(true);
+    expect([signinKnownDevice(token, mark, other, "enr1", 3, now), signinKnownDevice(token, mark, who, "enr2", 3, now), signinKnownDevice(token, mark, who, "enr1", 4, now),
+      signinKnownDevice("u".repeat(48), mark, who, "enr1", 3, now), signinKnownDevice(token, mark, who, "enr1", 3, now + 91 * 24 * 3600_000),
+      signinKnownDevice(token, mark.replace(/.$/, c => (c === "0" ? "1" : "0")), who, "enr1", 3, now), signinKnownDevice(token, undefined, who, "enr1", 3, now),
+      signinKnownDevice(token, mark, null, "enr1", 3, now), signinKnownDevice(token, mark, who, null, 3, now)]).toEqual(Array(9).fill(false));
+    const both = addSigninKnownDevice(token, mark, other, "enrA", 3, now);
+    expect([signinKnownDevice(token, both, who, "enr1", 3, now), signinKnownDevice(token, both, other, "enrA", 3, now)]).toEqual([true, true]);
+    expect(addSigninKnownDevice(token, both, who, "enr1", 3, now + 5).split("~")).toHaveLength(2);        // renewed, not piled up
   });
 });
 
 describe("rechecked as the session is made", () => {
   it("the app replaced, or the admin demoted, between the code and the session: no session, nothing admitted", () => {
     const f = fleet(), code = codeOf(secretFor(ADMIN));
-    const first = f.any.totpSignIn({ exposureId: undefined, peer: "lan", account: "alice_tg", code });
+    const first = f.any.totpSignIn({ exposureId: undefined, peer: "lan", account: "alice_tg", code, browser: { id: "b".repeat(32), address: "192.0.2.20" }, knownCookie: undefined });
     expect(first.kind).toBe("ok");
     const b = f.access().beginEnrollment("h", "x", adminKey("a", ADMIN)); f.access().confirmEnrollment("h", codeOf(b.secret, -1));
     const rec = f.any.webSessions.create({ tier: "admin", surface: "local", label: "x", tokenEpoch: tokenEpoch(TOKEN), owner: first.session.owner }).record;
     expect(first.commit(rec, "x")).toBe(false);
-    const second = f.any.totpSignIn({ exposureId: undefined, peer: "lan", account: "alice_tg", code: codeOf(b.secret, 1) });
+    const second = f.any.totpSignIn({ exposureId: undefined, peer: "lan", account: "alice_tg", code: codeOf(b.secret, 1), browser: { id: "b".repeat(32), address: "192.0.2.20" }, knownCookie: undefined });
     expect(second.kind).toBe("ok");
     f.fm.fleetConfig!.channels![0]!.access!.allowed_users = [ADMIN_B];
     expect(second.commit(rec, "x")).toBe(false);
@@ -373,10 +522,11 @@ describe("what is unchanged", () => {
     const f = fleet();
     expect(summary(await f.totp({ account: NO_APP, code: "123456" }))).toEqual(WRONG);
   });
-  it("the page lists nobody and offers no suggestions: no admin names, no datalist, autocomplete off", async () => {
+  it("the page lists nobody and offers no suggestions: no admin names, no datalist; the name field is for the browser to remember (autocomplete=username)", async () => {
     const html = readFileSync(join(process.cwd(), "src", "ui", "signin-authenticator.html"), "utf8");
     expect(html).not.toMatch(/datalist|list="/i);
-    expect(html).toMatch(/id="account"[^>]*autocomplete="off"/);
+    expect(html).toMatch(/id="account"[^>]*autocomplete="username"/);      // the browser may remember the person's own name; the page never suggests one
+    expect(html).toMatch(/id="code"[^>]*autocomplete="one-time-code"/);
     const js = readFileSync(join(process.cwd(), "src", "ui", "shared", "signin-authenticator.js"), "utf8");
     expect(js).not.toMatch(/\/auth\/(sessions|device-login)|admins|enumerate/);
   });
