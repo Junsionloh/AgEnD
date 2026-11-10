@@ -23,7 +23,7 @@ import { WEB_CSRF_HEADER } from "../src/web-auth.js";
 import { csrfTokenFor, tokenEpoch } from "../src/web-session.js";
 import { evaluateSettingsRole } from "../src/authority/settings-role.js";
 import { base32Decode, base32Encode, hotp, totpStep, adminKey, HOST_ADMIN_KEY, OUTSIDE_LINK_OWNER, SIGNIN_BROWSER_WRONG_LIMIT, SIGNIN_FLEET_WRONG_LIMIT, SIGNIN_WRONG_LIMIT, TOTP_SIGNIN_OVER_PUBLIC_LINK, WebRemoteAccess, WEB_REMOTE_ACCESS_FILE } from "../src/web-remote-access.js";
-import { addSigninKnownDevice, buildSigninCookie, signinKnownDevice } from "../src/web-signin-device.js";
+import { addSigninKnownDevice, buildSigninCookie, findSigninKnownEntry, signinKnownDevice } from "../src/web-signin-device.js";
 import { setLocale } from "../src/locale.js";
 
 const TOKEN = "d".repeat(48), ADMIN = "100", ADMIN_B = "200", NO_APP = "300", STRANGER = "999";
@@ -423,21 +423,51 @@ describe("a browser that signed in before (the known-device mark)", () => {
     mine.shed();
     expect((await mine.post({ account: "bob", code: codeOf(secretFor(ADMIN_B), 1) })).status).toBe(429);        // the right code waits too
   });
-  it("every mark of one admin counts together in the known-path limiter: several stolen marks cannot add up their tries", async () => {
+  it("every mark of one admin counts together in the known-path limiter (30): several stolen marks cannot add up their tries; half-way (15) the admins are told", async () => {
     const f = fleet(), who = adminKey("a", ADMIN_B);
-    // Four distinct valid marks of Bob's (four sign-ins from four browsers, each at another moment), each sent alone — a new browser id every time.
+    // Valid marks of Bob's (each from another sign-in, at another moment), each sent alone — a new browser id every time.
     const cookie = (n: number) => { const v = addSigninKnownDevice(TOKEN, undefined, who, f.access().enrollmentOf(who)!, f.any.webAuthorityState().epoch, Date.now() + n * 1000); return buildSigninCookie("known", v, false, TOKEN).split(";")[0]!; };
-    const marks = [0, 1, 2, 3].map(cookie);
+    const marks = Array.from({ length: 10 }, (_, n) => cookie(n));
     const wrong = async (n: number) => (await f.totp({ account: "bob", code: "000000" }, { cookie: marks[n]! })).status;
-    for (let n = 0; n < 4; n++) expect(await wrong(0)).toBe(401);
-    for (let n = 0; n < 4; n++) expect(await wrong(1)).toBe(401);
-    expect(await wrong(2)).toBe(401);                                                                          // nine in all, none of the marks at its own limit
-    expect(await wrong(2)).toBe(429);                                                                          // the tenth overall: the known-path ceiling (answered like the shared ones)
+    // 29 wrong codes spread so that no single mark reaches its own limit (4 each), none is the 30th
+    for (let m = 0; m < 7; m++) for (let n = 0; n < SIGNIN_BROWSER_WRONG_LIMIT - 1; n++) expect(await wrong(m)).toBe(401);
+    expect(await wrong(7)).toBe(401);
+    expect(f.notified.filter(t => /keeps trying/.test(t)).length).toBe(3);                                    // the admin's own half (5), the known path's (15) and the whole sign-in's (25), each once
+    expect(await wrong(8)).toBe(429);                                                                          // the 30th overall, from a mark with one try: the known-path ceiling
     const saved = JSON.parse(readFileSync(join(f.dir, WEB_REMOTE_ACCESS_FILE), "utf8"));
     expect(saved.admins[who].klim.level).toBe(1);
-    // a fourth mark, never used for a wrong code, is held too — and the right code waits
-    const held = await f.totp({ account: "bob", code: codeOf(secretFor(ADMIN_B)) }, { cookie: marks[3]! });
+    // a mark never used for a wrong code is held too — and the right code waits (a limit, like the others)
+    const held = await f.totp({ account: "bob", code: codeOf(secretFor(ADMIN_B)) }, { cookie: marks[9]! });
     expect([held.status, held.json.error, held.headers["Retry-After"]]).toEqual([429, "paused", "900"]);
+  });
+  it("a mark written another way is not another mark: leading zeros, 0x, exponent, upper-case, a fractional expiry are refused, and cannot make a fresh count", async () => {
+    const f = fleet(), who = adminKey("a", ADMIN_B), enrollment = f.access().enrollmentOf(who)!, epoch = f.any.webAuthorityState().epoch, now = Date.now();
+    const mark = addSigninKnownDevice(TOKEN, undefined, who, enrollment, epoch, now);
+    const [expiry, mac] = mark.split(".") as [string, string];
+    const variants = [`0${expiry}.${mac}`, `00000${expiry}.${mac}`, `0x${Number(expiry).toString(16)}.${mac}`, `${expiry}.0.${mac}`, `${expiry}.${mac.toUpperCase()}`, ` ${expiry}.${mac}`,
+      `${expiry}e0.${mac}`, `${Number(expiry) + 0.5}.${mac}`, `+${expiry}.${mac}`];
+    expect(signinKnownDevice(TOKEN, mark, who, enrollment, epoch, now)).toBe(true);
+    for (const v of variants) expect([v, signinKnownDevice(TOKEN, v, who, enrollment, epoch, now)]).toEqual([v, false]);
+    expect(findSigninKnownEntry(TOKEN, mark, who, enrollment, epoch, now)).toBe(mark);                        // the one written form
+    // Through the route: the real mark is exempt from a shared pause, every rewriting of it is not — and none starts a count of its own.
+    const known = buildSigninCookie("known", mark, false, TOKEN).split(";")[0]!, name = known.split("=")[0]!;
+    for (let n = 0; n < SIGNIN_WRONG_LIMIT; n++) await f.totp({ account: "bob", code: "000000" });             // strangers trip the shared ceilings
+    // (a leading space never reaches the server: the cookie header's own whitespace is trimmed, so it is the same string)
+    for (const [i, v] of variants.filter(x => !x.startsWith(" ")).entries()) expect((await f.totp({ account: "bob", code: codeOf(secretFor(ADMIN_B), 1) }, { cookie: `${name}=${v}` })).status, `variant ${i}`).toBe(429);
+    const saved = JSON.parse(readFileSync(join(f.dir, WEB_REMOTE_ACCESS_FILE), "utf8"));
+    expect(saved.admins[who].klim).toBeUndefined();
+    expect((await f.totp({ account: "bob", code: codeOf(secretFor(ADMIN_B), 1) }, { cookie: known })).status).toBe(200);
+  });
+  it("the sixth try with a mark and a shed browser id is a 429, however the mark's string is padded (padding only makes a stranger of it, never a new count)", async () => {
+    const f = fleet(), mine = f.browser();
+    expect((await signIn(mine)).status).toBe(200);
+    const known = [...mine.jar].find(([k]) => /^agend_signin_known/.test(k))!;
+    const seen: number[] = [];
+    for (let n = 0; n < SIGNIN_BROWSER_WRONG_LIMIT + 1; n++) seen.push((await f.totp({ account: "bob", code: "000000" }, { cookie: `${known[0]}=${n % 2 ? "0" : ""}${known[1]}` })).status);
+    const plain: number[] = [];
+    for (let n = 0; n < SIGNIN_BROWSER_WRONG_LIMIT; n++) plain.push((await f.totp({ account: "bob", code: "000000" }, { cookie: `${known[0]}=${known[1]}` })).status);
+    // The plain spelling had been sent 3 times above (tries 0, 2, 4); the padded ones were strangers', not the mark's: so the mark's own 5th is its 2nd try here.
+    expect(plain).toEqual([401, 429, 429, 429, 429]);
   });
   it("strangers' wrong codes (no mark) never touch the known-path count", async () => {
     const f = fleet(), mine = f.browser();

@@ -72,7 +72,7 @@ export const SIGNIN_COUNT_QUIET_MS = 24 * 60 * 60_000;
 /** This browser's own count forgets sooner: it only holds that browser. */
 export const SIGNIN_BROWSER_QUIET_MS = 60 * 60_000;
 /** Attempts that carry a valid known-device mark of one admin count together in one more limiter, whatever cookies they send. */
-export const SIGNIN_KNOWN_WRONG_LIMIT = 10;
+export const SIGNIN_KNOWN_WRONG_LIMIT = 30;
 export const SIGNIN_LEVEL_QUIET_MS = 24 * 60 * 60_000;
 /** How many typed names' limiters (saved) and browsers' (memory) are remembered; the shared ceilings bound how fast they can be made. */
 const SIGNIN_IDENT_MAX = 4096;
@@ -530,7 +530,7 @@ export class WebRemoteAccess {
     const f = bumpLim(fleet, SIGNIN_FLEET_WRONG_LIMIT, TOTP_PAUSE_MS, TOTP_PAUSE_MAX_MS, now, SIGNIN_COUNT_QUIET_MS, SIGNIN_FLEET_WRONG_LIMIT / 2);
     const i = bumpLim(byIdent, SIGNIN_WRONG_LIMIT, TOTP_PAUSE_MS, TOTP_PAUSE_MAX_MS, now);
     const a = rec ? bumpLim(byAdmin, SIGNIN_WRONG_LIMIT, TOTP_PAUSE_MS, TOTP_PAUSE_MAX_MS, now, SIGNIN_COUNT_QUIET_MS, SIGNIN_WRONG_LIMIT / 2) : { lim: NO_LIM, wait: 0, half: false };
-    const k = known ? bumpLim(byKnown, SIGNIN_KNOWN_WRONG_LIMIT, TOTP_PAUSE_MS, TOTP_PAUSE_MAX_MS, now) : { lim: byKnown, wait: 0, half: false };
+    const k = known ? bumpLim(byKnown, SIGNIN_KNOWN_WRONG_LIMIT, TOTP_PAUSE_MS, TOTP_PAUSE_MAX_MS, now, SIGNIN_COUNT_QUIET_MS, SIGNIN_KNOWN_WRONG_LIMIT / 2) : { lim: byKnown, wait: 0, half: false };
     const w = bumpLim(byBrowser, SIGNIN_BROWSER_WRONG_LIMIT, SIGNIN_BROWSER_PAUSE_MS, SIGNIN_BROWSER_PAUSE_MAX_MS, now, SIGNIN_BROWSER_QUIET_MS);
     this.browserLim.delete(browser.key); this.browserLim.set(browser.key, w.lim);
     while (this.browserLim.size > SIGNIN_BROWSER_MAX) this.browserLim.delete(this.browserLim.keys().next().value!);
@@ -542,7 +542,7 @@ export class WebRemoteAccess {
     this.state = { ...base, signin: f.lim, idents };
     this.flush();
     const began: SignInBegan = { fleet: f.wait > 0, admin: !!rec && (a.wait > 0 || i.wait > 0 || k.wait > 0), waitMs: Math.max(f.wait, i.wait, a.wait, k.wait),
-      halfFleet: f.half, halfAdmin: !!rec && a.half };
+      halfFleet: f.half, halfAdmin: !!rec && (a.half || k.half) };
     // Answered by what every name shares: this browser's wait, the name's, the whole sign-in's (a known device: its mark's and its admin's known-path wait).
     const started = Math.max(w.wait, ...(known ? [k.wait] : [f.wait, i.wait]));
     return started > 0 ? { kind: "paused", retryAfterMs: started, began } : { kind: "wrong", ...(rec && skew !== null ? { skewSteps: skew } : {}), began };

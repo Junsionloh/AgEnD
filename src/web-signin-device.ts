@@ -45,26 +45,37 @@ const macOf = (webToken: string, who: string, enrollment: string, epoch: number,
   createHmac("sha256", createHmac("sha256", webToken).update("agend signin known device v1").digest())
     .update(`${who}\0${enrollment}\0${epoch}\0${expiry}`).digest("hex").slice(0, 32);
 
+/**
+ * An entry in its one written form, or null: an expiry of 10–16 digits with no leading zero or other spelling (`String(Number(x)) === x`:
+ * not `0001234`, `0x4d2`, `1e3`, `12.0`) and a lowercase 32-hex signature. Every mark is counted by the string this returns, so one mark
+ * cannot be written as several to be counted several times.
+ */
+function canonicalEntry(entry: string): { expiry: number; mac: string; text: string } | null {
+  const dot = entry.indexOf("."), expiryText = entry.slice(0, dot), mac = entry.slice(dot + 1);
+  if (dot < 1 || !/^[1-9][0-9]{9,15}$/.test(expiryText) || String(Number(expiryText)) !== expiryText || !/^[0-9a-f]{32}$/.test(mac)) return null;
+  const expiry = Number(expiryText);
+  return Number.isSafeInteger(expiry) ? { expiry, mac, text: `${expiryText}.${mac}` } : null;
+}
+
 /** Whether one entry of the cookie is this admin's, for the app they have now, under this epoch, and not run out. */
 function entryValid(webToken: string, entry: string, who: string, enrollment: string, epoch: number, now: number): boolean {
-  const dot = entry.indexOf(".");
-  const expiry = Number(entry.slice(0, dot)), mac = entry.slice(dot + 1);
-  if (dot < 1 || !Number.isSafeInteger(expiry) || expiry <= now || !/^[0-9a-f]{32}$/.test(mac)) return false;
-  const want = Buffer.from(macOf(webToken, who, enrollment, epoch, expiry));
-  return timingSafeEqual(want, Buffer.from(mac));
+  const e = canonicalEntry(entry);
+  if (!e || e.expiry <= now) return false;
+  return timingSafeEqual(Buffer.from(macOf(webToken, who, enrollment, epoch, e.expiry)), Buffer.from(e.mac));
 }
 const entriesOf = (value: string | undefined): string[] => (value ?? "").split("~").filter(e => e.length > 0 && e.length <= 80).slice(0, SIGNIN_KNOWN_MAX_ENTRIES);
 
 /** The entry of the browser's mark that vouches for `who` — the admin the typed name resolved to — as their app and the epoch stand now; null when none does. */
 export function findSigninKnownEntry(webToken: string | null | undefined, value: string | undefined, who: string | null, enrollment: string | null, epoch: number, now: number): string | null {
   if (!webToken || !who || !enrollment) return null;
-  return entriesOf(value).find(e => entryValid(webToken, e, who, enrollment, epoch, now)) ?? null;
+  const found = entriesOf(value).find(e => entryValid(webToken, e, who, enrollment, epoch, now));
+  return found ? canonicalEntry(found)!.text : null;
 }
 export const signinKnownDevice = (webToken: string | null | undefined, value: string | undefined, who: string | null, enrollment: string | null, epoch: number, now: number): boolean =>
   findSigninKnownEntry(webToken, value, who, enrollment, epoch, now) !== null;
 /** The mark after a correct sign-in as `who`: their entry renewed, the others kept while they run out (at most four, newest last). */
 export function addSigninKnownDevice(webToken: string, value: string | undefined, who: string, enrollment: string, epoch: number, now: number): string {
   const expiry = now + SIGNIN_KNOWN_MAX_AGE_MS;
-  const kept = entriesOf(value).filter(e => !entryValid(webToken, e, who, enrollment, epoch, now) && Number(e.slice(0, e.indexOf("."))) > now);
+  const kept = entriesOf(value).filter(e => !entryValid(webToken, e, who, enrollment, epoch, now) && (canonicalEntry(e)?.expiry ?? 0) > now);
   return [...kept, `${expiry}.${macOf(webToken, who, enrollment, epoch, expiry)}`].slice(-SIGNIN_KNOWN_MAX_ENTRIES).join("~");
 }
