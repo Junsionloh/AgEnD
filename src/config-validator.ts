@@ -18,6 +18,7 @@ import { existsSync } from "node:fs";
 import { isUnsupportedHomeRef, resolveFileRefPath, systemPromptParts } from "./prompt-file-ref.js";
 import { isRemovedBackend, removedBackendMessage } from "./backend/removed.js";
 import { CROSS_INSTANCE_VISIBILITY_MODES, isCrossInstanceVisibility } from "./cross-instance-notice.js";
+import { AGENT_INSTRUCTIONS_MAX_CHARS } from "./agent-instructions.js";
 import { dashboardAccessProblem } from "./dashboard-permissions.js";
 import { validWindowsAgentId, validWindowsDirectory } from "./windows-cli-worker.js";
 import { isNativeProviderId, nativeProvider } from "./windows-cli-providers.js";
@@ -242,6 +243,11 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
     }
     if (value.cross_instance_visibility !== undefined && !isCrossInstanceVisibility(value.cross_instance_visibility)) {
       err(`${path}.cross_instance_visibility`, `must be one of: ${CROSS_INSTANCE_VISIBILITY_MODES.join(", ")}`);
+    }
+    // AGEND-162: the agent's own Markdown — text, at most AGENT_INSTRUCTIONS_MAX_CHARS.
+    if (value.instructions !== undefined) {
+      if (typeof value.instructions !== "string") err(`${path}.instructions`, "must be text (Markdown)");
+      else if (value.instructions.length > AGENT_INSTRUCTIONS_MAX_CHARS) err(`${path}.instructions`, `must be at most ${AGENT_INSTRUCTIONS_MAX_CHARS} characters (it is ${value.instructions.length})`);
     }
     if (value.board_cards_at_once !== undefined && !(Number.isInteger(value.board_cards_at_once) && (value.board_cards_at_once as number) >= 1)) {
       err(`${path}.board_cards_at_once`, "must be a whole number of at least 1");
