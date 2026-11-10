@@ -427,8 +427,10 @@ describe("#3008 a real fleet: connections from outside", () => {
     const fifth = await h.outside("POST", "/auth/totp", { body: { code: "000000" } });
     expect([fifth.status, fifth.headers["retry-after"], parse(fifth).retryAfterMs]).toEqual([429, String(TOTP_PAUSE_MS / 1000), TOTP_PAUSE_MS]);
     expect((await h.codeIn(key)).status).toBe(429);                                       // even the right code waits
-    expect(h.notices()).toContain("Sign-in from outside is paused for 15 minutes after 5 wrong codes.");
-    expect(parse(await h.local(s, "GET", "/ui/outside")).pausedForMs).toBeGreaterThan(TOTP_PAUSE_MS - 60_000);
+    // AGEND-146: a sign-in's wrong codes have their own limits (per admin and fleet-wide), apart from the confirmations' limiter: an open
+    // route cannot pause the confirmations of an admin who is signed in. The wait is said in a Notice; the confirmation status stays 0.
+    expect(((h.fm.notifyFleetError as any).mock.calls as unknown[][]).some(c => /Signing in with authenticator codes is paused for 15 minutes/.test(String(c[0])))).toBe(true);
+    expect(parse(await h.local(s, "GET", "/ui/outside")).pausedForMs).toBe(0);
   }, 20_000);
 
   it("Off closes the link and ends every session from outside; setting up a new app ends them too; removing turns it off", async () => {

@@ -68,6 +68,14 @@ export const LOGIN_PAUSED_MESSAGE = "Too many wrong codes — sign-in is paused 
 
 const MAX_LOGIN_BODY = 1024;
 
+/** AGEND-146: what FleetManager.totpSignIn answers (the route turns each into one response; `wrong` is the one answer for every way of not getting in). */
+export type TotpSignInResult =
+  | { kind: "ok"; session: { owner?: { adapterId: string; userId: string }; remote?: "totp" }; commit(record: SessionRecord, label: string): boolean }
+  | { kind: "wrong" }
+  | { kind: "paused"; retryAfterMs: number }
+  | { kind: "closed" }
+  | { kind: "unavailable" };
+
 export interface AuthApiContext {
   readonly webToken: string | null;
   readonly webSessions: WebSessionStore | null;
@@ -92,14 +100,13 @@ export interface AuthApiContext {
   /** S-117 story 1: web-only, or no chat connected yet — the sign-in page never says "send /web" then. */
   signinWithoutChat?(): boolean;
   /**
-   * #3008: a code from the authenticator app, typed at the outside link's sign-in (FleetManager.outsideSignIn): "ok"
-   * only for the link connections from outside opened (`exposureId`), with a code not used before.
+   * AGEND-146 (FleetManager.totpSignIn): a browser signs in as one admin with the code of that admin's own authenticator, on a
+   * direct connection or a link where it is open. "ok" says what kind of session to make and gives `commit`, which the caller runs
+   * on the session it made (false: end it — nothing was admitted).
    */
-  outsideSignIn?(exposureId: string | undefined, code: string): { kind: "ok" } | { kind: "wrong" } | { kind: "paused"; retryAfterMs: number } | { kind: "closed" } | { kind: "unavailable" };
+  totpSignIn?(input: { exposureId: string | undefined; peer: WebPeer; account: string | undefined; code: string }): TotpSignInResult;
   /** #3008: this exposure is the link "Allow connections from outside" opened, open now (its sign-in asks for the code). */
   isOutsideLink?(exposureId: string): boolean;
-  /** #3008: the session outsideSignIn's "ok" made is this computer's admin (and a Notice says who signed in). */
-  authorizeOutsideSession?(record: SessionRecord, peer: WebPeer, label: string): boolean;
   /** #1570: record this browser as a returning device of the code's owner; the cookie value, or null when not kept. */
   rememberReturningDevice?(owner: LoginCodeOwner, input: { surface: "local" | "gateway"; label: string }): string | null;
   /** #1920 step 4b: a guest's sign-in makes this browser a guest's returning device (its own caps). The cookie, or null. */
@@ -139,6 +146,8 @@ const ASSETS: Readonly<Record<string, { file: string; type: string }>> = {
   "loading.css": { file: join("shared", "loading.css"), type: "text/css; charset=utf-8" },
   "agend-auth.js": { file: join("shared", "agend-auth.js"), type: "text/javascript; charset=utf-8" },
   "signin.js": { file: join("shared", "signin.js"), type: "text/javascript; charset=utf-8" },
+  // AGEND-146: the temporary page for the authenticator sign-in (the leader's sign-in page replaces it).
+  "signin-authenticator.js": { file: join("shared", "signin-authenticator.js"), type: "text/javascript; charset=utf-8" },
   "guest-refused.js": { file: join("shared", "guest-refused.js"), type: "text/javascript; charset=utf-8" },
   "theme.js": { file: join("shared", "theme.js"), type: "text/javascript; charset=utf-8" },
   // #1408: the design tokens every panel shares, and the font they name (Inter, SIL OFL 1.1: shared/fonts/OFL.txt).
@@ -240,7 +249,7 @@ export function isServedAsset(name: string): boolean {
 }
 
 export function isAuthPath(path: string): boolean {
-  return path === "/" || path === "/signin" || path.startsWith("/auth/") || path.startsWith("/assets/");
+  return path === "/" || path === "/signin" || path === "/signin/authenticator" || path.startsWith("/auth/") || path.startsWith("/assets/");
 }
 
 /**
@@ -366,6 +375,18 @@ export function handleAuthRequest(
     return true;
   }
 
+  // AGEND-146 (TEMPORARY): the minimum page to try "sign in with your own authenticator" — GET /signin/authenticator; the leader's sign-in page replaces it.
+  if (path === "/signin/authenticator") {
+    if (method !== "GET" && method !== "HEAD") { json(res, 405, { error: "method not allowed" }); return true; }
+    if (!ctx.totpSignIn) { json(res, 404, { error: "not_found" }); return true; }
+    try {
+      const page = readFileSync(join(__dirname, "ui", "signin-authenticator.html"), "utf-8");
+      const html = ctx.isWebOnlyFleet?.() === true ? page.replace("<body>", '<body data-web-only="1">') : page;
+      sendPanelHtml(res, withAppIconLinks(html), 200, { "Cache-Control": "no-store" });
+    } catch { json(res, 500, { error: "signin-authenticator.html not found" }); }
+    return true;
+  }
+
   if (path.startsWith("/assets/")) {
     const asset = method === "GET" ? ASSETS[path.slice("/assets/".length)] : undefined;
     if (!asset) { json(res, 404, { error: "not found" }); return true; }
@@ -379,39 +400,47 @@ export function handleAuthRequest(
     return true;
   }
 
-  // ── #3008: POST /auth/totp — signing in from outside, with the authenticator app's code ──
-  // Only through the link "Allow connections from outside" opened (the gateway's own provenance names it, never a
-  // header); anything else is refused as a wrong code would be, without counting. An admin session with no account,
-  // marked `remote`, ended by the switch's Off, a new app, or the link closing.
+  // ── POST /auth/totp — a new browser signs in as ONE admin, with the code of that admin's own authenticator (AGEND-146; #3008) ──
+  // Body `{ "code": "123456", "account": "<name>" }`. `account` names the admin (FleetManager.totpSignIn: never listed, never guessed
+  // from the code alone); a web-only fleet has one admin and needs none. Same-origin, JSON, Origin required, as the sign-in code's own
+  // exchange. A direct connection or a link where it is open (the fleet decides; a link it does not allow is a 404 as if the route
+  // were not there); a name that is nobody's, an admin with no app and a wrong code all answer 401 `wrong_code`, alike.
   if (path === "/auth/totp") {
     if (method !== "POST") { json(res, 405, { error: "method not allowed" }); return true; }
     if (!req.headers.origin || !isSameOriginRequest(gateReq)) { json(res, 403, { error: "Cross-site request rejected" }); return true; }
     if (!isJsonRequest(req)) { json(res, 415, { error: "expected application/json" }); return true; }
     const token = ctx.webToken, gateway = gatewayRequestContext(req);
-    if (!token || !ctx.webSessions || !gateway || !ctx.outsideSignIn) { json(res, 404, { error: "not_found" }); return true; }
-    const sessions = ctx.webSessions, signIn = ctx.outsideSignIn.bind(ctx);
+    if (!token || !ctx.webSessions || !ctx.totpSignIn) { json(res, 404, { error: "not_found" }); return true; }
+    const sessions = ctx.webSessions, signIn = ctx.totpSignIn.bind(ctx);
+    const peer: WebPeer = gateway ? (gateway.named === true ? "named_link" : "quick_link") : classifyWebPeer(req);
     void readJsonBody(req).then(body => {
-      if (!body || typeof body.code !== "string" || body.code.length > 32) { json(res, 400, { error: "expected {\"code\": \"123456\"}" }); return; }
+      if (!body || typeof body.code !== "string" || body.code.length > 32 || (body.account !== undefined && (typeof body.account !== "string" || body.account.length > 256))) {
+        json(res, 400, { error: "expected {\"code\": \"123456\", \"account\": \"name\"}" }); return;
+      }
       if (!isWebRequestCurrent(req) || ctx.webToken !== token) { json(res, 401, { error: "wrong_code" }); return; }
-      const result = signIn(gateway.exposureId, body.code);
+      const result = signIn({ exposureId: gateway?.exposureId, peer, account: body.account as string | undefined, code: body.code });
       if (result.kind === "paused") {
         json(res, 429, { error: "paused", retryAfterMs: result.retryAfterMs }, { "Retry-After": String(Math.ceil(result.retryAfterMs / 1000)) });
         return;
       }
       if (result.kind === "closed") { json(res, 404, { error: "not_found" }); return; }
       if (result.kind === "unavailable") { json(res, 503, { error: "unavailable" }); return; }
-      if (result.kind === "wrong") { ctx.logger.debug("outside sign-in refused"); json(res, 401, { error: "wrong_code" }); return; }
+      if (result.kind === "wrong") { ctx.logger.debug("authenticator sign-in refused"); json(res, 401, { error: "wrong_code" }); return; }
       for (const previous of readSessionCookies(gateReq, token)) {
-        if (sessions.authenticate(previous, tokenEpoch(token), { touch: false, surface: gateway.surface, exposureId: gateway.exposureId })) sessions.revokeById(previous);
+        if (sessions.authenticate(previous, tokenEpoch(token), { touch: false, surface: gateway?.surface ?? "local", exposureId: gateway?.exposureId })) sessions.revokeById(previous);
       }
       const label = labelFromUserAgent(typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined);
-      const { sessionId, record } = sessions.create({ tier: "admin", surface: gateway.surface, label, tokenEpoch: tokenEpoch(token), exposureId: gateway.exposureId, remote: "totp" });
-      if (record.remote !== "totp") { sessions.revokeById(sessionId); json(res, 404, { error: "not_found" }); return; }
-      ctx.logger.info({ handle: record.handle, label, surface: record.surface }, "Web sign-in from outside");
-      // #3015 review r3: admitted (its handle saved) and authorized, or no session at all.
+      const { sessionId, record } = sessions.create({ tier: "admin", surface: gateway?.surface ?? "local", label, tokenEpoch: tokenEpoch(token), exposureId: gateway?.exposureId,
+        ...(result.session.owner ? { owner: result.session.owner } : {}), ...(result.session.remote ? { remote: result.session.remote } : {}) });
+      // The session must be the kind that was asked for (the store drops a flag it does not allow), or there is none.
+      if ((result.session.remote && record.remote !== result.session.remote) || (result.session.owner && !record.owner) || (!result.session.owner && !result.session.remote && (record.owner || record.remote))) {
+        sessions.revokeById(sessionId); json(res, 503, { error: "unavailable" }); return;
+      }
+      ctx.logger.info({ handle: record.handle, label, surface: record.surface }, "Web sign-in with an authenticator code");
+      // Admitted (and its Notice posted) by the fleet, or no session at all.
       let admitted = false;
-      try { admitted = ctx.authorizeOutsideSession?.(record, gateway.named === true ? "named_link" : "quick_link", label) === true; } catch (err) { ctx.logger.debug({ err }, "outside session not authorized"); }
-      if (!admitted) { sessions.revokeById(sessionId); json(res, 503, { error: "unavailable" }); return; }
+      try { admitted = result.commit(record, label) === true; } catch (err) { ctx.logger.debug({ err }, "authenticator sign-in not admitted"); }
+      if (!admitted || !isWebRequestCurrent(req)) { sessions.revokeById(sessionId); json(res, 503, { error: "unavailable" }); return; }
       const session = buildSessionCookie(sessionId, isSecureRequest(gateReq), (record.absoluteExpiry - record.created) / 1000, token);
       json(res, 200, { ok: true, csrf: csrfTokenFor(sessionId), tier: record.tier, expiresAt: record.absoluteExpiry }, { "Set-Cookie": session });
     }).catch(() => { if (!res.destroyed && !res.headersSent) json(res, 500, { error: "sign-in failed" }); });

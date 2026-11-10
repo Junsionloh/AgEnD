@@ -174,6 +174,11 @@ const enMessages = {
     // #3008: connections from outside (a web-only fleet's Notices; the leader's approved wording, cid-alpha3-design).
     "outside.notice_signed_in": "Signed in from outside: {0}.",
     "outside.notice_paused": "Sign-in from outside is paused for {0} after {1} wrong codes.",
+    // AGEND-146: a new browser signs in with an admin's own authenticator code.
+    "signin.totp_notice_signed_in": "🔐 {0} signed in from a new browser with their authenticator code ({1}, {2}). If this was not them, they can sign it out in Settings → Access & security, and remove or replace their authenticator app.",
+    "signin.totp_notice_paused": "🔐 Signing in with authenticator codes is paused for {0} after wrong codes. If this was not you, someone may be guessing codes.",
+    "signin.totp_where_direct": "direct connection",
+    "signin.totp_where_link": "through the public link",
     "outside.notice_ended": "The outside link has ended ({0}). Turn it on again on the AgEnD computer, in Settings → Access & security.",
     "outside.reason_expired": "its time ran out",
     "outside.reason_failed": "it could not be reopened",
@@ -1797,6 +1802,11 @@ const zhTWMessages: { [K in keyof typeof enMessages]: string } = {
     "web_auth.refusal_outside_sign_in": "它是從外面登入的，而從外面連線現在已關閉或授權已結束（請用新的 6 位數驗證碼重新登入）。",
     "outside.notice_signed_in": "有人從外面登入：{0}。",
     "outside.notice_paused": "從外面登入連錯 {1} 次，已暫停 {0}。",
+    // AGEND-146：新瀏覽器用管理員自己的驗證器驗證碼登入。
+    "signin.totp_notice_signed_in": "🔐 {0} 用驗證器驗證碼從新的瀏覽器登入（{1}，{2}）。如果不是本人，請本人到「設定 → 存取與安全」登出該裝置，並移除或更換驗證器。",
+    "signin.totp_notice_paused": "🔐 用驗證器驗證碼登入連續輸錯，已暫停 {0}。如果不是你，可能有人在猜驗證碼。",
+    "signin.totp_where_direct": "直接連線",
+    "signin.totp_where_link": "公開連結",
     "outside.notice_ended": "從外面連線的連結已結束（{0}）。請在 AgEnD 電腦上，到「設定 → 存取與安全」重新開啟。",
     "outside.reason_expired": "時間已到",
     "outside.reason_failed": "無法重新開啟",
