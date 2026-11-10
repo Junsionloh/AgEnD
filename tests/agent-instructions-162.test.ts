@@ -129,6 +129,16 @@ describe("AGEND-162: the web confirmation of a long instructions text", () => {
     expect(settingsChangeDiff(effect(long), effect(long), { operation: "PATCH x" })).toBeNull();
   });
 
+  it("the authority classifier (it judges the same change from `instances.<name>`, not from `fleet`) lists it just as shortly", async () => {
+    const { settingsEffectAuthority } = await import("../src/settings-authority.js");
+    const inst = (instructions?: string) => ({ working_directory: "/w", ...(instructions === undefined ? {} : { instructions }) });
+    const cfg = (instructions?: string) => ({ defaults: {}, instances: { dev: inst(instructions) } }) as never;
+    expect(() => settingsEffectAuthority(cfg(), cfg(long), {}, {})).not.toThrow();
+    expect(() => settingsEffectAuthority(cfg(long), cfg(long + "!"), {}, {})).not.toThrow();
+    const diff = settingsChangeDiff({ instances: { dev: inst() } }, { instances: { dev: inst(long) } }, { operation: "authority" })!;
+    expect(diff.summary.join("\n").length).toBeLessThan(400);
+  });
+
   it("does not change how systemPrompt is confirmed", () => {
     const sp = (v: string) => ({ fleet: { instances: { dev: { working_directory: "/w", systemPrompt: v } } } });
     const diff = settingsChangeDiff(sp("old"), sp("new prompt"), { operation: "PATCH x" })!;
