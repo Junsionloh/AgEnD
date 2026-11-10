@@ -1,0 +1,1 @@
+Screenshots for the authenticator sign-in page (fake data, scratch fixture). before/: the page a new browser has today (/signin); after/: /signin/authenticator and its wrong-code state. desk|phone x light|dark x en|zh-TW.
