@@ -1662,7 +1662,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         const now = this.fleetConfig?.instances[name];
         if (this.shuttingDown || !isNativePaneInstance(now) || now?.native_agent_id !== config.native_agent_id
           || now?.machine_id !== config.machine_id || now?.working_directory !== config.working_directory || now?.backend !== config.backend
-          || now?.model !== config.model || now?.native_sandbox !== config.native_sandbox || now?.systemPrompt !== config.systemPrompt || now?.workflow !== config.workflow
+          || now?.model !== config.model || now?.native_sandbox !== config.native_sandbox || now?.systemPrompt !== config.systemPrompt || now?.instructions !== config.instructions || now?.workflow !== config.workflow
           || now?.general_topic !== config.general_topic || now?.native_general_binding !== config.native_general_binding
           || nativeCredentialProfile(now) !== nativeCredentialProfile(config))
           throw Error("Native pane configuration or lifetime changed");
@@ -1688,7 +1688,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
           epoch: () => hub.paneTransportEpoch(machineId), version: provider => hub.machine(machineId)?.inventory?.clis.find(row => row.id === provider && row.runnable)?.version ?? null };
       },
       instructions: (name, config) => buildNativeFleetInstructions({ instanceName: name, workingDirectory: config.working_directory,
-        displayName: config.display_name, description: config.description, customPrompt: config.systemPrompt,
+        displayName: config.display_name, description: config.description, customPrompt: config.systemPrompt, agentInstructions: config.instructions,
         workflow: config.workflow, taskBoard: !dashboardRefusalIn(this.fleetConfig, name, "task"),
         runtimeIdentity: { kind: "fleet-topic", backend: config.backend ?? "codex", model: config.model || "default" } }, config.general_topic === true),
       menu: name => TOOLS.filter(tool => allowed(name, tool.name)).map(tool => ({ ...tool })),

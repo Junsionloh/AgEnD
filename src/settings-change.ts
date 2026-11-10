@@ -45,6 +45,14 @@ function fingerprint(value: unknown): string {
   if (value === undefined || value === null || value === "") return "absent";
   return createHash("sha256").update(String(value)).digest("hex").slice(0, 12);
 }
+/** AGEND-162: a long free text for a confirmation card: its length, fingerprint and first words — never the whole of it. */
+const TEXT_HEAD_CHARS = 40;
+function longTextSummary(value: unknown): string {
+  if (typeof value !== "string" || value === "") return settingsDisplay(t("settings_confirm.summary.text_none"));
+  const head = [...value.replace(/\s+/g, " ").trim()].slice(0, TEXT_HEAD_CHARS).join("");
+  const more = value.replace(/\s+/g, " ").trim().length > head.length ? "…" : "";
+  return `${t("settings_confirm.summary.text_chars", value.length)}, ${t("settings_confirm.summary.fingerprint")} ${fingerprint(value)}, ${settingsDisplay(`“${head}${more}”`)}`;
+}
 function same(a: unknown, b: unknown): boolean { return settingsFingerprint(a) === settingsFingerprint(b); }
 function object(value: unknown): value is Record<string, unknown> { return !!value && typeof value === "object" && !Array.isArray(value); }
 /**
@@ -439,6 +447,15 @@ export function settingsChangeDiff(before: unknown, after: unknown, options: {
       const fleet = path[1] === "defaults";
       if ([old, next].every(v => v === undefined || v === null || !quotaNoticeProblem(v, fleet))) return;
       throw new SettingsConfirmationError(400, "unsupported_quota_notice");
+    }
+    // AGEND-162: an agent's own instructions (up to 24,000 characters) are never listed whole — the card shows how long
+    // each version is, its fingerprint and its first words, so a long text neither fills the 4,096 the card holds
+    // (confirmation_diff_too_large) nor changes without the person seeing that it changed. The change's own fingerprint
+    // (below) still covers every character: what is confirmed is exactly this text.
+    if (path.length === 4 && path[0] === "fleet" && path[1] === "instances" && path[3] === "instructions"
+      && (old === undefined || old === null || typeof old === "string") && (next === undefined || next === null || typeof next === "string")) {
+      add(`${settingsDisplay(path.join("."))}: ${longTextSummary(old)} → ${longTextSummary(next)}`);
+      return;
     }
     if (ordinary(path, old, next) || plainList(path, old, next) || codexSpeedPath(path, old, next) || accountProfilePath(path, old, next)) return;
     if (path.some(key => /access|permission|admin/i.test(key)) && section !== "secret") section = "access";

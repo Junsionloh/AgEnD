@@ -19,6 +19,7 @@ export const PRESERVED_INSTANCE_FIELDS = new Set([
   "backend_options",
   "display_name",
   "systemPrompt",
+  "instructions",
   "worktree_source",
   "profile",
 ]);

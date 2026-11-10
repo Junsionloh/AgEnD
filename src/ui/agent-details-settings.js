@@ -45,7 +45,7 @@ export const categoryPath = (name, cat) => (cat ? `${detailsPath(name)}?cat=${ca
 
 /** Which category each key of a patch belongs to (a dot on the nav says "this one has changes"). */
 const AGENT_KEYS = {
-  basic: ["display_name", "description", "tags"],
+  basic: ["display_name", "description", "instructions", "tags"],
   runtime: ["backend", "model", "model_failover", "backend_options"],
   work: ["working_directory", "auto_pause_after", "hang_detector", "agent_mode", "tool_set", "reply_completion_guard", "lightweight"],
   channel: ["channel_id", "general_topic", "tool_progress", "cross_instance_visibility", "status_emojis"],

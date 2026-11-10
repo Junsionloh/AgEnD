@@ -65,6 +65,15 @@ register("agentPage", {
     tip_classicToolProgress: "Whether progress messages show in the room while the AI uses tools.", tip_classicReplyGuard: "On: when the AI ends a turn without answering with reply, AgEnD reminds it to.",
     tip_classicReplyTriggers: "Off: only @bot triggers the room; on: a single-level reply to the bot counts too.", tip_classicCollab: "Let the bots in this room work with each other.",
     tip_classicWebEcho: "Also post messages sent from the web chat into this room.", tip_classicContext: "How many recent chat lines are sent along with each message.",
+    // Instructions (AGEND-162)
+    cardInstructions: "Instructions", lbl_instructions: "Instructions",
+    tip_instructions: "Markdown you write for this agent — who it is, how it should work, rules to follow. Separate from the System prompt, which stays exactly as it is; AgEnD puts it at the very end of what the AI is told, under \"Agent Instructions\". Up to 24,000 characters. Read when the agent next starts.",
+    note_instructions: "Plain Markdown; no header block needed. The AI reads it when the agent next starts — a session already running keeps what it has.",
+    instrEdit: "Edit", instrPreview: "Preview", instrPlaceholder: "# Role\n\nWhat this agent is for, how it should work, rules it must follow…",
+    instrPreviewEmpty: "Nothing to preview yet.",
+    instrSize: "{0} / {1} characters · {2} bytes", instrTooLong: "{0} characters — {1} is the most. Shorten it to save.",
+    instrCodex: "Codex reads at most 32 KiB of AGENTS.md in total, and AgEnD's own guidance already takes about 12 KiB of it.",
+    instrCodexNear: "Over about 16 KiB, Codex (32 KiB of AGENTS.md in total, about 12 KiB of it AgEnD's own guidance) may cut off the end of these instructions.",
   },
   "zh-TW": {
     title: "詳細資料與設定", groupStatus: "狀態", groupSettings: "設定", onlyThis: "只影響 {0}",
@@ -121,6 +130,15 @@ register("agentPage", {
     tip_classicToolProgress: "AI 用工具時，是否在房間裡顯示進度訊息。", tip_classicReplyGuard: "On：AI 沒有用 reply 回覆就結束一輪時，AgEnD 會提醒它補上。",
     tip_classicReplyTriggers: "Off：只有 @bot 才觸發房間；On：也接受對該 bot 的單層回覆。", tip_classicCollab: "讓房間內的多個 bot 互相協作。",
     tip_classicWebEcho: "把網頁聊天室送出的訊息也貼到這個房間。", tip_classicContext: "每次送給 AI 時附上的最近聊天行數。",
+    // Instructions（AGEND-162）
+    cardInstructions: "Instructions", lbl_instructions: "Instructions",
+    tip_instructions: "寫給這個 Agent 的 Markdown：它是誰、怎麼做事、要遵守的規則。和「System prompt」分開（System prompt 照舊不動）；AgEnD 會把它放在給 AI 的指令最後面，標題是「Agent Instructions」。上限 24,000 字元。Agent 下次啟動時讀取。",
+    note_instructions: "純 Markdown，不需要檔頭。AI 在 Agent 下次啟動時讀到；正在跑的對話不會重讀。",
+    instrEdit: "編輯", instrPreview: "預覽", instrPlaceholder: "# 角色\n\n這個 Agent 負責什麼、怎麼做事、必須遵守的規則…",
+    instrPreviewEmpty: "還沒有內容可以預覽。",
+    instrSize: "{0} / {1} 字元 · {2} bytes", instrTooLong: "{0} 字元，上限 {1}。請縮短後才能儲存。",
+    instrCodex: "Codex 讀 AGENTS.md 一共最多 32 KiB，而 AgEnD 自己的指引已經用掉約 12 KiB。",
+    instrCodexNear: "超過約 16 KiB 時，Codex（AGENTS.md 一共 32 KiB，其中約 12 KiB 是 AgEnD 自己的指引）可能會把這份 Instructions 的結尾截掉。",
   },
 });
 

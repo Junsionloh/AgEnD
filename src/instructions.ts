@@ -1,3 +1,4 @@
+import { agentInstructionsText } from "./agent-instructions.js";
 import { GENERAL_ROLE_INSTRUCTIONS } from "./general-role.js";
 import { withoutTaskBoardGuidance, withoutTaskCommands } from "./dashboard-permissions.js";
 import { readFileSync } from "node:fs";
@@ -17,6 +18,8 @@ export interface FleetInstructionsParams {
   /** #1633/#1634: the AgEnD version this instance runs on — an agent can tell its own tool copies are older. */
   agendVersion?: string;
   customPrompt?: string;
+  /** AGEND-162: the agent's own Markdown (`instances.<name>.instructions`) — the last section, after `customPrompt`. */
+  agentInstructions?: string;
   workflow?: string | false;
   decisions?: { title: string; content: string }[];
   /**
@@ -274,6 +277,10 @@ export function buildFleetInstructions(params: FleetInstructionsParams): string 
   if (customPrompt) {
     sections.push(customPrompt);
   }
+
+  // ── The agent's own instructions (AGEND-162): last, so everything above reads exactly as it did without them ──
+  const own = agentInstructionsText(params.agentInstructions);
+  if (own) sections.push(`## Agent Instructions\n\n${own}`);
 
   return sections.join("\n\n");
 }
