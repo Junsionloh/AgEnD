@@ -1,0 +1,289 @@
+{
+  "source": {
+    "head": "d39c9e57e63627914e5386f3faf63aa5645a4dcf",
+    "base": "9458db49d (upstream release/2.3.5-alpha)",
+    "built": "npm run build at head; dist/build-provenance.json commit == head, modified=false"
+  },
+  "pr": "songsid/AgEnD#3573",
+  "retained_modules": {
+    "accounts-view.js@9458db49d": {
+      "role": "the PR's base version",
+      "sha256_16": "c80c3a14bd107848",
+      "words": "connect wording; AccountSelect has the edit-only hint"
+    },
+    "accounts-view.js@a2a77ad7d": {
+      "role": "oldest version exporting AccountSelect (#3224, first shipped in v2.3.5-alpha.10)",
+      "sha256_16": "487e5e780ee92631",
+      "words": "older 'sign in' wording; AccountSelect has the edit-only hint"
+    },
+    "panel-fleet.js@9458db49d": {
+      "role": "the create panel without this PR",
+      "sha256_16": "8f8a00bfcce9bd78"
+    }
+  },
+  "method": "Playwright intercepts the browser's request for the named /ui/js/<file>.js and answers with the exact blob from git (git show <sha>:src/ui/<file>). It simulates a tab that already holds that module; it is NOT a real old tab. The PR changes only two UI modules (panel-fleet.js, accounts-view.js): every other module and shared asset is byte-identical at base and head, so there is no further retained-asset variation to test for this change.",
+  "scope": "Throwaway fleet (isolated AGEND_HOME and HOME, own port, torn down afterwards), fake temporary named accounts 'work' (connected) and 'off' (not connected). The host's default account, ~/.claude and the :8452 preview were not touched. Real CLI sign-ins were not used. Agents were created in the throwaway fleet and read back from its fleet.yaml.",
+  "disclosures": [
+    "New panel-fleet.js with a retained accounts-view.js shows the RETAINED AccountSelect, so the create dialog's field carries the edit-dialog hint 'Changing the account restarts the agent...' (not the new create-specific copy). The choice still works: 'work' is written to the existing profile.",
+    "With accounts-view.js@a2a77ad7d the field also uses the older 'sign in' words ('Fleet default (default sign-in)', 'off — not signed in').",
+    "A retained create panel (panel-fleet.js@9458db49d) has no WSL Account field at all; creating without an account against the head server writes no backend_options, i.e. the default, exactly as before this PR."
+  ],
+  "checks_per_case": "dialog opens; WSL + Claude Code selectable; (field shown cases) named account 'work' is written as backend_options.claude-code.credential_profile=work and no new credential-profiles folder is made (only 'off' and 'work' exist); empty selection writes no credential_profile; desktop 1280x860 and phone 390x800; no page errors after sign-in.",
+  "cases": [
+    {
+      "case": "control-new-new",
+      "view": "desktop",
+      "selection": "named",
+      "dialog_opens": true,
+      "account_field_shown": true,
+      "retained_module_requests_served": {},
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": "work",
+      "page_errors": 0,
+      "pass": true,
+      "field_hint": "The new agent connects with this account from its first start. A disconnected account can't be chosen: connect it under Accounts first.",
+      "field_options": [
+        "Fleet default (default connection)",
+        "off — not connected",
+        "work"
+      ]
+    },
+    {
+      "case": "control-new-new",
+      "view": "desktop",
+      "selection": "default",
+      "dialog_opens": true,
+      "account_field_shown": true,
+      "retained_module_requests_served": {},
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": null,
+      "page_errors": 0,
+      "pass": true
+    },
+    {
+      "case": "control-new-new",
+      "view": "phone",
+      "selection": "named",
+      "dialog_opens": true,
+      "account_field_shown": true,
+      "retained_module_requests_served": {},
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": "work",
+      "page_errors": 0,
+      "pass": true,
+      "field_hint": "The new agent connects with this account from its first start. A disconnected account can't be chosen: connect it under Accounts first.",
+      "field_options": [
+        "Fleet default (default connection)",
+        "off — not connected",
+        "work"
+      ]
+    },
+    {
+      "case": "control-new-new",
+      "view": "phone",
+      "selection": "default",
+      "dialog_opens": true,
+      "account_field_shown": true,
+      "retained_module_requests_served": {},
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": null,
+      "page_errors": 0,
+      "pass": true
+    },
+    {
+      "case": "new-panel-old-accounts-base",
+      "view": "desktop",
+      "selection": "named",
+      "dialog_opens": true,
+      "account_field_shown": true,
+      "retained_module_requests_served": {
+        "accounts-view.js": 2
+      },
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": "work",
+      "page_errors": 0,
+      "pass": true,
+      "field_hint": "Changing the account restarts the agent. A disconnected account can't be chosen: connect it under Accounts first.",
+      "field_options": [
+        "Fleet default (default connection)",
+        "off — not connected",
+        "work"
+      ]
+    },
+    {
+      "case": "new-panel-old-accounts-base",
+      "view": "desktop",
+      "selection": "default",
+      "dialog_opens": true,
+      "account_field_shown": true,
+      "retained_module_requests_served": {
+        "accounts-view.js": 2
+      },
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": null,
+      "page_errors": 0,
+      "pass": true
+    },
+    {
+      "case": "new-panel-old-accounts-base",
+      "view": "phone",
+      "selection": "named",
+      "dialog_opens": true,
+      "account_field_shown": true,
+      "retained_module_requests_served": {
+        "accounts-view.js": 2
+      },
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": "work",
+      "page_errors": 0,
+      "pass": true,
+      "field_hint": "Changing the account restarts the agent. A disconnected account can't be chosen: connect it under Accounts first.",
+      "field_options": [
+        "Fleet default (default connection)",
+        "off — not connected",
+        "work"
+      ]
+    },
+    {
+      "case": "new-panel-old-accounts-base",
+      "view": "phone",
+      "selection": "default",
+      "dialog_opens": true,
+      "account_field_shown": true,
+      "retained_module_requests_served": {
+        "accounts-view.js": 2
+      },
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": null,
+      "page_errors": 0,
+      "pass": true
+    },
+    {
+      "case": "new-panel-old-accounts-oldest",
+      "view": "desktop",
+      "selection": "named",
+      "dialog_opens": true,
+      "account_field_shown": true,
+      "retained_module_requests_served": {
+        "accounts-view.js": 2
+      },
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": "work",
+      "page_errors": 0,
+      "pass": true,
+      "field_hint": "Changing the account restarts the agent. A signed-out account can't be chosen: sign it in under Accounts first.",
+      "field_options": [
+        "Fleet default (default sign-in)",
+        "off — not signed in",
+        "work"
+      ]
+    },
+    {
+      "case": "new-panel-old-accounts-oldest",
+      "view": "desktop",
+      "selection": "default",
+      "dialog_opens": true,
+      "account_field_shown": true,
+      "retained_module_requests_served": {
+        "accounts-view.js": 2
+      },
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": null,
+      "page_errors": 0,
+      "pass": true
+    },
+    {
+      "case": "new-panel-old-accounts-oldest",
+      "view": "phone",
+      "selection": "named",
+      "dialog_opens": true,
+      "account_field_shown": true,
+      "retained_module_requests_served": {
+        "accounts-view.js": 2
+      },
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": "work",
+      "page_errors": 0,
+      "pass": true,
+      "field_hint": "Changing the account restarts the agent. A signed-out account can't be chosen: sign it in under Accounts first.",
+      "field_options": [
+        "Fleet default (default sign-in)",
+        "off — not signed in",
+        "work"
+      ]
+    },
+    {
+      "case": "new-panel-old-accounts-oldest",
+      "view": "phone",
+      "selection": "default",
+      "dialog_opens": true,
+      "account_field_shown": true,
+      "retained_module_requests_served": {
+        "accounts-view.js": 2
+      },
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": null,
+      "page_errors": 0,
+      "pass": true
+    },
+    {
+      "case": "old-panel-new-server",
+      "view": "desktop",
+      "selection": "named",
+      "dialog_opens": true,
+      "account_field_shown": false,
+      "retained_module_requests_served": {
+        "panel-fleet.js": 1
+      },
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": null,
+      "page_errors": 0,
+      "pass": true
+    },
+    {
+      "case": "old-panel-new-server",
+      "view": "desktop",
+      "selection": "default",
+      "dialog_opens": true,
+      "account_field_shown": false,
+      "retained_module_requests_served": {
+        "panel-fleet.js": 1
+      },
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": null,
+      "page_errors": 0,
+      "pass": true
+    },
+    {
+      "case": "old-panel-new-server",
+      "view": "phone",
+      "selection": "named",
+      "dialog_opens": true,
+      "account_field_shown": false,
+      "retained_module_requests_served": {
+        "panel-fleet.js": 1
+      },
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": null,
+      "page_errors": 0,
+      "pass": true
+    },
+    {
+      "case": "old-panel-new-server",
+      "view": "phone",
+      "selection": "default",
+      "dialog_opens": true,
+      "account_field_shown": false,
+      "retained_module_requests_served": {
+        "panel-fleet.js": 1
+      },
+      "instance_in_fleet_yaml": true,
+      "credential_profile_written": null,
+      "page_errors": 0,
+      "pass": true
+    }
+  ],
+  "status": "PASS",
+  "pass_count": 16,
+  "total": 16
+}
