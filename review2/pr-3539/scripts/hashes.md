@@ -1,0 +1,24 @@
+| build | served URL | git path | sha256 served | sha256 git | |
+|---|---|---|---|---|---|
+| before | `/ui/js/accounts-view.js` | `src/ui/accounts-view.js` | `56bd1ac76e737c65752edbba09d82db3d3fad3316fdc977c3eb3802ca10b34e2` | `56bd1ac76e737c65752edbba09d82db3d3fad3316fdc977c3eb3802ca10b34e2` | match |
+| before | `/ui/js/host-install.js` | `src/ui/host-install.js` | `4808af383b428f3ac35f0fadc6e1205fe284ffe7d486f665d3b331112a4fc8f6` | `4808af383b428f3ac35f0fadc6e1205fe284ffe7d486f665d3b331112a4fc8f6` | match |
+| before | `/assets/accounts.css` | `src/ui/shared/accounts.css` | `54f899f215a1f62480961503252e34aa8f39cad0531c81b3eacf9b057f084e3f` | `54f899f215a1f62480961503252e34aa8f39cad0531c81b3eacf9b057f084e3f` | match |
+| before | `/ui/js/settings-confirm.js` | `src/ui/settings-confirm.js` | `a9516dc099d479a5c6648386d2b91928603c32908107bad0f5c9fa5faff47d15` | `a9516dc099d479a5c6648386d2b91928603c32908107bad0f5c9fa5faff47d15` | match |
+| before | `/ui/js/accounts-manage.js` | `src/ui/accounts-manage.js` | `7132a53e6f9cd911c1e28bc3b608159bf31c8f7c263331a528af758d10e5fc07` | `7132a53e6f9cd911c1e28bc3b608159bf31c8f7c263331a528af758d10e5fc07` | match |
+| before | `/ui/js/accounts-keepalive.js` | `src/ui/accounts-keepalive.js` | `47dc197d386613903c6ddb334eba8c50d094305e1432c8759c53be52d60039ac` | `47dc197d386613903c6ddb334eba8c50d094305e1432c8759c53be52d60039ac` | match |
+| before | `/assets/accounts-keepalive.css` | `src/ui/shared/accounts-keepalive.css` | `ce23afea1948ef40f84a649700a46948ee116dd8bfdbc98ec1564cb6a4a9ce87` | `ce23afea1948ef40f84a649700a46948ee116dd8bfdbc98ec1564cb6a4a9ce87` | match |
+| before | `/assets/app-i18n.js` | `src/ui/shared/app-i18n.js` | `f565a95444de2f7d929bb25e38f3f33cae05582a35feb2be3c2674d0a41fd1d5` | `f565a95444de2f7d929bb25e38f3f33cae05582a35feb2be3c2674d0a41fd1d5` | match |
+| before | `/assets/ui-toast.js` | `src/ui/shared/ui-toast.js` | `601074179fe7c9156d05d507f28e3d22f93b49aba43f8d903b40ae4b8b1bba8d` | `601074179fe7c9156d05d507f28e3d22f93b49aba43f8d903b40ae4b8b1bba8d` | match |
+| before | `/assets/app-html.js` | `src/ui/shared/app-html.js` | `8949e374c68b9252d5ee3ee788ec1b0340d12c4a6999ef8b734fe89562266bd9` | `8949e374c68b9252d5ee3ee788ec1b0340d12c4a6999ef8b734fe89562266bd9` | match |
+| before | `/assets/app-store.js` | `src/ui/shared/app-store.js` | `8cee97c514d1b6789b1410fdee5bef549cc0bc854e3ddb071055bc036385fa88` | `8cee97c514d1b6789b1410fdee5bef549cc0bc854e3ddb071055bc036385fa88` | match |
+| after | `/ui/js/accounts-view.js` | `src/ui/accounts-view.js` | `c80c3a14bd107848231b94f3c9a6a860e459ba95c4952f9f175369351c62574a` | `c80c3a14bd107848231b94f3c9a6a860e459ba95c4952f9f175369351c62574a` | match |
+| after | `/ui/js/host-install.js` | `src/ui/host-install.js` | `0645a13131a64fdb338d647e7aa49807613a0434897c7c094b7d72c06d6c115d` | `0645a13131a64fdb338d647e7aa49807613a0434897c7c094b7d72c06d6c115d` | match |
+| after | `/assets/accounts.css` | `src/ui/shared/accounts.css` | `cbe6a142ec0113f24b20fb64997c810ae112cb9d81d340a8cbc2e0f6b316ee9b` | `cbe6a142ec0113f24b20fb64997c810ae112cb9d81d340a8cbc2e0f6b316ee9b` | match |
+| after | `/ui/js/settings-confirm.js` | `src/ui/settings-confirm.js` | `a9516dc099d479a5c6648386d2b91928603c32908107bad0f5c9fa5faff47d15` | `a9516dc099d479a5c6648386d2b91928603c32908107bad0f5c9fa5faff47d15` | match |
+| after | `/ui/js/accounts-manage.js` | `src/ui/accounts-manage.js` | `7132a53e6f9cd911c1e28bc3b608159bf31c8f7c263331a528af758d10e5fc07` | `7132a53e6f9cd911c1e28bc3b608159bf31c8f7c263331a528af758d10e5fc07` | match |
+| after | `/ui/js/accounts-keepalive.js` | `src/ui/accounts-keepalive.js` | `47dc197d386613903c6ddb334eba8c50d094305e1432c8759c53be52d60039ac` | `47dc197d386613903c6ddb334eba8c50d094305e1432c8759c53be52d60039ac` | match |
+| after | `/assets/accounts-keepalive.css` | `src/ui/shared/accounts-keepalive.css` | `ce23afea1948ef40f84a649700a46948ee116dd8bfdbc98ec1564cb6a4a9ce87` | `ce23afea1948ef40f84a649700a46948ee116dd8bfdbc98ec1564cb6a4a9ce87` | match |
+| after | `/assets/app-i18n.js` | `src/ui/shared/app-i18n.js` | `f565a95444de2f7d929bb25e38f3f33cae05582a35feb2be3c2674d0a41fd1d5` | `f565a95444de2f7d929bb25e38f3f33cae05582a35feb2be3c2674d0a41fd1d5` | match |
+| after | `/assets/ui-toast.js` | `src/ui/shared/ui-toast.js` | `601074179fe7c9156d05d507f28e3d22f93b49aba43f8d903b40ae4b8b1bba8d` | `601074179fe7c9156d05d507f28e3d22f93b49aba43f8d903b40ae4b8b1bba8d` | match |
+| after | `/assets/app-html.js` | `src/ui/shared/app-html.js` | `8949e374c68b9252d5ee3ee788ec1b0340d12c4a6999ef8b734fe89562266bd9` | `8949e374c68b9252d5ee3ee788ec1b0340d12c4a6999ef8b734fe89562266bd9` | match |
+| after | `/assets/app-store.js` | `src/ui/shared/app-store.js` | `8cee97c514d1b6789b1410fdee5bef549cc0bc854e3ddb071055bc036385fa88` | `8cee97c514d1b6789b1410fdee5bef549cc0bc854e3ddb071055bc036385fa88` | match |

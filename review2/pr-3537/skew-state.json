@@ -1,0 +1,87 @@
+[
+ {
+  "what": "old-registry",
+  "url": "/ui/js/cli-caps.js",
+  "oldSha": "237b2067d520c04fa6d585c0f3d9f9eea946ded76fa493d4bece235dd427a056",
+  "newSha": "f0bc54a5e2e201c6735e898a4241fda9b86638c0b4cf6c2a1415dbcb7db364a1",
+  "hits": 2,
+  "rows": [
+   "Claude Code Installed 2.1.316",
+   "Codex Not installed Install 0.165.0"
+  ],
+  "why": 4,
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://dev.meta.ai/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "raw": [],
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ],
+  "frame": {
+   "extra": 1106,
+   "shotHeight": 2006,
+   "leftoverScroll": 0
+  }
+ },
+ {
+  "what": "old-install-module",
+  "url": "/ui/js/runtime-cli-install.js",
+  "oldSha": "e39513987feb5563a0ded318770908e34d1cec628fa52c1b6573da51d73f86da",
+  "newSha": "a16876678b69ca000ba4a220c9ebe9302ff1ce867d13e13146ada4c99894912e",
+  "hits": 1,
+  "rows": [
+   "Claude Code Installed 2.1.316",
+   "Codex Not installed Install 0.165.0",
+   "OpenCode Not installed Install 1.19.5"
+  ],
+  "why": 0,
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "raw": [],
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ],
+  "frame": {
+   "extra": 880,
+   "shotHeight": 1780,
+   "leftoverScroll": 0
+  }
+ },
+ {
+  "what": "old-css",
+  "url": "/assets/runtime-install.css",
+  "oldSha": "d351a880f9f9c042d8afc30353cbae26ed0ea94afa537f5da2d9d99269e31a54",
+  "newSha": "d351a880f9f9c042d8afc30353cbae26ed0ea94afa537f5da2d9d99269e31a54",
+  "hits": 1,
+  "rows": [
+   "Claude Code Installed 2.1.316",
+   "Codex Not installed Install 0.165.0",
+   "OpenCode Not installed Install 1.19.5"
+  ],
+  "why": 4,
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://dev.meta.ai/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "raw": [],
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ],
+  "frame": {
+   "extra": 1153,
+   "shotHeight": 2053,
+   "leftoverScroll": 0
+  }
+ }
+]

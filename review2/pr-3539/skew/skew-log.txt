@@ -1,0 +1,48 @@
+## baseline: routed(old copies served) none
+   cards=7 versionLines=6 buttons=["kiro-cli:Update to 3.1.0","grok:Update to 1.0.77","opencode:Install"]
+   errors(at idle)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]  errors(all)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]
+   clicked Update(grok); clicked Install(opencode); POSTs=["/ui/host-update {\"backend\":\"grok\"} -> 202 {\"ok\":true,\"result\":\"pending_confirmation\",\"pending_change\":{\"id\":\"6d7a3bce568c257926e8b351e1f4a95c\",\"state\":\"applying\",","/ui/host-install {\"backend\":\"opencode\"} -> 202 {\"ok\":true,\"result\":\"pending_confirmation\",\"pending_change\":{\"id\":\"d54d460cd63101daa5f9aff587312c0c\",\"state\":\"applying\","]
+   grok after: Grok Default connection not connected Connect used by no agent 1.0.77 is installed — up to date. The newest version AgEnD has audited: 1.0.77.
+   opencode after: OpenCode connected 1.19.5 is installed — up to date. The newest version AgEnD has audited: 1.19.5. OpenCode 1.19.5 is installed. Resolving release 1.19.5 for opencode (linux-x64) ... Downloading opencode 1.19.5 ... done Verifying checksum ... ok opencode 1.19.5 installed Dismiss
+## newview-oldhost: routed(old copies served) host:2
+   cards=7 versionLines=0 buttons=["opencode:Install"]
+   errors(at idle)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]  errors(all)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]
+   no Update button; clicked Install(opencode); POSTs=["/ui/host-install {\"backend\":\"opencode\"} -> 202 {\"ok\":true,\"result\":\"pending_confirmation\",\"pending_change\":{\"id\":\"9931e3f89a2ce226bbb28f434300bc08\",\"state\":\"applying\","]
+   grok after: Grok Default connection not connected Connect used by no agent
+   opencode after: OpenCode connected OpenCode 1.19.5 is installed. Resolving release 1.19.5 for opencode (linux-x64) ... Downloading opencode 1.19.5 ... done Verifying checksum ... ok opencode 1.19.5 installed Dismiss
+## oldview-newhost: routed(old copies served) view:2
+   cards=7 versionLines=0 buttons=["opencode:Install"]
+   errors(at idle)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]  errors(all)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]
+   no Update button; clicked Install(opencode); POSTs=["/ui/host-install {\"backend\":\"opencode\"} -> 202 {\"ok\":true,\"result\":\"pending_confirmation\",\"pending_change\":{\"id\":\"2c7a1df09666718c9aa4e9ec7233d1ec\",\"state\":\"applying\","]
+   grok after: Grok Default connection not connected Connect used by no agent
+   opencode after: OpenCode connected OpenCode 1.19.5 is installed. Resolving release 1.19.5 for opencode (linux-x64) ... Downloading opencode 1.19.5 ... done Verifying checksum ... ok opencode 1.19.5 installed Dismiss
+## oldcss: routed(old copies served) css:1
+   cards=7 versionLines=6 buttons=["kiro-cli:Update to 3.1.0","grok:Update to 1.0.77","opencode:Install"]
+   errors(at idle)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]  errors(all)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]
+   clicked Update(grok); clicked Install(opencode); POSTs=["/ui/host-update {\"backend\":\"grok\"} -> 202 {\"ok\":true,\"result\":\"pending_confirmation\",\"pending_change\":{\"id\":\"6917a038032fd155b0f56617032b55b7\",\"state\":\"applying\",","/ui/host-install {\"backend\":\"opencode\"} -> 202 {\"ok\":true,\"result\":\"pending_confirmation\",\"pending_change\":{\"id\":\"a1466d55d47d6fe4685396af82f0179e\",\"state\":\"applying\","]
+   grok after: Grok Default connection not connected Connect used by no agent 1.0.77 is installed — up to date. The newest version AgEnD has audited: 1.0.77.
+   opencode after: OpenCode connected 1.19.5 is installed — up to date. The newest version AgEnD has audited: 1.19.5. OpenCode 1.19.5 is installed. Resolving release 1.19.5 for opencode (linux-x64) ... Downloading opencode 1.19.5 ... done Verifying checksum ... ok opencode 1.19.5 installed Dismiss
+## oldcss-newview-oldhost: routed(old copies served) css:1,host:2
+   cards=7 versionLines=0 buttons=["opencode:Install"]
+   errors(at idle)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]  errors(all)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]
+   no Update button; clicked Install(opencode); POSTs=["/ui/host-install {\"backend\":\"opencode\"} -> 202 {\"ok\":true,\"result\":\"pending_confirmation\",\"pending_change\":{\"id\":\"98cfeb5acc4da5acb1eab03dde207be0\",\"state\":\"applying\","]
+   grok after: Grok Default connection not connected Connect used by no agent
+   opencode after: OpenCode connected OpenCode 1.19.5 is installed. Resolving release 1.19.5 for opencode (linux-x64) ... Downloading opencode 1.19.5 ... done Verifying checksum ... ok opencode 1.19.5 installed Dismiss
+## oldcss-oldview-newhost: routed(old copies served) css:1,view:2
+   cards=7 versionLines=0 buttons=["opencode:Install"]
+   errors(at idle)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]  errors(all)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]
+   no Update button; clicked Install(opencode); POSTs=["/ui/host-install {\"backend\":\"opencode\"} -> 202 {\"ok\":true,\"result\":\"pending_confirmation\",\"pending_change\":{\"id\":\"ced12969afed5ad2764092dd1f4e19e0\",\"state\":\"applying\","]
+   grok after: Grok Default connection not connected Connect used by no agent
+   opencode after: OpenCode connected OpenCode 1.19.5 is installed. Resolving release 1.19.5 for opencode (linux-x64) ... Downloading opencode 1.19.5 ... done Verifying checksum ... ok opencode 1.19.5 installed Dismiss
+## allold: routed(old copies served) view:2,host:2,css:1
+   cards=7 versionLines=0 buttons=["opencode:Install"]
+   errors(at idle)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]  errors(all)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]
+   no Update button; clicked Install(opencode); POSTs=["/ui/host-install {\"backend\":\"opencode\"} -> 202 {\"ok\":true,\"result\":\"pending_confirmation\",\"pending_change\":{\"id\":\"202cb04dd3121681b0e19982c1ca8883\",\"state\":\"applying\","]
+   grok after: Grok Default connection not connected Connect used by no agent
+   opencode after: OpenCode connected OpenCode 1.19.5 is installed. Resolving release 1.19.5 for opencode (linux-x64) ... Downloading opencode 1.19.5 ... done Verifying checksum ... ok opencode 1.19.5 installed Dismiss
+## newcss-oldmodules: routed(old copies served) view:2,host:2
+   cards=7 versionLines=0 buttons=["opencode:Install"]
+   errors(at idle)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]  errors(all)=["CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"]
+   no Update button; clicked Install(opencode); POSTs=["/ui/host-install {\"backend\":\"opencode\"} -> 202 {\"ok\":true,\"result\":\"pending_confirmation\",\"pending_change\":{\"id\":\"519326cb2dd07d5b85f0da6eaa44412c\",\"state\":\"applying\","]
+   grok after: Grok Default connection not connected Connect used by no agent
+   opencode after: OpenCode connected OpenCode 1.19.5 is installed. Resolving release 1.19.5 for opencode (linux-x64) ... Downloading opencode 1.19.5 ... done Verifying checksum ... ok opencode 1.19.5 installed Dismiss

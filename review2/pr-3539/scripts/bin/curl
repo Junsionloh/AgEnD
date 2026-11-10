@@ -1,0 +1,28 @@
+#!/bin/bash
+# FAKE curl for the AGEND-144 / #3539 evidence run. It never touches the network: it prints a scripted "vendor installer" for the URL it is asked for.
+# Which behaviour a CLI's installer has is read from $EV_CTL/<backend> (slow | ok | warn | fail), so the same fleet can show every state.
+CTL="__CTL__"
+url=""
+while [ $# -gt 0 ]; do case "$1" in -o) shift 2;; -*) shift;; *) url="$1"; shift;; esac; done
+case "$url" in
+  *x.ai/cli*)            b=grok; bin='$HOME/.grok/bin/grok'; name=grok; dv=1.0.77;;
+  *claude.ai/install.sh*) b=claude-code; bin='$HOME/.local/bin/claude'; name=claude; dv=2.1.319;;
+  *chatgpt.com/codex*)   b=codex; bin='$HOME/.local/bin/codex'; name=codex; dv=0.167.0;;
+  *cli.kiro.dev*)        b=kiro-cli; bin='$HOME/.local/bin/kiro-cli'; name=kiro-cli; dv=3.1.0;;
+  *opencode.ai*)         b=opencode; bin='$HOME/.opencode/bin/opencode'; name=opencode; dv=1.19.5;;
+  *) echo "echo 'fake curl: unexpected url $url' >&2; exit 1"; exit 0;;
+esac
+mode=$(cat "$CTL/$b" 2>/dev/null || echo ok)
+cat <<SCRIPT
+# fake installer for $b, mode=$mode (scripted; nothing is downloaded)
+ver=""; for a in "\$@"; do case "\$a" in [0-9]*.[0-9]*.[0-9]*) ver="\$a";; esac; done
+write_bin() { mkdir -p "\$(dirname $bin)"; printf '#!/bin/sh\ncase "\$1" in --version|-v|version) echo "%s";; *) echo fake $name;; esac\n' "\$1" > $bin; chmod +x $bin; }
+ver="\${ver:-$dv}"
+echo "Resolving release \$ver for $name (linux-x64) ..."
+case "$mode" in
+  slow) for i in \$(seq 1 40); do echo "Downloading $name \$ver ... chunk \$i of 40"; sleep 2; done; write_bin "\$ver"; exit 0;;
+  ok)   echo "Downloading $name \$ver ... done"; sleep 3; echo "Verifying checksum ... ok"; sleep 2; write_bin "\$ver"; echo "$name \$ver installed"; exit 0;;
+  warn) echo "Downloading $name \$ver ..."; sleep 2; echo "Already up to date (kept the installed copy)"; echo "note: the vendor's channel still serves an older build"; exit 0;;
+  fail) echo "Downloading $name \$ver ..."; sleep 2; echo "Checking signature ..."; echo "curl: (22) The requested URL returned error: 404" >&2; echo "installer: could not fetch the release archive for \$ver" >&2; exit 22;;
+esac
+SCRIPT

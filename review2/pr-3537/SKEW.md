@@ -1,0 +1,11 @@
+# Retained-module skew (AFTER server, one OLD file served in place of the new one)
+
+Method: AFTER server (:19811) with Playwright `page.route` answering one request path with the BEFORE server's file (fetched through a signed-in session; sha256 equal to the BEFORE commit's file). Desktop 1180x900, light, EN, Install block with "Other CLIs" open, same mocked Office PC as the matrix (AFTER catalog incl. opencode 1.19.5). URLs the page really requests (from the network log, `after-served-assets.txt`): `/ui/js/cli-caps.js`, `/ui/js/runtime-cli-install.js`, `/assets/runtime-install.css`. Console/page errors collected for every case: no `pageerror`, no `console.error` other than the benign sign-in `401 /auth/session` that every image has; no raw keys, `undefined`, `NaN` or `[object` in the block.
+
+**skew-old-registry-en.png: old `/ui/js/cli-caps.js` (OpenCode not marked installable) + new install module.** The route was hit (2 requests). No errors. The page is usable: the Install list shows Claude Code (Installed 2.1.316) and Codex (Install 0.165.0) but no OpenCode row (the list is derived from the registry's `runtimeInstall`), while "Other CLIs" shows all four new entries (Grok, Antigravity, Muse, Kiro) with their "Why not here" reasons. So OpenCode is simply absent, listed nowhere, until the registry module is refreshed; nothing breaks.
+
+**skew-old-install-module-en.png: old `/ui/js/runtime-cli-install.js` + new `/ui/js/cli-caps.js`.** The route was hit. No errors. The page is usable and shows the OpenCode row with "Install 1.19.5" (the old module renders whatever the registry marks installable and its label comes from `runtimeName`), but the "Other CLIs" list is the old one: Grok, Antigravity, Kiro with the plain command cards, no "Why not here" lines, no Muse. Nothing raw or broken; the PR's new words are just not there.
+
+**skew-old-css-en.png: old `/assets/runtime-install.css` + new modules.** The route was hit, no errors, and the page is identical to the AFTER page. The old and new CSS files are byte-identical (sha256 `d351a880...1a54` for both), because #3537 does not change any CSS; this case is a no-op by construction and is included only because it was asked for.
+
+Raw measurements: `skew-state.json` (rows, "why" count, commands, errors, hashes per case).

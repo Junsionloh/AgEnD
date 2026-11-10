@@ -1,0 +1,538 @@
+[
+ {
+  "name": "desk-light-en-before",
+  "lang": "en",
+  "theme": null,
+  "bg": "rgb(255, 255, 255)",
+  "h": 1733,
+  "w": 1180,
+  "cw": 1180,
+  "rows": [
+   "Claude Code Installed 2.1.316",
+   "Codex Not installed Install 0.165.0"
+  ],
+  "why": [],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 833,
+   "shotHeight": 1733,
+   "leftoverScroll": 0
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "desk-light-zh-TW-before",
+  "lang": "zh-Hant",
+  "theme": null,
+  "bg": "rgb(255, 255, 255)",
+  "h": 1685,
+  "w": 1180,
+  "cw": 1180,
+  "rows": [
+   "Claude Code 已安裝 2.1.316",
+   "Codex 尚未安裝 安裝 0.165.0"
+  ],
+  "why": [],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 785,
+   "shotHeight": 1685,
+   "leftoverScroll": 0
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "desk-dark-en-before",
+  "lang": "en",
+  "theme": null,
+  "bg": "rgb(33, 33, 33)",
+  "h": 1733,
+  "w": 1180,
+  "cw": 1180,
+  "rows": [
+   "Claude Code Installed 2.1.316",
+   "Codex Not installed Install 0.165.0"
+  ],
+  "why": [],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 833,
+   "shotHeight": 1733,
+   "leftoverScroll": 0
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "desk-dark-zh-TW-before",
+  "lang": "zh-Hant",
+  "theme": null,
+  "bg": "rgb(33, 33, 33)",
+  "h": 1685,
+  "w": 1180,
+  "cw": 1180,
+  "rows": [
+   "Claude Code 已安裝 2.1.316",
+   "Codex 尚未安裝 安裝 0.165.0"
+  ],
+  "why": [],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 785,
+   "shotHeight": 1685,
+   "leftoverScroll": 0
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "phone-light-en-before",
+  "lang": "en",
+  "theme": null,
+  "bg": "rgb(255, 255, 255)",
+  "h": 2232,
+  "w": 390,
+  "cw": 390,
+  "rows": [
+   "Claude Code Installed 2.1.316",
+   "Codex Not installed Install 0.165.0"
+  ],
+  "why": [],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 1388,
+   "shotHeight": 2232,
+   "leftoverScroll": 12
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "phone-light-zh-TW-before",
+  "lang": "zh-Hant",
+  "theme": null,
+  "bg": "rgb(255, 255, 255)",
+  "h": 2078,
+  "w": 390,
+  "cw": 390,
+  "rows": [
+   "Claude Code 已安裝 2.1.316",
+   "Codex 尚未安裝 安裝 0.165.0"
+  ],
+  "why": [],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 1234,
+   "shotHeight": 2078,
+   "leftoverScroll": 12
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "phone-dark-en-before",
+  "lang": "en",
+  "theme": null,
+  "bg": "rgb(33, 33, 33)",
+  "h": 2232,
+  "w": 390,
+  "cw": 390,
+  "rows": [
+   "Claude Code Installed 2.1.316",
+   "Codex Not installed Install 0.165.0"
+  ],
+  "why": [],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 1388,
+   "shotHeight": 2232,
+   "leftoverScroll": 12
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "phone-dark-zh-TW-before",
+  "lang": "zh-Hant",
+  "theme": null,
+  "bg": "rgb(33, 33, 33)",
+  "h": 2078,
+  "w": 390,
+  "cw": 390,
+  "rows": [
+   "Claude Code 已安裝 2.1.316",
+   "Codex 尚未安裝 安裝 0.165.0"
+  ],
+  "why": [],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 1234,
+   "shotHeight": 2078,
+   "leftoverScroll": 12
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "desk-light-en-after",
+  "lang": "en",
+  "theme": null,
+  "bg": "rgb(255, 255, 255)",
+  "h": 2053,
+  "w": 1180,
+  "cw": 1180,
+  "rows": [
+   "Claude Code Installed 2.1.316",
+   "Codex Not installed Install 0.165.0",
+   "OpenCode Not installed Install 1.19.5"
+  ],
+  "why": [
+   "Why not here: Grok's Windows program is not signed by its publisher, so AgEnD could not check who built it, and the vendor script installs whatever version is current.",
+   "Why not here: the vendor script installs whatever version is current. A fixed, signed download exists, and AgEnD will install it from here once its Runtime can download one.",
+   "Why not here: Muse has no package or file with a fixed version AgEnD could check: its launcher installs itself, and updates itself, from the vendor's server.",
+   "Why not here: Kiro's Windows installer is an MSI into Program Files, which needs an administrator; the Runtime never has one."
+  ],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://dev.meta.ai/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 1153,
+   "shotHeight": 2053,
+   "leftoverScroll": 0
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "desk-light-zh-TW-after",
+  "lang": "zh-Hant",
+  "theme": null,
+  "bg": "rgb(255, 255, 255)",
+  "h": 2005,
+  "w": 1180,
+  "cw": 1180,
+  "rows": [
+   "Claude Code 已安裝 2.1.316",
+   "Codex 尚未安裝 安裝 0.165.0",
+   "OpenCode 尚未安裝 安裝 1.19.5"
+  ],
+  "why": [
+   "為什麼不能從這裡安裝：Grok 的 Windows 程式沒有發行者的數位簽章，AgEnD 無法確認是誰建置的；廠商腳本也是裝當下最新的版本。",
+   "為什麼不能從這裡安裝：廠商腳本裝的是當下最新的版本。有固定版本且已簽章的下載檔，等 Runtime 能下載之後，AgEnD 會從這裡安裝。",
+   "為什麼不能從這裡安裝：Muse 沒有 AgEnD 能確認的固定版本套件或檔案：它的啟動器會自己從廠商的伺服器安裝、自己更新。",
+   "為什麼不能從這裡安裝：Kiro 在 Windows 的安裝程式是裝進 Program Files 的 MSI，需要系統管理員權限，而 Runtime 沒有。"
+  ],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://dev.meta.ai/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 1105,
+   "shotHeight": 2005,
+   "leftoverScroll": 0
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "desk-dark-en-after",
+  "lang": "en",
+  "theme": null,
+  "bg": "rgb(33, 33, 33)",
+  "h": 2053,
+  "w": 1180,
+  "cw": 1180,
+  "rows": [
+   "Claude Code Installed 2.1.316",
+   "Codex Not installed Install 0.165.0",
+   "OpenCode Not installed Install 1.19.5"
+  ],
+  "why": [
+   "Why not here: Grok's Windows program is not signed by its publisher, so AgEnD could not check who built it, and the vendor script installs whatever version is current.",
+   "Why not here: the vendor script installs whatever version is current. A fixed, signed download exists, and AgEnD will install it from here once its Runtime can download one.",
+   "Why not here: Muse has no package or file with a fixed version AgEnD could check: its launcher installs itself, and updates itself, from the vendor's server.",
+   "Why not here: Kiro's Windows installer is an MSI into Program Files, which needs an administrator; the Runtime never has one."
+  ],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://dev.meta.ai/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 1153,
+   "shotHeight": 2053,
+   "leftoverScroll": 0
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "desk-dark-zh-TW-after",
+  "lang": "zh-Hant",
+  "theme": null,
+  "bg": "rgb(33, 33, 33)",
+  "h": 2005,
+  "w": 1180,
+  "cw": 1180,
+  "rows": [
+   "Claude Code 已安裝 2.1.316",
+   "Codex 尚未安裝 安裝 0.165.0",
+   "OpenCode 尚未安裝 安裝 1.19.5"
+  ],
+  "why": [
+   "為什麼不能從這裡安裝：Grok 的 Windows 程式沒有發行者的數位簽章，AgEnD 無法確認是誰建置的；廠商腳本也是裝當下最新的版本。",
+   "為什麼不能從這裡安裝：廠商腳本裝的是當下最新的版本。有固定版本且已簽章的下載檔，等 Runtime 能下載之後，AgEnD 會從這裡安裝。",
+   "為什麼不能從這裡安裝：Muse 沒有 AgEnD 能確認的固定版本套件或檔案：它的啟動器會自己從廠商的伺服器安裝、自己更新。",
+   "為什麼不能從這裡安裝：Kiro 在 Windows 的安裝程式是裝進 Program Files 的 MSI，需要系統管理員權限，而 Runtime 沒有。"
+  ],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://dev.meta.ai/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 1105,
+   "shotHeight": 2005,
+   "leftoverScroll": 0
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "phone-light-en-after",
+  "lang": "en",
+  "theme": null,
+  "bg": "rgb(255, 255, 255)",
+  "h": 2776,
+  "w": 390,
+  "cw": 390,
+  "rows": [
+   "Claude Code Installed 2.1.316",
+   "Codex Not installed Install 0.165.0",
+   "OpenCode Not installed Install 1.19.5"
+  ],
+  "why": [
+   "Why not here: Grok's Windows program is not signed by its publisher, so AgEnD could not check who built it, and the vendor script installs whatever version is current.",
+   "Why not here: the vendor script installs whatever version is current. A fixed, signed download exists, and AgEnD will install it from here once its Runtime can download one.",
+   "Why not here: Muse has no package or file with a fixed version AgEnD could check: its launcher installs itself, and updates itself, from the vendor's server.",
+   "Why not here: Kiro's Windows installer is an MSI into Program Files, which needs an administrator; the Runtime never has one."
+  ],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://dev.meta.ai/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 1932,
+   "shotHeight": 2776,
+   "leftoverScroll": 12
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "phone-light-zh-TW-after",
+  "lang": "zh-Hant",
+  "theme": null,
+  "bg": "rgb(255, 255, 255)",
+  "h": 2550,
+  "w": 390,
+  "cw": 390,
+  "rows": [
+   "Claude Code 已安裝 2.1.316",
+   "Codex 尚未安裝 安裝 0.165.0",
+   "OpenCode 尚未安裝 安裝 1.19.5"
+  ],
+  "why": [
+   "為什麼不能從這裡安裝：Grok 的 Windows 程式沒有發行者的數位簽章，AgEnD 無法確認是誰建置的；廠商腳本也是裝當下最新的版本。",
+   "為什麼不能從這裡安裝：廠商腳本裝的是當下最新的版本。有固定版本且已簽章的下載檔，等 Runtime 能下載之後，AgEnD 會從這裡安裝。",
+   "為什麼不能從這裡安裝：Muse 沒有 AgEnD 能確認的固定版本套件或檔案：它的啟動器會自己從廠商的伺服器安裝、自己更新。",
+   "為什麼不能從這裡安裝：Kiro 在 Windows 的安裝程式是裝進 Program Files 的 MSI，需要系統管理員權限，而 Runtime 沒有。"
+  ],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://dev.meta.ai/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 1706,
+   "shotHeight": 2550,
+   "leftoverScroll": 12
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "phone-dark-en-after",
+  "lang": "en",
+  "theme": null,
+  "bg": "rgb(33, 33, 33)",
+  "h": 2776,
+  "w": 390,
+  "cw": 390,
+  "rows": [
+   "Claude Code Installed 2.1.316",
+   "Codex Not installed Install 0.165.0",
+   "OpenCode Not installed Install 1.19.5"
+  ],
+  "why": [
+   "Why not here: Grok's Windows program is not signed by its publisher, so AgEnD could not check who built it, and the vendor script installs whatever version is current.",
+   "Why not here: the vendor script installs whatever version is current. A fixed, signed download exists, and AgEnD will install it from here once its Runtime can download one.",
+   "Why not here: Muse has no package or file with a fixed version AgEnD could check: its launcher installs itself, and updates itself, from the vendor's server.",
+   "Why not here: Kiro's Windows installer is an MSI into Program Files, which needs an administrator; the Runtime never has one."
+  ],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://dev.meta.ai/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 1932,
+   "shotHeight": 2776,
+   "leftoverScroll": 12
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ },
+ {
+  "name": "phone-dark-zh-TW-after",
+  "lang": "zh-Hant",
+  "theme": null,
+  "bg": "rgb(33, 33, 33)",
+  "h": 2550,
+  "w": 390,
+  "cw": 390,
+  "rows": [
+   "Claude Code 已安裝 2.1.316",
+   "Codex 尚未安裝 安裝 0.165.0",
+   "OpenCode 尚未安裝 安裝 1.19.5"
+  ],
+  "why": [
+   "為什麼不能從這裡安裝：Grok 的 Windows 程式沒有發行者的數位簽章，AgEnD 無法確認是誰建置的；廠商腳本也是裝當下最新的版本。",
+   "為什麼不能從這裡安裝：廠商腳本裝的是當下最新的版本。有固定版本且已簽章的下載檔，等 Runtime 能下載之後，AgEnD 會從這裡安裝。",
+   "為什麼不能從這裡安裝：Muse 沒有 AgEnD 能確認的固定版本套件或檔案：它的啟動器會自己從廠商的伺服器安裝、自己更新。",
+   "為什麼不能從這裡安裝：Kiro 在 Windows 的安裝程式是裝進 Program Files 的 MSI，需要系統管理員權限，而 Runtime 沒有。"
+  ],
+  "cmds": [
+   "irm https://x.ai/cli/install.ps1 | iex",
+   "irm https://antigravity.google/cli/install.ps1 | iex",
+   "irm https://dev.meta.ai/install.ps1 | iex",
+   "irm https://cli.kiro.dev/install.ps1 | iex"
+  ],
+  "overflow": [],
+  "raw": [],
+  "frame": {
+   "extra": 1706,
+   "shotHeight": 2550,
+   "leftoverScroll": 12
+  },
+  "errors": [
+   "HTTP 401 /auth/session",
+   "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+ }
+]
