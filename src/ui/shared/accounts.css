@@ -86,3 +86,6 @@ button.s-account-used { display: inline-flex; align-items: center; gap: var(--s-
 .s-account-install-run > .signin-warn { color: var(--warn); font-weight: var(--fw-semibold); }
 .s-account-install-output { margin: 0; padding: var(--s-2) var(--s-3); max-height: 14em; overflow: auto; border-radius: var(--r-sm); background: var(--bg); color: var(--text-2); font-size: var(--fs-xs); line-height: 1.5; }
 .s-account-install-run .s-actions { justify-content: flex-end; }
+
+/* The Account field's options carry the account (name · email · plan): a long one is cut short inside the field, never wider than it. */
+.s-account-select select { min-width: 0; max-width: 100%; text-overflow: ellipsis; }

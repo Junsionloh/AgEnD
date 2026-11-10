@@ -27,3 +27,5 @@ export function identityParts(identity) {
   return parts;
 }
 export const identityText = identity => identityParts(identity).join(text("sep"));
+/** A label followed by the account it stands for, in the one format the Accounts page uses: `junsion · alice@example.com · Team`. No usable identity: the label alone. */
+export const withIdentity = (label, identity) => [label, ...identityParts(identity)].join(text("sep"));
