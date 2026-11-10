@@ -409,7 +409,7 @@ import { guestSessionPolicy, localSessionPolicy, sessionVia, tokenEpoch, WebSess
 import { WebNotices, WEB_NOTICES_FILE, type NoticeKind } from "./web-notices.js";
 import { enrolledRuntimeNotice } from "./runtime-enroll-notice.js";
 import { DeviceLoginRequests } from "./web-device-login.js";
-import { signinKnownDevice, addSigninKnownDevice } from "./web-signin-device.js";
+import { findSigninKnownEntry, addSigninKnownDevice } from "./web-signin-device.js";
 import { adminKey, HOST_ADMIN_KEY, isOutsideLinkOwner, OUTSIDE_LINK_OWNER, OUTSIDE_LINK_RETRY_MS, OUTSIDE_OWN_CLOSES, outsideDuration, outsideTimer, TOTP_SIGNIN_OVER_PUBLIC_LINK, TOTP_STEP_SECONDS, WEB_REMOTE_ACCESS_FILE, WebRemoteAccess } from "./web-remote-access.js";
 import { evaluateSettingsRole, type SettingsRole } from "./authority/settings-role.js";
 import { authorityNow, classifyWebPeer, evaluateWebAuthority, HOST_OPERATOR, hostSessionHere, VERIFIED_SESSION_HOURS, webAuthorityPolicy, type HumanAuthority, type WebAuthorityRefusal, type WebAuthorityResult, type WebPeer } from "./authority/web-authority.js";
@@ -18977,11 +18977,15 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const enrollment = who ? store.enrollmentOf(who) : null;
     const epoch = this.webAuthorityState().epoch, now = Date.now();
     // This browser: its cookie id, and on a direct connection the address too (over a link the gateway's peer is the tunnel, so the cookie alone).
-    const browser = { key: createHash("sha256").update(`agend-signin-browser\0${input.browser.id}\0${input.browser.address ?? "link"}`).digest("hex"),
-      known: signinKnownDevice(this.webToken, input.knownCookie, who, enrollment, epoch, now) };
+    // A browser with a valid mark is counted by the MARK (a thief cannot shed it by dropping the cookie id), else by cookie id and address.
+    const mark = findSigninKnownEntry(this.webToken, input.knownCookie, who, enrollment, epoch, now);
+    const browser = mark ? { key: createHash("sha256").update(`agend-signin-mark\0${mark}`).digest("hex"), known: true }
+      : { key: createHash("sha256").update(`agend-signin-browser\0${input.browser.id}\0${input.browser.address ?? "link"}`).digest("hex"), known: false };
     const v = store.signIn(who, ident, input.code, browser);
     if (v.kind === "unavailable") return v;
     if (v.kind !== "ok") {
+      // Half-way through a real admin's count, or the whole sign-in's: said once per cycle — nothing of the code or the name typed in it.
+      if (v.began.halfFleet || v.began.halfAdmin) this.postFleetSecurityNotice(t("signin.totp_notice_attempts"));
       // A shared wait that starts is said to the admins when it is the whole sign-in's or a real admin's — never for a name that is nobody's (a flood of those must not be a flood of Notices).
       if (v.began.fleet || v.began.admin) {
         this.logger.warn({ fleet: v.began.fleet }, "Sign-in with authenticator codes paused after wrong codes");

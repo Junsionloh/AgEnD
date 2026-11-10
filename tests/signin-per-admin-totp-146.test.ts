@@ -23,7 +23,7 @@ import { WEB_CSRF_HEADER } from "../src/web-auth.js";
 import { csrfTokenFor, tokenEpoch } from "../src/web-session.js";
 import { evaluateSettingsRole } from "../src/authority/settings-role.js";
 import { base32Decode, base32Encode, hotp, totpStep, adminKey, HOST_ADMIN_KEY, OUTSIDE_LINK_OWNER, SIGNIN_BROWSER_WRONG_LIMIT, SIGNIN_FLEET_WRONG_LIMIT, SIGNIN_WRONG_LIMIT, TOTP_SIGNIN_OVER_PUBLIC_LINK, WebRemoteAccess, WEB_REMOTE_ACCESS_FILE } from "../src/web-remote-access.js";
-import { addSigninKnownDevice, signinKnownDevice } from "../src/web-signin-device.js";
+import { addSigninKnownDevice, buildSigninCookie, signinKnownDevice } from "../src/web-signin-device.js";
 import { setLocale } from "../src/locale.js";
 
 const TOKEN = "d".repeat(48), ADMIN = "100", ADMIN_B = "200", NO_APP = "300", STRANGER = "999";
@@ -94,7 +94,8 @@ function fleet(o: { chat?: boolean; hostApp?: boolean; admins?: string[]; allowe
       const set = r.headers["Set-Cookie"];
       for (const c of Array.isArray(set) ? set : set ? [set] : []) { const [kv] = String(c).split(";"); const eq = kv!.indexOf("="); jar.set(kv!.slice(0, eq), kv!.slice(eq + 1)); }
       return r;
-    } };
+    }, /** The browser id dropped (a thief's way of starting a count afresh); the mark and the session stay. */
+    shed: () => { for (const k of [...jar.keys()]) if (/signin_browser/.test(k)) jar.delete(k); } };
   };
   const restart = () => { any.webRemoteAccessState?.close(); any.webRemoteAccessState = null; };   // the store read again from its file, as after a restart
   const access = (): WebRemoteAccess => any.webRemoteAccess();
@@ -345,20 +346,42 @@ describe("limits: this browser first, then the shared ceilings (the admin's, the
     expect(saved.admins[adminKey("a", ADMIN_B)].lim).toBeUndefined();
     expect(saved.signin.wrong).toBe(SIGNIN_WRONG_LIMIT - 1);
   });
-  it("time: a count is forgotten after an hour without wrong codes, and the doubling steps down a level per quiet day", () => {
+  it("time: a shared count is forgotten only after a quiet DAY (this browser's after an hour), and the doubling steps down a level per quiet day", () => {
     let clock = 1_800_000_000_000;
     const dir = mkdtempSync(join(tmpdir(), "agend-146-t-")); roots.push(dir);
     const store = new WebRemoteAccess(join(dir, WEB_REMOTE_ACCESS_FILE), { warn: () => {} }, () => clock);
-    const b = { key: "k", known: false }, wrongOnce = (i: number) => store.signIn(null, "x", "000000", { key: `k${i}`, known: false });
-    const burst = (): number => { let last: ReturnType<typeof wrongOnce> = { kind: "unavailable" }; for (let n = 0; n < SIGNIN_WRONG_LIMIT; n++) last = wrongOnce(n); return last.kind === "paused" ? last.retryAfterMs : 0; };
+    const wrongOnce = (i: number, name = "x") => store.signIn(null, name, "000000", { key: `k${i}`, known: false });
+    const burst = (name = "x"): number => { let last: ReturnType<typeof wrongOnce> = { kind: "unavailable" }; for (let n = 0; n < SIGNIN_WRONG_LIMIT; n++) last = wrongOnce(n, name); return last.kind === "paused" ? last.retryAfterMs : 0; };
     expect(burst()).toBe(15 * 60_000);
     clock += 15 * 60_000 + 1; expect(burst()).toBe(30 * 60_000);                 // a second wait right after: doubled
     clock += 30 * 60_000 + 3 * 24 * 60 * 60_000; expect(burst()).toBe(15 * 60_000);   // three quiet days later the level is back to the first
-    clock += 2 * 60 * 60_000;
-    for (let n = 0; n < SIGNIN_WRONG_LIMIT - 1; n++) wrongOnce(n);
-    clock += 61 * 60_000;                                                             // an hour of quiet: the count is forgotten …
-    for (let n = 0; n < SIGNIN_WRONG_LIMIT - 1; n++) expect(wrongOnce(n).kind).toBe("wrong");   // … so nine more do not pause
-    expect(b.known).toBe(false);
+    clock += 15 * 60_000 + 2 * 60 * 60_000;
+    for (let n = 0; n < SIGNIN_WRONG_LIMIT - 1; n++) wrongOnce(n, "y");
+    clock += 61 * 60_000;                                                             // an hour of quiet is NOT enough for a shared count …
+    expect(wrongOnce(0, "y").kind).toBe("paused");                                    // … the tenth since the first still pauses
+    // …while this browser's own count (one key) is forgotten after an hour.
+    const one = (name: string) => store.signIn(null, name, "000000", { key: "same-browser", known: false });
+    for (let n = 0; n < SIGNIN_BROWSER_WRONG_LIMIT - 1; n++) expect(one(`n${n}`).kind).toBe("wrong");
+    clock += 61 * 60_000;
+    for (let n = 0; n < SIGNIN_BROWSER_WRONG_LIMIT - 1; n++) expect(one(`m${n}`).kind).toBe("wrong");   // four more: not a fifth
+  });
+  it("a slow guesser (nine a hour, new browser each time) is caught: the tenth overall pauses, in the second hour; and half-way the admins are told once per cycle", () => {
+    let clock = 1_800_000_000_000;
+    const dir = mkdtempSync(join(tmpdir(), "agend-146-slow-")); roots.push(dir);
+    writeFileSync(join(dir, WEB_REMOTE_ACCESS_FILE), JSON.stringify({ v: 1, admins: { [adminKey("a", ADMIN)]: { secret: secretFor(ADMIN), enrolledAt: 1, lastStep: 0 } }, outside: false, wrong: 0, level: 0, pausedUntil: 0, handles: [] }));
+    const store = new WebRemoteAccess(join(dir, WEB_REMOTE_ACCESS_FILE), { warn: () => {} }, () => clock);
+    const who = adminKey("a", ADMIN);
+    let browserId = 0; const tryOnce = () => store.signIn(who, "alice", "000000", { key: `b${browserId++}`, known: false });
+    const told: boolean[] = [];
+    for (let n = 0; n < 9; n++) { const v = tryOnce(); expect(v.kind).toBe("wrong"); told.push((v as any).began.halfAdmin); }
+    expect(told.filter(Boolean)).toHaveLength(1); expect(told.indexOf(true)).toBe(SIGNIN_WRONG_LIMIT / 2 - 1);   // the fifth, once
+    clock += 60 * 60_000;                                                                                     // an hour later: nothing forgotten
+    expect(tryOnce().kind).toBe("paused");                                                                    // the tenth overall
+    clock += 15 * 60_000 + 1;
+    const again = tryOnce(); expect([again.kind, (again as any).began.halfAdmin]).toEqual(["wrong", false]);    // same cycle: not told again
+    clock += 25 * 60 * 60_000;                                                                                 // a day and an hour of quiet: a new cycle
+    const fresh: boolean[] = []; for (let n = 0; n < SIGNIN_WRONG_LIMIT / 2; n++) fresh.push((tryOnce() as any).began.halfAdmin);
+    expect(fresh.filter(Boolean)).toHaveLength(1);
   });
 });
 
@@ -390,6 +413,39 @@ describe("a browser that signed in before (the known-device mark)", () => {
     for (let n = 1; n < SIGNIN_BROWSER_WRONG_LIMIT; n++) expect((await mine.post({ account: "bob", code: "000000" })).status).toBe(401);
     expect((await mine.post({ account: "bob", code: "000000" })).status).toBe(429);                          // its own browser's limit still holds
     expect((await signIn(mine, ADMIN_B, 2)).status).toBe(429);
+  });
+  it("a stolen mark cannot be used to guess for ever by shedding cookies: its wrong codes are counted by the mark, not the browser id", async () => {
+    const f = fleet(), mine = f.browser();
+    expect((await signIn(mine)).status).toBe(200);
+    const seen: number[] = [];
+    for (let n = 0; n < SIGNIN_BROWSER_WRONG_LIMIT; n++) { mine.shed(); seen.push((await mine.post({ account: "bob", code: "000000" })).status); }
+    expect(seen).toEqual([401, 401, 401, 401, 429]);                                                           // a new browser id each time, the same count
+    mine.shed();
+    expect((await mine.post({ account: "bob", code: codeOf(secretFor(ADMIN_B), 1) })).status).toBe(429);        // the right code waits too
+  });
+  it("every mark of one admin counts together in the known-path limiter: several stolen marks cannot add up their tries", async () => {
+    const f = fleet(), who = adminKey("a", ADMIN_B);
+    // Four distinct valid marks of Bob's (four sign-ins from four browsers, each at another moment), each sent alone — a new browser id every time.
+    const cookie = (n: number) => { const v = addSigninKnownDevice(TOKEN, undefined, who, f.access().enrollmentOf(who)!, f.any.webAuthorityState().epoch, Date.now() + n * 1000); return buildSigninCookie("known", v, false, TOKEN).split(";")[0]!; };
+    const marks = [0, 1, 2, 3].map(cookie);
+    const wrong = async (n: number) => (await f.totp({ account: "bob", code: "000000" }, { cookie: marks[n]! })).status;
+    for (let n = 0; n < 4; n++) expect(await wrong(0)).toBe(401);
+    for (let n = 0; n < 4; n++) expect(await wrong(1)).toBe(401);
+    expect(await wrong(2)).toBe(401);                                                                          // nine in all, none of the marks at its own limit
+    expect(await wrong(2)).toBe(429);                                                                          // the tenth overall: the known-path ceiling (answered like the shared ones)
+    const saved = JSON.parse(readFileSync(join(f.dir, WEB_REMOTE_ACCESS_FILE), "utf8"));
+    expect(saved.admins[who].klim.level).toBe(1);
+    // a fourth mark, never used for a wrong code, is held too — and the right code waits
+    const held = await f.totp({ account: "bob", code: codeOf(secretFor(ADMIN_B)) }, { cookie: marks[3]! });
+    expect([held.status, held.json.error, held.headers["Retry-After"]]).toEqual([429, "paused", "900"]);
+  });
+  it("strangers' wrong codes (no mark) never touch the known-path count", async () => {
+    const f = fleet(), mine = f.browser();
+    expect((await signIn(mine)).status).toBe(200);
+    for (let n = 0; n < SIGNIN_WRONG_LIMIT - 1; n++) await f.totp({ account: "bob", code: "000000" });          // new browsers, no marks
+    const saved = JSON.parse(readFileSync(join(f.dir, WEB_REMOTE_ACCESS_FILE), "utf8"));
+    expect(saved.admins[adminKey("a", ADMIN_B)].klim).toBeUndefined();
+    expect((await mine.post({ account: "bob", code: codeOf(secretFor(ADMIN_B), 1) })).status).toBe(200);        // still let in, count untouched
   });
   it("it vouches only for the admin it was made for: Bob's browser is held like any other under Alice's name", async () => {
     const f = fleet(), mine = f.browser();
@@ -503,6 +559,42 @@ describe("every success tells the fleet's admins", () => {
     const f = fleet({ chat: false });
     expect((await f.totp({ code: codeOf(HOST_SECRET) })).status).toBe(200);
     expect(f.feed().length + f.notified.length).toBeGreaterThan(0);
+  });
+});
+
+describe("the admins hear of a slow guesser half-way, once", () => {
+  const half = (f: ReturnType<typeof fleet>) => f.notified.filter(t => /keeps trying/.test(t)).length;
+  it("a real admin's count reaching half (5) is one Notice, no more in the same cycle; no code, no name in it", async () => {
+    const f = fleet();
+    for (let n = 0; n < SIGNIN_WRONG_LIMIT / 2 - 1; n++) await f.totp({ account: "bob", code: "000000" });
+    expect(half(f)).toBe(0);
+    await f.totp({ account: "bob", code: "000000" });
+    expect(half(f)).toBe(1);
+    for (let n = 0; n < 3; n++) await f.totp({ account: ADMIN_B, code: "000000" });
+    expect(half(f)).toBe(1);
+    const text = f.notified.find(t => /keeps trying/.test(t))!;
+    expect(text).not.toMatch(/bob|000000|200/);
+  });
+  it("a name that is nobody's says nothing at its own half; the whole sign-in's half (25) says it once", async () => {
+    const f = fleet();
+    for (let n = 0; n < SIGNIN_WRONG_LIMIT / 2; n++) await f.totp({ account: "ghost", code: "000000" });
+    expect(half(f)).toBe(0);
+    for (let n = SIGNIN_WRONG_LIMIT / 2; n < SIGNIN_FLEET_WRONG_LIMIT / 2; n++) await f.totp({ account: `ghost${n}`, code: "000000" });
+    expect(half(f)).toBe(1);
+    for (let n = 0; n < 10; n++) await f.totp({ account: `other${n}`, code: "000000" });
+    expect(half(f)).toBe(1);
+  });
+  it("the answers do not change because of it: the same 401 before and after the Notice", async () => {
+    const f = fleet(), g = fleet();
+    const real: number[] = [], ghost: number[] = [];
+    for (let n = 0; n < 7; n++) { real.push((await f.totp({ account: "bob", code: "000000" })).status); ghost.push((await g.totp({ account: "nobody", code: "000000" })).status); }
+    expect(real).toEqual(ghost);
+  });
+  it("the page tells a refused person to use the 8-character code or a device used before (the leader's page should too)", () => {
+    const js = readFileSync(join(process.cwd(), "src", "ui", "shared", "signin-authenticator.js"), "utf8");
+    expect(js).toMatch(/refused_hint/);
+    expect(js).toMatch(/8-character sign-in code/);
+    expect(js).toMatch(/8 碼登入碼/);
   });
 });
 

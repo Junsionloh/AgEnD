@@ -55,11 +55,13 @@ function entryValid(webToken: string, entry: string, who: string, enrollment: st
 }
 const entriesOf = (value: string | undefined): string[] => (value ?? "").split("~").filter(e => e.length > 0 && e.length <= 80).slice(0, SIGNIN_KNOWN_MAX_ENTRIES);
 
-/** Whether the browser's mark vouches for `who` — the admin the typed name resolved to — as their app and the epoch stand now. */
-export function signinKnownDevice(webToken: string | null | undefined, value: string | undefined, who: string | null, enrollment: string | null, epoch: number, now: number): boolean {
-  if (!webToken || !who || !enrollment) return false;
-  return entriesOf(value).some(e => entryValid(webToken, e, who, enrollment, epoch, now));
+/** The entry of the browser's mark that vouches for `who` — the admin the typed name resolved to — as their app and the epoch stand now; null when none does. */
+export function findSigninKnownEntry(webToken: string | null | undefined, value: string | undefined, who: string | null, enrollment: string | null, epoch: number, now: number): string | null {
+  if (!webToken || !who || !enrollment) return null;
+  return entriesOf(value).find(e => entryValid(webToken, e, who, enrollment, epoch, now)) ?? null;
 }
+export const signinKnownDevice = (webToken: string | null | undefined, value: string | undefined, who: string | null, enrollment: string | null, epoch: number, now: number): boolean =>
+  findSigninKnownEntry(webToken, value, who, enrollment, epoch, now) !== null;
 /** The mark after a correct sign-in as `who`: their entry renewed, the others kept while they run out (at most four, newest last). */
 export function addSigninKnownDevice(webToken: string, value: string | undefined, who: string, enrollment: string, epoch: number, now: number): string {
   const expiry = now + SIGNIN_KNOWN_MAX_AGE_MS;
