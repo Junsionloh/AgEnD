@@ -234,6 +234,11 @@ export interface InstanceConfig {
   lightweight?: boolean;
   /** System prompt — supports comma-separated file: paths for modularization */
   systemPrompt?: string;
+  /**
+   * AGEND-162: Markdown the person wrote for this agent (≤ 24,000 characters, agent-instructions.ts), kept beside
+   * `systemPrompt` — never in place of it. Appended as the last section, `## Agent Instructions`, of what the agent is told.
+   */
+  instructions?: string;
   /** Skip permission checks (dangerously-skip-permissions) */
   skipPermissions?: boolean;
   /** Claude model to use (e.g. "sonnet", "opus", "haiku", or full model ID) */
