@@ -6,15 +6,15 @@ import { register, t } from "/assets/app-i18n.js";
 register("agentPage", {
   en: {
     // The page
-    title: "Details & settings", groupStatus: "Status", groupSettings: "Settings", onlyThis: "Only affects {0}",
+    title: "Settings", groupStatus: "Status", groupSettings: "Settings", onlyThis: "Only affects {0}",
     leadOverview: "This agent's status, usage and recent activity. To change a setting, pick a category.",
     leadSection: "Changes are staged first and written when you press Save. Each setting says when it takes effect.",
     loading: "Reading this agent's settings…", loadFailed: "Could not read this agent's settings.", notConfigured: "This agent is not in fleet.yaml, so it has no settings to edit here.",
-    unsavedDot: "Has unapplied changes", nativeLimits: "Windows native agents have no auto-pause, hang detection, tool sets or channel binding (they never did); this page shows only what the agent supports.",
+    checkEnable: "Enable", unsavedDot: "Has unapplied changes", nativeLimits: "Windows native agents have no auto-pause, hang detection, tool sets or channel binding (they never did); this page shows only what the agent supports.",
     classicNote: "A ClassicBot room: its settings live in classicBot.yaml, not fleet.yaml.",
     actions: "Actions", actionsNote: "The same actions as the ⋯ menu in the header (which also has the identity colour and the web theme lock).",
     // Categories
-    cat_overview: "Overview", cat_basic: "Basic info", cat_runtime: "Runtime & model", cat_work: "Workspace & running", cat_channel: "Channels & status emojis", cat_adv: "Advanced",
+    cat_overview: "Overview", cat_basic: "Basic info", cat_runtime: "Runtime & model", cat_work: "Workspace", cat_channel: "Channels", cat_adv: "Advanced",
     cat_classicChannel: "Channels & replies", openSettings: "Settings",
     // Cards
     cardName: "Name & description", cardRuntime: "Runtime & CLI", cardModel: "Model", cardWorkdir: "Working directory", cardIdle: "Idle & protection", cardTools: "Tools & modes",
@@ -22,7 +22,7 @@ register("agentPage", {
     cardDashboard: "Dashboard access", cardElsewhere: "Other settings live elsewhere", cardDanger: "Danger zone", cardWorkspace: "Workspace & permissions",
     cardReplies: "Reply behaviour", cardCollab: "Collaboration & web",
     // Labels of the three settings the page never showed
-    lbl_resumeWork: "Resume interrupted work", lbl_mcpProxy: "Reply for the agent when MCP is down", lbl_boardCards: "Board cards at once",
+    lbl_resumeWork: "Resume interrupted work", lbl_mcpProxy: "MCP proxy reply", lbl_boardCards: "Board cards at once",
     mustBePositiveInteger: "Enter a whole number of at least 1.",
     // Field help (the ⓘ)
     tip_displayName: "The name this agent goes by in chat, the agent list and other agents' eyes.",
@@ -76,20 +76,20 @@ register("agentPage", {
     instrCodexNear: "Over about 16 KiB, Codex (32 KiB of AGENTS.md in total, about 12 KiB of it AgEnD's own guidance) may cut off the end of these instructions.",
   },
   "zh-TW": {
-    title: "詳細資料與設定", groupStatus: "狀態", groupSettings: "設定", onlyThis: "只影響 {0}",
+    title: "設定", groupStatus: "狀態", groupSettings: "設定", onlyThis: "只影響 {0}",
     leadOverview: "這個 Agent 目前的狀態、用量與最近活動。要改設定請從分類選擇。",
     leadSection: "改動會先暫存，按「儲存」才寫入；每個欄位旁標明生效時機。",
     loading: "正在讀取這個 Agent 的設定…", loadFailed: "讀不到這個 Agent 的設定。", notConfigured: "這個 Agent 不在 fleet.yaml 裡，沒有可在這裡編輯的設定。",
-    unsavedDot: "有尚未套用的變更", nativeLimits: "Windows 原生 Agent 沒有自動暫停、卡住偵測、工具組與頻道綁定（原本就沒有）；這一頁只顯示它支援的設定。",
+    checkEnable: "啟用", unsavedDot: "有尚未套用的變更", nativeLimits: "Windows 原生 Agent 沒有自動暫停、卡住偵測、工具組與頻道綁定（原本就沒有）；這一頁只顯示它支援的設定。",
     classicNote: "ClassicBot 房間：設定存在 classicBot.yaml，不是 fleet.yaml。",
     actions: "動作", actionsNote: "與標題列「⋯」選單同一組動作（那裡另有識別顏色、鎖定／重設網頁主題）。",
-    cat_overview: "概覽", cat_basic: "基本資料", cat_runtime: "Runtime 與模型", cat_work: "工作目錄與執行", cat_channel: "頻道與 Status emojis", cat_adv: "進階",
+    cat_overview: "概覽", cat_basic: "基本資料", cat_runtime: "Runtime 與模型", cat_work: "工作目錄", cat_channel: "頻道", cat_adv: "進階",
     cat_classicChannel: "頻道與回覆", openSettings: "設定",
     cardName: "名稱與描述", cardRuntime: "Runtime 與 CLI", cardModel: "模型", cardWorkdir: "工作目錄", cardIdle: "閒置與保護", cardTools: "工具與模式",
     cardChannel: "頻道與可見度", cardEmojis: "Status emojis", cardSystemPrompt: "System prompt（原有欄位）", cardLogging: "記錄與恢復", cardBoard: "任務看板",
     cardDashboard: "儀表板權限", cardElsewhere: "其他設定在別處", cardDanger: "危險操作", cardWorkspace: "工作區與權限",
     cardReplies: "回覆行為", cardCollab: "協作與網頁",
-    lbl_resumeWork: "中斷後自動接續工作", lbl_mcpProxy: "MCP 失效時由 daemon 代為回覆", lbl_boardCards: "同時處理的看板卡片數",
+    lbl_resumeWork: "中斷後自動接續工作", lbl_mcpProxy: "MCP 代為回覆", lbl_boardCards: "同時處理的看板卡片數",
     mustBePositiveInteger: "請輸入至少為 1 的整數。",
     tip_displayName: "Agent 在聊天室、Agent 清單與其他 Agent 眼中的名字。",
     tip_tags: "用來在 Agent 清單分類與搜尋；AI 不會讀到。",

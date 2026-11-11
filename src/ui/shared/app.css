@@ -299,6 +299,10 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
   .p-chat .panel-sub > :not(.status) { display: none; }
 }
 .status { display: inline-flex; align-items: center; gap: 6px; }
+/* An agent's page, on a phone: the status is its dot only (the word is the status's title and accessible name), so the name keeps the room. */
+@media (max-width: 479px) {
+  .p-agent-page .panel-sub .status-text { display: none; }
+}
 /* #2015: the largest processes, after the host memory chip's text. */
 .host-mem-top { margin-left: var(--s-2); opacity: 0.8; overflow-wrap: anywhere; }
 /* M-2556: bound Fleet's warning independently of tab placement. Cached panels without a tooltip keep wrapping. */
@@ -363,7 +367,6 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .p-log .log-sec-h { font-size: var(--fs-xs); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
 .p-log .log-older, .p-log .log-start { text-align: center; margin: var(--s-2) 0; }
 .p-log .log-off { padding: var(--s-6) var(--s-4); }
-.p-details .d-edit { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-2); }
 /* The header's controls are one height, the icon buttons' (36 px): its small buttons, and the instance tabs when they share
    its row (a phone puts them on a row of their own, under it). */
 .panel-head .btn-sm { min-height: 36px; }
@@ -1706,8 +1709,9 @@ body.side-resizing, body.side-resizing * { cursor: col-resize !important; user-s
 .pill.ver { text-transform: none; letter-spacing: 0; }
 /* #2347 §7: Settings' title stays whole on a narrow phone (at 320 px it was cut to "S…"): the version beside it takes the
    room that is left — shortened, or not shown when too little is. */
-.p-settings .panel-title h1 { flex: none; }
-.p-settings .panel-sub { flex: 1 1 0; min-width: 0; container: settings-ver / inline-size; }
+/* AGEND-161: the version pill of the Settings header; an agent's page (p-agent-page) keeps Details' own header (its status must not shrink to nothing). */
+.p-settings:not(.p-agent-page) .panel-title h1 { flex: none; }
+.p-settings:not(.p-agent-page) .panel-sub { flex: 1 1 0; min-width: 0; container: settings-ver / inline-size; }
 .p-settings .panel-sub .pill.ver { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 @container settings-ver (max-width: 56px) { .p-settings .panel-sub .pill.ver { display: none; } }
 .s-key { display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-2) 0; border-top: 1px solid var(--border); }
@@ -4275,6 +4279,12 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 .p-settings .s-nav .seg-item .icon { color: var(--text-3); }
 .p-settings .s-nav .seg-item.active .icon { color: inherit; }
 .p-settings .s-nav .seg-item .count { color: var(--warn); font-size: var(--fs-xs); }
+/* S2b. A label too long for the column is cut with an ellipsis (its `title` has the whole word), never drawn past the column;
+   the current item is bold, so it is the one that grew. The row of tabs (S4) scrolls instead, and the phone's list wraps. */
+.p-settings > .s-nav .seg-item { min-width: 0; max-width: 100%; }
+.p-settings > .s-nav .seg-item > span:not(.count) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 900px) and (max-width: 1099px) { .p-settings > .s-nav .seg-item > span:not(.count) { overflow: visible; text-overflow: clip; } }
+@media (max-width: 899px) { .p-settings > .s-nav .seg-item > span:not(.count) { overflow: visible; text-overflow: clip; white-space: normal; } }
 /* S3. Wide (≥1100px): the category column is its own panel — the sidebar's tone and a divider on its right edge. */
 @media (min-width: 1100px) {
   .p-settings > .s-nav { background: var(--bg-sidebar); border-right: 1px solid var(--border); padding: var(--s-4) var(--s-3) var(--s-4) var(--s-3); }
@@ -4306,6 +4316,8 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 .ap-grid > .card { margin-bottom: 0; }
 .ap-grid > .ap-span2 { grid-column: 1 / -1; }
 .ap-danger { border-color: var(--danger-line); }
+/* A category's panel takes no box of its own: its cards are stacked by .s-section-layout's gap, like Settings' cards. */
+.ap-panel { display: contents; }
 .ap-panel[hidden] { display: none; }
 .p-details .d-actions .field-row { flex-wrap: wrap; }
 /* The sidebar's ⚙: one step to an agent's settings — on hover or focus on a desktop and on the open row, always on a touch screen. */
@@ -4314,3 +4326,6 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 .v-li.two-line > .inst-gear { align-self: flex-start; margin-top: 6px; }
 /* AGEND-162: the Instructions field's preview scrolls inside its own box (the chat's Markdown look, .pv-code.pv-md). */
 .instructions-field .pv-code { max-height: 24rem; }
+/* The Edit / Preview switch, the box under it (the editor or the preview) and the notes are one column with the form's standard gap (they touched). */
+.instructions-field { display: flex; flex-direction: column; gap: var(--s-2); }
+.instructions-field > .seg-inline { align-self: flex-start; }
