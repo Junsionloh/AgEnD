@@ -111,6 +111,7 @@ const FLEET_FIELD_IMPACTS: Readonly<Record<string, ConfigImpact>> = {
   "web.experimental.canvas_worker": "now",
   "web.echo_to_channel": "now",
   "web.log_tab": "now",
+  "web.log_thinking": "now",
   "web.usage_report_on_public_link": "now",
   "web.office_levels": "now",
   "web.preview_cdn": "now",
