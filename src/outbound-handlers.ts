@@ -73,6 +73,7 @@ import {
 } from "./outbound-schemas.js";
 import type { CrossInstanceRecord } from "./search/search-docs.js";
 import { HUB_REPORT_TARGET, parseHubReportExtras, type HubReportExtras, type HubReportOutcome } from "./hub-report-target.js";
+import { AGENT_INSTRUCTIONS_MAX_CHARS } from "./agent-instructions.js";
 
 /** Shared context available to all outbound tool handlers. */
 export interface OutboundContext {
@@ -2269,6 +2270,11 @@ const deployTemplate: Handler = async (ctx, rawArgs, respond, meta) => {
         if (instanceDef.lightweight == null && profile.lightweight != null) instanceDef.lightweight = profile.lightweight;
       }
 
+      // AGEND-163: a template's instructions are validated as fleet.yaml would, before anything is created for this role.
+      if (instanceDef.instructions !== undefined && (typeof instanceDef.instructions !== "string" || instanceDef.instructions.length > AGENT_INSTRUCTIONS_MAX_CHARS)) {
+        throw new Error(`Template "${templateName}" role "${role}": instructions must be text of at most ${AGENT_INSTRUCTIONS_MAX_CHARS} characters`);
+      }
+
       const topicName = `${deploymentName}-${role}`;
       const deploymentTags = [
         `deployment:${deploymentName}`,
@@ -2284,6 +2290,7 @@ const deployTemplate: Handler = async (ctx, rawArgs, respond, meta) => {
         ...(instanceDef.backend ? { backend: instanceDef.backend } : {}),
         ...(instanceDef.model_failover ? { model_failover: instanceDef.model_failover } : {}),
         ...(instanceDef.systemPrompt ? { systemPrompt: instanceDef.systemPrompt } : {}),
+        ...(typeof instanceDef.instructions === "string" && instanceDef.instructions ? { instructions: instanceDef.instructions } : {}),
         ...(instanceDef.tool_set ? { tool_set: instanceDef.tool_set } : {}),
         ...(instanceDef.skipPermissions != null ? { skipPermissions: instanceDef.skipPermissions } : {}),
         ...(instanceDef.lightweight != null ? { lightweight: instanceDef.lightweight } : {}),
