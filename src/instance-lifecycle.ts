@@ -64,6 +64,7 @@ import {
 } from "./delivery-reconciliation.js";
 
 import { noPlaceMarkers, placeRef } from "./topic-link.js";
+import { AGENT_INSTRUCTIONS_MAX_CHARS, agentInstructionsText } from "./agent-instructions.js";
 
 export { isFleetStartCommandLine } from "./fleet-lock.js";
 
@@ -434,6 +435,8 @@ export interface LifecycleCreateArgs {
   detach?: boolean;
   worktree_path?: string;
   systemPrompt?: string;
+  /** AGEND-163: forwarded by deploy_template from a template's `instructions` (kept only when valid, agent-instructions.ts). */
+  instructions?: string;
   tags?: string[];
   workflow?: string | false;
   model_failover?: string[];
@@ -2643,6 +2646,8 @@ export class InstanceLifecycle {
     const topicName = args.topic_name || (directory ? basename(directory) : undefined);
     const description = args.description;
     const systemPrompt = args.systemPrompt;
+    // AGEND-163: a template's instructions are kept only as fleet.yaml itself would accept them (a text of at most 24,000 characters).
+    const agentInstructions = typeof args.instructions === "string" && args.instructions.length <= AGENT_INSTRUCTIONS_MAX_CHARS ? agentInstructionsText(args.instructions) : undefined;
     const branch = args.branch;
     const detach = args.detach ?? false;
 
@@ -2897,6 +2902,7 @@ export class InstanceLifecycle {
         ...(createdTopicId != null && adapterId && this.bindsAdapter(adapterId) ? { channel_id: adapterId } : {}),
         ...(description ? { description } : {}),
         ...(systemPrompt ? { systemPrompt } : {}),
+        ...(agentInstructions ? { instructions: agentInstructions } : {}),
         ...(args.model ? { model: args.model } : {}),
         ...(args.backend ? { backend: args.backend } : {}),
         ...(args.backend_options ? { backend_options: args.backend_options } : {}),

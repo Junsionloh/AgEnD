@@ -367,6 +367,8 @@ export interface TemplateInstanceDef {
   model_failover?: string[];
   tool_set?: string;
   systemPrompt?: string;
+  /** AGEND-163: the agent's own instructions (agent-instructions.ts), forwarded to each deployed instance. */
+  instructions?: string;
   skipPermissions?: boolean;
   lightweight?: boolean;
   workflow?: string | false;
