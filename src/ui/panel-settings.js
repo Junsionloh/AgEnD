@@ -1214,6 +1214,7 @@ function WebSection({ ctx, staged, part = "all" }) {
     notify: noticeMode(web.notify_login),
     echo: web.echo_to_channel ?? true,
     log: web.log_tab === true,                                                  // #1218: off by default
+    thinking: web.log_thinking !== false,                                       // AGEND-181: on by default (needs the Log)
     usagePub: web.usage_report_on_public_link === true,                         // #2122: off by default
     levels: web.office_levels !== false,                                        // #2661: on by default
     cdn: web.preview_cdn === true,                                              // #2911 (7): off by default
@@ -1223,7 +1224,7 @@ function WebSection({ ctx, staged, part = "all" }) {
   }), []);
   const text = (v) => (v === null || v === undefined ? "" : String(v));
   /** #2347: a field's row class: `s-dirty` while it differs from what is saved (the draft may come from before). */
-  const savedForm = useMemo(() => ({ notify: String(original.notify), echo: original.echo, log: original.log, usagePub: original.usagePub, levels: original.levels, cdn: original.cdn, pub: original.pub.allow_public,
+  const savedForm = useMemo(() => ({ notify: String(original.notify), echo: original.echo, log: original.log, thinking: original.thinking, usagePub: original.usagePub, levels: original.levels, cdn: original.cdn, pub: original.pub.allow_public,
     ttl: String(original.pub.ttl_minutes), protocol: original.pub.protocol, hostname: original.pub.hostname, originPort: String(original.pub.origin_port),
     abs: text(original.session.absolute_hours), idle: text(original.session.idle_hours), termOn: original.terminal.enabled !== false,
     termTtl: text(original.terminal.ttl_minutes), autoOpen: original.pub.auto_open }), []);
@@ -1236,7 +1237,7 @@ function WebSection({ ctx, staged, part = "all" }) {
     const pick = (obj, key, fallback) => Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : fallback;
     return {
       notify: String(pick(pending, "notify_login", original.notify)),
-      echo: pick(pending, "echo_to_channel", original.echo), log: pick(pending, "log_tab", original.log), usagePub: pick(pending, "usage_report_on_public_link", original.usagePub),
+      echo: pick(pending, "echo_to_channel", original.echo), log: pick(pending, "log_tab", original.log), thinking: pick(pending, "log_thinking", original.thinking), usagePub: pick(pending, "usage_report_on_public_link", original.usagePub),
       levels: pick(pending, "office_levels", original.levels), cdn: pick(pending, "preview_cdn", original.cdn),
       pub: pick(pub, "allow_public", original.pub.allow_public), ttl: String(pick(pub, "ttl_minutes", original.pub.ttl_minutes)), protocol: pick(pub, "protocol", original.pub.protocol),
       hostname: pick(pub, "hostname", original.pub.hostname), originPort: String(pick(pub, "origin_port", original.pub.origin_port)), autoOpen: pick(pub, "auto_open", original.pub.auto_open),
@@ -1288,6 +1289,7 @@ function WebSection({ ctx, staged, part = "all" }) {
       ...(noticeMode(f.notify) !== original.notify ? { notify_login: noticeMode(f.notify) } : {}),
       ...(f.echo !== original.echo ? { echo_to_channel: f.echo } : {}),
       ...(f.log !== original.log ? { log_tab: f.log } : {}),
+      ...(f.thinking !== original.thinking ? { log_thinking: f.thinking } : {}),
       ...(f.usagePub !== original.usagePub ? { usage_report_on_public_link: f.usagePub } : {}),
       ...(f.levels !== original.levels ? { office_levels: f.levels } : {}),
       ...(f.cdn !== original.cdn ? { preview_cdn: f.cdn } : {}),
@@ -1299,6 +1301,7 @@ function WebSection({ ctx, staged, part = "all" }) {
       ...(body.notify_login !== undefined ? ["web.notify_login"] : []),
       ...(body.echo_to_channel !== undefined ? ["web.echo_to_channel"] : []),
       ...(body.log_tab !== undefined ? ["web.log_tab"] : []),
+      ...(body.log_thinking !== undefined ? ["web.log_thinking"] : []),
       ...(body.usage_report_on_public_link !== undefined ? ["web.usage_report_on_public_link"] : []),
       ...(body.office_levels !== undefined ? ["web.office_levels"] : []),
       ...(body.preview_cdn !== undefined ? ["web.preview_cdn"] : []),
@@ -1393,6 +1396,8 @@ function WebSection({ ctx, staged, part = "all" }) {
     ${has("dashboard") ? lock(html`<section class="card"><h3>${tn("webDashboardTitle")}</h3>
       <label class=${fc("check", "log")}><input id="webLogTab" type="checkbox" checked=${f.log} onChange=${(e) => set("log")(e.target.checked)} /><span>${tn("webLogTab")}</span><${Impact} schema=${schema} field="web.log_tab" /></label>
       <p class="note">${tn("webLogTabHint")}</p>
+      <label class=${fc("check", "thinking")}><input id="webLogThinking" type="checkbox" checked=${f.thinking} disabled=${!f.log} onChange=${(e) => set("thinking")(e.target.checked)} /><span>${tn("webLogThinking")}</span><${Impact} schema=${schema} field="web.log_thinking" /></label>
+      <p class="note">${tn("webLogThinkingHint")}</p>
       <label class=${fc("check", "usagePub")}><input id="webUsagePublic" type="checkbox" checked=${f.usagePub} onChange=${(e) => set("usagePub")(e.target.checked)} /><span>${tn("webUsagePublic")}</span><${Impact} schema=${schema} field="web.usage_report_on_public_link" /></label>
       <p class="note">${tn("webUsagePublicHint")}</p>
       <label class=${fc("check", "levels")}><input id="webOfficeLevels" type="checkbox" checked=${f.levels} onChange=${(e) => set("levels")(e.target.checked)} /><span>${tn("webOfficeLevels")}</span><${Impact} schema=${schema} field="web.office_levels" /></label>
