@@ -273,10 +273,37 @@ describe("create: the instance's fleet.yaml gets the instructions (and nothing w
     expect(error).toBeUndefined();
     return (yaml.load(readFileSync(configPath, "utf8")) as any).instances[name] as Record<string, unknown>;
   }
-  it("writes a valid text as given, and no key for blank, over-long or no text", async () => {
+  it("writes a valid text as given, and no key for blank or no text", async () => {
     expect((await created({ instructions: "# Role\nBe exact.\n" })).instructions).toBe("# Role\nBe exact.");
     expect(await created({ instructions: "  \n" })).not.toHaveProperty("instructions");
-    expect(await created({ instructions: "x".repeat(AGENT_INSTRUCTIONS_MAX_CHARS + 1) })).not.toHaveProperty("instructions");
     expect(await created({})).not.toHaveProperty("instructions");
+  });
+});
+
+describe("review follow-ups (AGEND-166)", () => {
+  it("a key that is also an Object.prototype name is an unknown field, never an undefined reason", () => {
+    const r = parseAgentExport("agend_export: 1\nagent:\n  constructor: x\n  toString: y\n  hasOwnProperty: z\nbehavior:\n  valueOf: 1\n");
+    if (!r.ok) throw new Error(r.error);
+    expect(r.skipped.map((s) => s.reason)).toEqual(["unknown", "unknown", "unknown", "unknown"]);
+  });
+  it("more secret shapes stop the file (Stripe, Hugging Face) and tags are scanned too", () => {
+    expect(buildAgentExport("r", { instructions: `key ${"rk_"}${"live_"}abcdefghijklmnopqrstuvwx` }, ["instructions"]).findings[0]).toMatchObject({ kind: "api_key" });
+    expect(buildAgentExport("r", { instructions: "hf_abcdefghijklmnopqrstuvwxyz0123456789" }, ["instructions"]).text).toBeNull();
+    expect(buildAgentExport("r", { tags: ["ok", "sk-abcdefghijklmnopqrstuvwx"] }, ["identity"]).findings[0]).toMatchObject({ field: "tags" });
+  });
+  it("a secret deep inside a very long line is still found, and a long line does not take long to scan", () => {
+    const long = `${"a-".repeat(40_000)} sk-abcdefghijklmnopqrstuvwx ${"b".repeat(1000)}`;
+    const t0 = Date.now();
+    expect(scanForSecrets("systemPrompt", long)).toEqual([{ field: "systemPrompt", line: 1, kind: "api_key" }]);
+    expect(scanForSecrets("systemPrompt", "a-".repeat(100_000))).toEqual([]);
+    expect(Date.now() - t0).toBeLessThan(2000);
+  });
+  it("create_instance with too-long or non-text instructions is an error, not a silent drop", async () => {
+    const fm = new FleetManager(temp("agend-163-err-"));
+    for (const bad of ["x".repeat(AGENT_INSTRUCTIONS_MAX_CHARS + 1), 5]) {
+      let err = "";
+      await fm.lifecycle.handleCreate({ directory: temp("agend-163-e-"), topic_name: "t", instructions: bad } as any, (_r: any, e?: string) => { err = e ?? ""; });
+      expect(err).toMatch(/instructions must be text of at most 24000 characters/);
+    }
   });
 });

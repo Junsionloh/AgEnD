@@ -61,6 +61,7 @@ export function ExportDialog({ name, pending, onClose }) {
   useEffect(() => {
     const mine = ++seq.current;
     setFailed(false);
+    setResult(null);          // the old preview is gone the moment the choice changes: nothing stale can be copied
     post("/ui/agent-export/build", { instance: name, include: GROUPS.filter((g) => groups.has(g)) })
       .then((r) => { if (alive.current && mine === seq.current) setResult(r); })
       .catch(() => { if (alive.current && mine === seq.current) { setResult(null); setFailed(true); } });

@@ -50,7 +50,7 @@ const EXCLUDED: Record<string, SkipReason> = {
   quota_notice: "notice",
   workflow: "fleetOnly", cost_guard: "fleetOnly", restart_policy: "fleetOnly", profile: "fleetOnly", mcp_proxy_reply: "permission",
 };
-const excludedReason = (key: string): SkipReason => (key.startsWith("native_") ? "machine" : EXCLUDED[key] ?? "unknown");
+const excludedReason = (key: string): SkipReason => (key.startsWith("native_") ? "machine" : Object.hasOwn(EXCLUDED, key) ? EXCLUDED[key]! : "unknown");
 
 export interface Skipped { path: string; reason: SkipReason }
 
@@ -58,7 +58,7 @@ export interface Skipped { path: string; reason: SkipReason }
 
 const SECRET_PATTERNS: Array<[string, RegExp]> = [
   ["private_key", /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
-  ["api_key", /\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|npm_[A-Za-z0-9]{30,}|ya29\.[A-Za-z0-9._-]{20,})/],
+  ["api_key", /\b(?:sk-[A-Za-z0-9_-]{16,}|[sr]k_(?:live|test)_[A-Za-z0-9]{16,}|hf_[A-Za-z0-9]{30,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|npm_[A-Za-z0-9]{30,}|ya29\.[A-Za-z0-9._-]{20,})/],
   ["bot_token", /\b\d{7,12}:[A-Za-z0-9_-]{30,}\b/],
   ["jwt", /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/],
   ["bearer", /\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{20,}/],
@@ -72,7 +72,12 @@ export interface SecretFinding { field: string; line: number; kind: string }
 export function scanForSecrets(field: string, text: string): SecretFinding[] {
   const found: SecretFinding[] = [];
   text.split(/\r?\n/).forEach((line, i) => {
-    for (const [kind, re] of SECRET_PATTERNS) if (re.test(line)) { found.push({ field, line: i + 1, kind }); break; }
+    // A very long line is read in overlapping pieces, so the patterns' cost stays small however long a line is.
+    for (let at = 0; at === 0 || at < line.length; at += 3000) {
+      const piece = line.slice(at, at + 4000);
+      const hit = SECRET_PATTERNS.find(([, re]) => re.test(piece));
+      if (hit) { found.push({ field, line: i + 1, kind: hit[0] }); break; }
+    }
   });
   return found;
 }
@@ -102,7 +107,10 @@ export function buildAgentExport(role: string, inst: Partial<InstanceConfig>, in
   if (want.has("identity")) {
     const d = text(inst.description);
     if (d) { agent.description = d; findings.push(...scanForSecrets("description", d)); }
-    if (Array.isArray(inst.tags) && inst.tags.length) agent.tags = inst.tags.filter((x): x is string => typeof x === "string");
+    if (Array.isArray(inst.tags) && inst.tags.length) {
+      agent.tags = inst.tags.filter((x): x is string => typeof x === "string");
+      findings.push(...scanForSecrets("tags", (agent.tags as string[]).join("\n")));
+    }
   }
   if (want.has("instructions")) {
     const s = text(inst.instructions);

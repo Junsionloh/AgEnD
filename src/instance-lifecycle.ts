@@ -2647,7 +2647,11 @@ export class InstanceLifecycle {
     const description = args.description;
     const systemPrompt = args.systemPrompt;
     // AGEND-163: a template's instructions are kept only as fleet.yaml itself would accept them (a text of at most 24,000 characters).
-    const agentInstructions = typeof args.instructions === "string" && args.instructions.length <= AGENT_INSTRUCTIONS_MAX_CHARS ? agentInstructionsText(args.instructions) : undefined;
+    if (args.instructions !== undefined && (typeof args.instructions !== "string" || args.instructions.length > AGENT_INSTRUCTIONS_MAX_CHARS)) {
+      respond(null, `instructions must be text of at most ${AGENT_INSTRUCTIONS_MAX_CHARS} characters`);
+      return;
+    }
+    const agentInstructions = agentInstructionsText(args.instructions);
     const branch = args.branch;
     const detach = args.detach ?? false;
 
