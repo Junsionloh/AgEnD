@@ -1,4 +1,4 @@
-// AGEND-162: `instances.<name>.instructions` — an agent's own Markdown, added beside `systemPrompt`.
+// `instances.<name>.instructions` — an agent's own Markdown, added beside `systemPrompt`.
 import { describe, it, expect, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { handleSettingsRequest, type SettingsApiContext } from "../src/settings-api.js";
@@ -20,15 +20,15 @@ import { KiroBackend } from "../src/backend/kiro.js";
 import { TEST_KIRO_COMPAT } from "./helpers/kiro-compat.js";
 import type { InstanceConfig } from "../src/types.js";
 import type { Logger } from "../src/logger.js";
-import { matrixCases } from "./helpers/instructions-matrix-162.js";
+import { matrixCases } from "./helpers/instructions-matrix.js";
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);
-// Recorded from the instructions code before this field existed (a05dc0855): see helpers/instructions-matrix-record-162.ts.
-const GOLDEN: Record<string, string> = JSON.parse(readFileSync(new URL("./fixtures/instructions-matrix-162.json", import.meta.url), "utf8"));
+// Recorded from the instructions code before this field existed (a05dc0855): see helpers/instructions-matrix-record.ts.
+const GOLDEN: Record<string, string> = JSON.parse(readFileSync(new URL("./fixtures/instructions-matrix.json", import.meta.url), "utf8"));
 const NOT_FILLED: Array<[string, unknown]> = [["undefined", undefined], ["empty", ""], ["spaces", "   "], ["newlines and tabs", "\n\t \r\n"], ["not a string", 42]];
 const FILLED = "# Role\n\nYou review pull requests.\n\n- Be kind\n- Be exact\n";
 
-describe("AGEND-162: what an agent is told", () => {
+describe("what an agent is told", () => {
   const cases = matrixCases();
   it("covers the whole parameter grid, for the fleet and the Windows native builders", () => {
     expect(cases.length).toBe(576);
@@ -73,7 +73,7 @@ describe("AGEND-162: what an agent is told", () => {
   });
 });
 
-describe("AGEND-162: the field in the configuration", () => {
+describe("the field in the configuration", () => {
   const fleet = (instructions: unknown) => ({ instances: { a: { working_directory: "/w", instructions } } });
   const problems = (instructions: unknown) => validateFleetConfig(fleet(instructions)).errors.filter(e => e.path.endsWith("instructions"));
 
@@ -100,7 +100,7 @@ describe("AGEND-162: the field in the configuration", () => {
   });
 });
 
-describe("AGEND-162: the web confirmation of a long instructions text", () => {
+describe("the web confirmation of a long instructions text", () => {
   const effect = (instructions: string | undefined) => ({ fleet: { instances: { dev: { working_directory: "/w", ...(instructions === undefined ? {} : { instructions }) } } } });
   const long = "A".repeat(20_000) + "\n" + "Z".repeat(4_000);
 
@@ -147,7 +147,7 @@ describe("AGEND-162: the web confirmation of a long instructions text", () => {
   });
 });
 
-describe("AGEND-162: saving it through the Settings API", () => {
+describe("saving it through the Settings API", () => {
   function patch(body: unknown): Promise<{ status: number; body: Record<string, unknown>; saved: ReturnType<typeof vi.fn> }> {
     const saved = vi.fn();
     const ctx = { fleetConfig: { defaults: {}, instances: { worker: { working_directory: "/tmp/worker", systemPrompt: "persona", instructions: "old" } } }, configPath: "/tmp/fleet.yaml", dataDir: "/tmp",
@@ -183,7 +183,7 @@ describe("AGEND-162: saving it through the Settings API", () => {
   });
 });
 
-describe("AGEND-162: every runtime hands the AI the same text", () => {
+describe("every runtime hands the AI the same text", () => {
   const BACKENDS = ["claude-code", "codex", "opencode", "kiro-cli", "antigravity", "grok", "muse"] as const;
   const cfg = (extra: Partial<InstanceConfig> = {}, backend?: string): InstanceConfig => ({
     working_directory: "/tmp/test", restart_policy: { max_retries: 10, backoff: "exponential", reset_after: 300 },

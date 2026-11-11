@@ -1,5 +1,5 @@
 /**
- * AGEND-162: the Instructions field on an agent's Basic info — the Edit / Preview switch, the counter (characters and bytes,
+ * the Instructions field on an agent's Basic info — the Edit / Preview switch, the counter (characters and bytes,
  * the 24,000 limit, the Codex AGENTS.md note), and the patch: its own key, beside systemPrompt, written only when changed.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";

@@ -1,7 +1,7 @@
 /**
- * AGEND-162: the parameter grid of what an agent is told (buildFleetInstructions / buildNativeFleetInstructions), shared by
+ * the parameter grid of what an agent is told (buildFleetInstructions / buildNativeFleetInstructions), shared by
  * the test and by the script that recorded the golden hashes from the code as it was BEFORE the `instructions` field
- * (tests/fixtures/instructions-matrix-162.json, recorded from a05dc0855).
+ * (tests/fixtures/instructions-matrix.json, recorded from a05dc0855).
  */
 import type { FleetInstructionsParams } from "../../src/instructions.js";
 

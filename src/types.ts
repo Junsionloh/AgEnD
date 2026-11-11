@@ -235,7 +235,7 @@ export interface InstanceConfig {
   /** System prompt — supports comma-separated file: paths for modularization */
   systemPrompt?: string;
   /**
-   * AGEND-162: Markdown the person wrote for this agent (≤ 24,000 characters, agent-instructions.ts), kept beside
+   * Markdown the person wrote for this agent (≤ 24,000 characters, agent-instructions.ts), kept beside
    * `systemPrompt` — never in place of it. Appended as the last section, `## Agent Instructions`, of what the agent is told.
    */
   instructions?: string;

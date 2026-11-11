@@ -45,7 +45,7 @@ function fingerprint(value: unknown): string {
   if (value === undefined || value === null || value === "") return "absent";
   return createHash("sha256").update(String(value)).digest("hex").slice(0, 12);
 }
-/** AGEND-162: a long free text for a confirmation card: its length, fingerprint and first words — never the whole of it. */
+/** a long free text for a confirmation card: its length, fingerprint and first words — never the whole of it. */
 const TEXT_HEAD_CHARS = 40;
 function longTextSummary(value: unknown): string {
   if (typeof value !== "string" || value === "") return settingsDisplay(t("settings_confirm.summary.text_none"));
@@ -448,7 +448,7 @@ export function settingsChangeDiff(before: unknown, after: unknown, options: {
       if ([old, next].every(v => v === undefined || v === null || !quotaNoticeProblem(v, fleet))) return;
       throw new SettingsConfirmationError(400, "unsupported_quota_notice");
     }
-    // AGEND-162: an agent's own instructions (up to 24,000 characters) are never listed whole — the card shows how long
+    // an agent's own instructions (up to 24,000 characters) are never listed whole — the card shows how long
     // each version is, its fingerprint and its first words, so a long text neither fills the 4,096 the card holds
     // (confirmation_diff_too_large) nor changes without the person seeing that it changed. The change's own fingerprint
     // (below) still covers every character: what is confirmed is exactly this text.

@@ -1,4 +1,4 @@
-// AGEND-162: the "Instructions" field of an agent's Basic info — Markdown the person writes for the agent, with an Edit /
+// the "Instructions" field of an agent's Basic info — Markdown the person writes for the agent, with an Edit /
 // Preview switch. The preview is the chat's own Markdown renderer (chat-thread.js drawMarkdown → chat-render.js: it escapes
 // the text first, so nothing typed here becomes markup); nothing is rendered by this file.
 import { html, useEffect, useRef, useState } from "/assets/app-html.js";

@@ -244,7 +244,7 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
     if (value.cross_instance_visibility !== undefined && !isCrossInstanceVisibility(value.cross_instance_visibility)) {
       err(`${path}.cross_instance_visibility`, `must be one of: ${CROSS_INSTANCE_VISIBILITY_MODES.join(", ")}`);
     }
-    // AGEND-162: the agent's own Markdown — text, at most AGENT_INSTRUCTIONS_MAX_CHARS.
+    // the agent's own Markdown — text, at most AGENT_INSTRUCTIONS_MAX_CHARS.
     if (value.instructions !== undefined) {
       if (typeof value.instructions !== "string") err(`${path}.instructions`, "must be text (Markdown)");
       else if (value.instructions.length > AGENT_INSTRUCTIONS_MAX_CHARS) err(`${path}.instructions`, `must be at most ${AGENT_INSTRUCTIONS_MAX_CHARS} characters (it is ${value.instructions.length})`);

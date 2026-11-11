@@ -1,5 +1,5 @@
 /**
- * AGEND-162: an agent's own `instructions` — plain Markdown the person writes for that agent, kept beside `systemPrompt`
+ * an agent's own `instructions` — plain Markdown the person writes for that agent, kept beside `systemPrompt`
  * (never in place of it). The daemon appends it as the last section of the agent's instructions (instructions.ts), so an
  * agent without it is told exactly what it was told before.
  */

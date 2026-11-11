@@ -191,7 +191,7 @@ export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmoji
     backend: form.backend, model: form.model.trim() || null,
     working_directory: form.working_directory, channel_id: form.channel_id || undefined,
     description: form.description || undefined, systemPrompt: form.systemPrompt || undefined,
-    // AGEND-162: its own key beside systemPrompt; emptied (or only blanks) removes it (null), as the server reads it.
+    // its own key beside systemPrompt; emptied (or only blanks) removes it (null), as the server reads it.
     instructions: (form.instructions || "").trim() ? form.instructions : null,
     tags: form.tags.length ? form.tags : undefined, general_topic: form.general_topic,
     auto_pause_after: form.inherit.auto_pause_after ? null : Number(form.auto_pause_after),
