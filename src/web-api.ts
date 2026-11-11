@@ -1,3 +1,4 @@
+import { buildAgentExport, parseAgentExport } from "./agent-export.js";
 import { hubModeOf, hubNameOf, type HubSwitches } from "./hub-mode.js";
 import { validCredentialProfileName } from "./runtime-credential-profiles.js";
 import { CANVAS_WORKER_EXPERIMENTAL_MESSAGE } from "./web-experimental.js";
@@ -2111,6 +2112,30 @@ export function handleWebRequest(
       if (adminAdmissionOf(req, url, ctx) !== admission) { json(res, 403, { error: "admin_required" }); return; }
       json(res, 200, { backend, ...result });
     })().catch(() => { if (!res.headersSent) json(res, 500, { error: "model_refresh_failed" }); });
+    return true;
+  }
+
+  // AGEND-163: an agent's portable settings as a file, and the way back. Both only compute (nothing is written: loading a
+  // file fills the Settings form, and the person still saves it there), and both are for the admin, as Settings is.
+  if (method === "POST" && (path === "/ui/agent-export/build" || path === "/ui/agent-export/parse")) {
+    const admission = adminAdmissionOf(req, url, ctx);
+    if (!admission) { json(res, 403, { error: "admin_required" }); return true; }
+    void (async () => {
+      let body: Record<string, unknown>;
+      try { body = await parseBody(req); } catch { json(res, 400, { error: "Invalid JSON" }); return; }
+      if (!permitWebContinuation(req, res, ctx)) return;
+      if (adminAdmissionOf(req, url, ctx) !== admission) { json(res, 403, { error: "admin_required" }); return; }
+      if (!body || Array.isArray(body) || typeof body !== "object") { json(res, 400, { error: "invalid_request" }); return; }
+      if (path === "/ui/agent-export/parse") {
+        json(res, 200, parseAgentExport(body.text));
+        return;
+      }
+      const name = body.instance, include = body.include;
+      if (typeof name !== "string" || !isSafeInstanceName(name) || !Array.isArray(include) || include.some(g => typeof g !== "string")) { json(res, 400, { error: "invalid_request" }); return; }
+      const inst = Object.hasOwn(ctx.fleetConfig?.instances ?? {}, name) ? ctx.fleetConfig!.instances[name] : undefined;
+      if (!inst) { json(res, 404, { error: "unknown_instance" }); return; }
+      json(res, 200, buildAgentExport(name, inst, include as string[]));
+    })().catch(() => { if (!res.headersSent) json(res, 500, { error: "agent_export_failed" }); });
     return true;
   }
 
