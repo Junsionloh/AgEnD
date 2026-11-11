@@ -201,6 +201,9 @@ const AGY = { metrics: [
   metric("Gemini 4 Argon", "Gemini 4 Argon", 0.3, null),
 ] };
 describe("Antigravity's quota pools on its account row: every pool, every window", () => {
+  // The fixtures' reset times are fixed dates (2026-11-11): the clock is pinned before them, so a window has not "reset since the read" just because the calendar moved on.
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date("2026-11-10T12:00:00Z")); });
+  afterEach(() => { vi.useRealTimers(); });
   it("the real shape: Gemini's 5h AND week, Claude & others' 5h AND week, and Argon's one number — the row used to show Gemini's 5h and Claude & others' week only", () => {
     const groups = accountUsage("antigravity", AGY)!.groups;
     expect(groups.map((g) => g.pool?.label)).toEqual(["Gemini", "Claude & others", "Gemini 4 Argon"]);
