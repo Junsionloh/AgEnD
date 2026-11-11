@@ -23,7 +23,7 @@ import type { Logger } from "../src/logger.js";
 import { matrixCases } from "./helpers/instructions-matrix.js";
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);
-// Recorded from the instructions code before this field existed (a05dc0855): see helpers/instructions-matrix-record.ts.
+// Recorded from the instructions code before this field existed (the base of this change, f44a4742d): see helpers/instructions-matrix-record.ts.
 const GOLDEN: Record<string, string> = JSON.parse(readFileSync(new URL("./fixtures/instructions-matrix.json", import.meta.url), "utf8"));
 const NOT_FILLED: Array<[string, unknown]> = [["undefined", undefined], ["empty", ""], ["spaces", "   "], ["newlines and tabs", "\n\t \r\n"], ["not a string", 42]];
 const FILLED = "# Role\n\nYou review pull requests.\n\n- Be kind\n- Be exact\n";

@@ -1,7 +1,7 @@
 /**
  * the parameter grid of what an agent is told (buildFleetInstructions / buildNativeFleetInstructions), shared by
  * the test and by the script that recorded the golden hashes from the code as it was BEFORE the `instructions` field
- * (tests/fixtures/instructions-matrix.json, recorded from a05dc0855).
+ * (tests/fixtures/instructions-matrix.json, recorded from the code before the field, f44a4742d).
  */
 import type { FleetInstructionsParams } from "../../src/instructions.js";
 
