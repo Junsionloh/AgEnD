@@ -4322,3 +4322,6 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 .v-li.two-line > .inst-gear { align-self: flex-start; margin-top: 6px; }
 /* AGEND-162: the Instructions field's preview scrolls inside its own box (the chat's Markdown look, .pv-code.pv-md). */
 .instructions-field .pv-code { max-height: 24rem; }
+/* The Edit / Preview switch, the box under it (the editor or the preview) and the notes are one column with the form's standard gap (they touched). */
+.instructions-field { display: flex; flex-direction: column; gap: var(--s-2); }
+.instructions-field > .seg-inline { align-self: flex-start; }
