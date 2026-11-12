@@ -1,0 +1,9 @@
+#!/bin/sh
+# Capture-only fake `claude` (no network, no credentials): logged out; `auth login` shows the real 2.1.286 OAuth-URL screen and waits.
+D="$(cd "$(dirname "$0")/.." && pwd)"
+case "$1 $2" in
+  "auth status") echo '{"loggedIn": false}'; exit 1 ;;
+  "auth login") cat "$D/fixtures/claude-oauth-url.pane.txt"; printf ' '; exec sleep 3600 ;;
+esac
+case "$1" in --version|-v) echo "2.1.286 (Claude Code)"; exit 0 ;; esac
+echo "fake claude: unsupported args: $*" >&2; exit 2

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Capture-only fake `grok`: logged out; `login` shows a device-code screen and waits.
+D="$(cd "$(dirname "$0")/.." && pwd)"
+case "$1" in
+  models) echo 'You are not authenticated.'; exit 1 ;;
+  login) cat "$D/fixtures/grok-login.pane.txt"; exec sleep 3600 ;;
+  --version|-v|version) echo "grok 1.0.77"; exit 0 ;;
+esac
+echo "fake grok: unsupported args: $*" >&2; exit 2
