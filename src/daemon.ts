@@ -119,6 +119,7 @@ import { unrecognisedPromptShape, type PromptShape } from "./unrecognised-prompt
 import { selectionCard } from "./selection-card.js";
 import type { InteractionOwner, InteractionSnapshot } from "./backend/types.js";
 import type { KiroLogLaunch } from "./kiro-log-gate.js";
+import { applyEnvIsolation } from "./env-isolation.js";
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13782,7 +13783,14 @@ export class Daemon extends EventEmitter {
     // may belong to a tmux server the fleet did not start, which would hand
     // the CLI its own (full) filter instead of the fleet's.
     admit();
-    const cmd = coredumpFilterLaunchPrefix() + `${envPrefix} ` + this.backend!.buildCommand(launchConfig);
+    // AGEND-242: env_isolation is off unless configured; "dry-run" only logs which variable names an allowlist would
+    // remove. The command is returned as it was in every mode.
+    const cmd = applyEnvIsolation({
+      command: coredumpFilterLaunchPrefix() + `${envPrefix} ` + this.backend!.buildCommand(launchConfig),
+      env: process.env,
+      config: { env_isolation: this.config.env_isolation, env_passthrough: this.config.env_passthrough, backend: this.config.backend },
+      logger: this.logger,
+    });
     // Every launched command re-arms the passive-transient check, including a
     // retry inside the same spawn: its load is a new one.
     expectedAttempt = ++this.launchAttempt;
