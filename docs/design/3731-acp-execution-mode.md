@@ -309,6 +309,33 @@ Other rules:
 - Child process: spawned without a shell, with an explicit argument array and an explicit environment (no inheritance of fleet tokens), `stdio` pipes only, one process per instance, killed on stop. Any CLI-specific socket/IPC path is derived by AgEnD from the instance directory, never from request content (the existing short-path/UUID validation pattern, e.g. `src/backend/grok.ts:401`).
 - Frames from the child are untrusted input: bounded line length, bounded outstanding requests, JSON-RPC ids validated, unknown methods answered with `-32601`, unknown notifications ignored.
 
+### 7.4 Hard invariant: a read-only observer never answers
+
+This section applies wherever AgEnD attaches a **second client to a CLI session that a human TUI is driving**: the Step 1 grok leader observer. It does not apply to the `acp` adapter, which is the only client of its CLI process and *does* answer permission requests, by policy (§7.1).
+
+**Why it must be absolute.** Measured in Step 1 (grok 1.0.77, real TUI without `--always-approve`): a permission request is sent as a copy to **every connected client, and the first answer wins**. The observer received `session/request_permission` on its own wire at the same moment the TUI showed its dialog. A single reply from the observer, once, would decide a tool call for the person at the keyboard, who would never see the decision.
+
+**The invariant.** *There is no code path by which the observer writes a reply to an agent-to-client request.* This is a property of the code's shape, not of a policy flag:
+
+1. **The observer's writer allows two requests, ever.** `initialize` and `session/load`, from a fixed allow-list. Any other method throws before a byte is written. There is exactly one call site that writes to the transport, so the allow-list cannot be bypassed by a second one.
+2. **Agent-to-client requests are counted, not answered.** An incoming frame that has both a `method` and an `id` is a request. The observer only increments a counter and, for `session/request_permission`, raises a "waiting for approval" flag for the UI. It does not compose a response, not even an error response, because a JSON-RPC error reply is also an answer that may win the race.
+3. **No capability is advertised.** `initialize` carries empty `clientCapabilities`, so the agent has no reason to send the observer `fs/*` or `terminal/*` requests.
+4. **The observer is a different type from the `acp` adapter's client.** It must **not** be a "read-only mode" flag on `AcpClient`: a flag can be set wrongly or defaulted wrongly. The two share only the frame decoder and the update reducer (code that cannot write). The `acp` adapter's client has an `answerPermission` method; the observer type has no such method to call.
+5. **The observer never becomes the "last active client".** It sends nothing but the two requests above, so the leader's "route to the last active client" fallback cannot choose it (§9.5, item 2 covers the case where the TUI dies).
+
+**Tests that prove it** (required before any code for this is proposed upstream):
+
+| Test | What it proves |
+|---|---|
+| Replay a recorded real wire capture (grok 1.0.77) frame by frame, including every `session/request_permission` and `pending_interaction`, and assert that **zero bytes** are written other than the two allowed requests | The behaviour on real traffic |
+| Feed synthetic request frames for every ACP agent-to-client method (`session/request_permission` with each option kind, `fs/read_text_file`, `fs/write_text_file`, `terminal/*`, an unknown method, a malformed id) and assert no write | Coverage beyond what one capture contained |
+| Call the writer with each non-allowed method name and assert it throws before writing | The allow-list |
+| A **source scan** of the observer module: exactly one transport write call site; no import of the adapter's client or its `answerPermission`; no string `"result"` / `"error"` response builder | The "no code path" half of the claim, which behavioural tests cannot show |
+| A **mutation check** recorded with the evidence: add a reply to the permission branch and confirm the tests above fail | That the tests would catch a regression |
+| An end-to-end run with a real TUI that leaves a permission dialog unanswered for longer than the observer's reconnect backoff and asserts the TUI's dialog is still the only one that can resolve it | The race in the real system |
+
+The Step 1 spike (fork PR #68) implements points 1–3 and 5 and has tests for the first three. The type separation in point 4 and the mutation check are **not** yet in it, because the `acp` adapter did not exist as a design when the spike was written; they are requirements for the shared decoder/reducer split in phase 1.
+
 ## 8. Phasing
 
 | Phase | Scope | Acceptance | Estimate |
@@ -357,14 +384,64 @@ Also avoided: `runtime` (already `wsl` | `windows`, `alpha:src/types.ts:106`) an
 
 ### 9.4 Relationship to Step 1 (grok per-instance leader spike)
 
+The open review points on Step 1 itself are in §9.5, and the permission invariant is §7.4.
+
 Step 1 keeps the TUI and adds a **read-only ACP observer** attached to a per-instance grok leader. The `acp` adapter **does not depend on it, and it does not depend on the `acp` adapter**:
 
 - They solve different problems. Step 1 is "keep the pane **and** get live thought text, for grok only". The `acp` adapter is "drop the pane for any CLI with official ACP".
-- They share the **ACP client code**: the observer needs the framing, `initialize`, `session/load` and `session/update` decoding that `AcpClient` needs. If Step 1 lands first, `AcpClient` should be extracted from it, not rewritten; the observer's read-only rule (never send prompts, cancels or keys; never become the "last active client" for permission routing) is a *restriction on a client*, which the full client can honour by construction.
+- They share the **decoding code**, not the client: the observer needs the framing, `initialize`/`session/load` response parsing and `session/update` reduction that the `acp` adapter also needs. Those read-only pieces should be one shared module. The writer must **not** be shared: the observer keeps its own two-method writer and has no `answerPermission` (§7.4, point 4), while the `acp` adapter's client answers permissions by policy.
 - They differ on identity: Step 1 must use **one leader per instance** (and a short socket path) to keep MCP identity isolated; the `acp` adapter with `--no-leader` and a per-process `session/new` needs no leader at all.
-- If both exist, a grok instance would be either tmux + observer, or `acp`, never both at once. If Step 1 shows the TUI can join a per-instance leader cleanly, it is the lower-cost route for grok *only* and the `acp` adapter's grok phase may be reduced to "for users who want no TUI at all".
+- If both exist, a grok instance would be either tmux + observer, or `acp`, never both at once. Step 1 reported that the TUI can join a per-instance leader and that an observer receives thoughts live (fork PR #68). That makes it the lower-cost route for grok *only* and the `acp` adapter's grok phase may be reduced to "for users who want no TUI at all".
 
-### 9.5 Questions for the maintainers
+### 9.5 Review points on the Step 1 leader observer
+
+These four points come from the upstream maintainers' review of the Step 1 results on #3731. They concern the *tmux + observer* configuration (grok with a per-instance leader and a read-only observer). The `acp` adapter launches `grok agent --no-leader stdio` and owns its process, so for that adapter none of items 2–4 can occur in this form. The comparison is made at the end of each item. Item 1 is §7.4.
+
+**Item 1: permission copies go to every client.** Addressed in §7.4 as a hard invariant with named tests.
+
+**Item 2: the driver moves to the observer when the TUI dies.**
+
+- *Mechanism (measured, Step 1).* The leader's own log records `Transferred session driver … old_driver=<TUI> new_driver=<observer>` when the TUI is killed. The observer then drives a session it will never answer for. A permission request that arrives while it is the driver has nobody to answer it, and the turn stalls (the same outcome as a dead TUI today, but now with a live-looking observer).
+- *Mitigation (measured).* Before a respawn, the daemon stops this instance's leader and then starts the new TUI with `--resume`. The observer re-attaches within one poll. The leader is stopped only after its pid, from the instance's own lock file, is shown to belong to a `grok agent leader` for this instance's socket; it is never stopped by name.
+- *The daemon is down at that moment.* Two cases:
+  1. **The daemon was already down when the TUI died.** The observer is a child of the daemon and exits on stdin EOF (reported in Step 1). With no observer connected, there is nobody to receive the driver role. The TUI-started leader outlives its TUI (it runs with `--no-exit-on-disconnect`, measured), so what remains is an **orphan leader holding the session**, with the environment of the launch that started it (the #1411 problem). The next daemon start retires it before launching anything (prepare-before-launch, above). Until then nothing is visible and nothing is answered, which is today's behaviour for a dead TUI with the daemon down.
+  2. **The daemon died after the TUI died but before it stopped the leader.** The driver role has already moved to the observer, and the observer then exits with the daemon. The leader has a session and no clients. Same recovery: the next start retires the leader, and the new TUI resumes by session id. A permission request pending at that instant is lost with the leader, exactly as it is when a TUI is killed today.
+- *Required behaviour that the spike does not yet have (found while writing this).* If the pid in the lock file is **not** verifiably this instance's leader, the spike logs "left alone" and **still launches the TUI with `--leader --leader-socket`**, so the TUI would join an unverified process at that socket. The required behaviour is to fail closed: **launch as before (`--no-leader`) with no observer**, log the reason, and never join a leader that was not started by this launch's environment. This must be fixed, and tested with a lock file that points at a foreign process, before anything else is built on it.
+- *`acp` adapter.* There is no leader and no second client, so there is no driver to transfer. If the daemon is down, the CLI child is gone with it (item 4).
+
+**Item 3: the hidden `--leader` flag is protected only by the version gate.**
+
+- *Fact.* At the root of the grok TUI, `--leader` is not in `--help` (neither is `--no-leader`, which AgEnD has relied on since #1411); under `grok agent` both are listed (checked on 1.0.77). Source-level evidence in #1411 shows the flag exists, and that an incompatible build rejects an unknown flag instead of ignoring it.
+- *What the spike's gate is, honestly.* A **range**: grok 1.0.x from 1.0.77 on, checked against both the binary's `--version` and the `agentVersion` in `initialize`. A range assumes that every later patch behaves like the audited one. For a hidden flag that is not enough, and the maintainers are right to say so.
+- *Required.* An **exact allow-list**, not a range, with one audit row and one fixture per version:
+
+  | Per grok version (and build hash) | Recorded in the audit table |
+  |---|---|
+  | Date, audited version and build, auditor | who looked and when |
+  | The flag is still accepted and behaves as described | `grok --leader --leader-socket S` starts a TUI that joins; an unknown-flag error is a **fail**, not a skip |
+  | TUI joins a per-instance leader | pass/fail |
+  | The observer's `session/load` replay and live updates | pass/fail |
+  | Permission copies reach the observer and **only the TUI's answer resolves** | pass/fail (the §7.4 end-to-end test) |
+  | `Transferred session driver` still appears on TUI death, and the stop-before-respawn path still cleans up | pass/fail |
+  | Socket path limit | measured limit, unchanged or not |
+  | Fixture file name | a redacted real capture, one per version, under a versioned directory |
+
+  Enforcement in CI: a test walks the allow-list and fails if any listed version lacks its audit row or its fixture file. Adding a version means adding a row and a fixture in the same change. **An unlisted version never uses the leader mode**: it launches as today and says so once in the instance log. The same list drives the `initialize` check (`agentVersion` must equal the binary version).
+- *`acp` adapter.* It uses `grok agent … stdio`, where the flags are documented in `--help`, plus an `initialize` handshake. It still needs a version gate and a fixture per supported grok version (§9.2), but not a hidden-flag audit.
+
+**Item 4: session selection is ambiguous, and a daemon restart leaves a gap.**
+
+- *Selection today.* The observer must attach to the session the TUI is using. The spike reuses AgEnD's existing `getSessionId()`, which picks the **most recently active session in the instance's working directory**. That is ambiguous when: two instances share a working directory; a person runs grok by hand in the same directory; grok created a second session (for example a sub-agent or a restart that did not resume). The observer could then replay another conversation to an admin. That is a cross-conversation disclosure, not a cosmetic bug.
+- *Required rule: fail closed unless the match is proved.* The observer shows nothing until a session is *proved* to be this instance's current TUI session. Proof, in order of strength:
+  1. A resumed launch: AgEnD started the TUI with `--resume <id>`, so the id is known and the observer loads exactly that.
+  2. A fresh launch: attach only to a candidate whose **working directory matches, whose creation time is after this launch began, and that is the only such candidate**; then require an **echo**: the first `user_message_chunk` seen must equal text AgEnD itself delivered to this TUI (AgEnD knows the delivery it just made). A mismatch detaches the observer and shows nothing.
+  3. More than one candidate, or no echo within a bounded time: **no live view**, falling back to today's transcript-only timeline.
+  Listing candidates would use `session/list` (the protocol has it, and grok advertises it [V]). That is a **third** observer request, so the writer's allow-list (§7.4) must be extended by a reviewed change; it is read-only, but it is a change to the invariant's boundary and should be called out as one.
+- *The restart gap.* Observer and host are children of the daemon. When the daemon restarts and **keeps the existing pane** (the TUI and its leader are untouched), no new launch happens, so no host is created and nothing attaches until the TUI is next launched. The chat falls back to today's behaviour: the elapsed time, "N s without new records", and for grok the `events.jsonl` phase. The gap must be **shown as "live view unavailable", not as a frozen last state**, so a stale thought is never presented as current. This case is described in the Step 1 report as a limitation; it was not exercised in a real restart run.
+- *Closing the gap (optional, after the baseline).* Persist an `observer-binding` record when an attach is proved (session id, leader pid, socket, grok version, launch time), and on daemon start with a retained pane re-attach only if the pid is still verifiably this instance's leader, the version is still on the allow-list, and the persisted launch time matches the pane's. Otherwise stay detached. This needs its own test with a restart while a turn is running.
+- *`acp` adapter.* No selection ambiguity: AgEnD gets the id from `session/new`, or passes its stored id to `session/load`. Its restart behaviour is different and worse in one respect that should be stated plainly: a tmux TUI survives a daemon restart, whereas the `acp` adapter's CLI child is owned by the daemon and **ends with it**, so a turn in progress is interrupted. On start the adapter resumes the session by id, so the conversation continues but that turn does not. Keeping the child alive across restarts (a supervisor, or grok's `serve` mode) is out of scope for the first phase.
+
+### 9.6 Questions for the maintainers
 
 Answered by the maintainer's direction and therefore removed: whether the mode may be per-instance and opt-in with an adapter chosen per CLI (adopted as the design); whether Codex may use its own `app-server` rather than an ACP wrapper (yes: no official ACP means a native adapter); the choice between an ACP wrapper and the native protocol for Claude (native).
 
@@ -378,6 +455,8 @@ Still open:
 6. Where should the adapter be selectable (create form only, or editable later)? Editing implies the conversation-continuity question in §9.1 (7).
 7. Is a recorded-fixture + fake-CLI test strategy (no real CLI in CI) acceptable, with real-CLI smoke runs left to a manual step?
 8. Codex's `app-server` is labelled "[experimental]". Is an adapter on an experimental interface acceptable behind a strict version gate?
+9. Session binding for the observer (§9.5, item 4): is "proved by echo, otherwise no live view" the acceptable rule, and is extending the observer's allow-list by the read-only `session/list` acceptable?
+10. Is the optional re-attach after a daemon restart (§9.5, item 4) wanted, or is "live view unavailable until the next TUI launch" acceptable?
 
 ## Appendix A. Handshake evidence
 
