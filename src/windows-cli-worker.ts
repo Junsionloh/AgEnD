@@ -97,7 +97,7 @@ interface NativeCommandOutput { ok: boolean; text: string }
  * the locale, and a CLI's own config directory when it names a Windows path. Nothing else: no fleet secret, provider
  * API key, bot token or AgEnD setting reaches a native CLI, whatever the host put in the environment.
  */
-const NATIVE_ENV_ALLOWED = new Set([
+export const NATIVE_ENV_ALLOWED = new Set([
   // Windows itself: where it is, how it finds programs, who and where the user is.
   "SYSTEMROOT", "WINDIR", "SYSTEMDRIVE", "COMSPEC", "PATH", "PATHEXT", "TEMP", "TMP", "OS",
   "USERPROFILE", "USERNAME", "USERDOMAIN", "USERDOMAIN_ROAMINGPROFILE", "COMPUTERNAME", "HOMEDRIVE", "HOMEPATH", "LOGONSERVER",

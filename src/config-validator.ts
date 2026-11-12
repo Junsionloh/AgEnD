@@ -19,6 +19,7 @@ import { isUnsupportedHomeRef, resolveFileRefPath, systemPromptParts } from "./p
 import { isRemovedBackend, removedBackendMessage } from "./backend/removed.js";
 import { CROSS_INSTANCE_VISIBILITY_MODES, isCrossInstanceVisibility } from "./cross-instance-notice.js";
 import { dashboardAccessProblem } from "./dashboard-permissions.js";
+import { ENV_ISOLATION_MODES, isEnvIsolationMode, isEnvVariableName } from "./env-isolation.js";
 import { validWindowsAgentId, validWindowsDirectory } from "./windows-cli-worker.js";
 import { isNativeProviderId, nativeProvider } from "./windows-cli-providers.js";
 
@@ -242,6 +243,14 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
     }
     if (value.cross_instance_visibility !== undefined && !isCrossInstanceVisibility(value.cross_instance_visibility)) {
       err(`${path}.cross_instance_visibility`, `must be one of: ${CROSS_INSTANCE_VISIBILITY_MODES.join(", ")}`);
+    }
+    if (value.env_isolation !== undefined && !isEnvIsolationMode(value.env_isolation)) {
+      err(`${path}.env_isolation`, `must be one of: ${ENV_ISOLATION_MODES.join(", ")}`);
+    } else if (value.env_isolation === "allowlist") {
+      warn(`${path}.env_isolation`, "allowlist is not available yet — treated as off (use dry-run to preview what it would remove)");
+    }
+    if (value.env_passthrough !== undefined && !(Array.isArray(value.env_passthrough) && value.env_passthrough.every(isEnvVariableName))) {
+      err(`${path}.env_passthrough`, "must be a list of environment variable names (letters, digits and underscores)");
     }
     if (value.board_cards_at_once !== undefined && !(Number.isInteger(value.board_cards_at_once) && (value.board_cards_at_once as number) >= 1)) {
       err(`${path}.board_cards_at_once`, "must be a whole number of at least 1");
