@@ -74,9 +74,17 @@ export class GrokLeaderHost {
   get socketPath(): string | null { return this.socket; }
 
   async prepare(): Promise<string | null> {
-    this.stopped = false;
     this.socket = null;
-    if (!this.requested) return null;
+    if (!this.requested) { this.stopped = false; return null; }
+    // The previous launch's observer goes FIRST, and its poll with it: a bridge (`grok agent --leader … stdio`) whose leader dies
+    // starts a new leader of its own at the same socket, with the daemon's environment — measured — and the TUI about to be
+    // launched would join that one (#1411). Nothing may attach while the old leader is being retired.
+    this.stopped = true;
+    this.detach();
+    try { return await this.prepareChecked(); } finally { this.stopped = false; }
+  }
+
+  private async prepareChecked(): Promise<string | null> {
     const d = this.o.deps ?? {};
     const version = (d.version ?? readGrokVersion)(this.o.binary);
     if (!grokLeaderVersionOk(version)) {
@@ -195,13 +203,18 @@ export class GrokLeaderHost {
   /** Instance stop: the observer, then this instance's leader. Idempotent. */
   async stop(): Promise<void> {
     this.stopped = true;
-    const d = this.o.deps ?? {};
-    if (this.timer) { (d.clearInterval ?? ((h: unknown) => clearInterval(h as ReturnType<typeof setInterval>)))(this.timer); this.timer = null; }
-    this.observer?.stop(); this.observer = null;
+    this.detach();
     if (this.socket) {
       const left = await this.retireLeader(this.socket);
       if (left === "alive") this.o.log("warn", "grok leader observer: the leader did not exit in time at stop — its lock file is kept, the next launch tries again");
     }
+  }
+
+  /** Drop the poll and the observer (its bridge is this process's own child, closed by its handle). Backoff is forgotten. */
+  private detach(): void {
+    const d = this.o.deps ?? {};
+    if (this.timer) { (d.clearInterval ?? ((h: unknown) => clearInterval(h as ReturnType<typeof setInterval>)))(this.timer); this.timer = null; }
+    this.observer?.stop(); this.observer = null;     // `stopped` is set by the callers: a planned stop is not a failure to back off from
     this.failures = 0; this.notBefore = 0;
   }
 }

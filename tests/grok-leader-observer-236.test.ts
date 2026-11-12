@@ -461,6 +461,18 @@ describe("the host — the instance's leader and observer lifecycle", () => {
     await h.host.stop();
     h.tickTimer(); expect(h.transports).toHaveLength(1);
   });
+  it("a relaunch: the previous launch's observer and poll are dropped BEFORE its leader is stopped (a bridge whose leader dies would start one of its own), and nothing re-attaches meanwhile", async () => {
+    const order: string[] = []; let h!: ReturnType<typeof mk>;
+    h = mk({ stopLeader: () => { order.push(`stopLeader(observerClosed=${h.transports[0]?.closedBy}, poll=${h.hasTimer()})`); h.tickTimer(); order.push(`transports=${h.transports.length}`); return "stopped"; } });
+    await h.host.prepare(); h.host.begin(); h.tickTimer(); load(h.transports[0]!);
+    expect(h.host.live()).not.toBeNull();
+    order.length = 0;
+    expect(await h.host.prepare()).not.toBeNull();
+    expect(order).toEqual(["stopLeader(observerClosed=observer, poll=false)", "transports=1"]);
+    expect(h.host.live()).toBeNull();
+    h.host.begin(); h.tickTimer();                                               // after the new launch: attached again
+    expect(h.transports).toHaveLength(2);
+  });
   it("an unlisted version (a later patch too): not used — the launch is --no-leader, no observer, a warning, and nothing fails", async () => {
     for (const version of ["1.0.78", "1.0.76", "2.0.0", null]) {
       const h = mk({ version: () => version });
