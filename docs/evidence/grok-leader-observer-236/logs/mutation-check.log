@@ -1,0 +1,104 @@
+# mutation check (design #3731 §7.4) — base commit c4e8996e6 (the evidence commit changes docs only; src/ is identical).
+# The line below was ADDED to src/backend/grok-acp-observer.ts in the working tree only, right after the line that counts an unanswered agent→client request, run, then reverted (git checkout):
+#   if (name === "session/request_permission") this.o.transport.send(JSON.stringify({ jsonrpc: "2.0", id: m.id, result: { outcome: { outcome: "selected", optionId: "allow_once" } } }));
+# command: npx vitest run tests/grok-leader-observer-236.test.ts
+
+
+ RUN  v4.1.12 /home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-247-0f131955d860/workdir/AgEnD
+
+ ❯ tests/grok-leader-observer-236.test.ts (53 tests | 4 failed) 218ms
+     × over the whole real session it sends exactly initialize and session/load — nothing else 6ms
+     × the module names no other request: only initialize and session/load appear as a method it sends 2ms
+     × agent→client lines that are not responses (an id and a method) never get an answer — whatever they ask 1ms
+     × walking it frame by frame: waiting from the request (or its pending_interaction) until interaction_resolved, answers sent: none 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/grok-leader-observer-236.test.ts > rule 3 — the observer is read-only > over the whole real session it sends exactly initialize and session/load — nothing else
+AssertionError: expected [ 'initialize', 'session/load', …(1) ] to deeply equal [ 'initialize', 'session/load' ]
+
+- Expected
++ Received
+
+  [
+    "initialize",
+    "session/load",
++   undefined,
+  ]
+
+ ❯ tests/grok-leader-observer-236.test.ts:141:47
+    139|     const h = observe();
+    140|     play(h);
+    141|     expect(h.tr.written.map((m) => m.method)).toEqual(["initialize", "…
+       |                                               ^
+    142|     expect(h.obs.sent).toEqual(["initialize", "session/load"]);
+    143|     expect([...OBSERVER_ALLOWED_METHODS]).toEqual(["initialize", "sess…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/grok-leader-observer-236.test.ts > rule 3 — the observer is read-only > the module names no other request: only initialize and session/load appear as a method it sends
+AssertionError: expected [ [ 'transport.send(', …(3) ], …(1) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ tests/grok-leader-observer-236.test.ts:160:53
+    158|     expect(sends.sort()).toEqual(["initialize", "session/load"]);
+    159|     // no other write path to the leader than send()
+    160|     expect([...src.matchAll(/transport\.send\(/g)]).toHaveLength(1);
+       |                                                     ^
+    161|     for (const method of ["session/prompt", "session/cancel", "session…
+    162|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/grok-leader-observer-236.test.ts > rule 3 — the observer is read-only > agent→client lines that are not responses (an id and a method) never get an answer — whatever they ask
+AssertionError: expected [ …(4) ] to have a length of 2 but got 4
+
+- Expected
++ Received
+
+- 2
++ 4
+
+ ❯ tests/grok-leader-observer-236.test.ts:171:26
+    169|     for (const m of ["session/request_permission", "fs/read_text_file"…
+    170|     h.tr.push({ jsonrpc: "2.0", id: 2, method: "session/request_permis…
+    171|     expect(h.tr.written).toHaveLength(before);
+       |                          ^
+    172|     expect(h.obs.unanswered["session/request_permission"]).toBe(2);
+    173|     expect(h.obs.unanswered["fs/read_text_file"]).toBe(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/grok-leader-observer-236.test.ts > rule 2 — a permission request stays with the TUI > walking it frame by frame: waiting from the request (or its pending_interaction) until interaction_resolved, answers sent: none
+AssertionError: expected [ 'initialize', 'session/load', …(1) ] to deeply equal [ 'initialize', 'session/load' ]
+
+- Expected
++ Received
+
+  [
+    "initialize",
+    "session/load",
++   undefined,
+  ]
+
+ ❯ tests/grok-leader-observer-236.test.ts:186:47
+    184|     const resolved = frames.findIndex((f) => f.m.params?.update?.sessi…
+    185|     expect(down).toBe(resolved);
+    186|     expect(h.tr.written.map((m) => m.method)).toEqual(["initialize", "…
+       |                                               ^
+    187|     expect(h.tr.written.some((m) => m.result !== undefined || m.error …
+    188|     expect(h.obs.unanswered["session/request_permission"]).toBe(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 49 passed (53)
+   Start at  07:10:59
+   Duration  1.04s (transform 609ms, setup 55ms, import 672ms, tests 218ms, environment 0ms)
+

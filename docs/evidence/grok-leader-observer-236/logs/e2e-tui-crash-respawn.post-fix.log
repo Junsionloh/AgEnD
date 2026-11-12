@@ -1,0 +1,29 @@
+{"t":"2026-11-12T23:14:01.199Z","k":"launch","resume":false,"cmd":"AGEND_PROBE_BINDING=launch-1 /home/junsionloh/.local/bin/grok --no-auto-update --leader --leader-socket '<socket>' --effort low"}
+{"t":"2026-11-12T23:14:03.269Z","k":"live","turnOpen":false,"permissionWaiting":false,"tools":[]}
+{"t":"2026-11-12T23:14:03.713Z","k":"loaded","live":true}
+{"t":"2026-11-12T23:14:04.123Z","k":"prompt-sent","text":"Reply with just OK."}
+{"t":"2026-11-12T23:14:04.139Z","k":"live","turnOpen":true,"permissionWaiting":false,"tools":[]}
+{"t":"2026-11-12T23:14:05.765Z","k":"live","turnOpen":false,"permissionWaiting":false,"tools":[]}
+{"t":"2026-11-12T23:14:13.125Z","k":"session","sid":"01a1d20a…"}
+{"t":"2026-11-12T23:14:13.135Z","k":"tui-process","tuiPid":3293626,"cmdline":"/home/junsionloh/.local/bin/grok --no-auto-update --leader --leader-socket /run/user/1000/agend-grok-1000/7eb293af2662.s"}
+{"t":"2026-11-12T23:14:13.135Z","k":"crash","tuiPid":3293626,"leaderPid":3293669}
+{"t":"2026-11-12T23:14:17.140Z","k":"after-crash","leaderAlive":true,"observerLoaded":true}
+{"t":"2026-11-12T23:14:17.140Z","k":"live"}
+{"t":"2026-11-12T23:14:17.140Z","k":"host-info","msg":"stopped this instance's grok leader (a launch's environment must not outlive its launch)","pid":3293669}
+{"t":"2026-11-12T23:14:18.044Z","k":"respawn-prepare","sameSocket":true,"leaderStillAlive":false}
+{"t":"2026-11-12T23:14:18.044Z","k":"launch","resume":true,"cmd":"AGEND_PROBE_BINDING=launch-2 /home/junsionloh/.local/bin/grok --no-auto-update --leader --leader-socket '<socket>' --resume 01a1d20a-2068-76e1-b5f7-43f583c5eb21 --effort low"}
+{"t":"2026-11-12T23:14:20.121Z","k":"live","turnOpen":false,"permissionWaiting":false,"tools":[]}
+{"t":"2026-11-12T23:14:20.561Z","k":"re-attached","live":true}
+{"t":"2026-11-12T23:14:23.580Z","k":"leader-after-respawn","pid":3293918,"differentFromOld":true,"parentIsNewTui":true,"env":"AGEND_PROBE_BINDING=launch-2"}
+{"t":"2026-11-12T23:14:23.988Z","k":"prompt-sent","text":"Use your file edit tool to create e2e2-perm.txt co"}
+{"t":"2026-11-12T23:14:24.003Z","k":"live","turnOpen":true,"permissionWaiting":false,"tools":[]}
+{"t":"2026-11-12T23:14:26.382Z","k":"live","turnOpen":true,"permissionWaiting":false,"tools":["pending:search_replace"]}
+{"t":"2026-11-12T23:14:26.382Z","k":"live","turnOpen":true,"permissionWaiting":true,"tools":["pending:search_replace"]}
+{"t":"2026-11-12T23:14:36.993Z","k":"pane","permissionDialogInTui":true,"observerSaysWaiting":true}
+{"t":"2026-11-12T23:14:37.000Z","k":"live","turnOpen":true,"permissionWaiting":false,"tools":["pending:Edit `/tmp/gl-e2e/proj/e2e2-pe"]}
+{"t":"2026-11-12T23:14:37.007Z","k":"live","turnOpen":true,"permissionWaiting":false,"tools":["completed:Edit `/tmp/gl-e2e/proj/e2e2-pe"]}
+{"t":"2026-11-12T23:14:38.204Z","k":"live","turnOpen":false,"permissionWaiting":false,"tools":["completed:Edit `/tmp/gl-e2e/proj/e2e2-pe"]}
+{"t":"2026-11-12T23:14:44.995Z","k":"done","fileCreated":true,"observerWaiting":false,"turnOpen":false}
+{"t":"2026-11-12T23:14:46.000Z","k":"live"}
+{"t":"2026-11-12T23:14:46.000Z","k":"host-info","msg":"stopped this instance's grok leader (a launch's environment must not outlive its launch)","pid":3293918}
+{"t":"2026-11-12T23:14:47.614Z","k":"stopped","socketExists":false}

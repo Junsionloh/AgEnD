@@ -8,6 +8,65 @@ Reproduce: `harness/` (the spike observer, the two end-to-end runs that drive th
 `GrokBackend.buildCommand` against real grok, the socket-length probe). Logs of those runs: `logs/`. The redacted wire capture
 the tests replay: `tests/fixtures/grok-leader-observer-236/<version>/`.
 
+## Which commit each piece of evidence is from
+
+| Evidence | Commit | Status |
+|---|---|---|
+| Measurements, the wire capture, `logs/e2e-tui-turn.log`, `logs/e2e-tui-crash-respawn.log`, `logs/leader-clients.log` (everything below "The four questions") | `fe36d3911` | **Before the fixes** below. Kept as it was; it is still what was measured about grok 1.0.77, but it is not evidence about the fixed code |
+| `logs/e2e-tui-turn.post-fix.log`, `logs/e2e-tui-crash-respawn.post-fix.log`, `logs/mutation-check.log`, the fail-closed tests | **`c4e8996e6`** | After the fixes. This commit's `src/` is the code the runs used; the commit that adds this text changes only `docs/` |
+
+Why a second run: design #3731 §9.5 required the Step 1 spike to fail closed and to gate on an exact version list, and §7.4 a recorded
+mutation check. The changes are listed next; each has its own tests in `tests/grok-leader-observer-236.test.ts`.
+
+## What changed after review (`fe36d3911` → `c4e8996e6`)
+
+| Gap (from design §7.4 / §9.5) | In `fe36d3911` | Now | Tests |
+|---|---|---|---|
+| Version gate was a range | `1.0.x`, patch ≥ 77: every unaudited patch passed | **exact list** `GROK_LEADER_AUDIT` (today: 1.0.77), one audit row + one versioned fixture dir per version (audit table at the end). An unlisted or unreadable version launches `--no-leader`, no observer, with a warning naming the audited list; the launch does not fail | "only the exact audited versions pass" (1.0.78, 1.0.99, 1.0.76, 1.1.0, 2.x, junk all refused); "the allow-list is the audit rows…" walks every listed version and fails if its row is incomplete / not `pass`, its fixture is missing (or is another version's capture), or its entry below is missing; "an unlisted version…" (host) |
+| Lock-file pid is not this instance's leader | logged "left alone", **still returned the socket**: the TUI joined an unverified process (#1411) | **fails closed**: `prepare()` returns no socket, so the TUI is launched `--no-leader`, no observer; a warning says why; nothing is signalled | "fail closed: a lock file that names a process that is not this instance's leader…" (injected), and the same with the real check against a live foreign process (the test runner's own pid) |
+| An old leader still running after the bounded wait (30 × 100 ms) | waited, then **joined anyway** | **fails closed** the same way; its socket and lock file are kept (they are removed only once the process is seen gone), so the next launch retries the stop | "fail closed: a leader that was told to stop and is still running after the wait…" (a pid that never dies; the wait is exactly 3000 ms); "a leader that exits during the wait" (files removed, socket returned) |
+| Observer attached to a leader that is being retired | not considered | `prepare()` first stops the previous observer and its poll (see the end-to-end note below) | "a relaunch: the previous launch's observer and poll are dropped BEFORE its leader is stopped…" |
+| Mutation check (§7.4) | not recorded | recorded: `logs/mutation-check.log` | below |
+
+Also: a zombie (empty command line) now counts as "gone", not as a running leader.
+
+### Mutation check (§7.4)
+
+On `c4e8996e6`, in the working tree only, one line was added to `src/backend/grok-acp-observer.ts`, right after the line that counts an
+unanswered agent→client request: for `session/request_permission` it writes a JSON-RPC **result** (`outcome: selected, allow_once`) to the
+transport. `npx vitest run tests/grok-leader-observer-236.test.ts` then failed **4** tests (49 passed); the file was restored (`git checkout`)
+and the suite is green again (53/53). Full output: `logs/mutation-check.log`.
+
+| Failing test | What caught the reply |
+|---|---|
+| rule 3 › over the whole real session it sends exactly initialize and session/load — nothing else | the real capture's frames: the written messages were not only the two allowed requests |
+| rule 3 › the module names no other request: only initialize and session/load appear as a method it sends | the source scan |
+| rule 3 › agent→client lines that are not responses (an id and a method) never get an answer — whatever they ask | the synthetic request frames |
+| rule 2 › walking it frame by frame: waiting from the request … until interaction_resolved, answers sent: none | the permission request, frame by frame |
+
+### End to end on the fixed commit (real grok 1.0.77, real tmux TUI, minimal prompts)
+
+Same harness as before (`harness/e2e-tui-turn.mjs`, `harness/e2e-tui-crash-respawn.mjs`, built from `c4e8996e6`; times UTC, from the logs).
+
+- **One turn** (`logs/e2e-tui-turn.post-fix.log`): the observer loaded 2.5 s after the launch; the thought was in hand while the turn ran;
+  `Execute sleep 5; echo e2e-a` went `running` → `completed`; the file edit's permission was answered **in the TUI**, and the observer's
+  `permissionWaiting` turned true then false; the leader had `AGEND_PROBE_BINDING=e2e-launch-1`; at instance stop `host.stop()` stopped it
+  (`leaderAlive: false`, socket gone).
+- **TUI crash, then respawn** (`logs/e2e-tui-crash-respawn.post-fix.log`): the TUI was killed with `kill -9` by the pid tmux recorded
+  for its pane; the leader survived and the observer stayed loaded (`after-crash`: `leaderAlive: true`, `observerLoaded: true`); the
+  respawn's `prepare()` stopped the leader (`leaderStillAlive: false` after it); the new TUI resumed the session; the observer
+  re-attached; the new leader is **a different process, a child of the new TUI, with `AGEND_PROBE_BINDING=launch-2`** (this launch's
+  environment); the permission dialog was in the TUI and the observer saw it (`observerSaysWaiting: true`) until the TUI answered
+  (`observerWaiting: false`); the file was created; stop left no socket.
+- **A finding that changed the code.** In an earlier run of the crash script with the pre-existing harness, the **old observer's bridge
+  was still alive when the old leader was stopped, and started a new leader of its own** at the same socket (a child of the bridge, with
+  the daemon's environment), which the new TUI then joined. The harness reuses one host across the respawn; the daemon does not (it
+  stops the old host and builds a new one for every launch, so the observer is always stopped first), so the daemon was not exposed.
+  `prepare()` no longer depends on that: it stops the old observer and its poll before retiring the leader (the test above). A reused host
+  must call `begin()` after its launch (the daemon does; the harness now does too).
+- **Not exercised in a real run:** the two fail-closed paths use injected / local processes in tests (a live foreign pid; a pid that never
+  dies). Making a real grok leader ignore SIGTERM was not attempted.
+
 ## How it works
 
 ```
@@ -122,7 +181,7 @@ daemon owns the leader's lifetime (never `grok leader kill`, which stops every l
 | 4. version gate + fixture | `grokLeaderVersionOk`: an **exact list** of audited versions (`GROK_LEADER_AUDIT`, one row each; today 1.0.77 only), on the binary *and* on the `initialize` answer's `agentVersion`; `loadSession` required; an unlisted version launches `--no-leader` with a warning | "rule 4" (exact versions; every listed version has its audit row, its entry below and its fixture); fixture = real, redacted capture |
 | 5. default unchanged | opt-in literal `true`; no socket ⇒ `--no-leader`; no observer ⇒ no `live` key | "rule 5" (command string, validator, a not-requested host touches nothing) |
 
-Counter-proof: with the wiring removed (`grok.ts`, `log-service.ts`, `chat-activity.js`, the validator) and the new modules kept, 7
+Counter-proof (at `fe36d3911`): with the wiring removed (`grok.ts`, `log-service.ts`, `chat-activity.js`, the validator) and the new modules kept, 7
 of the 47 tests fail; without the modules the file does not load.
 
 ## What this does not do / open points
@@ -148,7 +207,7 @@ or a check is not `pass`. A version that is not listed launches as before (`--no
 
 | | |
 |---|---|
-| Date, version and build, auditor | 2026-11-13 (checks re-run on the fixed code; the wire capture is from 2026-11-12) · grok 1.0.77 `50ca579fa996` [stable] · Junsionloh |
+| Date, version and build, auditor | 2026-11-13, UTC+8 (the checks were re-run on the fixed code at 23:11–23:14 UTC on 11-12; the wire capture is from 2026-11-12) · grok 1.0.77 `50ca579fa996` [stable] · Junsionloh |
 | The flag is still accepted and behaves as described | pass: `grok --leader --leader-socket S` starts a TUI that registers as `grok-shell` at S |
 | TUI joins a per-instance leader | pass |
 | The observer's `session/load` replay and live updates | pass |
