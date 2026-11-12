@@ -16,6 +16,7 @@ import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { ClaudeStepParser, CodexStepParser, bounded, chatStep, readTailRecords, type LogStep } from "./log-steps.js";
 import type { ToolProgressLevel } from "./tool-progress.js";
+import { liveView, type GrokLive, type LiveView } from "./backend/grok-acp-observer.js";
 import { AntigravityStepParser, GrokStepParser, readGrokPhase, type GrokPhase } from "./log-steps-agy-grok.js";
 import { grokEventsPath, type LogFormat } from "./log-transcript-paths.js";
 export type { LogFormat };
@@ -60,6 +61,8 @@ export interface LogServiceDeps {
   toolProgress?(name: string): ToolProgressLevel;
   /** AGEND-181: an instance's working directory — the page shows paths under it relative (display only). */
   cwd?(name: string): string | undefined;
+  /** AGEND-236 (experimental): the grok turn as the read-only ACP observer sees it now; null when the instance has none. */
+  grokLive?(name: string): GrokLive | null;
   /** An instance the Log may show (a fleet instance or a ClassicBot room). */
   known(name: string): boolean;
   source(name: string): LogSource;
@@ -120,6 +123,12 @@ export type LogAnswer =
      * a value of the closed set — nothing else of that file. Absent: not grok, no such file, no turn open, or a phase not known.
      */
     phase?: GrokPhase;
+    /**
+     * AGEND-236 (experimental, `backend_options.grok.leader_observer`): the turn in flight as grok's own session stream says it —
+     * the calls running now and, for a viewer who may have thinking, the thought so far. Only the chat's answer, only while a turn
+     * is open, cut to the instance's `tool_progress` (see `liveView`). Absent: the mode is off, no observer, or no turn open.
+     */
+    live?: LiveView;
     /** The transcript's identity (device-inode): a cursor of another one is reset. */
     key?: string;
     steps: LogStep[]; events: LogEvent[];
@@ -228,7 +237,12 @@ export class LogService {
     const answer = { ...base, supported: true, key, ...(phase ? { phase } : {}) };
     const done = (settled: ReturnType<typeof settle>, rest: object = {}): LogAnswer => {
       if (!settled) { this.unwatch(name, "chat"); return offAnswer(); }
-      return { ...answer, ...settled, ...rest } as LogAnswer;
+      // AGEND-236: read where the answer leaves, with the policy now in force (the level and thinking `settle` just applied).
+      const state = chat && src.format === "grok" ? this.deps.grokLive?.(name) ?? null : null;
+      const levelNow: ToolProgressLevel = this.deps.toolProgress?.(name) ?? "off";
+      const live = state && (levelNow === "standard" || levelNow === "verbose") && levelNow === settled.level
+        ? liveView(state, levelNow, settled.thinking && this.deps.thinking?.() === true) : null;
+      return { ...answer, ...settled, ...(live ? { live } : {}), ...rest } as LogAnswer;
     };
     const fresh = q.key !== undefined && q.key !== key;
     const past = q.after !== undefined && q.after > st.size;

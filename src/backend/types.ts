@@ -145,6 +145,12 @@ export interface CliBackendConfig {
   /** Daemon-owned localhost Muse usage relay, prepared before spawn. */
   museBaseUrl?: string;
   /**
+   * AGEND-236 (experimental, grok only): this instance's own leader socket. Set by the daemon only when
+   * `backend_options.grok.leader_observer` is on and the installed grok passes the version gate; the TUI then joins (or starts) a
+   * leader at that socket instead of `--no-leader`. Unset = the launch is exactly what it always was.
+   */
+  grokLeaderSocket?: string;
+  /**
    * Working directories of the OTHER configured instances on the same backend,
    * read lazily. Codex needs it only when its session DB is unreadable, to
    * decide whether `resume --last` could take a sibling worktree's session

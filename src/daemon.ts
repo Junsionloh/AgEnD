@@ -56,7 +56,9 @@ import { IpcServer } from "./channel/ipc-bridge.js";
 import { daemonBudgetMs } from "./channel/ipc-timeouts.js";
 import { MessageBus } from "./channel/message-bus.js";
 import type { CliBackend, CliBackendConfig, ErrorPattern, InputBox, InputDraft, InputUnavailableTransient, InstanceState, InstanceStateSnapshot, RuntimeDialog, StartupDialog, SteerComposerMode } from "./backend/types.js";
-import { shellQuote, KiroCompatibilityError, UnsupportedCliError, ResumeBlockedError } from "./backend/types.js";
+import { shellQuote, KiroCompatibilityError, UnsupportedCliError, ResumeBlockedError, resolveBinary } from "./backend/types.js";
+import { GrokLeaderHost } from "./backend/grok-leader-host.js";
+import type { GrokLive } from "./backend/grok-acp-observer.js";
 import type { ChannelAdapter, InboundMessage } from "./channel/types.js";
 import { getTmuxSession } from "./config.js";
 import { routeToolCall } from "./channel/tool-router.js";
@@ -1879,6 +1881,10 @@ export class Daemon extends EventEmitter {
   private pendingModelErrorKey: string | null = null;
   /** Optional per-instance localhost relay used to observe Muse usage events. */
   private museUsageRelay: MuseUsageRelay | null = null;
+  /** AGEND-236 (experimental): this grok instance's own leader + read-only ACP observer. Null unless `backend_options.grok.leader_observer`. */
+  private grokLeader: GrokLeaderHost | null = null;
+  /** AGEND-236: the grok turn as the observer sees it now (thought, tools), for the chat's live block. Null: not observed. */
+  getGrokLive(): GrokLive | null { try { return this.grokLeader?.live() ?? null; } catch { return null; } }
   /** Set after an in-run relay failure so subsequent Muse respawns go direct. */
   private museRelayFallback = false;
   private museRelayFallbackInFlight: Promise<void> | null = null;
@@ -5658,6 +5664,10 @@ export class Daemon extends EventEmitter {
       const windowIdFile = join(this.instanceDir, "window-id");
       try { unlinkSync(windowIdFile); } catch (e) { this.logger.debug({ err: e }, "Failed to remove window-id file"); }
     }
+
+    // AGEND-236: the TUI is gone — the observer, then this instance's leader (grok starts it with --no-exit-on-disconnect, so it would
+    // outlive the TUI and serve the next launch with this launch's environment: #1411).
+    if (this.grokLeader) { await this.grokLeader.stop().catch(() => undefined); this.grokLeader = null; }
 
     // Close IPC AFTER CLI has exited — MCP servers are already dead at this point
     await this.ipcServer?.close();
@@ -13778,6 +13788,21 @@ export class Daemon extends EventEmitter {
         clearMuseUsageSnapshot(this.instanceDir);
       }
     }
+    // AGEND-236 (experimental, off unless the instance asks): the instance's own grok leader. prepare() stops whatever an earlier
+    // launch left at its socket, so this launch's TUI starts a fresh leader with THIS launch's environment; null = as before.
+    if (this.backend?.binaryName === "grok") {
+      await this.grokLeader?.stop().catch(() => undefined);
+      const host = new GrokLeaderHost({
+        instanceName: this.name, instanceDir: this.instanceDir, cwd: resolvedCwd, binary: resolveBinary("grok"),
+        backendOptions: backendConfig.backendOptions,
+        sessionId: () => this.backend?.getSessionId() ?? null,
+        onChange: () => this.emit("grok_live", { name: this.name }),
+        log: (level, msg, extra) => this.logger[level](extra ?? {}, msg),
+      });
+      const socket = host.requested ? await host.prepare().catch(() => null) : null;
+      this.grokLeader = socket ? host : null;
+      if (socket) launchConfig = { ...launchConfig, grokLeaderSocket: socket };
+    }
     // The CLI's own shell sets a zero coredump_filter first (#1113): this pane
     // may belong to a tmux server the fleet did not start, which would hand
     // the CLI its own (full) filter instead of the fleet's.
@@ -13827,6 +13852,7 @@ export class Daemon extends EventEmitter {
     }
     admit();
     this.writeWindowId(windowId);
+    this.grokLeader?.begin();   // AGEND-236: the observer attaches once the TUI's own leader and session exist
 
     // Enable remain-on-exit to capture exit codes on crash
     await this.tmux!.setRemainOnExit().catch(err => {
