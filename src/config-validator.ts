@@ -203,6 +203,10 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
               }
             }
           }
+          // AGEND-236 (experimental): keep grok's TUI and attach a read-only ACP observer through a per-instance leader. Off unless true.
+          if (backendName === "grok" && settings.leader_observer !== undefined && typeof settings.leader_observer !== "boolean") {
+            err(`${optionPath}.leader_observer`, "must be a boolean");
+          }
           // #2010: opt-in Claude prompt-cache TTL ("1h" | "5m"); unset leaves the CLI's own choice.
           if (backendName === "claude-code" && settings.prompt_cache_ttl !== undefined && !PROMPT_CACHE_TTLS.includes(settings.prompt_cache_ttl as never)) {
             err(`${optionPath}.prompt_cache_ttl`, `must be one of: ${PROMPT_CACHE_TTLS.join(", ")}`);

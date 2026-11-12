@@ -1,0 +1,30 @@
+2026-11-12T09:07:04.155559Z run_leader: xai_grok_shell::agent::app: Leader server starting
+2026-11-12T09:07:04.166432Z xai_grok_shell::leader::server: Leader server listening
+2026-11-12T09:07:14.091750Z xai_grok_shell::leader::server: Leader server shutting down (cancelled) reason=Manual
+2026-11-12T09:07:16.239245Z run_leader: xai_grok_shell::agent::app: Leader server starting
+2026-11-12T09:07:16.239465Z xai_grok_shell::leader::server: Leader server listening
+2026-11-12T09:07:23.663798Z xai_grok_shell::leader::server: Client registered client_id=1 client_type=grok-shell mode=Stdio yolo_mode=true client_version=Some("1.0.77")
+2026-11-12T09:07:23.663865Z xai_grok_shell::leader::server: Client registered client_id=1 mode=Stdio yolo_mode=true client_type=grok-shell
+2026-11-12T09:07:24.088519Z xai_grok_shell::leader::server: Using fallback routing to last active client client_id=1
+2026-11-12T09:07:48.738993Z xai_grok_shell::leader::server: Client disconnected client_id=1
+2026-11-12T09:07:48.739247Z run_leader: xai_grok_shell::agent::mvp_agent::agent_ops: Client disconnected; detaching sessions (no-evict keystone) count=1 sessions=["01a1cf03-04be-7bd1-8bbd-ffe63fa64d82"]
+2026-11-12T09:07:53.316432Z xai_grok_shell::leader::server: Client registered client_id=2 client_type=grok-shell mode=Stdio yolo_mode=false client_version=Some("1.0.77")
+2026-11-12T09:07:53.316483Z xai_grok_shell::leader::server: Client registered client_id=2 mode=Stdio yolo_mode=false client_type=grok-shell
+2026-11-12T09:07:53.604699Z xai_grok_shell::leader::server: Using fallback routing to last active client client_id=2
+2026-11-12T09:08:12.001477Z xai_grok_shell::leader::server: Client disconnected client_id=2
+2026-11-12T09:08:12.001779Z run_leader: xai_grok_shell::agent::mvp_agent::agent_ops: Client disconnected; detaching sessions (no-evict keystone) count=1 sessions=["01a1cf03-781c-78b3-a472-5516cbfa8482"]
+2026-11-12T09:08:16.072937Z xai_grok_shell::leader::server: Client registered client_id=3 client_type=grok-shell mode=Stdio yolo_mode=false client_version=Some("1.0.77")
+2026-11-12T09:08:16.073326Z xai_grok_shell::leader::server: Client registered client_id=3 mode=Stdio yolo_mode=false client_type=grok-shell
+2026-11-12T09:08:16.345438Z xai_grok_shell::leader::server: Using fallback routing to last active client client_id=3
+2026-11-12T09:08:26.711966Z xai_grok_shell::leader::server: Client registered client_id=4 client_type=grok agent --leader --leader-socket /tmp/gl/l.sock stdio mode=Stdio yolo_mode=false client_version=Some("1.0.77")
+2026-11-12T09:08:26.712016Z xai_grok_shell::leader::server: Client registered client_id=4 mode=Stdio yolo_mode=false client_type=grok agent --leader --leader-socket /tmp/gl/l.sock stdio
+2026-11-12T09:12:45.090964Z xai_grok_shell::leader::server: Client disconnected client_id=3
+2026-11-12T09:12:45.091223Z xai_grok_shell::leader::server: Transferred session driver after disconnect session_id=01a1cf03-d0d6-7c11-b219-700e1a1737cb old_driver=3 new_driver=4
+2026-11-12T09:12:55.419490Z xai_grok_shell::leader::server: Client registered client_id=5 client_type=grok-shell mode=Stdio yolo_mode=false client_version=Some("1.0.77")
+2026-11-12T09:12:55.419567Z xai_grok_shell::leader::server: Client registered client_id=5 mode=Stdio yolo_mode=false client_type=grok-shell
+2026-11-12T09:12:55.831458Z xai_grok_shell::leader::server: Using fallback routing to last active client client_id=5
+2026-11-12T09:13:43.305528Z xai_grok_shell::leader::server: Client disconnected client_id=4
+2026-11-12T09:13:43.305660Z xai_grok_shell::leader::server: Transferred session driver after disconnect session_id=01a1cf03-d0d6-7c11-b219-700e1a1737cb old_driver=4 new_driver=5
+2026-11-12T09:14:33.802309Z xai_grok_shell::leader::server: Client disconnected client_id=5
+2026-11-12T09:14:33.802579Z run_leader: xai_grok_shell::agent::mvp_agent::agent_ops: Client disconnected; detaching sessions (no-evict keystone) count=1 sessions=["01a1cf03-d0d6-7c11-b219-700e1a1737cb"]
+2026-11-12T09:14:35.529974Z xai_grok_shell::leader::server: Leader server shutting down (cancelled) reason=Manual

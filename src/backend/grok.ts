@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { cleanupGrokMcp, grokMcpLaunchEnv, writeGrokMcp } from "./grok-mcp.js";
+import { grokLeaderLaunchFlags } from "./grok-leader.js";
 import { type CliBackend, type CliBackendConfig, type ErrorPattern, type InputBox, type RuntimeDialog, type StartupDialog, resolveBinary, shellQuote, validateModel, warnIfModelMismatch } from "./types.js";
 import { appendWithMarker, removeMarker } from "./marker-utils.js";
 import { selectionCard } from "../selection-card.js";
@@ -383,7 +384,10 @@ export class GrokBackend implements CliBackend {
     this.workingDirectory = config.workingDirectory;
     // Flags: -m/--model, --always-approve, -r/--resume <ID>, -p/--single, --no-auto-update.
     // --no-auto-update: an auto-update prompt on launch would corrupt ready detection.
-    let cmd = `${grokMcpLaunchEnv(config, this.instanceDir)} ${this.binaryPath} --no-auto-update --no-leader`;
+    // AGEND-236: `--no-leader` unless the instance opted into the experimental leader + observer (the daemon sets
+    // grokLeaderSocket only then, after the version gate): then the TUI joins this instance's own leader at that socket.
+    const leader = config.grokLeaderSocket ? grokLeaderLaunchFlags(config.grokLeaderSocket) : "--no-leader";
+    let cmd = `${grokMcpLaunchEnv(config, this.instanceDir)} ${this.binaryPath} --no-auto-update ${leader}`;
     // --always-approve auto-approves tool executions (documented flag). If a grok
     // build ignores it, getRuntimeDialogs() auto-approves the prompt as a net.
     if (config.skipPermissions !== false) cmd += " --always-approve";

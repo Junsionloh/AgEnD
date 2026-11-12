@@ -4934,6 +4934,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     this.workingStateListeners ??= new WeakSet();
     if (this.workingStateListeners.has(daemon)) return;
     this.workingStateListeners.add(daemon);
+    // AGEND-236: the grok observer's live turn moved — the chat's activity block looks again (the same tick the transcript makes).
+    daemon.on("grok_live", () => { if (this.daemons.get(name) === daemon) this.emitSseEvent("steps_tick", { instance: name }); });
     daemon.on("working_state", (event: { reason: WorkingStateReason; observation: WorkingStateObservation }) => {
       try {
         if (this.daemons.get(name) !== daemon || !sameInteractionOwner(event.observation.owner, daemon.getInteractionSnapshot().owner)) return;
@@ -6604,6 +6606,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       toolProgress: (name) => this.chatToolProgress(name),
       known: (name) => Object.prototype.hasOwnProperty.call(this.fleetConfig?.instances ?? {}, name) || this.classicRoomFor(name) !== null,
       source: (name) => this.logSource(name),
+      grokLive: (name) => { try { return this.lifecycle.daemons.get(name)?.getGrokLive?.() ?? null; } catch { return null; } },
       events: (name, limit) => (this.eventLog?.query({ instance: name, limit }) ?? []) as Array<{ id: number; event_type: string; payload: unknown; created_at: string }>,
       emit: (event, data) => this.emitSseEvent(event, data),
     });

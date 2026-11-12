@@ -441,7 +441,8 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
    running are the icon's colour and one small word; a step that went well says nothing. */
 .act-block .act-body { padding: var(--s-1) 0 var(--s-2); display: flex; flex-direction: column; gap: var(--s-1); border-top: 1px solid var(--border); }
 .act-block .act-earlier { align-self: flex-start; margin-left: calc(14px + var(--s-2)); }
-.act-block .act-lvl, .act-block .act-partial { margin: 0; }
+.act-block .act-lvl, .act-block .act-partial, .act-block .act-thought { margin: 0; }
+.act-block .act-thought { white-space: pre-wrap; overflow-wrap: anywhere; }
 .act-block .log-list { gap: 0; }
 .act-block .log-item { --row-h: 24px; position: relative; background: transparent; border-radius: 0; padding: 0 0 0 calc(14px + var(--s-2)); font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--text-2); }
 @media (pointer: coarse) { .act-block .log-item { --row-h: 32px; } }

@@ -1,0 +1,25 @@
+{"t":"2026-11-12T09:26:30.413Z","k":"launch","resume":false,"cmd":"/home/user/.local/bin/grok --no-auto-update --leader --leader-socket '<socket>' --effort low"}
+{"t":"2026-11-12T09:26:32.490Z","k":"live","turnOpen":false,"permissionWaiting":false,"tools":[]}
+{"t":"2026-11-12T09:26:32.928Z","k":"loaded","live":true}
+{"t":"2026-11-12T09:26:33.338Z","k":"prompt-sent","text":"Reply with just OK."}
+{"t":"2026-11-12T09:26:33.371Z","k":"live","turnOpen":true,"permissionWaiting":false,"tools":[]}
+{"t":"2026-11-12T09:26:35.998Z","k":"live","turnOpen":false,"permissionWaiting":false,"tools":[]}
+{"t":"2026-11-12T09:26:42.338Z","k":"session","sid":"01a1cf14…"}
+{"t":"2026-11-12T09:26:42.347Z","k":"crash","tuiPid":2234497,"leaderPid":2234546}
+{"t":"2026-11-12T09:26:46.352Z","k":"after-crash","leaderAlive":true,"observerLoaded":true}
+{"t":"2026-11-12T09:26:46.353Z","k":"host-info","msg":"stopped the leader an earlier launch left","pid":2234546}
+{"t":"2026-11-12T09:26:47.165Z","k":"live","turnOpen":true,"permissionWaiting":false,"tools":[]}
+{"t":"2026-11-12T09:26:47.363Z","k":"respawn-prepare","sameSocket":true,"leaderStillAlive":false}
+{"t":"2026-11-12T09:26:47.363Z","k":"launch","resume":true,"cmd":"/home/user/.local/bin/grok --no-auto-update --leader --leader-socket '<socket>' --resume 01a1cf14-8403-7830-9b7c-b7a6eddfe465 --effort low"}
+{"t":"2026-11-12T09:26:47.373Z","k":"re-attached","live":true}
+{"t":"2026-11-12T09:26:47.779Z","k":"prompt-sent","text":"Use your file edit tool to create e2e2-perm.txt co"}
+{"t":"2026-11-12T09:26:59.008Z","k":"live","turnOpen":true,"permissionWaiting":false,"tools":["pending:search_replace"]}
+{"t":"2026-11-12T09:26:59.009Z","k":"live","turnOpen":true,"permissionWaiting":true,"tools":["pending:search_replace"]}
+{"t":"2026-11-12T09:27:00.784Z","k":"pane","permissionDialogInTui":true,"observerSaysWaiting":true}
+{"t":"2026-11-12T09:27:00.798Z","k":"live","turnOpen":true,"permissionWaiting":false,"tools":["pending:Edit `/tmp/gl/proj/e2e2-perm.t"]}
+{"t":"2026-11-12T09:27:00.798Z","k":"live","turnOpen":true,"permissionWaiting":false,"tools":["completed:Edit `/tmp/gl/proj/e2e2-perm.t"]}
+{"t":"2026-11-12T09:27:02.077Z","k":"live","turnOpen":false,"permissionWaiting":false,"tools":["completed:Edit `/tmp/gl/proj/e2e2-perm.t"]}
+{"t":"2026-11-12T09:27:08.786Z","k":"done","fileCreated":true,"observerWaiting":false,"turnOpen":false}
+{"t":"2026-11-12T09:27:09.796Z","k":"live"}
+{"t":"2026-11-12T09:27:09.796Z","k":"host-info","msg":"stopped the leader an earlier launch left","pid":2236087}
+{"t":"2026-11-12T09:27:11.305Z","k":"stopped","socketExists":false}
