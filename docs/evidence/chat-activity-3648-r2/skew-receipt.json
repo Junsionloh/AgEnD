@@ -1,0 +1,845 @@
+{
+ "what": "Browser SKEW receipt: real Chrome against the head's server while the browser RETAINS older files. Each case serves the named paths from an older checkout (route fulfilment; the bytes actually returned are hashed, and compared with the head's file), everything else from the head. Asked of each case: does the chat page still draw the composer, does the Log tab still draw its rows, any page error.",
+ "pins": {
+  "head": "6aaf195c0936d90b88b38b0e684c996c1a181a6a",
+  "base (retained, before the PR)": "c1cfcfe03c6a54f989b4ae8467ceadf22f57fe46",
+  "previous head (retained)": "b0feba52f1b85faf596fe3a3eaa6ca63753b808f"
+ },
+ "harness": {
+  "file": "shots.mts (MODE=skew)",
+  "sha256": "101e3c48ebd6fd4422862ba9724e6f5fc088a74639c0c58a561dc924ed81a67d"
+ },
+ "fixture": {
+  "transcript": "cb68bc93a12de03bfb02e6a67458b6d3d4875b02e32231adf03786740a581aa4",
+  "ledger": "13538bc987ba0bc58d0ba6b00fc2ea618c795a1487c70e0b519ea72dc6b15ba2"
+ },
+ "fileHashes": {
+  "head:src/ui/shared/app-i18n.js": "6f7fd589ed235fb3081d3097b4669cee511a16ad3a3b5e363d94ab4b2cefd9e5",
+  "prev:src/ui/shared/app-i18n.js": "6f7fd589ed235fb3081d3097b4669cee511a16ad3a3b5e363d94ab4b2cefd9e5",
+  "base:src/ui/shared/app-i18n.js": "6f7fd589ed235fb3081d3097b4669cee511a16ad3a3b5e363d94ab4b2cefd9e5",
+  "head:src/ui/shared/app-shell.js": "3629da502b59f389148efe34fd07abdc975108c4f08bfd946a2c34ecaa59eebd",
+  "prev:src/ui/shared/app-shell.js": "3629da502b59f389148efe34fd07abdc975108c4f08bfd946a2c34ecaa59eebd",
+  "base:src/ui/shared/app-shell.js": "3629da502b59f389148efe34fd07abdc975108c4f08bfd946a2c34ecaa59eebd",
+  "head:src/ui/shared/chat-thread.js": "e8124f3778fdb4eb70ebf5077e282f01e464a6945dcfd9730d085757dbf3209b",
+  "prev:src/ui/shared/chat-thread.js": "e8124f3778fdb4eb70ebf5077e282f01e464a6945dcfd9730d085757dbf3209b",
+  "base:src/ui/shared/chat-thread.js": "535dc835a85f53e843b9dc709c3659f891f547efc09f5c12cf0dad74b6590907",
+  "head:src/ui/shared/app.css": "972025e4fe033d8f8fc3a1c4d2c3b5779a387240c17905384a89323c97e138db",
+  "prev:src/ui/shared/app.css": "972025e4fe033d8f8fc3a1c4d2c3b5779a387240c17905384a89323c97e138db",
+  "base:src/ui/shared/app.css": "c8eaa59d64832dfbd4f0abf41e8f52eed4ac64c755c97f02fae58504c038bfb8",
+  "head:src/ui/panel-log.js": "be0495b78eb1d736f4dab456859cde8ff794e75da47877830529611a14322e0c",
+  "prev:src/ui/panel-log.js": "be0495b78eb1d736f4dab456859cde8ff794e75da47877830529611a14322e0c",
+  "base:src/ui/panel-log.js": "0165f9c071365d1872cfe62b997cef1b96865734e43af9c871921f17947ffd4b",
+  "head:src/ui/log-row.js": "6048f18b78abb71f6e5d33fa61711bf71e79a1d0e0180aac5859c27a29208079",
+  "prev:src/ui/log-row.js": "3b58314e323e1c62306159db857a1b93fd4e85b1ced16d97d209f597fb1c8a08",
+  "base:src/ui/log-row.js": "(absent)",
+  "head:src/ui/panel-chat.js": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+  "prev:src/ui/panel-chat.js": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+  "base:src/ui/panel-chat.js": "33881341d650ce33c206707bfa5d86adc590f11407d3cfb97f906c2835da4d12",
+  "head:src/ui/chat-activity.js": "1b9262b46ecba50c3e30d82521d8d89952b0b60afdfce85735ac88c9dda6bd15",
+  "prev:src/ui/chat-activity.js": "1b9262b46ecba50c3e30d82521d8d89952b0b60afdfce85735ac88c9dda6bd15",
+  "base:src/ui/chat-activity.js": "(absent)",
+  "head:src/ui/chat-activity-groups.js": "46dc2f64e97025affaba73627828c5a581f48a450616bd3cfb70cad1d4d18c62",
+  "prev:src/ui/chat-activity-groups.js": "7c5acdd1404ee6cd8f1a25978cf9dd56506323408f998d364e2c7863f7adfb0d",
+  "base:src/ui/chat-activity-groups.js": "(absent)"
+ },
+ "reading": {
+  "byte-equal to the head (the retained file IS the current file)": [
+   "app-i18n.js",
+   "app-shell.js",
+   "app-ctx.js"
+  ],
+  "retained and different": [
+   "chat-thread.js (base)",
+   "app.css (base)",
+   "panel-log.js (base)",
+   "panel-chat.js (base)",
+   "log-row.js / chat-activity-groups.js (previous head)"
+  ],
+  "result": "7 of 8 cases keep the composer and the Log rows and raise no page error. Retained chat-thread.js or panel-chat.js (base): the composer stays, the block is simply not drawn (blocks 0). Retained base app.css (which has none of the block's rules): the block is drawn UNSTYLED \u2014 the native disclosure marker, the chevron and the icon stack above its text \u2014 but it is readable and opens; composer present, no horizontal overflow (see skew/skew-old-css-*.png). Retained previous-head activity modules: block drawn.",
+  "failure, disclosed": "missing-log-row: when log-row.js answers 404, the chat page AND the Log tab do not draw (composer absent, 0 Log rows) \u2014 log-row.js is a static import of panel-chat's chat-activity.js and of panel-log.js, as every shared module is. It needs a browser holding the new panel-chat.js against a server that no longer has log-row.js (a server downgraded under an open page); a reload fixes it. Not changed in this review."
+ },
+ "cases": [
+  {
+   "case": "old-i18n",
+   "view": "desktop-light-en",
+   "note": "the shared string module a cached browser still holds",
+   "served": [
+    {
+     "path": "/assets/app-i18n.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "6f7fd589ed235fb3081d3097b4669cee511a16ad3a3b5e363d94ab4b2cefd9e5",
+     "currentSha256": "6f7fd589ed235fb3081d3097b4669cee511a16ad3a3b5e363d94ab4b2cefd9e5",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/assets/app-i18n.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "6f7fd589ed235fb3081d3097b4669cee511a16ad3a3b5e363d94ab4b2cefd9e5",
+     "currentSha256": "6f7fd589ed235fb3081d3097b4669cee511a16ad3a3b5e363d94ab4b2cefd9e5",
+     "equalToCurrent": true,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 2,
+   "rows": 3,
+   "overflowX": false,
+   "steps": 4,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "old-i18n",
+   "view": "phone-dark-zh-TW",
+   "note": "the shared string module a cached browser still holds",
+   "served": [
+    {
+     "path": "/assets/app-i18n.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "6f7fd589ed235fb3081d3097b4669cee511a16ad3a3b5e363d94ab4b2cefd9e5",
+     "currentSha256": "6f7fd589ed235fb3081d3097b4669cee511a16ad3a3b5e363d94ab4b2cefd9e5",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/assets/app-i18n.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "6f7fd589ed235fb3081d3097b4669cee511a16ad3a3b5e363d94ab4b2cefd9e5",
+     "currentSha256": "6f7fd589ed235fb3081d3097b4669cee511a16ad3a3b5e363d94ab4b2cefd9e5",
+     "equalToCurrent": true,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 2,
+   "rows": 3,
+   "overflowX": false,
+   "steps": 4,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "old-shell",
+   "view": "desktop-light-en",
+   "note": "the app shell modules",
+   "served": [
+    {
+     "path": "/assets/app-shell.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "3629da502b59f389148efe34fd07abdc975108c4f08bfd946a2c34ecaa59eebd",
+     "currentSha256": "3629da502b59f389148efe34fd07abdc975108c4f08bfd946a2c34ecaa59eebd",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/assets/app-ctx.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "f20813f7fa32b98ada2353b04273eedbe192046e0ef03334098d0e8c2a7eced6",
+     "currentSha256": "f20813f7fa32b98ada2353b04273eedbe192046e0ef03334098d0e8c2a7eced6",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/assets/app-shell.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "3629da502b59f389148efe34fd07abdc975108c4f08bfd946a2c34ecaa59eebd",
+     "currentSha256": "3629da502b59f389148efe34fd07abdc975108c4f08bfd946a2c34ecaa59eebd",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/assets/app-ctx.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "f20813f7fa32b98ada2353b04273eedbe192046e0ef03334098d0e8c2a7eced6",
+     "currentSha256": "f20813f7fa32b98ada2353b04273eedbe192046e0ef03334098d0e8c2a7eced6",
+     "equalToCurrent": true,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 2,
+   "rows": 3,
+   "overflowX": false,
+   "steps": 4,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "old-shell",
+   "view": "phone-dark-zh-TW",
+   "note": "the app shell modules",
+   "served": [
+    {
+     "path": "/assets/app-shell.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "3629da502b59f389148efe34fd07abdc975108c4f08bfd946a2c34ecaa59eebd",
+     "currentSha256": "3629da502b59f389148efe34fd07abdc975108c4f08bfd946a2c34ecaa59eebd",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/assets/app-ctx.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "f20813f7fa32b98ada2353b04273eedbe192046e0ef03334098d0e8c2a7eced6",
+     "currentSha256": "f20813f7fa32b98ada2353b04273eedbe192046e0ef03334098d0e8c2a7eced6",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/assets/app-shell.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "3629da502b59f389148efe34fd07abdc975108c4f08bfd946a2c34ecaa59eebd",
+     "currentSha256": "3629da502b59f389148efe34fd07abdc975108c4f08bfd946a2c34ecaa59eebd",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/assets/app-ctx.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "f20813f7fa32b98ada2353b04273eedbe192046e0ef03334098d0e8c2a7eced6",
+     "currentSha256": "f20813f7fa32b98ada2353b04273eedbe192046e0ef03334098d0e8c2a7eced6",
+     "equalToCurrent": true,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 2,
+   "rows": 3,
+   "overflowX": false,
+   "steps": 4,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "old-thread",
+   "view": "desktop-light-en",
+   "note": "the chat thread module (this PR changes it)",
+   "served": [
+    {
+     "path": "/assets/chat-thread.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "535dc835a85f53e843b9dc709c3659f891f547efc09f5c12cf0dad74b6590907",
+     "currentSha256": "e8124f3778fdb4eb70ebf5077e282f01e464a6945dcfd9730d085757dbf3209b",
+     "equalToCurrent": false,
+     "status": 200
+    },
+    {
+     "path": "/assets/chat-thread.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "535dc835a85f53e843b9dc709c3659f891f547efc09f5c12cf0dad74b6590907",
+     "currentSha256": "e8124f3778fdb4eb70ebf5077e282f01e464a6945dcfd9730d085757dbf3209b",
+     "equalToCurrent": false,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 0,
+   "rows": 5,
+   "overflowX": false,
+   "steps": 0,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "old-thread",
+   "view": "phone-dark-zh-TW",
+   "note": "the chat thread module (this PR changes it)",
+   "served": [
+    {
+     "path": "/assets/chat-thread.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "535dc835a85f53e843b9dc709c3659f891f547efc09f5c12cf0dad74b6590907",
+     "currentSha256": "e8124f3778fdb4eb70ebf5077e282f01e464a6945dcfd9730d085757dbf3209b",
+     "equalToCurrent": false,
+     "status": 200
+    },
+    {
+     "path": "/assets/chat-thread.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "535dc835a85f53e843b9dc709c3659f891f547efc09f5c12cf0dad74b6590907",
+     "currentSha256": "e8124f3778fdb4eb70ebf5077e282f01e464a6945dcfd9730d085757dbf3209b",
+     "equalToCurrent": false,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 0,
+   "rows": 5,
+   "overflowX": false,
+   "steps": 0,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "old-css",
+   "view": "desktop-light-en",
+   "note": "the stylesheet (this PR changes it)",
+   "served": [
+    {
+     "path": "/assets/app.css",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "c8eaa59d64832dfbd4f0abf41e8f52eed4ac64c755c97f02fae58504c038bfb8",
+     "currentSha256": "972025e4fe033d8f8fc3a1c4d2c3b5779a387240c17905384a89323c97e138db",
+     "equalToCurrent": false,
+     "status": 200
+    },
+    {
+     "path": "/assets/app.css",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "c8eaa59d64832dfbd4f0abf41e8f52eed4ac64c755c97f02fae58504c038bfb8",
+     "currentSha256": "972025e4fe033d8f8fc3a1c4d2c3b5779a387240c17905384a89323c97e138db",
+     "equalToCurrent": false,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 2,
+   "rows": 3,
+   "overflowX": false,
+   "steps": 4,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "old-css",
+   "view": "phone-dark-zh-TW",
+   "note": "the stylesheet (this PR changes it)",
+   "served": [
+    {
+     "path": "/assets/app.css",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "c8eaa59d64832dfbd4f0abf41e8f52eed4ac64c755c97f02fae58504c038bfb8",
+     "currentSha256": "972025e4fe033d8f8fc3a1c4d2c3b5779a387240c17905384a89323c97e138db",
+     "equalToCurrent": false,
+     "status": 200
+    },
+    {
+     "path": "/assets/app.css",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "c8eaa59d64832dfbd4f0abf41e8f52eed4ac64c755c97f02fae58504c038bfb8",
+     "currentSha256": "972025e4fe033d8f8fc3a1c4d2c3b5779a387240c17905384a89323c97e138db",
+     "equalToCurrent": false,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 2,
+   "rows": 3,
+   "overflowX": false,
+   "steps": 4,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "old-log-modules",
+   "view": "desktop-light-en",
+   "note": "the Log panel from before log-row.js existed",
+   "served": [
+    {
+     "path": "/ui/js/panel-log.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "0165f9c071365d1872cfe62b997cef1b96865734e43af9c871921f17947ffd4b",
+     "currentSha256": "be0495b78eb1d736f4dab456859cde8ff794e75da47877830529611a14322e0c",
+     "equalToCurrent": false,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 2,
+   "rows": 3,
+   "overflowX": false,
+   "steps": 4,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "old-log-modules",
+   "view": "phone-dark-zh-TW",
+   "note": "the Log panel from before log-row.js existed",
+   "served": [
+    {
+     "path": "/ui/js/panel-log.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "0165f9c071365d1872cfe62b997cef1b96865734e43af9c871921f17947ffd4b",
+     "currentSha256": "be0495b78eb1d736f4dab456859cde8ff794e75da47877830529611a14322e0c",
+     "equalToCurrent": false,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 2,
+   "rows": 3,
+   "overflowX": false,
+   "steps": 4,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "old-panel",
+   "view": "desktop-light-en",
+   "note": "the chat panel from before the block existed (new server, new thread module)",
+   "served": [
+    {
+     "path": "/ui/js/panel-chat.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "33881341d650ce33c206707bfa5d86adc590f11407d3cfb97f906c2835da4d12",
+     "currentSha256": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+     "equalToCurrent": false,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/panel-chat.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "33881341d650ce33c206707bfa5d86adc590f11407d3cfb97f906c2835da4d12",
+     "currentSha256": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+     "equalToCurrent": false,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 0,
+   "rows": 3,
+   "overflowX": false,
+   "steps": 0,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "old-panel",
+   "view": "phone-dark-zh-TW",
+   "note": "the chat panel from before the block existed (new server, new thread module)",
+   "served": [
+    {
+     "path": "/ui/js/panel-chat.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "33881341d650ce33c206707bfa5d86adc590f11407d3cfb97f906c2835da4d12",
+     "currentSha256": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+     "equalToCurrent": false,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/panel-chat.js",
+     "source": "c1cfcfe03 (upstream base, before the PR)",
+     "sha256": "33881341d650ce33c206707bfa5d86adc590f11407d3cfb97f906c2835da4d12",
+     "currentSha256": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+     "equalToCurrent": false,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 0,
+   "rows": 3,
+   "overflowX": false,
+   "steps": 0,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "prev-head",
+   "view": "desktop-light-en",
+   "note": "the previous head's activity modules (the fixes of this review not yet loaded)",
+   "served": [
+    {
+     "path": "/ui/js/panel-chat.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+     "currentSha256": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/chat-activity.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "1b9262b46ecba50c3e30d82521d8d89952b0b60afdfce85735ac88c9dda6bd15",
+     "currentSha256": "1b9262b46ecba50c3e30d82521d8d89952b0b60afdfce85735ac88c9dda6bd15",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/log-row.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "3b58314e323e1c62306159db857a1b93fd4e85b1ced16d97d209f597fb1c8a08",
+     "currentSha256": "6048f18b78abb71f6e5d33fa61711bf71e79a1d0e0180aac5859c27a29208079",
+     "equalToCurrent": false,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/chat-activity-groups.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "7c5acdd1404ee6cd8f1a25978cf9dd56506323408f998d364e2c7863f7adfb0d",
+     "currentSha256": "46dc2f64e97025affaba73627828c5a581f48a450616bd3cfb70cad1d4d18c62",
+     "equalToCurrent": false,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/panel-chat.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+     "currentSha256": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/chat-activity.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "1b9262b46ecba50c3e30d82521d8d89952b0b60afdfce85735ac88c9dda6bd15",
+     "currentSha256": "1b9262b46ecba50c3e30d82521d8d89952b0b60afdfce85735ac88c9dda6bd15",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/log-row.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "3b58314e323e1c62306159db857a1b93fd4e85b1ced16d97d209f597fb1c8a08",
+     "currentSha256": "6048f18b78abb71f6e5d33fa61711bf71e79a1d0e0180aac5859c27a29208079",
+     "equalToCurrent": false,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/chat-activity-groups.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "7c5acdd1404ee6cd8f1a25978cf9dd56506323408f998d364e2c7863f7adfb0d",
+     "currentSha256": "46dc2f64e97025affaba73627828c5a581f48a450616bd3cfb70cad1d4d18c62",
+     "equalToCurrent": false,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 2,
+   "rows": 3,
+   "overflowX": false,
+   "steps": 4,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "prev-head",
+   "view": "phone-dark-zh-TW",
+   "note": "the previous head's activity modules (the fixes of this review not yet loaded)",
+   "served": [
+    {
+     "path": "/ui/js/panel-chat.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+     "currentSha256": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/chat-activity.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "1b9262b46ecba50c3e30d82521d8d89952b0b60afdfce85735ac88c9dda6bd15",
+     "currentSha256": "1b9262b46ecba50c3e30d82521d8d89952b0b60afdfce85735ac88c9dda6bd15",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/log-row.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "3b58314e323e1c62306159db857a1b93fd4e85b1ced16d97d209f597fb1c8a08",
+     "currentSha256": "6048f18b78abb71f6e5d33fa61711bf71e79a1d0e0180aac5859c27a29208079",
+     "equalToCurrent": false,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/chat-activity-groups.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "7c5acdd1404ee6cd8f1a25978cf9dd56506323408f998d364e2c7863f7adfb0d",
+     "currentSha256": "46dc2f64e97025affaba73627828c5a581f48a450616bd3cfb70cad1d4d18c62",
+     "equalToCurrent": false,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/panel-chat.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+     "currentSha256": "027ef329f2c1916c41475c29236b467b5b980675ae17a599a88a4aa54c9f3ea9",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/chat-activity.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "1b9262b46ecba50c3e30d82521d8d89952b0b60afdfce85735ac88c9dda6bd15",
+     "currentSha256": "1b9262b46ecba50c3e30d82521d8d89952b0b60afdfce85735ac88c9dda6bd15",
+     "equalToCurrent": true,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/log-row.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "3b58314e323e1c62306159db857a1b93fd4e85b1ced16d97d209f597fb1c8a08",
+     "currentSha256": "6048f18b78abb71f6e5d33fa61711bf71e79a1d0e0180aac5859c27a29208079",
+     "equalToCurrent": false,
+     "status": 200
+    },
+    {
+     "path": "/ui/js/chat-activity-groups.js",
+     "source": "b0feba52f (this PR's previous head)",
+     "sha256": "7c5acdd1404ee6cd8f1a25978cf9dd56506323408f998d364e2c7863f7adfb0d",
+     "currentSha256": "46dc2f64e97025affaba73627828c5a581f48a450616bd3cfb70cad1d4d18c62",
+     "equalToCurrent": false,
+     "status": 200
+    }
+   ],
+   "composer": true,
+   "blocks": 2,
+   "rows": 3,
+   "overflowX": false,
+   "steps": 4,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "failedRequests": [
+    "401 /auth/session"
+   ],
+   "log": {
+    "logRows": 10,
+    "logListPresent": true,
+    "shellPresent": true
+   },
+   "logFailedRequests": []
+  },
+  {
+   "case": "missing-log-row",
+   "view": "desktop-light-en",
+   "note": "log-row.js not cached/available (404): chat-activity.js imports it",
+   "served": [
+    {
+     "path": "/ui/js/log-row.js",
+     "source": "base: absent",
+     "sha256": "",
+     "currentSha256": "6048f18b78abb71f6e5d33fa61711bf71e79a1d0e0180aac5859c27a29208079",
+     "equalToCurrent": null,
+     "status": 404
+    },
+    {
+     "path": "/ui/js/log-row.js",
+     "source": "base: absent",
+     "sha256": "",
+     "currentSha256": "6048f18b78abb71f6e5d33fa61711bf71e79a1d0e0180aac5859c27a29208079",
+     "equalToCurrent": null,
+     "status": 404
+    },
+    {
+     "path": "/ui/js/log-row.js",
+     "source": "base: absent",
+     "sha256": "",
+     "currentSha256": "6048f18b78abb71f6e5d33fa61711bf71e79a1d0e0180aac5859c27a29208079",
+     "equalToCurrent": null,
+     "status": 404
+    }
+   ],
+   "composer": false,
+   "blocks": 0,
+   "rows": 0,
+   "overflowX": false,
+   "steps": 0,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+   ],
+   "failedRequests": [
+    "401 /auth/session",
+    "404 /ui/js/log-row.js"
+   ],
+   "log": {
+    "logRows": 0,
+    "logListPresent": false,
+    "shellPresent": true
+   },
+   "logFailedRequests": [
+    "404 /ui/js/log-row.js",
+    "404 /ui/js/log-row.js"
+   ]
+  },
+  {
+   "case": "missing-log-row",
+   "view": "phone-dark-zh-TW",
+   "note": "log-row.js not cached/available (404): chat-activity.js imports it",
+   "served": [
+    {
+     "path": "/ui/js/log-row.js",
+     "source": "base: absent",
+     "sha256": "",
+     "currentSha256": "6048f18b78abb71f6e5d33fa61711bf71e79a1d0e0180aac5859c27a29208079",
+     "equalToCurrent": null,
+     "status": 404
+    },
+    {
+     "path": "/ui/js/log-row.js",
+     "source": "base: absent",
+     "sha256": "",
+     "currentSha256": "6048f18b78abb71f6e5d33fa61711bf71e79a1d0e0180aac5859c27a29208079",
+     "equalToCurrent": null,
+     "status": 404
+    },
+    {
+     "path": "/ui/js/log-row.js",
+     "source": "base: absent",
+     "sha256": "",
+     "currentSha256": "6048f18b78abb71f6e5d33fa61711bf71e79a1d0e0180aac5859c27a29208079",
+     "equalToCurrent": null,
+     "status": 404
+    }
+   ],
+   "composer": false,
+   "blocks": 0,
+   "rows": 0,
+   "overflowX": false,
+   "steps": 0,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+   ],
+   "failedRequests": [
+    "401 /auth/session",
+    "404 /ui/js/log-row.js"
+   ],
+   "log": {
+    "logRows": 0,
+    "logListPresent": false,
+    "shellPresent": true
+   },
+   "logFailedRequests": [
+    "404 /ui/js/log-row.js",
+    "404 /ui/js/log-row.js"
+   ]
+  }
+ ]
+}
