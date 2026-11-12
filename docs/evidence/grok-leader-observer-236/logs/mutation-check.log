@@ -4,7 +4,7 @@
 # command: npx vitest run tests/grok-leader-observer-236.test.ts
 
 
- RUN  v4.1.12 /home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-247-0f131955d860/workdir/AgEnD
+ RUN  v4.1.12 <repo>
 
  ❯ tests/grok-leader-observer-236.test.ts (53 tests | 4 failed) 218ms
      × over the whole real session it sends exactly initialize and session/load — nothing else 6ms

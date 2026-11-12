@@ -212,6 +212,6 @@ or a check is not `pass`. A version that is not listed launches as before (`--no
 | TUI joins a per-instance leader | pass |
 | The observer's `session/load` replay and live updates | pass |
 | Permission copies reach the observer and only the TUI's answer resolves | pass |
-| `Transferred session driver` appears on TUI death, and the stop-before-respawn path cleans up | pass |
+| `Transferred session driver` appears on TUI death, and the stop-before-respawn path cleans up | pass: the driver transfer is grok's own behaviour, logged by the leader in the `fe36d3911` run (`logs/leader-clients.log`); the stop-before-respawn path was re-run on `c4e8996e6` (`logs/e2e-tui-crash-respawn.post-fix.log`) |
 | Socket path limit | 107 bytes (108 fails), unchanged |
 | Fixture | `tests/fixtures/grok-leader-observer-236/1.0.77/session-turns.jsonl` |
