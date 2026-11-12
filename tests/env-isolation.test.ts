@@ -8,7 +8,8 @@ import {
 import { NATIVE_ENV_ALLOWED } from "../src/windows-cli-worker.js";
 import { KNOWN_BACKENDS, validateFleetConfig } from "../src/config-validator.js";
 import { createBackend } from "../src/backend/factory.js";
-import { getEffectiveInstanceDefaults } from "../src/config.js";
+import { deepMergeGeneric, getEffectiveInstanceDefaults } from "../src/config.js";
+import { HOT_INSTANCE_CONFIG_KEYS, instanceFieldImpact } from "../src/instance-config-impact.js";
 
 const SECRET = "s3cr3t-VALUE-must-never-be-logged";
 const ENV = {
@@ -106,6 +107,20 @@ describe("env_isolation config", () => {
     expect(warned.warnings.some(w => w.path === "defaults.env_isolation")).toBe(true);
   });
 
+  it("env_passthrough: an instance's own list REPLACES the fleet default (not a union); unset inherits it", () => {
+    const defaults = getEffectiveInstanceDefaults({ env_passthrough: ["GITHUB_TOKEN", "SSH_AUTH_SOCK"] });
+    expect(deepMergeGeneric(defaults, { env_passthrough: ["NPM_TOKEN"] }).env_passthrough).toEqual(["NPM_TOKEN"]);
+    expect(deepMergeGeneric(defaults, { env_passthrough: [] }).env_passthrough).toEqual([]);
+    expect(deepMergeGeneric(defaults, {}).env_passthrough).toEqual(["GITHUB_TOKEN", "SSH_AUTH_SOCK"]);
+  });
+
+  it("both fields are cold (an agent restart), not hot: read only at launch, and not settable over the instance's own socket", () => {
+    expect(HOT_INSTANCE_CONFIG_KEYS.has("env_isolation")).toBe(false);
+    expect(HOT_INSTANCE_CONFIG_KEYS.has("env_passthrough")).toBe(false);
+    expect(instanceFieldImpact("env_isolation")).toBe("instance");
+    expect(instanceFieldImpact("env_passthrough")).toBe("instance");
+  });
+
   it("a fleet default flows into instances; unset adds nothing", () => {
     expect(getEffectiveInstanceDefaults({ env_isolation: "dry-run" }).env_isolation).toBe("dry-run");
     expect("env_isolation" in getEffectiveInstanceDefaults({})).toBe(false);
@@ -116,24 +131,38 @@ describe("golden: every backend's launch command is identical with env_isolation
   const dirs: string[] = [];
   afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
 
-  // kiro-cli's buildCommand runs the real CLI to pin its UI/engine, which the test process guard forbids; the helper
-  // takes the finished command string and never looks inside it, so the other backends cover the same property.
-  for (const backend of Object.keys(ENV_ALLOWED_BY_BACKEND).filter(b => b !== "kiro-cli")) {
-    it(backend, () => {
+  const MODES = [undefined, "off", "dry-run", "allowlist"] as unknown[];
+  function expectUnchanged(command: string, backend: string) {
+    const snapshot = JSON.stringify(process.env);
+    for (const env_isolation of MODES) {
+      const logger = recordingLogger();
+      expect(applyEnvIsolation({ command, env: process.env, config: { env_isolation, backend }, logger })).toBe(command);
+    }
+    expect(JSON.stringify(process.env)).toBe(snapshot);
+  }
+
+  // Every backend whose buildCommand runs here: a backend that cannot build its command FAILS the test (it is never
+  // skipped silently), so a golden that compares nothing cannot pass.
+  const BUILDABLE = Object.keys(ENV_ALLOWED_BY_BACKEND).filter(b => b !== "kiro-cli");
+  for (const backend of BUILDABLE) {
+    it(`${backend}: the real buildCommand output`, () => {
       const dir = mkdtempSync(join(tmpdir(), "env-iso-"));
       dirs.push(dir);
-      let command: string;
-      try {
-        command = createBackend(backend, dir).buildCommand({ workingDirectory: dir, instanceDir: dir, instanceName: "t", mcpServers: {}, skipResume: true });
-      } catch {
-        // A backend whose CLI is not installed here cannot build a command; nothing to compare.
-        return;
-      }
-      const snapshot = JSON.stringify(process.env);
-      for (const env_isolation of [undefined, "off", "dry-run", "allowlist"] as unknown[]) {
-        expect(applyEnvIsolation({ command, env: process.env, config: { env_isolation, backend }, logger: recordingLogger() })).toBe(command);
-      }
-      expect(JSON.stringify(process.env)).toBe(snapshot);
+      const command = createBackend(backend, dir).buildCommand({ workingDirectory: dir, instanceDir: dir, instanceName: "t", mcpServers: {}, skipResume: true });
+      expect(command.length).toBeGreaterThan(0);
+      expectUnchanged(command, backend);
     });
   }
+
+  it("counts the backends compared: all but kiro-cli build here, kiro-cli has the fixed string below", () => {
+    expect(BUILDABLE.length).toBe(Object.keys(ENV_ALLOWED_BY_BACKEND).length - 1);
+    expect(BUILDABLE).not.toContain("kiro-cli");
+  });
+
+  // kiro-cli's buildCommand runs the real CLI (--version, chat --help) to pin its UI and engine, which the test process
+  // guard forbids here. So its launch command is a fixed string in the shape it has (env prefix, quoting, flags).
+  it("kiro-cli: a fixed launch command", () => {
+    const command = `TERM=xterm-256color AGEND_INSTANCE_NAME='kiro-a' AGEND_HOME='/home/u/.agend' AGEND_FLEET_DATA_DIR='' AGEND_FLEET_CONFIG_PATH='' KIRO_NO_AUTO_UPDATE=1 /usr/local/bin/kiro-cli chat --tui --agent 'agend-kiro-a' --trust-all-tools --resume 'it'"'"'s $HOME'`;
+    expectUnchanged(command, "kiro-cli");
+  });
 });

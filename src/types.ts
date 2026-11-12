@@ -204,10 +204,14 @@ export interface InstanceConfig {
    * providers' API keys…). "off" (the default, also when unset): nothing changes. "dry-run": the environment is left
    * as it is and the instance log records which variable NAMES an allowlist would remove (never values). "allowlist"
    * is reserved for the enforcing follow-up and behaves as "off" for now. Unset inherits `defaults.env_isolation`.
-   * Read at each launch, so a change reaches the agent on its next start.
+   * Read at each launch. Deliberately a cold key (an agent restart applies it, not the hot set): the instance's own
+   * socket accepts hot keys, and an agent must not be able to switch off its own environment isolation.
    */
   env_isolation?: "off" | "dry-run" | "allowlist";
-  /** AGEND-242: variable names this instance keeps when the environment is isolated (e.g. GITHUB_TOKEN, SSH_AUTH_SOCK). */
+  /**
+   * AGEND-242: variable names this instance keeps when the environment is isolated (e.g. GITHUB_TOKEN, SSH_AUTH_SOCK).
+   * An instance's own list REPLACES `defaults.env_passthrough` (arrays are not merged, like `tags`); unset inherits it.
+   */
   env_passthrough?: string[];
   /**
    * #2303: how many task board cards handed to this instance it may have in progress at once (claiming another at the
