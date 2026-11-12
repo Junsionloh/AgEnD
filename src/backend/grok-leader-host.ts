@@ -5,7 +5,9 @@
  *  - `prepare()` — before every launch: decide whether the mode applies (opt-in, version gate, short socket path), and stop any
  *    leader left at the instance's socket by an earlier launch, so the TUI that is about to start spawns a FRESH leader with
  *    THIS launch's environment (a surviving leader keeps the old one: #1411, measured). Returns the socket, or null: launch as
- *    before (`--no-leader`).
+ *    before (`--no-leader`), no observer. It fails CLOSED: an unaudited grok version, a lock-file pid that is not this instance's
+ *    leader, or an old leader still running after the bounded wait all give null — the TUI never joins a leader that this launch
+ *    did not start.
  *  - `begin()` — after the launch: every POLL_MS, attach (or re-attach) the read-only observer to the TUI's session once the
  *    instance's own leader exists and the session id is known. The observer is never started while no leader of this socket is
  *    alive: `grok agent --leader … stdio` would spawn one then, with the daemon's environment.
@@ -17,10 +19,14 @@
 import { existsSync } from "node:fs";
 import { GrokAcpObserver, spawnGrokBridge, type AcpTransport, type GrokLive } from "./grok-acp-observer.js";
 import {
-  ensureSocketDir, grokLeaderRequested, grokLeaderSocketPath, grokLeaderVersionOk, processArgs, processLeaderSocketEnv, readGrokVersion, readLeaderPid, stopGrokLeader,
+  GROK_LEADER_AUDITED_VERSIONS, ensureSocketDir, grokLeaderRequested, grokLeaderSocketPath, grokLeaderVersionOk, processArgs, processLeaderSocketEnv, readGrokVersion,
+  readLeaderPid, removeLeaderFiles, stopGrokLeader,
 } from "./grok-leader.js";
 
 export const POLL_MS = 2000;
+/** How long a leader that was told to stop gets to exit: 30 polls of 100 ms. */
+export const LEADER_EXIT_POLLS = 30;
+export const LEADER_EXIT_POLL_MS = 100;
 const BACKOFF_MS = [2000, 5000, 15000, 30000];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -34,6 +40,8 @@ export interface HostDeps {
   leaderAlive?: (socket: string) => boolean;
   stopLeader?: (socket: string) => "none" | "stopped" | "not-a-leader";
   sleep?: (ms: number) => Promise<void>;
+  /** Is this pid still running? (default: it has a command line). Tests pass a leader that will not die. */
+  pidAlive?: (pid: number) => boolean;
   version?: (binary: string) => string | null;
 }
 
@@ -72,7 +80,7 @@ export class GrokLeaderHost {
     const d = this.o.deps ?? {};
     const version = (d.version ?? readGrokVersion)(this.o.binary);
     if (!grokLeaderVersionOk(version)) {
-      this.o.log("warn", "grok leader observer is on, but this grok is not an audited build — launching as before", { version });
+      this.o.log("warn", `grok leader observer is on, but grok ${version ?? "(version unreadable)"} is not on the audited list (${GROK_LEADER_AUDITED_VERSIONS.join(", ")}) — launching as before (--no-leader), no observer`, { version });
       return null;
     }
     const sock = grokLeaderSocketPath(this.o.instanceDir);
@@ -81,22 +89,41 @@ export class GrokLeaderHost {
       this.o.log("warn", `grok leader observer: ${e instanceof Error ? e.message : String(e)} — launching as before`);
       return null;
     }
-    await this.retireLeader(sock.path);
+    // Fail closed: the TUI may join the socket only when nothing of an earlier launch is left at it. A process that is not provably this
+    // instance's leader, or a leader that did not exit in time, would run the TUI's tools with another launch's environment (#1411).
+    const left = await this.retireLeader(sock.path);
+    if (left !== "clear") {
+      this.o.log("warn", left === "foreign"
+        ? "grok leader observer: the pid in the leader lock file is not this instance's grok leader — launching as before (--no-leader), no observer"
+        : "grok leader observer: the previous leader did not exit in time — launching as before (--no-leader), no observer");
+      return null;
+    }
     this.socket = sock.path;
     return sock.path;
   }
 
-  /** Stop what an earlier launch left at this socket and wait (bounded) until it has let go of it. */
-  private async retireLeader(socket: string): Promise<void> {
+  /**
+   * Stop what an earlier launch left at this socket and wait (bounded) until it has let go of it.
+   * "clear": nothing of it is left (its files are removed). "foreign": the lock file's pid is not this instance's leader (left alone).
+   * "alive": it was told to stop and is still running after the wait (its lock file is kept).
+   */
+  private async retireLeader(socket: string): Promise<"clear" | "foreign" | "alive"> {
     const d = this.o.deps ?? {};
     const pid = readLeaderPid(socket);
     const what = (d.stopLeader ?? stopGrokLeader)(socket);
-    if (what === "stopped") this.o.log("info", "stopped this instance's grok leader (a launch's environment must not outlive its launch)", { pid });
-    if (what === "not-a-leader") this.o.log("warn", "the pid in the leader lock file is not this instance's grok leader — left alone", { pid });
-    if (what === "stopped" && pid !== null && !d.stopLeader) {
-      const sleep = d.sleep ?? ((ms: number) => new Promise<void>(r => setTimeout(r, ms)));
-      for (let i = 0; i < 30 && processArgs(pid) !== null; i++) await sleep(100);
+    if (what === "not-a-leader") {
+      this.o.log("warn", "the pid in the leader lock file is not this instance's grok leader — left alone", { pid });
+      return "foreign";
     }
+    if (what === "stopped" && pid !== null) {
+      this.o.log("info", "stopped this instance's grok leader (a launch's environment must not outlive its launch)", { pid });
+      const sleep = d.sleep ?? ((ms: number) => new Promise<void>(r => setTimeout(r, ms)));
+      const alive = d.pidAlive ?? ((p: number) => processArgs(p) !== null);
+      for (let i = 0; i < LEADER_EXIT_POLLS && alive(pid); i++) await sleep(LEADER_EXIT_POLL_MS);
+      if (alive(pid)) return "alive";
+      removeLeaderFiles(socket);
+    } else if (what === "stopped") removeLeaderFiles(socket);
+    return "clear";
   }
 
   /** Start attaching the observer (after the launch). */
@@ -171,7 +198,10 @@ export class GrokLeaderHost {
     const d = this.o.deps ?? {};
     if (this.timer) { (d.clearInterval ?? ((h: unknown) => clearInterval(h as ReturnType<typeof setInterval>)))(this.timer); this.timer = null; }
     this.observer?.stop(); this.observer = null;
-    if (this.socket) await this.retireLeader(this.socket);
+    if (this.socket) {
+      const left = await this.retireLeader(this.socket);
+      if (left === "alive") this.o.log("warn", "grok leader observer: the leader did not exit in time at stop — its lock file is kept, the next launch tries again");
+    }
     this.failures = 0; this.notBefore = 0;
   }
 }

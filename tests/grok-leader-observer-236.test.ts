@@ -1,7 +1,7 @@
 /**
  * AGEND-236 (upstream #3731, step 1): keep grok's TUI and attach a read-only ACP observer through a per-instance leader.
  *
- * Fixture: tests/fixtures/grok-leader-observer-236/session-turns.jsonl — the messages a real observer (grok 1.0.77, attached with
+ * Fixture: tests/fixtures/grok-leader-observer-236/1.0.77/session-turns.jsonl — the messages a real observer (grok 1.0.77, attached with
  * `grok agent --leader --leader-socket … stdio` + `session/load`) received from a leader while a person drove the TUI through four
  * turns (thinking + a tool; a permission-asking edit; a pure-reasoning turn; two 6-second tool calls). Redacted: see its README.
  *
@@ -12,13 +12,13 @@
  *  4. a version gate and a real fixture
  *  5. the default is unchanged: no opt-in, no leader (`--no-leader`), no observer, no `live` in any answer
  */
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { GrokBackend } from "../src/backend/grok.js";
 import {
-  GROK_SOCKET_PATH_MAX, ensureSocketDir, grokLeaderLaunchFlags, grokLeaderRequested, grokLeaderSocketPath, grokLeaderVersionOk, leaderLockPath, parseGrokVersion, readGrokVersion,
+  GROK_LEADER_AUDIT, GROK_LEADER_AUDITED_VERSIONS, GROK_SOCKET_PATH_MAX, ensureSocketDir, grokLeaderLaunchFlags, grokLeaderRequested, grokLeaderSocketPath, grokLeaderVersionOk, leaderLockPath, parseGrokVersion, readGrokVersion,
   resetGrokVersionCache, stopGrokLeader,
 } from "../src/backend/grok-leader.js";
 import { GrokAcpObserver, OBSERVER_ALLOWED_METHODS, emptyLive, liveView, reduceLive, type AcpTransport } from "../src/backend/grok-acp-observer.js";
@@ -31,7 +31,7 @@ import { installDom } from "./helpers/mini-dom.js";
 import { composeRows, groupSteps } from "../src/ui/chat-activity-groups.js";
 
 const FIX = join(import.meta.dirname, "fixtures", "grok-leader-observer-236");
-const frames: Array<{ t: number; m: any }> = readFileSync(join(FIX, "session-turns.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+const frames: Array<{ t: number; m: any }> = readFileSync(join(FIX, "1.0.77", "session-turns.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
 const SID = "00000000-0000-4000-8000-000000000000";
 const dirs: string[] = [];
 const scratch = () => { const d = mkdtempSync(join(tmpdir(), "agend-236-")); dirs.push(d); return d; };
@@ -85,9 +85,29 @@ describe("rule 4 — the version gate", () => {
     expect(parseGrokVersion("grok nightly")).toBeNull();
     expect(parseGrokVersion(null)).toBeNull();
   });
-  it("1.0.77 and later 1.0.x pass; earlier, 1.1+, 2.x and junk do not", () => {
-    for (const v of ["1.0.77", "1.0.78", "grok 1.0.99 (abc) [stable]"]) expect(grokLeaderVersionOk(v), v).toBe(true);
-    for (const v of ["1.0.76", "1.0.52", "1.1.0", "2.0.0", "0.9.99", "", "x", null, undefined]) expect(grokLeaderVersionOk(v as any), String(v)).toBe(false);
+  it("only the exact audited versions pass — not a range: later patches, earlier ones, 1.1+, 2.x and junk do not", () => {
+    for (const v of ["1.0.77", "grok 1.0.77 (50ca579fa996) [stable]"]) expect(grokLeaderVersionOk(v), v).toBe(true);
+    for (const v of ["1.0.78", "1.0.99", "grok 1.0.99 (abc) [stable]", "1.0.76", "1.0.52", "1.0.770", "1.1.0", "2.0.0", "0.9.99", "", "x", null, undefined]) expect(grokLeaderVersionOk(v as any), String(v)).toBe(false);
+  });
+  it("the allow-list is the audit rows, and every listed version has its audit row, its evidence entry and its fixture", () => {
+    expect(GROK_LEADER_AUDITED_VERSIONS).toEqual(GROK_LEADER_AUDIT.map((r) => r.version));
+    expect(GROK_LEADER_AUDITED_VERSIONS.length).toBeGreaterThan(0);
+    expect(new Set(GROK_LEADER_AUDITED_VERSIONS).size).toBe(GROK_LEADER_AUDITED_VERSIONS.length);
+    const evidence = readFileSync(join(import.meta.dirname, "..", "docs", "evidence", "grok-leader-observer-236", "README.md"), "utf8");
+    for (const row of GROK_LEADER_AUDIT) {
+      const v = row.version;
+      expect(v, "an exact x.y.z, not a range").toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}$/);
+      expect(row.build, `${v}: build hash`).toMatch(/^[0-9a-f]{7,40}$/);
+      expect(row.date, `${v}: date`).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(row.auditor.trim(), `${v}: auditor`).not.toBe("");
+      for (const k of ["flagAccepted", "tuiJoinsLeader", "observerReplayAndLive", "permissionOnlyTuiResolves", "driverTransferAndRespawn"] as const) expect(row[k], `${v}: ${k}`).toBe("pass");
+      expect(row.socketPathLimit, `${v}: socket limit`).toBeGreaterThan(GROK_SOCKET_PATH_MAX);
+      const fixture = join(FIX, row.fixtureDir, "session-turns.jsonl");
+      expect(existsSync(fixture), `${v}: fixture ${fixture}`).toBe(true);
+      const first = JSON.parse(readFileSync(fixture, "utf8").split("\n").find(Boolean)!);
+      expect(first.m.result._meta.agentVersion, `${v}: the fixture's initialize answer is this version`).toBe(v);
+      expect(evidence, `${v}: audit entry in docs/evidence/grok-leader-observer-236/README.md`).toContain(`### grok ${v} (${row.build})`);
+    }
   });
   it("the binary's version is read once and cached; an unreadable one is null (so: not audited)", () => {
     resetGrokVersionCache(); let calls = 0;
@@ -305,7 +325,7 @@ describe("rule 1 — one leader per instance, on its own short socket", () => {
     // the leader the TUI spawned: no --leader-socket in its argv, the socket in its environment
     expect(stopGrokLeader(sock, deps(["/h/.grok/bin/grok", "agent", "leader", "--no-exit-on-disconnect"], sock))).toBe("stopped");
     expect(killed).toEqual([[4242, "SIGTERM"]]);
-    expect(removed).toEqual([sock, leaderLockPath(sock)]);
+    expect(removed).toEqual([]);                                   // not before the process is seen to be gone (the host removes them then)
     // a leader we named on its argv
     killed.length = 0;
     expect(stopGrokLeader(sock, deps(["grok", "agent", "leader", "--leader-socket", sock]))).toBe("stopped");
@@ -378,7 +398,7 @@ describe("the host — the instance's leader and observer lifecycle", () => {
       now: () => clock, setInterval: (fn) => { timer = fn; return 1; }, clearInterval: () => { timer = null; },
       ...over,
     };
-    const host = new GrokLeaderHost({ instanceName: "g", instanceDir: scratch(), cwd: "/w", binary: "grok", backendOptions: { grok: { leader_observer: true } }, sessionId: () => sid, onChange: () => events.push("change"), log: (l, m) => events.push(`${l}:${m.slice(0, 40)}`), deps, ...o });
+    const host = new GrokLeaderHost({ instanceName: "g", instanceDir: scratch(), cwd: "/w", binary: "grok", backendOptions: { grok: { leader_observer: true } }, sessionId: () => sid, onChange: () => events.push("change"), log: (l, m) => events.push(`${l}:${m}`), deps, ...o });
     return { host, events, transports, setSid: (s: string | null) => { sid = s; }, setLeader: (b: boolean) => { leaderUp = b; }, advance: (ms: number) => { clock += ms; }, tickTimer: () => timer?.(), hasTimer: () => timer !== null };
   };
   const load = (t: FakeTransport) => { t.push({ jsonrpc: "2.0", id: 1, result: frames[0]!.m.result }); t.push({ jsonrpc: "2.0", id: 2, result: {} }); };
@@ -441,10 +461,66 @@ describe("the host — the instance's leader and observer lifecycle", () => {
     await h.host.stop();
     h.tickTimer(); expect(h.transports).toHaveLength(1);
   });
-  it("a leader the lock file names that is not ours is reported and left alone", async () => {
+  it("an unlisted version (a later patch too): not used — the launch is --no-leader, no observer, a warning, and nothing fails", async () => {
+    for (const version of ["1.0.78", "1.0.76", "2.0.0", null]) {
+      const h = mk({ version: () => version });
+      expect(await h.host.prepare(), String(version)).toBeNull();
+      expect(h.events.some((e) => e.startsWith("warn:") && e.includes("audited list")), String(version)).toBe(true);
+      expect(h.events).not.toContain("stopLeader");
+      expect(h.host.socketPath).toBeNull();
+      h.host.begin(); expect(h.hasTimer()).toBe(false);
+    }
+  });
+  it("fail closed: a lock file that names a process that is not this instance's leader — no socket (so --no-leader), no observer, nothing signalled", async () => {
     const h = mk({ stopLeader: () => "not-a-leader" });
-    expect(await h.host.prepare()).not.toBeNull();
+    expect(await h.host.prepare()).toBeNull();
     expect(h.events.some((e) => e.startsWith("warn:the pid in the leader lock file"))).toBe(true);
+    expect(h.events.some((e) => e.startsWith("warn:grok leader observer:") && e.includes("--no-leader"))).toBe(true);
+    expect(h.host.socketPath).toBeNull();
+    h.host.begin(); expect(h.hasTimer()).toBe(false);
+    h.tickTimer(); expect(h.transports).toHaveLength(0);
+  });
+  it("fail closed, with the real check: a lock file pointing at a foreign process (this test process) is left alone and the launch gets no socket", async () => {
+    const instanceDir = scratch(); let sock = "";
+    const h = mk({}, { instanceDir });
+    const deps: HostDeps = { version: () => "1.0.77" };            // stopLeader, pidAlive: the real ones
+    const host = new GrokLeaderHost({ instanceName: "g", instanceDir, cwd: "/w", binary: "grok", backendOptions: { grok: { leader_observer: true } }, sessionId: () => SID, onChange: () => undefined, log: (l, m) => h.events.push(`${l}:${m}`), deps });
+    const first = grokLeaderSocketPath(instanceDir); if (!first.ok) throw new Error("no socket path"); sock = first.path;
+    ensureSocketDir(first.dir);
+    writeFileSync(leaderLockPath(sock), `${process.pid}\n`);         // a live process that is not a `grok agent leader`
+    try {
+      expect(await host.prepare()).toBeNull();
+      expect(host.socketPath).toBeNull();
+      expect(readFileSync(leaderLockPath(sock), "utf8").trim()).toBe(String(process.pid));   // the record is kept
+      expect(h.events.some((e) => e.startsWith("warn:the pid in the leader lock file"))).toBe(true);
+    } finally { rmSync(leaderLockPath(sock), { force: true }); }
+  });
+  it("fail closed: a leader that was told to stop and is still running after the wait — the TUI does not join it (no socket, no observer), its lock file is kept", async () => {
+    const instanceDir = scratch();
+    const first = grokLeaderSocketPath(instanceDir); if (!first.ok) throw new Error("no socket path"); ensureSocketDir(first.dir);
+    writeFileSync(leaderLockPath(first.path), "4242\n"); writeFileSync(first.path, "");
+    const events: string[] = []; let polls = 0; let slept = 0;
+    const deps: HostDeps = { version: () => "1.0.77", stopLeader: () => { events.push("sigterm"); return "stopped"; }, pidAlive: () => { polls++; return true; }, sleep: async (ms) => { slept += ms; } };
+    const host = new GrokLeaderHost({ instanceName: "g", instanceDir, cwd: "/w", binary: "grok", backendOptions: { grok: { leader_observer: true } }, sessionId: () => SID, onChange: () => undefined, log: (l, m) => events.push(`${l}:${m}`), deps });
+    try {
+      expect(await host.prepare()).toBeNull();
+      expect(host.socketPath).toBeNull();
+      expect(slept).toBe(3000);                                                     // the bounded wait: 30 × 100 ms, then it gives up
+      expect(events.some((e) => e.startsWith("warn:") && e.includes("did not exit in time") && e.includes("--no-leader"))).toBe(true);
+      expect(existsSync(leaderLockPath(first.path)) && existsSync(first.path)).toBe(true);   // still there: the next launch retries the stop
+      host.begin(); expect(host.socketPath).toBeNull();
+    } finally { rmSync(leaderLockPath(first.path), { force: true }); rmSync(first.path, { force: true }); }
+    expect(polls).toBeGreaterThan(0);
+  });
+  it("a leader that exits during the wait: the files are removed and the launch gets the socket", async () => {
+    const instanceDir = scratch();
+    const first = grokLeaderSocketPath(instanceDir); if (!first.ok) throw new Error("no socket path"); ensureSocketDir(first.dir);
+    writeFileSync(leaderLockPath(first.path), "4242\n"); writeFileSync(first.path, "");
+    let alive = true; let sleeps = 0;
+    const deps: HostDeps = { version: () => "1.0.77", stopLeader: () => "stopped", pidAlive: () => alive, sleep: async () => { if (++sleeps === 3) alive = false; } };
+    const host = new GrokLeaderHost({ instanceName: "g", instanceDir, cwd: "/w", binary: "grok", backendOptions: { grok: { leader_observer: true } }, sessionId: () => SID, onChange: () => undefined, log: () => undefined, deps });
+    expect(await host.prepare()).toBe(first.path);
+    expect(existsSync(leaderLockPath(first.path)) || existsSync(first.path)).toBe(false);
   });
 });
 

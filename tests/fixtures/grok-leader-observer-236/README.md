@@ -1,6 +1,9 @@
 # grok-leader-observer-236 fixture
 
-`session-turns.jsonl` — what a read-only ACP observer received from a grok **1.0.77** leader while a person drove the TUI of
+One directory per audited grok version (`GROK_LEADER_AUDIT` in `src/backend/grok-leader.ts`); each holds the redacted real capture
+`session-turns.jsonl` for that version, and a test fails if a listed version has none.
+
+`1.0.77/session-turns.jsonl` — what a read-only ACP observer received from a grok **1.0.77** leader while a person drove the TUI of
 the same session through four turns (AGEND-236, upstream #3731 step 1). One JSON object per line: `t` is milliseconds since
 the first frame (the capture's own clock), `m` is the JSON-RPC message exactly as the leader sent it.
 

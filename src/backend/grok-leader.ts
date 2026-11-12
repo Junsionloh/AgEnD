@@ -19,8 +19,47 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { shellQuote } from "./types.js";
 
-/** The grok builds whose leader / ACP fields were audited and have a fixture (tests/fixtures/grok-leader-observer-236). */
-export const GROK_LEADER_AUDITED = Object.freeze({ major: 1, minor: 0, minPatch: 77 });
+/**
+ * One audit row per grok version that may use the leader mode (design #3731 §9.5, item 3). The list is EXACT: a version that is not
+ * here — an older one, a newer patch, a newer minor — never uses `--leader`, it is launched with `--no-leader` as before and the
+ * instance log says so. Adding a version means adding its row, a redacted real capture under `tests/fixtures/grok-leader-observer-236/<version>/`
+ * and its entry in docs/evidence/grok-leader-observer-236/README.md in the same change; tests/grok-leader-observer-236.test.ts
+ * walks this list and fails if any of the three is missing. A check that was not run, or failed, is not a `"pass"`: the row is refused.
+ */
+export interface GrokLeaderAuditRow {
+  /** `grok --version`'s bare version, and the `agentVersion` of `initialize` (an exact string, not a range). */
+  version: string;
+  /** The build hash `grok --version` printed for it. */
+  build: string;
+  /** Day (UTC) the checks below were last run against this version. */
+  date: string;
+  auditor: string;
+  /** `grok --leader --leader-socket S` is still accepted by the TUI (an unknown-flag error is a fail, not a skip). */
+  flagAccepted: "pass" | "fail";
+  /** The TUI joins the instance's own leader. */
+  tuiJoinsLeader: "pass" | "fail";
+  /** The observer's `session/load` replay and live updates. */
+  observerReplayAndLive: "pass" | "fail";
+  /** Permission copies reach the observer and only the TUI's answer resolves (design §7.4's end-to-end). */
+  permissionOnlyTuiResolves: "pass" | "fail";
+  /** `Transferred session driver` still appears on TUI death, and the stop-before-respawn path cleans up. */
+  driverTransferAndRespawn: "pass" | "fail";
+  /** The measured longest unix-socket path, in bytes (107 on Linux). */
+  socketPathLimit: number;
+  /** The redacted real capture: a directory name under tests/fixtures/grok-leader-observer-236/, holding session-turns.jsonl. */
+  fixtureDir: string;
+}
+
+export const GROK_LEADER_AUDIT: readonly GrokLeaderAuditRow[] = Object.freeze([
+  Object.freeze({
+    version: "1.0.77", build: "50ca579fa996", date: "2026-11-13", auditor: "Junsionloh",
+    flagAccepted: "pass", tuiJoinsLeader: "pass", observerReplayAndLive: "pass", permissionOnlyTuiResolves: "pass", driverTransferAndRespawn: "pass",
+    socketPathLimit: 107, fixtureDir: "1.0.77",
+  } as const),
+]);
+
+/** The exact list of audited versions (derived from the audit rows: there is no second list to forget). */
+export const GROK_LEADER_AUDITED_VERSIONS: readonly string[] = Object.freeze(GROK_LEADER_AUDIT.map(r => r.version));
 
 /** `grok --version` prints "grok 1.0.77 (50ca579fa996) [stable]"; the bare "1.0.77" is accepted too. */
 export function parseGrokVersion(text: string | null | undefined): string | null {
@@ -28,12 +67,10 @@ export function parseGrokVersion(text: string | null | undefined): string | null
   return m ? m[1]! : null;
 }
 
-/** The version gate: 1.0.x from the audited patch on. A newer minor or major has not been audited — it is not used. */
+/** The version gate: a version on the audited list, exactly. Not a range: 1.0.78 is not 1.0.77, and neither is anything newer. */
 export function grokLeaderVersionOk(version: string | null | undefined): boolean {
   const v = parseGrokVersion(version ?? "");
-  if (!v) return false;
-  const [major, minor, patch] = v.split(".").map(Number) as [number, number, number];
-  return major === GROK_LEADER_AUDITED.major && minor === GROK_LEADER_AUDITED.minor && patch >= GROK_LEADER_AUDITED.minPatch;
+  return v !== null && GROK_LEADER_AUDITED_VERSIONS.includes(v);
 }
 
 const versionCache = new Map<string, string | null>();
@@ -106,7 +143,10 @@ export function readLeaderPid(socket: string): number | null {
  * Used to prove that the pid in a lock file is a grok leader before it is signalled.
  */
 export function processArgs(pid: number): string[] | null {
-  try { return readFileSync(`/proc/${pid}/cmdline`, "utf-8").split("\0").filter(Boolean); } catch { /* not Linux or gone */ }
+  try {
+    const args = readFileSync(`/proc/${pid}/cmdline`, "utf-8").split("\0").filter(Boolean);
+    return args.length ? args : null;      // an empty cmdline is a zombie (or a kernel thread): no running leader
+  } catch { /* not Linux or gone */ }
   try {
     const out = execFileSync("ps", ["-o", "command=", "-p", String(pid)], { encoding: "utf-8", timeout: 3000 }).trim();
     return out ? out.split(/\s+/) : null;
@@ -143,11 +183,15 @@ export function stopGrokLeader(socket: string, deps: LeaderStopDeps = {}): "none
   const ours = args.includes(socket) || (deps.socketEnv ?? processLeaderSocketEnv)(pid) === socket;
   if (!isLeader || !ours) return "not-a-leader";
   try { (deps.kill ?? process.kill)(pid, "SIGTERM"); } catch { /* already gone */ }
-  removeStale(socket, deps);
+  // The lock file and the socket stay until the process is seen to be gone (`removeLeaderFiles`): a leader that ignores SIGTERM must
+  // not lose the record that says whose pid it is.
   return "stopped";
 }
 
-function removeStale(socket: string, deps: LeaderStopDeps): void {
+/** Remove the instance's socket and lock file (call once the leader's process is gone). */
+export function removeLeaderFiles(socket: string, deps: Pick<LeaderStopDeps, "unlink"> = {}): void { removeStale(socket, deps); }
+
+function removeStale(socket: string, deps: Pick<LeaderStopDeps, "unlink">): void {
   const rm = deps.unlink ?? ((p: string) => { try { unlinkSync(p); } catch { /* absent */ } });
   rm(socket); rm(leaderLockPath(socket));
 }

@@ -6,12 +6,12 @@ observer's own wire log; they are the leader's stream, not the page's.
 
 Reproduce: `harness/` (the spike observer, the two end-to-end runs that drive the production `GrokLeaderHost` +
 `GrokBackend.buildCommand` against real grok, the socket-length probe). Logs of those runs: `logs/`. The redacted wire capture
-the tests replay: `tests/fixtures/grok-leader-observer-236/`.
+the tests replay: `tests/fixtures/grok-leader-observer-236/<version>/`.
 
 ## How it works
 
 ```
- daemon (per grok instance, opt-in: backend_options.grok.leader_observer: true, grok 1.0.x ≥ 1.0.77)
+ daemon (per grok instance, opt-in: backend_options.grok.leader_observer: true, an audited grok version: 1.0.77)
    prepare():  stop the instance's old leader (pid from its own lock file), choose  <XDG_RUNTIME_DIR|tmp>/agend-grok-<uid>/<12 hex>.sock
    launch:     [instance env] grok --no-auto-update --leader --leader-socket <S> …        (instead of --no-leader)
                   └─ the TUI spawns ITS leader at <S>: a child of the TUI, with the TUI's environment
@@ -119,7 +119,7 @@ daemon owns the leader's lifetime (never `grok leader kill`, which stops every l
 | 1. one leader per instance, own env and socket, no shared leader, `~/.grok/config.toml` untouched, CLI flags only | `grokLeaderSocketPath`, `GrokLeaderHost.prepare/stop`, `grokLeaderLaunchFlags`; no config write anywhere | "rule 1" (socket, dir, flags, stop only a verified leader of this socket), host lifecycle |
 | 2. permission requests stay in the TUI | the observer never answers; declares no capabilities | "rule 2" (frame by frame over the real turn: sent = initialize, session/load; no response ever written; `unanswered` = 1) |
 | 3. read-only | `OBSERVER_ALLOWED_METHODS`, one `transport.send` call site | "rule 3" (whole session sends two requests; `send("session/prompt" …)` throws; the module's source names no other method) |
-| 4. version gate + fixture | `grokLeaderVersionOk` (1.0.x ≥ 1.0.77, on the binary *and* on the `initialize` answer's `agentVersion`); `loadSession` required | "rule 4"; fixture = real, redacted capture |
+| 4. version gate + fixture | `grokLeaderVersionOk`: an **exact list** of audited versions (`GROK_LEADER_AUDIT`, one row each; today 1.0.77 only), on the binary *and* on the `initialize` answer's `agentVersion`; `loadSession` required; an unlisted version launches `--no-leader` with a warning | "rule 4" (exact versions; every listed version has its audit row, its entry below and its fixture); fixture = real, redacted capture |
 | 5. default unchanged | opt-in literal `true`; no socket ⇒ `--no-leader`; no observer ⇒ no `live` key | "rule 5" (command string, validator, a not-requested host touches nothing) |
 
 Counter-proof: with the wiring removed (`grok.ts`, `log-service.ts`, `chat-activity.js`, the validator) and the new modules kept, 7
@@ -131,8 +131,28 @@ of the 47 tests fail; without the modules the file does not load.
   heuristic AgEnD already uses for `--resume`). The protocol has `session/list`, but that would be a third request; asking the
   leader which session the TUI holds is a design decision for step 2.
 - **No live view after a daemon restart without a relaunch** (above).
-- **`--leader` is a hidden root flag**; the gate is the version. A grok that drops it makes the launch fail the way a missing `--no-leader` would.
+- **`--leader` is a hidden root flag**; the gate is the exact list of audited versions below. A version that is not on it never gets `--leader`.
 - The thought is a summary (burst per segment), see 1.
 - A tool's `rawOutput` is **not** read or sent (only titles, only at `tool_progress: verbose`; `standard` gets the kind).
 - Linux and macOS only; one extra `grok agent … stdio` process per observed instance (a thin bridge) while a turn is idle too.
 - The bridge `grok agent --leader … stdio` reports `client_type=<its own argv>`, so the leader log distinguishes it from the TUI.
+
+## Audit table (one entry per grok version that may use the mode)
+
+The list in `src/backend/grok-leader.ts` (`GROK_LEADER_AUDIT`) is the allow-list; the gate is an exact match, not a range. A version
+is added by adding its row there, its redacted real capture under `tests/fixtures/grok-leader-observer-236/<version>/`, and its entry
+here, in one change; `tests/grok-leader-observer-236.test.ts` ("the allow-list is the audit rows…") fails if any of the three is missing
+or a check is not `pass`. A version that is not listed launches as before (`--no-leader`), without an observer, and the instance log says so.
+
+### grok 1.0.77 (50ca579fa996)
+
+| | |
+|---|---|
+| Date, version and build, auditor | 2026-11-13 (checks re-run on the fixed code; the wire capture is from 2026-11-12) · grok 1.0.77 `50ca579fa996` [stable] · Junsionloh |
+| The flag is still accepted and behaves as described | pass: `grok --leader --leader-socket S` starts a TUI that registers as `grok-shell` at S |
+| TUI joins a per-instance leader | pass |
+| The observer's `session/load` replay and live updates | pass |
+| Permission copies reach the observer and only the TUI's answer resolves | pass |
+| `Transferred session driver` appears on TUI death, and the stop-before-respawn path cleans up | pass |
+| Socket path limit | 107 bytes (108 fails), unchanged |
+| Fixture | `tests/fixtures/grok-leader-observer-236/1.0.77/session-turns.jsonl` |
