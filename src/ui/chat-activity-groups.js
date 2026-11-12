@@ -196,7 +196,7 @@ export function groupSteps(rows, steps, opts = {}) {
     if (lastPlaced) { lastPlaced.trailing = tail; lastPlaced.to = tail[tail.length - 1].ts || lastPlaced.to; return; }
     groups.push({ key: `act:${tkey}:${n}`, turn: turn.turn, n, level: "none", rowKey: null, items: tail, trailing: [], ts: tail[0].ts || 0, from, to: tail[tail.length - 1].ts || 0, ended: true, turnEnded: ended, ...(partial && !segs.length ? { partial: true } : {}) });
   });
-  if (live && opts.busy) live.busy = true;               // AGEND-220: the page knows the agent is working: this live group is shown even when it holds nothing to show yet
+  if (live && opts.busy) { live.busy = true; if (opts.phase) live.phase = opts.phase; }   // AGEND-228: grok's phase (reasoning, a tool…), for the live line to say               // AGEND-220: the page knows the agent is working: this live group is shown even when it holds nothing to show yet
   return { groups, live };
 }
 
