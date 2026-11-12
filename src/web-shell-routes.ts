@@ -31,6 +31,8 @@ export type ShellRoute =
   | { panel: "windows-agent"; instance: string }
   // #2910 D2: a web-only fleet's Notices (/ui/notices).
   | { panel: "notices" }
+  // AGEND-243: the Skill / MCP library (/ui/library); its data is GET /ui/library/list (src/library/web.ts).
+  | { panel: "library" }
   // #1523 N2: Details, "the Fleet side of one instance" (/ui/fleet/agent/<name>).
   | { panel: "details"; instance: string }
   // #1218: the instance's Log (/ui/log/<name>).
@@ -76,6 +78,8 @@ export function shellRoute(method: string, path: string): ShellMatch {
   if (path === "/ui/needs") return { kind: "shell", route: { panel: "needs" } };
   // #2910 D2: the Notices page (its list: GET /ui/notices/list, then SSE `notice`).
   if (path === "/ui/notices") return { kind: "shell", route: { panel: "notices" } };
+  // AGEND-243: the library page.
+  if (path === "/ui/library") return { kind: "shell", route: { panel: "library" } };
   // AgEnD Hub P1: the Hub's pages (whether they are mounted at all is web-api.ts's: only on a Hub).
   if (path === "/ui/hub") return { kind: "shell", route: { panel: "hub", tab: "ask" } };
   if (path === "/ui/hub/exposures") return { kind: "shell", route: { panel: "hub", tab: "exposures" } };
