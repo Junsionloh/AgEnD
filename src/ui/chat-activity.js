@@ -29,6 +29,7 @@ register("act", {
     partial: "Earlier steps of this turn are not loaded.", earlier: "Show {0} earlier steps", calls: "{0} calls",
     menuActivity: "Show activity", menuThinking: "Show thinking",
     quiet: "no new record for {0}",
+    statusOnly: "This agent's steps are not shown in the chat; this line only says it is working.",
     waiting: "Nothing written yet. The agent records each thought and tool call as it finishes, so they show up here one by one.",
   },
   "zh-TW": {
@@ -38,6 +39,7 @@ register("act", {
     partial: "這一輪較早的步驟尚未載入。", earlier: "顯示更早的 {0} 個步驟", calls: "{0} 次呼叫",
     menuActivity: "顯示活動", menuThinking: "顯示思考",
     quiet: "{0} 沒有新紀錄",
+    statusOnly: "這個 agent 的步驟不會顯示在對話裡；這一行只表示它正在處理。",
     waiting: "目前還沒有紀錄。Agent 會在每個思考或工具呼叫完成時才寫入，完成後會一個一個出現在這裡。",
   },
 });
@@ -177,7 +179,7 @@ export function ActivityBlock({ group, ctx, now: clock }) {
       ${group.partial ? html`<p class="note act-partial">${ta("partial")}</p>` : null}
       ${inferred ? html`<p class="note act-lvl">${ta("noteInferred", inferred)}</p>` : null}
       ${skipped ? html`<button type="button" class="btn btn-sm act-earlier" onClick=${() => setMore(more + EARLIER_STEP)}>${ta("earlier", Math.min(skipped, EARLIER_STEP))}</button>` : null}
-      ${shown.length ? list(shown) : live ? html`<p class="note act-waiting">${ta("waiting")}</p>` : null}
+      ${shown.length ? list(shown) : live ? html`<p class="note act-waiting">${ta(group.statusOnly ? "statusOnly" : "waiting")}</p>` : null}
     </div></details>`;
 }
 
@@ -216,8 +218,27 @@ export const activityInfo = (name) => memory.get(name)?.info ?? null;
  */
 export function composeActivity(name, rows, now = Date.now(), opts = {}) {
   const s = memory.get(name);
-  if (!s || s.dead || s.info.level === "off" || !s.steps.length) return rows;
-  return composeRows(rows, groupSteps(rows, s.steps, { now, complete: s.complete, busy: opts.busy === true }));
+  if (!s || s.info.level === "off") return rows;
+  const busy = opts.busy === true;
+  // AGEND-220: a backend whose steps are not shown in the chat (the server said `supported: false`: Codex until its real fixture
+  // (#3709 R6), muse, opencode, kiro), or a transcript with no step yet, still has the "Working…" line while the agent is working.
+  // It comes from the page's busy state alone — nothing is read from a transcript or the pane. Not busy, or the first answer not
+  // in yet (`supported` null): nothing.
+  if (s.info.supported === false || (s.info.supported !== null && !s.dead && !s.steps.length)) return busy ? statusRows(rows, opts.since, s.info.supported === false) : rows;
+  if (s.dead || !s.steps.length) return rows;
+  return composeRows(rows, groupSteps(rows, s.steps, { now, complete: s.complete, busy }));
+}
+
+/**
+ * The thread's rows with ONE live group that holds no step: the "Working…" line and how long, for an agent whose steps the chat
+ * does not show (`statusOnly`) or whose transcript has none yet. `since`: epoch ms the agent began working, as this page saw it
+ * (the working bar's own clock), else the last prompt's time; none known: no elapsed time.
+ */
+function statusRows(rows, since, statusOnly) {
+  let from = Number.isFinite(since) ? since : 0;
+  if (!from) { for (let i = rows.length - 1; i >= 0; i--) if (rows[i].role === "user") { const t = Date.parse(rows[i].ts); if (Number.isFinite(t)) from = t; break; } }
+  const live = { key: "act:status", turn: "status", n: 0, level: "live", rowKey: null, items: [], trailing: [], ts: from, from, to: 0, ended: false, turnEnded: false, busy: true, ...(statusOnly ? { statusOnly: true } : {}) };
+  return composeRows(rows, { groups: [], live });
 }
 
 /**

@@ -173,7 +173,9 @@ export let store = null;
  */
 const activityShown = () => activityOffered() && activityPrefs.get().on;
 const agentBusy = (name) => R().isBusy(store.state.exec[name]);
-const rowsOf = (name) => (activityShown() ? composeActivity(name, store.threadRows(name), Date.now(), { busy: agentBusy(name) }) : store.threadRows(name));
+/** Epoch ms the agent began working, by the working bar's own clock (a monotonic one), or null. */
+const agentSince = (name) => { const t = store.state.workingSince[name]; return t == null ? null : Date.now() - (performance.now() - t); };
+const rowsOf = (name) => (activityShown() ? composeActivity(name, store.threadRows(name), Date.now(), { busy: agentBusy(name), since: agentSince(name) }) : store.threadRows(name));
 /** What a chat's activity blocks need to draw: its paths to shorten, and whether thinking is shown. */
 const activityCtx = (name) => () => {
   const info = activityInfo(name);
