@@ -182,3 +182,18 @@ describe("the page: the empty live group is a block, and it is replaced in place
     expect(act.isEmptyGroup({ ended: true, busy: true, items: [], trailing: [] }, { thinking: false })).toBe(true);
   });
 });
+
+describe("antigravity: the same, on its real capture (a record is written DONE when its step completes)", () => {
+  const agyLines = readFileSync(join(FIX, "agy-web-chat.jsonl"), "utf8").split("\n").filter(Boolean);
+  it("the prompt alone (step 0, before the first planner step is written) is one user step; busy: the empty live group; not busy: none", async () => {
+    const d = mkdtempSync(join(tmpdir(), "agend-220-agy-")); dirs.push(d);
+    const file = join(d, "transcript.jsonl");
+    writeFileSync(file, agyLines[0] + "\n");
+    const svc = new LogService({ enabled: () => false, toolProgress: () => "verbose", thinking: () => true, known: () => true, source: () => ({ backend: "antigravity", path: file, format: "antigravity" }), events: () => [], emit: () => {} });
+    const a: any = await svc.steps("x", { chat: true, thinking: true });
+    expect(a.steps.map((x: LogStep) => x.kind)).toEqual(["user"]);
+    const rows = [{ role: "user", boot: "b", id: "u", anchor: a.steps[0].anchor.messageId, text: "x", ts: new Date(a.steps[0].ts).toISOString() }];
+    expect(groupSteps(rows, a.steps, { now: a.steps[0].ts + 5000, complete: true, busy: false }).live).toBeNull();
+    expect(groupSteps(rows, a.steps, { now: a.steps[0].ts + 5000, complete: true, busy: true }).live).toMatchObject({ items: [], ended: false, busy: true });
+  });
+});
