@@ -130,6 +130,7 @@ export function linkWorkBarCss(doc = typeof document !== "undefined" ? document 
 }
 linkWorkBarCss();
 
+import { activityInfo, activityInfoStore, activityOffered, activityPrefs, composeActivity, mountActivity, observeActivity, setActivityOn, setActivityThinking } from "./chat-activity.js";
 /** The composer's textarea (#2342: text put back into it is a step Ctrl+Z goes back from). */
 const composers = new Map(); // agent → current mounted refs, never a retained thread's stale closure
 const composerField = (name) => composers.get(name)?.input.current || null;
@@ -159,11 +160,69 @@ export function insertPaneQuote(name, source, text, current = () => true) {
 }
 export const paneComposerReady = name => !!composerField(name);
 
+/** A scoped pane can change width without changing text. Keep its existing 240px composer cap and IME ownership. */
+function observeComposerWidth(field, current, composing) {
+  if (!field || typeof ResizeObserver !== "function") return () => {};
+  let alive = true, width = -1, deferred = false;
+  const resize = () => {
+    if (!alive || !current()) return;
+    const next = field.getBoundingClientRect().width;
+    if (next === width && !deferred) return;
+    if (composing()) { deferred = true; return; }
+    width = next; deferred = false;
+    field.style.height = "auto";
+    if (field.value) field.style.height = `${Math.min(field.scrollHeight, 240)}px`;
+  };
+  let frame = null;
+  const schedule = () => {
+    if (frame !== null || (field.getBoundingClientRect().width === width && !deferred)) return;
+    // Height writes happen outside ResizeObserver delivery, avoiding a self-generated resize loop.
+    frame = setTimeout(() => { frame = null; resize(); }, 0);
+  };
+  const ended = () => queueMicrotask(resize);
+  const observer = new ResizeObserver(schedule); observer.observe(field);
+  field.addEventListener("compositionend", ended); field.addEventListener("blur", ended); resize();
+  return () => { alive = false; clearTimeout(frame); observer.disconnect(); field.removeEventListener("compositionend", ended); field.removeEventListener("blur", ended); };
+}
+
+
+/** #3637: private, write-only local draft handoff; never send, upload or share an outgoing queue. */
+export const popoutDraftVersion = 1;
+export const popoutDraftReady = () => !!store && ["captureDraft", "draftCurrent", "clearCapturedDraft", "acceptDraft"].every(key => typeof store[key] === "function");
+export function capturePaneDraft(name) {
+  const owner = store;
+  if (!popoutDraftReady() || guestPage() || composers.get(name)?.composing) return null;
+  const ticket = owner.captureDraft(name);
+  const sameField = () => !composers.get(name)?.composing && (!composerField(name) || composerField(name).value === ticket.payload.text);
+  if (!sameField()) return null;
+  return { payload: ticket.payload, current: () => store === owner && owner.draftCurrent(ticket) && sameField(),
+    clear: () => store === owner && owner.clearCapturedDraft(ticket) };
+}
+export function acceptPaneDraft(name, data) {
+  const field = composerField(name);
+  if (!popoutDraftReady() || guestPage() || composers.get(name)?.composing || !field || field.disabled || field.readOnly || field.isConnected === false) return false;
+  return store.acceptDraft(name, data);
+}
+
+
 const R = () => globalThis.AgendChatRender;
 const P = () => globalThis.AgendPreview;
 
 /** The page's chat store (boot creates it). Exported for the tests. */
 export let store = null;
+
+/**
+ * AGEND-181/197: the thread's rows with the activity block put in — each turn's steps above the reply they produced, the
+ * turn in progress at the end — for an admin session, when this browser shows activity. Else the rows. (Which agents have
+ * anything: each one's tool_progress, the feed's answer.)
+ */
+const activityShown = () => activityOffered() && activityPrefs.get().on;
+const rowsOf = (name) => (activityShown() ? composeActivity(name, store.threadRows(name)) : store.threadRows(name));
+/** What a chat's activity blocks need to draw: its paths to shorten, and whether thinking is shown. */
+const activityCtx = (name) => () => {
+  const info = activityInfo(name);
+  return { paths: info ? { cwd: info.cwd, home: info.home } : null, thinking: activityPrefs.get().thinking && !!info && info.thinking === true };
+};
 
 // ── Announcements: one polite, visually hidden line for the coarse events only (a reply arrived, the agent started,
 // finished, or waits on you). Messages themselves are not read out as they arrive; the list is a log to browse.
@@ -342,12 +401,21 @@ function useResolvedMode(lease) {
 
 function ChatView({ name, inst, lease, navKey, exec, awaiting }) {
   const pane = paneContext.usePane?.(), paneNow = useRef(pane); paneNow.current = pane;
-  const bindings = useRef({ input: { current: null }, box: { current: null } }).current;
+  const bindings = useRef({ input: { current: null }, box: { current: null }, composing: false }).current;
   const ids = pane ? Object.fromEntries(["msgIn", "attachBtn", "stopBtn", "sendBtn", "cmdPalette"].map(key => [key, `pane-${pane.id}-${key}`])) : {};
   useLayoutEffect(() => {
     composers.set(name, bindings);
-    return () => { if (composers.get(name) === bindings) composers.delete(name); };
+    const field = bindings.input.current, start = () => { bindings.composing = true; }, end = () => { bindings.composing = false; };
+    field?.addEventListener("compositionstart", start); field?.addEventListener("compositionend", end); field?.addEventListener("blur", end);
+    return () => {
+      field?.removeEventListener("compositionstart", start); field?.removeEventListener("compositionend", end); field?.removeEventListener("blur", end);
+      if (composers.get(name) === bindings) composers.delete(name);
+    };
   }, [name]);
+  useLayoutEffect(() => {
+    if (!pane && new URLSearchParams(location.search).get("presentation") !== "popout") return;
+    return observeComposerWidth(bindings.input.current, () => composers.get(name) === bindings, () => bindings.composing);
+  }, [name, !!pane]);
   const attachmentsSupported = supportsInstanceFeature(inst,"attachments");
   const names = useStore(namesStore);   // #1722: which name leads (the title)
   // #1629: this agent's theme, on this surface only; redrawn when the themes, the viewer's switch or the mode move.
@@ -370,6 +438,7 @@ function ChatView({ name, inst, lease, navKey, exec, awaiting }) {
   };
   const [wrap, setWrap] = useState(codeWrap);
   const wide = useStore(chatWide).on;
+  useStore(activityPrefs); useStore(activityInfoStore);          // AGEND-181: the ⋯ menu's Show activity / Show thinking
   const view = useRef(null), split = useRef(null), thread = useRef(null), bg = useRef(null), effectSurface = useRef(null);
   useLayoutEffect(() => { applyTheme(view.current, theme, mode); }, [themeKey, mode]);
   useLayoutEffect(() => {
@@ -436,6 +505,11 @@ function ChatView({ name, inst, lease, navKey, exec, awaiting }) {
     ...themeMenuItems(name),
     // #2117: its ambient — why it is not showing here (with the way to change that), and a person's Clear.
     ...ambientMenuItems(name, { publicLink: document.body.dataset.publicLink === "1", clear: clearAmbient }),
+    // AGEND-181: the activity timeline above each reply (this browser's choice), when the Log is on.
+    ...(activityOffered() && activityInfo(name)?.level !== "off" ? [
+      { key: "activity", checkbox: true, checked: activityPrefs.get().on, label: t("act.menuActivity"), onSelect: () => setActivityOn(!activityPrefs.get().on) },
+      ...(activityInfo(name)?.thinking ? [{ key: "thinking", checkbox: true, checked: activityPrefs.get().thinking, disabled: !activityPrefs.get().on, label: t("act.menuThinking"), onSelect: () => setActivityThinking(!activityPrefs.get().thinking) }] : []),
+    ] : []),
     narrowScreen() ? null : { key: "fullWidth", checkbox: true, checked: wide, label: t("chat.fullWidth"), onSelect: () => setChatWide(!wide) },
     { key: "delete", label: t("chat.delete"), icon: "trash", danger: true, onSelect: () => setDialog("delete") },
   ];
@@ -567,6 +641,7 @@ function threadEntry(name, doc) {
     openImage: openLightbox,                                               // an image, full size, in the page
     emojis: (id) => !!emojiIndex && emojiIndex.known(id),                  // #1630: the fleet's server emoji
     mentions: (kind, id) => (mentionIndex ? mentionIndex.name(kind, id) : null),   // #1682: mention names
+    activity: { mount: (node, group) => mountActivity(node, group, activityCtx(name)) },   // AGEND-181: the timeline's blocks
   });
   e.thread = thread;
   return e;
@@ -577,12 +652,31 @@ function follow(name, thread) {
   // #1682: the same for mention names — asked for the ids the messages carry; when names arrive, drawn again.
   const wantEmojis = (msgs) => { if (emojiIndex && emojiIndex.wants(msgs)) emojiIndex.ensure(); if (mentionIndex) mentionIndex.ensure(msgs); };
   const offs = [];
-  if (emojiIndex) offs.push(emojiIndex.subscribe(() => thread.render(store.threadRows(name))));
-  if (mentionIndex) offs.push(mentionIndex.subscribe(() => thread.render(store.threadRows(name))));
+  if (emojiIndex) offs.push(emojiIndex.subscribe(() => thread.render(rowsOf(name))));
+  if (mentionIndex) offs.push(mentionIndex.subscribe(() => thread.render(rowsOf(name))));
   wantEmojis(store.state.msgs[name]);
+  // AGEND-181/197: the activity feed — this instance's steps while the chat is shown (the Log's own read, live by steps_tick,
+  // or by a poll when the stream has fallen back to polling); switched by this browser's Show activity / Show thinking.
+  // Nothing is read for anyone but an admin session on the local dashboard.
+  let feed = null;
+  const sync = () => {
+    if (activityShown() && !feed) {
+      feed = observeActivity(name, {
+        changed: () => thread.render(rowsOf(name)),
+        streamOn: appStore.get().streamOn,
+        polling: () => globalThis.document?.body?.dataset?.webTransport === "poll" || appStore.get().connection === "polling",
+        wantThinking: () => activityPrefs.get().thinking,
+      });
+      feed.start();
+    } else if (!activityShown() && feed) { feed.stop(); feed = null; }
+    thread.render(rowsOf(name));
+  };
+  if (activityShown()) sync();
+  offs.push(activityPrefs.subscribe(sync));
+  offs.push(() => { if (feed) { feed.stop(); feed = null; } });
   offs.push(store.subscribe((instance, kind) => {
     if (instance !== name) return;
-    if (kind === "msgs") { thread.render(store.threadRows(name)); wantEmojis(store.state.msgs[name]); }
+    if (kind === "msgs") { thread.render(rowsOf(name)); wantEmojis(store.state.msgs[name]); if (feed) feed.nudge(); }   // a message came or went: read the steps now
     else if (kind === "progress") thread.progress();                       // an upload moved: its bar, in place
     else if (kind === "sent") thread.jumpLatest();
   }));
@@ -618,7 +712,7 @@ function Thread({ name, label = name, th, bindings }) {
     thread.attach(sc);
     th.current = thread;
     // Up to date, at the reader's place (the bottom unless they had scrolled up); a kept one's cards say what they can do.
-    thread.render(store.threadRows(name), { restore: store.state.scrollMemo[name] ?? null });
+    thread.render(rowsOf(name), { restore: store.state.scrollMemo[name] ?? null });
     if (kept) thread.refreshCards();
     const unfollow = follow(name, thread);
     const onScroll = () => { store.state.scrollMemo[name] = thread.onScroll(); };
