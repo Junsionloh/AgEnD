@@ -200,6 +200,20 @@ export interface InstanceConfig {
    */
   cross_instance_visibility?: "full" | "summary" | "hidden";
   /**
+   * AGEND-242: what an agent's process inherits from the daemon's environment (bot tokens, tunnel tokens, other
+   * providers' API keys…). "off" (the default, also when unset): nothing changes. "dry-run": the environment is left
+   * as it is and the instance log records which variable NAMES an allowlist would remove (never values). "allowlist"
+   * is reserved for the enforcing follow-up and behaves as "off" for now. Unset inherits `defaults.env_isolation`.
+   * Read at each launch. Deliberately a cold key (an agent restart applies it, not the hot set): the instance's own
+   * socket accepts hot keys, and an agent must not be able to switch off its own environment isolation.
+   */
+  env_isolation?: "off" | "dry-run" | "allowlist";
+  /**
+   * AGEND-242: variable names this instance keeps when the environment is isolated (e.g. GITHUB_TOKEN, SSH_AUTH_SOCK).
+   * An instance's own list REPLACES `defaults.env_passthrough` (arrays are not merged, like `tags`); unset inherits it.
+   */
+  env_passthrough?: string[];
+  /**
    * #2303: how many task board cards handed to this instance it may have in progress at once (claiming another at the
    * limit is refused). A whole number of at least 1; unset is 1. Cards it opened for itself never count. The fleet
    * reads it at each claim; the daemon only keeps it current.
