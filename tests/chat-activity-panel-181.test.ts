@@ -105,6 +105,22 @@ describe("the chat for an admin session", () => {
     expect([...doc.querySelectorAll(".activity-row")].filter((n: any) => !n.hidden)).toHaveLength(0);
     panel.store.applyActivity({ instance: "w", state: "idle" });
   });
+  it("AGEND-220: a backend whose steps are not shown (Codex under #3709 R6, muse, opencode, kiro) still has the Working… line while busy — from the busy state, no transcript", async () => {
+    steps(() => ({ enabled: true, instance: "w", backend: "codex", supported: false, reason: "unsupported", level: "standard", thinking: false, steps: [], events: [], ev: 0, before: null, after: null }));
+    const doc = await open();
+    panel.store.state.msgs.w = ledger.slice(0, 1).map((r) => ({ ...r }));
+    panel.store.applyActivity({ instance: "w", state: "idle" });
+    await settle(); await settle();
+    expect([...doc.querySelectorAll(".activity-row")].filter((n: any) => !n.hidden)).toHaveLength(0);
+    panel.store.applyActivity({ instance: "w", state: "working" });
+    await settle(); await settle();
+    const live = [...doc.querySelectorAll(".activity-row")].filter((n: any) => !n.hidden);
+    expect(live).toHaveLength(1);
+    expect(live[0].querySelector(".act-title").textContent).toBe("Working…");
+    panel.store.applyActivity({ instance: "w", state: "idle" });
+    await settle(); await settle();
+    expect([...doc.querySelectorAll(".activity-row")].filter((n: any) => !n.hidden)).toHaveLength(0);
+  });
   it("Show activity off: the blocks go and no further read is made; on again: they come back", async () => {
     steps(() => answer(records.length));
     const doc = await open();
