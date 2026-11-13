@@ -418,13 +418,13 @@ describe("the page's words", () => {
 
   it("says it is an overview, which items are built in (read only) and which are the team's, in English and in zh-TW", async () => {
     answer(ok); await open("skills");
-    expect(text()).toContain("An overview of what this AgEnD has"); expect(text()).toContain("Built in · read only"); expect(text()).toContain("Added by your team");
+    expect(text()).toContain("An overview of what this AgEnD has"); expect(text()).toContain("Built in · read only"); expect(text()).toContain("Library");
     expect(text()).not.toContain("Nothing in the library is given to an agent");
     await p.unmount();
     answer(ok); I.setLang("zh-TW", { store: false });
     try {
       await open("skills", "zh-TW");
-      expect(text()).toContain("這一頁是總覽"); expect(text()).toContain("內建・唯讀"); expect(text()).toContain("團隊新增");
+      expect(text()).toContain("這一頁是總覽"); expect(text()).toContain("內建・唯讀"); expect(text()).toContain("資源庫");
       expect(q('[data-library-nav="tools"]').textContent).toContain("工具");
       expect(text()).not.toContain("不會交給任何 Agent");
       expect(q('[data-library-item="skill:review"] [data-library-tag="oldcli"]').getAttribute("title")).toContain("沒有 skill 資料夾");
@@ -442,10 +442,10 @@ describe("the page's words", () => {
   });
 });
 
-describe("the agent's Team skills field", () => {
-  it("is titled 'Team skills (from the Library)' in both languages, sits right after the working directory, and is the target of the tags' link", () => {
+describe("the agent's Skills card", () => {
+  it("is titled 'Skills' in both languages (AGEND-261: no 'Team' prefix), sits right after the working directory, and is the target of the tags' link", () => {
     const f = readFileSync("src/ui/library-mount-field.js", "utf8");
-    expect(f).toContain('card: "Team skills (from the Library)"'); expect(f).toContain('card: "團隊 Skill（來自資源庫）"');
+    expect(f).toContain('card: "Skills"'); expect(f).not.toContain("團隊"); expect(f).not.toContain("Team skills");
     expect(f).toContain('location.hash !== "#library-skills"');                   // the tags' link target is the hash, not an id (two panes would share it)
     const dlg = readFileSync("src/ui/settings-dialogs.js", "utf8");
     expect(dlg.indexOf("libraryCardTitle()")).toBeGreaterThan(dlg.indexOf('pt("cardWorkdir")'));

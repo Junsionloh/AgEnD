@@ -3,7 +3,7 @@
 //  - Preview: SKILL.md drawn as Markdown by the chat's own renderer (chat-thread.js drawMarkdown → chat-render.js: it escapes the text first,
 //    so nothing in a skill becomes markup and nothing new is loaded); its frontmatter as plain fields (name, description, roles…); the other
 //    files as a list that opens as text. A built-in skill has only this tab.
-//  - Edit (team skills only): the text of SKILL.md and of each other file. A save is the library's own save (POST /ui/library/save): the same
+//  - Edit (library skills only): the text of SKILL.md and of each other file. A save is the library's own save (POST /ui/library/save): the same
 //    checks and secret scan as adding one, nothing written when one fails, the recorded hash updated when it succeeds. `expect` is the hash
 //    this editor read, so a skill saved by someone else meanwhile is not overwritten. If agents have the skill, the admin is told who gets
 //    the new text (at their next start) before it is saved.
@@ -39,7 +39,7 @@ register("librarySkill", {
     chooseFile: "Choose a file", chooseAnother: "Choose another file", checking: "Checking “{0}”…", tooBig: "That file is larger than {0} MB.", importFailed: "Could not import.", previewFailed: "Could not read that file.",
     found: "{0} skills in “{1}”", found1: "1 skill in “{0}”", leftOut: "Left out of the archive: {0}",
     notUsable: "Cannot be imported", importIt: "Import this skill", showText: "Show SKILL.md", hideText: "Hide SKILL.md", filesIn: "{0} files", file1: "1 file",
-    clashTeam: "A team skill named “{0}” is already in the library.", clashBuiltin: "“{0}” is the name of a built-in skill. A built-in skill is never replaced.",
+    clashTeam: "A library skill named “{0}” is already in the library.", clashBuiltin: "“{0}” is the name of a built-in skill. A built-in skill is never replaced.",
     actReplace: "Replace it", actRename: "Import under another name", actSkip: "Skip it", newName: "New name", nameBad: "Lowercase letters, digits and dashes, up to 64.",
     importCount: "Import ({0})", importNone: "Nothing to import",
     doneTitle: "Import finished", doneNote: "The skills are in the library. No agent has them yet: give one to an agent with the “+” tag on its row.",
@@ -62,7 +62,7 @@ register("librarySkill", {
     chooseFile: "選擇檔案", chooseAnother: "改選別的檔案", checking: "正在檢查「{0}」…", tooBig: "這個檔案超過 {0} MB。", importFailed: "無法導入。", previewFailed: "無法讀取這個檔案。",
     found: "「{1}」裡有 {0} 個 Skill", found1: "「{0}」裡有 1 個 Skill", leftOut: "壓縮檔中略過的項目：{0}",
     notUsable: "無法導入", importIt: "導入這個 Skill", showText: "顯示 SKILL.md", hideText: "收合 SKILL.md", filesIn: "{0} 個檔案", file1: "1 個檔案",
-    clashTeam: "資源庫裡已經有一個叫「{0}」的團隊 Skill。", clashBuiltin: "「{0}」是內建 Skill 的名稱。內建 Skill 不會被取代。",
+    clashTeam: "資源庫裡已經有一個叫「{0}」的 Skill。", clashBuiltin: "「{0}」是內建 Skill 的名稱。內建 Skill 不會被取代。",
     actReplace: "取代它", actRename: "用別的名稱導入", actSkip: "略過", newName: "新名稱", nameBad: "小寫英文、數字和連字號，最多 64 字。",
     importCount: "導入（{0}）", importNone: "沒有可導入的項目",
     doneTitle: "導入完成", doneNote: "Skill 已放進資源庫。還沒有 Agent 拿到它們：用該列的「＋」標籤交給 Agent。",
@@ -97,7 +97,7 @@ function Tabs({ label, tabs, value, onChange }) {
     data-library-tab=${x.id} onClick=${() => onChange(x.id)} onKeyDown=${(e) => keys(e, i)}>${x.label}</button>`)}</div>`;
 }
 
-/** A skill, whole: Preview (always) and Edit (a team skill only — a built-in one is read only and has no such tab). */
+/** A skill, whole: Preview (always) and Edit (a library skill only — a built-in one is read only and has no such tab). */
 export function SkillDialog({ id, builtin, used, api, onClose, onSaved, onDelete }) {
   const [state, setState] = useState({ loading: true });
   const [tab, setTab] = useState("preview");

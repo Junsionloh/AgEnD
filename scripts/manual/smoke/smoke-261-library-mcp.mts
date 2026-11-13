@@ -44,7 +44,7 @@ void view;
 const measure = `(() => {
   const dlg = document.querySelector(".dlg, [role=dialog]"), card = document.querySelector("[data-library-mcp-field]")?.closest(".card");
   const box = (e) => e && e.getBoundingClientRect();
-  const within = (root) => root ? [...root.querySelectorAll("*")].filter((e) => { const b = e.getBoundingClientRect(), p = box(root); return b.width > 0 && (b.right > p.right + 1); }).slice(0, 5).map((e) => e.tagName + "." + e.className) : [];
+  const within = (root) => root ? [...root.querySelectorAll("*")].filter((e) => !e.closest("dialog, [role=dialog]") || root === dlg).filter((e) => { const b = e.getBoundingClientRect(), p = box(root); return b.width > 0 && (b.right > p.right + 1); }).slice(0, 5).map((e) => e.tagName + "." + e.className) : [];
   return { hscroll: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1, cardOver: within(card), dialogOver: within(dlg) };
 })()`;
 await seed();

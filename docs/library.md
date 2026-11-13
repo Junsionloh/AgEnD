@@ -14,43 +14,43 @@ The page is an overview of what this AgEnD has — **Skills**, **Tools** and **M
 like Settings: the categories in a list on the left (the Settings page's own `.s-nav`), the chosen one on the right, a filter box on top;
 on a phone `/ui/library` is the list of categories and a category opens on its own (`/ui/library/skills`, `/tools`, `/mcp`) with a back link.
 Every item is one row of **two lines**, the same in every category: line 1 is the name and its description (cut to one line), line 2 is who uses it, what it is for or how big it is, and
-whether it is built in or the team's. *Details* sits in a column at the right of the row, centered on it, so it never moves with the content (Export and Delete sit beside it; under 600 px wide only *Details* stays in the row —
+whether it is built in or from the library. *Details* sits in a column at the right of the row, centered on it, so it never moves with the content (Export and Delete sit beside it; under 600 px wide only *Details* stays in the row —
 Export and Delete are in the dialog it opens). A row shows at most three agent tags (one on a phone) and then **+N**, which opens the item rather than making the row taller. Each category has two groups:
 
 - **Built in · read only** — what ships with AgEnD, listed from the package and the code, never editable here: the bundled skills
   (`src/general-knowledge/skills`, with the roles they are published to: General, workers, classic bots), the `tool_set` profiles
   (`TOOL_PROFILES`, with each tool list) and AgEnD's own `agend` MCP server.
-- **Added by your team** — the library items below: add, import, export, view, edit (skills), delete.
+- **Library** — the library items below: add, import, export, view, edit (skills), delete.
 
 **Used by** is a row of tags, one per agent: bundled skills by the agent's role (General gets every one; any other agent those marked for
 workers, and only an agent whose CLI has a skills folder), tool sets by the agent's `tool_set` (the rule the daemon itself uses), the `agend`
-MCP server by every agent, and team skills by the agents they are mounted on. A tag opens that agent: for a team skill straight to
-*Settings → the agent → Workspace → Team skills (from the Library)*, otherwise to the agent. A team skill also has a **+** tag: pick agents
+MCP server by every agent, and library skills by the agents they are mounted on. A tag opens that agent: for a library skill straight to
+*Settings → the agent → Workspace → Skills*, otherwise to the agent. A library skill also has a **+** tag: pick agents
 and it is written into their settings — the same `library` value, through the same `PATCH /api/settings/fleet/instances/<name>` and the same
 Apply as ticking the skill on the agent's own Settings page (`agentPatchRequest` / `libraryMountPatch` in `settings-model.js` are the one copy
 of that write). It takes effect the next time the agent starts. Built-in tags only open an agent; nothing built in can be added or changed.
 
 The page reads the existing settings and changes nothing by itself: no agent file, setting or launch command moves unless you use **+**
-(or the agent's own Settings). A team skill mounted on an agent whose CLI has no skills folder (the backend table in
-`src/native-skills-dir.ts`) is flagged on its tag and on the agent's *Team skills* field: it cannot take effect there. A team MCP server has the same **+** tag and the same "in use" tags (a tag on an agent whose CLI cannot take library MCP is flagged);
+(or the agent's own Settings). A library skill mounted on an agent whose CLI has no skills folder (the backend table in
+`src/native-skills-dir.ts`) is flagged on its tag and on the agent's *Skills* card: it cannot take effect there. A library MCP server has the same **+** tag and the same "in use" tags (a tag on an agent whose CLI cannot take library MCP is flagged);
 the **+** dialog first shows what the server runs and confirms it (see below).
 
 ## Preview and Edit (skills)
 
 *Details* on a skill opens a dialog with two tabs. **Preview** draws `SKILL.md` as Markdown with AgEnD's own chat renderer (it escapes the text first: no raw HTML, no script, nothing new is
-loaded), shows the frontmatter as fields (name, description, roles…), the agents that use it, and lists the other files, each opening as text. **Edit** (team skills only) changes the text of
+loaded), shows the frontmatter as fields (name, description, roles…), the agents that use it, and lists the other files, each opening as text. **Edit** (library skills only) changes the text of
 `SKILL.md` and of the other files; a save is the library's own save, so it runs the same checks and the same secret scan as adding a skill, writes **nothing** when one fails, and records the new
 hash in `library.lock.json` when it succeeds. The editor sends the hash it read: a skill that was saved by someone else since is not overwritten (the answer is `changed`). If agents have the
 skill mounted, the dialog names them first — they get the new text the next time they start. A **built-in** skill has Preview only (no Edit tab); it can be exported as a copy.
 
 ## Export and import (skills)
 
-- **Export.** Every skill row has an **Export** button that downloads `<id>.zip` (`<id>/SKILL.md` and its other files); the Skills page has **Export all** for every team skill in one zip. A built-in skill can be exported
+- **Export.** Every skill row has an **Export** button that downloads `<id>.zip` (`<id>/SKILL.md` and its other files); the Skills page has **Export all** for every library skill in one zip. A built-in skill can be exported
   too — a copy; the shipped skill is untouched. Exporting a skill and importing it again gives back every byte (the same hash).
 - **Import.** **Import** takes a `.zip`, a `.skill` file (the same zip under another name — the bytes decide, not the name) or a single `SKILL.md`. A zip may hold one skill (`<id>/SKILL.md…`, or `SKILL.md` at
   the top, named by its `name:`) or several (one folder each, what *Export all* writes; up to 100). Before anything is stored you read the **preview**: each skill's name, description, file list and the full `SKILL.md` (a
   skill is instructions an AI will follow), and what was left out (`__MACOSX/`, `.DS_Store`). Nothing is stored until you confirm, and **no agent is given the skill** — it only lands in the library.
-- **A name that is taken** is settled by you, per skill: **replace** the team skill, **import under another name** (only the `name:` line of `SKILL.md` changes), or **skip** (the default). A name shared with a **built-in** skill is
+- **A name that is taken** is settled by you, per skill: **replace** the library skill, **import under another name** (only the `name:` line of `SKILL.md` changes), or **skip** (the default). A name shared with a **built-in** skill is
   never replaced: rename or skip.
 - **The rules are the library's own** (`validateSkill`): names, size and file-count limits, text only, no hidden file, no Windows device name (`con`, `nul.txt`…), and the secret scan (a hit refuses that skill and reports
   the file and line, never the value). The archive reader adds its own: a path that would leave the folder (`../`, `/x`, `C:\x`, backslashes — "zip slip"), a symbolic link or any entry that is not a plain file, an encrypted entry,
@@ -97,7 +97,9 @@ An `http` server has `url` (no credentials, no query string) and `headers`, a ma
 
 ## Mounting skills on an agent
 
-An administrator gives an agent library skills in **Settings → the agent → Workspace → Team skills (from the Library)** (tick them), with the **+** tag on the Library page, or in
+In the agent's settings the two cards are named **Skills** and **MCP servers**, like the Library's categories. Each lists first what the agent gets by itself — the built-in skills of its role, AgEnD's own `agend` MCP server — in grey, ticked and not removable (tagged *Built in · automatic*), then the Library's items, which you tick (tagged *Library*). One card shows what the agent will actually get. (Display only: the settings are still `library.skills` and `library.mcp`.)
+
+An administrator gives an agent library skills in **Settings → the agent → Workspace → Skills** (tick them), with the **+** tag on the Library page, or in
 `fleet.yaml`:
 
 ```yaml
@@ -129,7 +131,7 @@ the built-in record (`.agend-managed-skills.json`), which it never touches.
 
 ## Mounting MCP servers on an agent
 
-*AGEND-261.* An administrator gives an agent library MCP servers in **Settings → the agent → Workspace → Team MCP servers (from the Library)** (under *Team skills*), or with the **+** tag on a
+*AGEND-261.* An administrator gives an agent library MCP servers in **Settings → the agent → Workspace → MCP servers** (under *Skills*), or with the **+** tag on a
 Library MCP row. It is `library.mcp: [id, …]` in the agent's `fleet.yaml` entry, on the same permission line as `library.skills`: per agent only, only an administrator sets it, no agent tool
 (General included) can write it, and it is a cold key (an agent restart applies it).
 

@@ -1,4 +1,4 @@
-// AGEND-261: the "Team MCP" card of an agent's settings (Settings → agent → Workspace, under "Team skills"): which of the team's library MCP
+// AGEND-261: the "MCP servers" card of an agent's settings (Settings → agent → Workspace, under "Skills"): AgEnD's own server (grey, listed first) and which of the library MCP
 // servers (the Library page, /ui/library/mcp) this agent is given. An administrator ticks them; ticking one that is not confirmed yet first
 // shows exactly what it would run and the variables it needs, and the confirmation is recorded for this agent at that version
 // (POST /ui/library/mcp-confirm). The agent gets the server in its CLI's MCP config at its next start (src/library/mcp-mount.ts): a server
@@ -10,11 +10,13 @@
 import { html, useCallback, useEffect, useRef, useState } from "/assets/app-html.js";
 import { register, t } from "/assets/app-i18n.js";
 import { Dialog } from "/assets/ui-dialog.js";
+import { BuiltinRow, builtinFor } from "./library-mount-field.js";
 
 register("libraryMcp", {
   en: {
-    card: "Team MCP servers (from the Library)", label: "Team MCP servers",
-    tip: "Team MCP servers from the Library that this agent is given, beside AgEnD’s own. They are written into the agent’s CLI MCP config when the agent starts, so a change applies after a restart. Your own MCP settings are not touched.",
+    card: "MCP servers", label: "MCP servers",
+    tip: "The MCP servers this agent gets: AgEnD’s own, given automatically (grey, it cannot be turned off), and the ones from the Library that you tick. Library servers are written into the agent’s CLI MCP config when the agent starts, so a change applies after a restart. Your own MCP settings are not touched.",
+    builtinTag: "Built in · automatic", libraryTag: "Library", builtinTip: "Given to every agent automatically; it cannot be turned off here.", agendHint: "AgEnD’s own tools, by this agent’s tool set.",
     none: "The Library has no usable MCP server yet. Add one on the Library page.", loadFailed: "Could not read the Library.", loading: "Reading the Library…",
     gone: "Not in the Library any more", notReady: "Not given: it was changed outside the Library or breaks a rule — check it on the Library page",
     unsupported: "This agent’s CLI ({0}) does not support Library MCP servers yet, so they do not take effect on it.",
@@ -29,8 +31,9 @@ register("libraryMcp", {
     changedMeanwhile: "It was changed after you opened this. Review it again.", confirmFailed: "Could not save the confirmation.",
   },
   "zh-TW": {
-    card: "團隊 MCP（來自資源庫）", label: "團隊 MCP server",
-    tip: "從資源庫選給這個 Agent 的團隊 MCP server，和 AgEnD 自己的並用。Agent 啟動時會寫進它 CLI 的 MCP 設定，所以變更要重啟後才生效。你自己的 MCP 設定不會被動到。",
+    card: "MCP servers", label: "MCP servers",
+    tip: "這個 Agent 會拿到的 MCP server：AgEnD 自己的自動帶入（灰色，不能取消），以及你從資源庫勾選的。資源庫的 server 會在 Agent 啟動時寫進它 CLI 的 MCP 設定，所以變更要重啟後才生效。你自己的 MCP 設定不會被動到。",
+    builtinTag: "內建・自動", libraryTag: "資源庫", builtinTip: "自動交給每個 Agent，無法在這裡取消。", agendHint: "AgEnD 自己的工具，依這個 Agent 的工具組。",
     none: "資源庫裡還沒有可用的 MCP server，請先到「資源庫」頁新增。", loadFailed: "無法讀取資源庫。", loading: "讀取資源庫中…",
     gone: "已不在資源庫", notReady: "不會交給 Agent：它在資源庫外被改過或不符規則，請到資源庫頁檢查",
     unsupported: "這個 Agent 的 CLI（{0}）暫不支援資源庫 MCP，掛上去也不會生效。",
@@ -95,6 +98,15 @@ export function LibraryMcpField({ m, L }) {
   const { f, set, name } = m;
   const [state, setState] = useState({ loading: true });
   const [review, setReview] = useState(null);
+  // What this agent gets by itself (AgEnD's own server), from the overview; read apart so the card still lists the library's without it.
+  const [builtin, setBuiltin] = useState([]);
+  useEffect(() => {
+    let live = true;
+    fetch("/ui/library/overview", { credentials: "same-origin", cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((data) => { if (live) setBuiltin(builtinFor(Array.isArray(data && data.mcp) ? data.mcp.map((x) => ({ ...x, description: lw("agendHint") })) : [], name)); }, () => {});
+    return () => { live = false; };
+  }, [name]);
   const box = useRef(null);
   const load = useCallback(() => {
     let live = true;
@@ -107,8 +119,11 @@ export function LibraryMcpField({ m, L }) {
   // The Library's agent tags link here (`…?cat=work#library-mcp`): bring the card into view once it is drawn.
   useEffect(() => {
     if (typeof location === "undefined" || location.hash !== "#library-mcp" || !box.current || typeof box.current.scrollIntoView !== "function") return;
+    // The cards above and below fill in as their lists arrive and move this one: look again once they have (and after the last of them).
+    const again = setTimeout(() => { if (box.current) box.current.scrollIntoView({ block: "center" }); }, 400);
     box.current.scrollIntoView({ block: "center" });
-  }, []);
+    return () => clearTimeout(again);
+  }, [state.loading, builtin.length]);
   const chosen = f.library_mcp || [];
   const listed = (state.items || []).filter((i) => i.kind === undefined || i.kind === "mcp");
   // A server the agent has but the Library does not list (deleted there) stays visible, so it can be unticked.
@@ -127,6 +142,7 @@ export function LibraryMcpField({ m, L }) {
   const reconfirmed = () => { setReview(null); load(); };
   const missingOf = (s) => (s.variables || []).filter((v) => !v.set).map((v) => v.name);
   return html`<div class="field" data-library-mcp-field ref=${box}>${L(lw("label"), "instance.library", undefined, lw("tip"))}
+    ${builtin.map((b) => html`<${BuiltinRow} key=${b.name} name=${b.name} description=${b.description} attr="data-library-builtin-mcp" tag=${lw("builtinTag")} tip=${lw("builtinTip")} />`)}
     ${unsupported ? html`<p class="feedback warning" role="note" data-library-mcp-unsupported>${lw("unsupported", f.backend)}</p>` : null}
     ${state.loading ? html`<p class="note">${lw("loading")}</p>` : null}
     ${state.error && !rows.length ? html`<p class="note">${lw("loadFailed")}</p>` : null}
@@ -138,7 +154,7 @@ export function LibraryMcpField({ m, L }) {
       return html`<div key=${s.id} class="lib-mcp-row" data-library-mcp=${s.id}>
         <label class="check">
           <input type="checkbox" disabled=${!pickable(s) || (unsupported && !on)} checked=${on} onChange=${(e) => toggle(s, e.target.checked)} />
-          <span><span class="strong">${s.id}</span>${s.description ? html` — ${s.description}` : null}${s.status === "missing" ? html` <span class="note">(${lw("gone")})</span>` : s.status !== "ok" ? html` <span class="note">(${lw("notReady")})</span>` : null}</span></label>
+          <span><span class="strong">${s.id}</span>${s.description ? html` — ${s.description}` : null} <span class="pill lib-kind">${lw("libraryTag")}</span>${s.status === "missing" ? html` <span class="note">(${lw("gone")})</span>` : s.status !== "ok" ? html` <span class="note">(${lw("notReady")})</span>` : null}</span></label>
         ${miss.length ? html`<p class="feedback warning lib-mcp-sub" role="note" data-library-mcp-missing=${miss.join(",")}>${miss.length === 1 ? lw("missingOne", miss[0]) : lw("missing", miss.join(", "))}</p>` : null}
         ${changed ? html`<p class="lib-mcp-sub"><span class="pill off" data-library-mcp-changed>${lw("needsConfirm")}</span> <button type="button" class="btn btn-sm" onClick=${() => setReview(s)} data-library-mcp-review-open>${lw("review")}</button></p>` : null}
       </div>`;

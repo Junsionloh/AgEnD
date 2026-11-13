@@ -881,6 +881,11 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
   .p-library .lib-tag { max-width: 6em; }
 }
 /* AGEND-261: the agent settings' Team MCP card and its confirmation. The command is shown whole (it wraps, never cut), in the page's own code look. */
+.lib-builtin { opacity: 0.62; cursor: default; }
+.lib-builtin .lib-builtin-text { flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: var(--s-2); }
+.lib-builtin .lib-builtin-text > .strong, .lib-builtin .lib-builtin-text > .pill { flex: none; }
+.lib-builtin .lib-builtin-desc { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-library-skills] .pill, [data-library-mcp-field] .pill { white-space: nowrap; }
 .lib-mcp-row { min-width: 0; }
 .lib-mcp-row .lib-mcp-sub { margin: var(--s-1) 0 0 calc(var(--s-3) + 1.1em); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .lib-mcp-cmd { margin: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); color: var(--text); font-family: var(--font-mono); font-size: var(--fs-xs); line-height: var(--lh-xs); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }

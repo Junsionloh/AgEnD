@@ -196,9 +196,88 @@ describe("the card", () => {
 
   it("is in both languages and the tags' link goes to it (#library-mcp)", () => {
     const src = readFileSync("src/ui/library-mcp-field.js", "utf8");
-    expect(src).toContain('card: "Team MCP servers (from the Library)"'); expect(src).toContain('card: "團隊 MCP（來自資源庫）"');
+    expect(src).toContain('card: "MCP servers"'); expect(src).not.toContain("團隊"); expect(src).not.toContain("Team MCP");
     expect(src).toContain('location.hash !== "#library-mcp"');
     expect(readFileSync("src/ui/panel-library.js", "utf8")).toContain("#library-mcp");
+  });
+});
+
+describe("the two cards list what the agent gets by itself first (AGEND-261 naming)", () => {
+  const OV = buildOverview({ instances: { coder: { backend: "claude-code" }, general: { backend: "claude-code", general_topic: true } } });
+  const ITEMS_ = [{ kind: "skill", id: "review", description: "Reviews code", status: "ok" }];
+  const maps = (ov: unknown = { status: 200, body: OV }) => ({
+    "/ui/library/overview": ov as any, "/ui/library/list": { status: 200, body: { items: ITEMS_ } }, "/ui/library/mcp-status": { status: 200, body: STATUS },
+  });
+  const order = (sel: string) => qa(sel).map((e) => e.getAttribute("data-library-builtin-skill") ?? e.getAttribute("data-library-builtin-mcp") ?? e.getAttribute("data-library-skill") ?? e.getAttribute("data-library-mcp"));
+
+  it("Skills: the built-in skills of the agent's role are first — grey, ticked, disabled, tagged 'Built in · automatic' — then the Library's, tagged 'Library'", async () => {
+    answer(maps());
+    const w = await work({ working_directory: "/w" });
+    const builtinNames = OV.builtinSkills.filter((b: any) => b.agents.includes("coder")).map((b: any) => b.name);
+    expect(builtinNames.length).toBeGreaterThan(0);
+    const rows = qa("[data-library-skills] [data-library-builtin-skill]");
+    expect(rows.map((e) => e.getAttribute("data-library-builtin-skill"))).toEqual(builtinNames);
+    for (const r of rows) {
+      const box = r.querySelector("input");
+      expect(box.checked).toBe(true); expect(box.disabled).toBe(true);
+      expect(r.classList.contains("lib-builtin")).toBe(true);
+      expect(r.textContent).toContain("Built in · automatic");
+    }
+    // a worker does not get what only the General gets
+    expect(OV.builtinSkills.some((b: any) => !b.agents.includes("coder") && b.agents.includes("general"))).toBe(true);
+    expect(rows.length).toBeLessThan(OV.builtinSkills.length);
+    // order: every built-in row before the first library row
+    const all = qa("[data-library-skills] [data-library-builtin-skill], [data-library-skills] [data-library-skill]");
+    const lastBuiltin = all.map((e) => e.hasAttribute("data-library-builtin-skill")).lastIndexOf(true);
+    const firstLibrary = all.findIndex((e) => e.hasAttribute("data-library-skill"));
+    expect(lastBuiltin).toBeLessThan(firstLibrary);
+    expect(q('[data-library-skill="review"]').textContent).toContain("Library");
+    expect(q('[data-library-skill="review"] input').disabled).toBeFalsy();
+    // the built-in rows are display only: unticking is impossible and nothing is written
+    expect(w.patch()).not.toHaveProperty("library");
+  });
+
+  it("the General gets more built-in skills than a worker, from the overview's own rule", async () => {
+    answer(maps());
+    await work({ working_directory: "/w" });
+    const asWorker = qa("[data-library-builtin-skill]").length;
+    expect(asWorker).toBe(OV.builtinSkills.filter((b: any) => b.agents.includes("coder")).length);
+    expect(OV.builtinSkills.filter((b: any) => b.agents.includes("general")).length).toBeGreaterThan(asWorker);
+  });
+
+  it("MCP servers: AgEnD's own `agend` is first, grey and ticked, then the Library's, tagged 'Library'", async () => {
+    answer(maps());
+    const w = await work({ working_directory: "/w" });
+    const row = q("[data-library-mcp-field] [data-library-builtin-mcp]");
+    expect(row.getAttribute("data-library-builtin-mcp")).toBe("agend");
+    expect(row.querySelector("input").checked).toBe(true); expect(row.querySelector("input").disabled).toBe(true);
+    expect(row.textContent).toContain("Built in · automatic");
+    const all = qa("[data-library-mcp-field] [data-library-builtin-mcp], [data-library-mcp-field] [data-library-mcp]").map((e) => e.getAttribute("data-library-builtin-mcp") ?? e.getAttribute("data-library-mcp"));
+    expect(all[0]).toBe("agend");
+    expect(all.slice(1)).toEqual(["gh", "ex", "broken"]);
+    expect(q('[data-library-mcp="gh"]').textContent).toContain("Library");
+    expect(w.patch()).not.toHaveProperty("library");
+  });
+
+  it("an overview that cannot be read leaves the Library's rows exactly as before (no built-in rows, nothing broken)", async () => {
+    answer(maps({ status: 500, body: { error: "library_failed" } }));
+    const w = await work({ working_directory: "/w" });
+    expect(qa("[data-library-builtin-skill]").length).toBe(0); expect(qa("[data-library-builtin-mcp]").length).toBe(0);
+    expect(w.rows()).toEqual(["gh", "ex", "broken"]);
+    expect(qa("[data-library-skill]").map((e) => e.getAttribute("data-library-skill"))).toEqual(["review"]);
+  });
+
+  it("the cards, tags and groups say Library / Skills / MCP servers — no 'Team' anywhere the person reads", async () => {
+    for (const f of ["src/ui/library-mount-field.js", "src/ui/library-mcp-field.js", "src/ui/panel-library.js", "src/ui/library-skill.js"]) {
+      const src = readFileSync(f, "utf8");
+      const copy = [...src.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]!).filter((x) => /\s/.test(x));
+      for (const c of copy) { expect(c, `${f}: ${c.slice(0, 60)}`).not.toMatch(/\bTeam (skills?|MCP)\b|團隊 ?(Skill|MCP)|Added by your team|團隊新增/); }
+    }
+    answer(maps()); await open("skills");
+    expect(q('[data-library-group="team-skills"] h4').textContent).toBe("Library");
+    expect(q('[data-library-item="skill:review"] .lib-kind').textContent).toBe("Library");
+    await p.unmount();
+    expect(I.t("library.counts", 4, 2)).toBe("4 built in · 2 library");
   });
 });
 
@@ -324,6 +403,6 @@ describe("words", () => {
     for (const k of ["tagOpenMcp", "tagNoMcp", "addToBodyMcp", "addToNoMcp", "addToMcpLoading", "addToMcpFailed", "addToConfirmMcp", "addToChanged", "addToConfirmFailed", "deleteBodyUsedMcp", "e_expect_required"]) {
       expect(pe.has(k), k).toBe(true); expect(holes(pz.get(k)!), k).toBe(holes(pe.get(k)!));
     }
-    expect(I.t("libraryMcp.label")).toBe("Team MCP servers");
+    expect(I.t("libraryMcp.label")).toBe("MCP servers");
   });
 });

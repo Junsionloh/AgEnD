@@ -51,7 +51,7 @@ describe("the field", () => {
     expect(w.box("review").disabled).toBeFalsy();
     expect(w.box("edited").disabled).toBe(true); expect(w.box("fresh").disabled).toBe(true);
     expect(w.text()).toContain("Reviews code");
-    expect(w.text()).toContain("Team skills");
+    expect(w.text()).toContain("Skills"); expect(w.text()).toContain("Library");
     expect((globalThis as any).fetch.mock.calls[0][0]).toBe("/ui/library/list");
   });
 
@@ -139,6 +139,6 @@ describe("words", () => {
     expect(e.size).toBeGreaterThanOrEqual(8);
     expect([...z.keys()].sort()).toEqual([...e.keys()].sort());
     for (const [k, v] of e) { expect(v.length, k).toBeGreaterThan(0); expect(z.get(k)!.length, k).toBeGreaterThan(0); }
-    expect(I.t("libraryMount.label")).toBe("Team skills");
+    expect(I.t("libraryMount.label")).toBe("Skills");
   });
 });
