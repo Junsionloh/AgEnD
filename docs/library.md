@@ -1,9 +1,10 @@
 # Library (Skills and MCP servers)
 
-The library is a place inside the AgEnD data folder to keep **skills** and **MCP server definitions**. It is storage and a viewer only:
-nothing in it is given to an agent yet, so no agent's files, settings or instructions change whether the library is empty or full.
-(Giving a library skill to an agent, and sharing library items inside an exported agent file, are separate later steps. The agent
-export file already reserves an empty `library:` section for them.)
+The library is a place inside the AgEnD data folder to keep **skills** and **MCP server definitions**. An agent gets a library
+**skill** only when an administrator mounts it on that agent (see [Mounting skills](#mounting-skills-on-an-agent)); an agent with
+nothing mounted is exactly as it was, whether the library is empty or full. MCP servers are stored but cannot be mounted yet, and
+sharing library items inside an exported agent file is a separate later step (the export file already reserves an empty `library:`
+section for it).
 
 Open it from the sidebar (**Library**, `/ui/library`). It is for an administrator; a fleet that never opens it gets no `library/` folder.
 
@@ -42,6 +43,34 @@ env: [GITHUB_TOKEN]         # names only; a `KEY: value` map is refused
 
 An `http` server has `url` (no credentials, no query string) and `headers`, a map from header name to the variable holding its value
 (`Authorization: GITHUB_TOKEN`).
+
+## Mounting skills on an agent
+
+An administrator gives an agent library skills in **Settings → the agent → Workspace → Library** (tick the team skills), or in
+`fleet.yaml`:
+
+```yaml
+instances:
+  reviewer:
+    library:
+      skills: [pr-review, triage]
+```
+
+Only an administrator can set it (Settings or `fleet.yaml`); no agent tool can, and the fleet `defaults` cannot. It is applied at
+the agent's next start, so a change restarts the agent. The built-in skills are given by the agent's role and are not part of this list.
+
+At each start AgEnD copies the mounted skills into the folder the agent's CLI reads (`.claude/skills`, `.agents/skills`, `.grok/skills`,
+`.kiro/skills`, as for the built-in skills), and records what it wrote in its **own** file, `.agend-library-skills.json`, beside
+the built-in record (`.agend-managed-skills.json`), which it never touches.
+
+- **Who wins a name:** a folder you made yourself > a built-in skill > a library skill. A folder that is not in the record is yours and is
+  never changed or removed; a library skill named like a built-in one is skipped (and said once in the log).
+- **Un-mounting** removes only the folders listed in the record. An agent with nothing mounted and no record gets no new file.
+- **Only a skill that passes every rule and is still the saved one is given.** A skill edited by hand in the library folder, or put there
+  without saving it on the Library page, is not given until it is saved again; one that was already given is left as it is.
+- **Agents that share one working directory** share its skills folder, so the folder gets the union of their mounts (otherwise each start
+  would remove what the other was given).
+- A published skill folder belongs to AgEnD: edits made in it are put back at the next start. To change a skill, change it in the library.
 
 ## Secrets
 
