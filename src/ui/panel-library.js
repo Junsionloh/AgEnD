@@ -18,8 +18,9 @@ import { Icon } from "/assets/ui-icons.js";
 import { PageHead } from "/assets/page-head.js";
 import { appStore } from "/assets/app-store.js";
 import { LIBRARY_SECTIONS, detailsPath, librarySectionPath } from "/assets/app-route.js";
-import { DEFAULT_SCHEMA, agentPatchRequest, libraryMountPatch, requestImpact } from "./settings-model.js";
+import { DEFAULT_SCHEMA, agentPatchRequest, libraryMcpMountPatch, libraryMountPatch, requestImpact } from "./settings-model.js";
 import { operationActive, startOperation } from "./settings-apply.js";
+import { McpDetails } from "./library-mcp-field.js";   // AGEND-261: what a team MCP server runs, shown before it is given to an agent
 import { ImportDialog, SkillDialog } from "./library-skill.js";   // AGEND-257: Preview / Edit, and Import — their own module and words
 
 register("library", {
@@ -28,11 +29,11 @@ register("library", {
     skills: "Skills", tools: "Tools", mcp: "MCP servers", groupResources: "Resources",
     lead_skills: "Skills agents can load. Built-in ones are given by an agent’s role; team skills are given to the agents you pick.",
     lead_tools: "A tool set is the list of AgEnD tools an agent may use; an agent’s `tool_set` setting picks one.",
-    lead_mcp: "MCP servers. AgEnD’s own comes with it; the ones you add are kept here and are not given to agents yet.",
+    lead_mcp: "MCP servers. AgEnD’s own comes with it; the ones you add can be given to agents (Claude Code and Codex for now).",
     counts: "{0} built in · {1} team",
     filterSkills: "Filter skills", filterTools: "Filter tool sets", filterMcp: "Filter MCP servers", noMatch: "Nothing matches “{0}”.",
     teamGroup: "Added by your team", builtinGroup: "Built in · read only",
-    teamSkillsLead: "Skills you added. Give one to an agent with the “+” tag, or in Settings → the agent → Workspace.", teamMcpLead: "MCP server definitions you added. They are kept here and are not given to agents yet.",
+    teamSkillsLead: "Skills you added. Give one to an agent with the “+” tag, or in Settings → the agent → Workspace.", teamMcpLead: "MCP servers you added. Give one to an agent with the “+” tag (it shows what it runs first), or in Settings → the agent → Workspace. Claude Code and Codex agents only for now.",
     builtinSkillsLead: "Skills that come with AgEnD. Each is given to agents by their role.", builtinToolsLead: "Tool sets that come with AgEnD.", builtinMcpLead: "AgEnD’s own MCP server.",
     builtin: "Built in", team: "Team",
     role_general: "General", role_worker: "Workers", role_classic: "Classic bots", givenTo: "Given to", roles: "Roles",
@@ -42,7 +43,9 @@ register("library", {
     ts_general: "For the General, the fleet’s administrator.", ts_standard: "A smaller everyday set.", ts_minimal: "Reply and message only.",
     agendMcp: "agend", agendMcpHint: "Gives each agent the tools of its tool set.",
     tagOpen: "Open the settings of {0}", tagOpenSkill: "Open {0} — Team skills", tagNoFolder: "{0}: its CLI ({1}) has no skills folder, so this skill does not take effect there.",
-    addTag: "Add to an agent", addTagLabel: "Add “{0}” to an agent",
+    addTag: "Add to an agent", addTagLabel: "Add “{0}” to an agent", tagOpenMcp: "Open {0} — Team MCP servers", tagNoMcp: "{0}: its CLI ({1}) does not support Library MCP servers yet, so this one does not take effect there.",
+    addToBodyMcp: "Pick the agents that should get this MCP server. Check what it runs below: confirming records this exact version for each agent you pick, then writes it into the agent’s settings, exactly as ticking it in Settings → the agent → Team MCP servers would. Takes effect the next time the agent starts.", addToNoMcp: "not supported yet", addToMcpLoading: "Reading what it runs…", addToMcpFailed: "Could not read the server. Close this and try again.", addToConfirmMcp: "Confirm and add", addToChanged: "It was changed after you opened this. Close it and open it again.", addToConfirmFailed: "Could not save the confirmation.",
+    deleteBodyUsedMcp: "It is removed from the library. {0} still have it mounted and lose this MCP server the next time they start.",
     addToTitle: "Add “{0}” to agents", addToBody: "Pick the agents that should get this skill. It is written into each agent’s settings, exactly as ticking it in Settings → the agent → Team skills would. Takes effect the next time the agent starts.",
     addToNone: "Every agent already has it.", addToNoFolder: "no skills folder", addToConfirm: "Add", addingLabel: "Add “{0}” to {1}", addBusy: "Another change is being saved. Try again in a moment.",
     addStarted: "Adding “{0}”. It takes effect when the agent next starts.", addLoadFailed: "Could not read the agents’ settings.",
@@ -85,11 +88,11 @@ register("library", {
     skills: "Skills", tools: "工具", mcp: "MCP server", groupResources: "資源",
     lead_skills: "Agent 可以載入的 Skill。內建的依 Agent 的角色自動帶入；團隊 Skill 交給你挑的 Agent。",
     lead_tools: "工具組是 Agent 可以使用的 AgEnD 工具清單，由 Agent 的 `tool_set` 設定選擇。",
-    lead_mcp: "MCP server。AgEnD 自己的隨附；你新增的只存放在這裡，還不會交給 Agent。",
+    lead_mcp: "MCP server。AgEnD 自己的隨附；你新增的可以交給 Agent（目前支援 Claude Code 和 Codex）。",
     counts: "內建 {0}・團隊 {1}",
     filterSkills: "篩選 Skill", filterTools: "篩選工具組", filterMcp: "篩選 MCP server", noMatch: "沒有符合「{0}」的項目。",
     teamGroup: "團隊新增", builtinGroup: "內建・唯讀",
-    teamSkillsLead: "你新增的 Skill。用「＋」標籤交給 Agent，或到「設定 → 該 Agent → 工作目錄」。", teamMcpLead: "你新增的 MCP server 定義。目前只存放在這裡，還不會交給 Agent。",
+    teamSkillsLead: "你新增的 Skill。用「＋」標籤交給 Agent，或到「設定 → 該 Agent → 工作目錄」。", teamMcpLead: "你新增的 MCP server。用「＋」標籤交給 Agent（會先顯示它要執行什麼），或到「設定 → 該 Agent → 工作目錄」。目前只支援 Claude Code 和 Codex 的 Agent。",
     builtinSkillsLead: "隨 AgEnD 附帶的 Skill，依 Agent 的角色自動帶入。", builtinToolsLead: "隨 AgEnD 附帶的工具組。", builtinMcpLead: "AgEnD 自己的 MCP server。",
     builtin: "內建", team: "團隊",
     role_general: "General", role_worker: "一般 Agent", role_classic: "Classic bot", givenTo: "適用", roles: "角色",
@@ -99,7 +102,9 @@ register("library", {
     ts_general: "給 General（fleet 的管理員）。", ts_standard: "較精簡的日常組合。", ts_minimal: "只能回覆與傳訊息。",
     agendMcp: "agend", agendMcpHint: "把各 Agent 所屬工具組的工具交給它。",
     tagOpen: "開啟 {0} 的設定", tagOpenSkill: "開啟 {0}：團隊 Skill", tagNoFolder: "{0}：它的 CLI（{1}）沒有 skill 資料夾，這個 Skill 在那裡不會生效。",
-    addTag: "加給 Agent", addTagLabel: "把「{0}」加給 Agent",
+    addTag: "加給 Agent", addTagLabel: "把「{0}」加給 Agent", tagOpenMcp: "開啟 {0}：團隊 MCP server", tagNoMcp: "{0}：它的 CLI（{1}）暫不支援資源庫 MCP，這個 server 在那裡不會生效。",
+    addToBodyMcp: "選要拿到這個 MCP server 的 Agent。請先看下面它會執行什麼：按下確認會替你選的每個 Agent 記下這個版本，再寫進各 Agent 的設定，效果和在「設定 → 該 Agent → 團隊 MCP server」勾選完全一樣，下次啟動時生效。", addToNoMcp: "暫不支援", addToMcpLoading: "讀取它會執行的內容…", addToMcpFailed: "無法讀取這個 server，請關掉再試一次。", addToConfirmMcp: "確認並加入", addToChanged: "你打開之後它被改過了，請關掉再重新打開。", addToConfirmFailed: "無法儲存確認。",
+    deleteBodyUsedMcp: "它會從資源庫移除。{0} 還掛著它，下次啟動時會失去這個 MCP server。",
     addToTitle: "把「{0}」加給 Agent", addToBody: "選要拿到這個 Skill 的 Agent。它會寫進各 Agent 的設定，效果和在「設定 → 該 Agent → 團隊 Skill」勾選完全一樣，下次啟動時生效。",
     addToNone: "每個 Agent 都已經有了。", addToNoFolder: "沒有 skill 資料夾", addToConfirm: "加入", addingLabel: "把「{0}」加給 {1}", addBusy: "還有另一項變更在儲存，請稍後再試。",
     addStarted: "正在加入「{0}」，Agent 下次啟動時生效。", addLoadFailed: "無法讀取 Agent 的設定。",
@@ -233,7 +238,7 @@ function ViewDialog({ item, onClose, onDelete }) {
 }
 
 /** An agent's tag: a link to that agent's settings. Team skills go straight to the Team skills field (`?cat=work#library-skills`). */
-const agentHref = (name, to) => (to === "skill" ? `${detailsPath(name)}?cat=work#library-skills` : to === "tools" ? `${detailsPath(name)}?cat=work` : detailsPath(name));
+const agentHref = (name, to) => (to === "skill" ? `${detailsPath(name)}?cat=work#library-skills` : to === "mcp-team" ? `${detailsPath(name)}?cat=work#library-mcp` : to === "tools" ? `${detailsPath(name)}?cat=work` : detailsPath(name));
 
 /** How many agent tags a row shows before "+N": fewer on a phone, where the line is short. The rest is "+N", which opens the item (its Details lists every one): a row never grows taller for it. */
 function useTagLimit() {
@@ -254,12 +259,13 @@ function useTagLimit() {
 function UsedBy({ names, to, agents, limit, onMore, onAdd }) {
   const shown = names.slice(0, limit);
   const noFolder = (n) => { const a = agents.find((x) => x.name === n); return a && !a.nativeSkills ? a : null; };
+  const noMcp = (n) => { const a = agents.find((x) => x.name === n); return a && !a.windows && a.libraryMcp === false ? a : null; };
   return html`<span class="lib-tags" data-library-used-by>
     ${names.length ? null : html`<span class="note">${tn("noUse")}</span>`}
     ${shown.map((n) => {
-      const bad = to === "skill" ? noFolder(n) : null;
+      const bad = to === "skill" ? noFolder(n) : to === "mcp-team" ? noMcp(n) : null;
       return html`<a key=${n} class=${`pill lib-tag${bad ? " warn" : ""}`} href=${agentHref(n, to)} data-library-tag=${n}
-        title=${bad ? tn("tagNoFolder", n, bad.backend) : to === "skill" ? tn("tagOpenSkill", n) : tn("tagOpen", n)}>${bad ? html`<${Icon} name="alert" size=${12} />` : null}${n}</a>`;
+        title=${bad ? tn(to === "mcp-team" ? "tagNoMcp" : "tagNoFolder", n, bad.backend) : to === "skill" ? tn("tagOpenSkill", n) : to === "mcp-team" ? tn("tagOpenMcp", n) : tn("tagOpen", n)}>${bad ? html`<${Icon} name="alert" size=${12} />` : null}${n}</a>`;
     })}
     ${names.length > limit ? html`<button type="button" class="pill lib-tag lib-more" onClick=${onMore} data-library-more title=${tn("moreAgents", names.length - limit, names.slice(limit).join(", "))}
       aria-label=${tn("seeAll")}>+${names.length - limit}</button>` : null}
@@ -292,7 +298,7 @@ function Row({ item, used, agents, limit, onView, onDelete, onAdd }) {
   const warn = item.status !== "ok";
   const openable = item.status !== "missing" && item.status !== "invalid";
   const add = onAdd ? Object.assign(() => onAdd(item), { label: tn("addTagLabel", item.id) }) : null;
-  const tags = item.kind === "skill" && used ? html`<${UsedBy} names=${used} to="skill" agents=${agents} limit=${limit} onMore=${() => onView(item)} onAdd=${add} />` : null;
+  const tags = used ? html`<${UsedBy} names=${used} to=${item.kind === "skill" ? "skill" : "mcp-team"} agents=${agents} limit=${limit} onMore=${() => onView(item)} onAdd=${add} />` : null;
   const extra = html`${warn ? html`<span class="pill off" title=${hasHint ? hint : undefined}>${tn(`st_${item.status}`)}</span>` : null}
     ${meta ? html`<span class="note lib-size">${meta}</span>` : null}<span class="pill lib-kind">${tn("team")}</span>`;
   return html`<${ItemRow} icon=${item.kind === "skill" ? "book" : "plug"} name=${item.id}
@@ -327,10 +333,25 @@ function DetailsDialog({ detail, onClose }) {
 
 /** "+" on a team skill: pick agents; the write is the agent Settings page's own (agentPatchRequest, libraryMountPatch, startOperation). */
 function AddToAgentsDialog({ item, agents, usedNames, onClose, onStarted }) {
+  const mcp = item.kind === "mcp";
   const [picked, setPicked] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // An MCP server is confirmed before it is given: what it runs is read from the server (the same answer the agent's Settings card uses).
+  const [detail, setDetail] = useState(mcp ? { loading: true } : null);
+  const probe = (agents.find((a) => !a.windows) || {}).name;
+  useEffect(() => {
+    if (!mcp) return undefined;
+    if (!probe) { setDetail({ failed: true }); return undefined; }
+    let live = true;
+    call(`/ui/library/mcp-status?agent=${encodeURIComponent(probe)}`).then((r) => {
+      const found = r.ok && r.data && Array.isArray(r.data.items) ? r.data.items.find((x) => x.id === item.id && x.summary && x.sha256) : null;
+      if (live) setDetail(found ? { item: found } : { failed: true });
+    }, () => { if (live) setDetail({ failed: true }); });
+    return () => { live = false; };
+  }, [mcp, item.id, probe]);
   const eligible = agents.filter((a) => !a.windows && !usedNames.includes(a.name));
+  const usable = (a) => (mcp ? a.libraryMcp !== false : a.nativeSkills);
   const toggle = (name, on) => setPicked(on ? [...picked.filter((n) => n !== name), name] : picked.filter((n) => n !== name));
   const submit = async () => {
     if (!picked.length) return;
@@ -342,10 +363,19 @@ function AddToAgentsDialog({ item, agents, usedNames, onClose, onStarted }) {
       if (!raw.ok || !raw.data || typeof raw.data.instances !== "object") { setError(tn("addLoadFailed")); return; }
       const schema = schemaRes.ok && schemaRes.data ? schemaRes.data : DEFAULT_SCHEMA;
       const changes = [];
+      if (mcp) {
+        // Confirm the exact version that was shown, for each agent picked, before anything is written to its settings.
+        const shown = detail && detail.item;
+        if (!shown) { setError(tn("addToMcpFailed")); return; }
+        for (const name of picked) {
+          const c = await call("/ui/library/mcp-confirm", { agent: name, id: item.id, sha256: shown.sha256 });
+          if (!c.ok) { setError(c.status === 409 ? tn("addToChanged") : tn("addToConfirmFailed")); return; }
+        }
+      }
       for (const name of picked) {
         const inst = raw.data.instances[name];
         if (!inst) continue;
-        const patch = libraryMountPatch(inst, item.id);
+        const patch = mcp ? libraryMcpMountPatch(inst, item.id) : libraryMountPatch(inst, item.id);
         if (!Object.keys(patch).length) continue;
         const request = agentPatchRequest(name, inst, patch);
         changes.push({ label: tn("addingLabel", item.id, name), impact: requestImpact(schema, request), request });
@@ -359,12 +389,15 @@ function AddToAgentsDialog({ item, agents, usedNames, onClose, onStarted }) {
   };
   return html`<${Dialog} title=${tn("addToTitle", item.id)} onClose=${onClose} busy=${busy}
     actions=${html`<button type="button" class="btn" onClick=${onClose} disabled=${busy}>${tn("cancel")}</button>
-      <button type="button" class="btn btn-primary" onClick=${submit} disabled=${busy || !picked.length} data-library-add-confirm>${tn("addToConfirm")}</button>`}>
+      <button type="button" class="btn btn-primary" onClick=${submit} disabled=${busy || !picked.length || (mcp && !(detail && detail.item))} data-library-add-confirm>${tn(mcp ? "addToConfirmMcp" : "addToConfirm")}</button>`}>
     <div class="form" data-library-add-dialog>
-      <p class="note">${tn("addToBody")}</p>
+      <p class="note">${tn(mcp ? "addToBodyMcp" : "addToBody")}</p>
+      ${mcp && detail && detail.loading ? html`<p class="note">${tn("addToMcpLoading")}</p>` : null}
+      ${mcp && detail && detail.failed ? html`<p class="feedback error" role="alert">${tn("addToMcpFailed")}</p>` : null}
+      ${mcp && detail && detail.item ? html`<${McpDetails} item=${detail.item} agent=${null} />` : null}
       ${eligible.length ? html`<div class="checks">${eligible.map((a) => html`<label key=${a.name} class="check" data-library-pick=${a.name}>
-        <input type="checkbox" checked=${picked.includes(a.name)} disabled=${!a.nativeSkills} onChange=${(e) => toggle(a.name, e.target.checked)} />
-        <span><span class="strong">${a.name}</span>${!a.nativeSkills ? html` <span class="note">(${tn("addToNoFolder")}: ${a.backend})</span>` : null}</span></label>`)}</div>`
+        <input type="checkbox" checked=${picked.includes(a.name)} disabled=${!usable(a)} onChange=${(e) => toggle(a.name, e.target.checked)} />
+        <span><span class="strong">${a.name}</span>${!usable(a) ? html` <span class="note">(${tn(mcp ? "addToNoMcp" : "addToNoFolder")}: ${a.backend})</span>` : null}</span></label>`)}</div>`
         : html`<p class="note">${tn("addToNone")}</p>`}
       <p class="note">${tn("nextStart")}.</p>
       ${error ? html`<p class="feedback error" role="alert" data-library-error>${error}</p>` : null}
@@ -410,10 +443,11 @@ export function LibraryPanel({ route, navKey }) {
   const data = ov.data;
   const agents = (data && data.agents) || [];
   const teamUsage = (data && data.teamUsage) || {};
-  const usedBy = (item) => (item.kind === "skill" && data ? (Object.hasOwn(teamUsage, item.id) ? teamUsage[item.id] : []) : null);
+  const teamMcpUsage = (data && data.teamMcpUsage) || {};
+  const usedBy = (item) => (!data ? null : item.kind === "skill" ? (Object.hasOwn(teamUsage, item.id) ? teamUsage[item.id] : []) : (Object.hasOwn(teamMcpUsage, item.id) ? teamMcpUsage[item.id] : []));
   const remove = async (item) => {
     const used = usedBy(item) || [];
-    const message = used.length ? tn("deleteBodyUsed", used.join(", ")) : tn("deleteBody");
+    const message = used.length ? tn(item.kind === "mcp" ? "deleteBodyUsedMcp" : "deleteBodyUsed", used.join(", ")) : tn("deleteBody");
     if (!(await confirmDialog({ title: tn("deleteTitle", item.id), message, confirmLabel: tn("delete"), danger: true }))) return;
     try {
       const r = await call("/ui/library/delete", { kind: item.kind, id: item.id });
@@ -437,7 +471,7 @@ export function LibraryPanel({ route, navKey }) {
   const teamRows = (list, kind) => {
     const shown = list.filter((i) => matches(q, i.id, i.description));
     return shown.length ? shown.map((i) => html`<${Row} key=${`${i.kind}:${i.id}`} item=${i} used=${usedBy(i)} agents=${agents} limit=${limit}
-        onView=${(it) => setDialog(it.kind === "skill" ? { type: "skill", id: it.id, item: it } : { type: "view", item: it })} onDelete=${remove} onAdd=${kind === "skill" && data ? (it) => setDialog({ type: "addto", item: it }) : null} />`)
+        onView=${(it) => setDialog(it.kind === "skill" ? { type: "skill", id: it.id, item: it } : { type: "view", item: it })} onDelete=${remove} onAdd=${data ? (it) => setDialog({ type: "addto", item: it }) : null} />`)
       : (list.length ? none([]) : html`<${Empty} icon=${kind === "skill" ? "book" : "plug"} title=${kind === "skill" ? tn("noneSkills") : tn("noneMcp")} hint=${tn("emptyHint")} />`);
   };
 

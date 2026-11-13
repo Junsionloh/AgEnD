@@ -190,11 +190,19 @@ export const proxyReplyOf = (inst, defaults) => (typeof (inst && inst.mcp_proxy_
  * keeps whatever else `library` holds (`mcp`) and is null (the key goes) when nothing is left, so a patch never drops what it did not touch.
  */
 export const librarySkillsOf = (inst) => (inst && inst.library && Array.isArray(inst.library.skills) ? inst.library.skills.filter((id) => typeof id === "string") : []);
-export function libraryValue(inst, ids) {
+/** AGEND-261: the library MCP servers an agent is given (`library.mcp`). */
+export const libraryMcpOf = (inst) => (inst && inst.library && Array.isArray(inst.library.mcp) ? inst.library.mcp.filter((id) => typeof id === "string") : []);
+/**
+ * `mcp` is the new list of MCP ids; left out (undefined) it is whatever `library` already holds, so a caller that only knows skills never
+ * drops it. Skills come first, then mcp, then anything else — for a `library` with no mcp that is the very value this made before.
+ */
+export function libraryValue(inst, ids, mcp) {
   const rest = { ...((inst && inst.library) || {}) };
   delete rest.skills;
-  const next = ids.length ? { skills: [...ids], ...rest } : rest;
-  return Object.keys(next).length ? next : null;
+  const kept = mcp === undefined ? (Array.isArray(rest.mcp) ? rest.mcp : []) : mcp;
+  delete rest.mcp;
+  const value = { ...(ids.length ? { skills: [...ids] } : {}), ...(kept.length ? { mcp: [...kept] } : {}), ...rest };
+  return Object.keys(value).length ? value : null;
 }
 /**
  * AGEND-248: the write behind "an agent's settings are changed" — one place for the URL and the shape, used by Settings' staging
@@ -209,6 +217,11 @@ export const agentPatchRequest = (name, inst, patch) => ({
 export const libraryMountPatch = (inst, id) => {
   const have = librarySkillsOf(inst);
   return have.includes(id) ? {} : { library: libraryValue(inst, [...have, id]) };
+};
+/** The patch that mounts one more library MCP server (the Library's "+" on an MCP row); the confirmation is recorded before it is sent. */
+export const libraryMcpMountPatch = (inst, id) => {
+  const have = libraryMcpOf(inst);
+  return have.includes(id) ? {} : { library: libraryValue(inst, librarySkillsOf(inst), [...have, id]) };
 };
 export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmojisBaseline) {
   const hang = inst.hang_detector || {};
@@ -237,7 +250,7 @@ export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmoji
     board_cards_at_once: form.board_cards_at_once === undefined ? boardCardsOf(inst) : Number(form.board_cards_at_once),
     resume_interrupted_work: form.resume_interrupted_work === undefined ? resumeWorkOf(inst, defaults) : form.resume_interrupted_work,
     mcp_proxy_reply: form.mcp_proxy_reply === undefined ? proxyReplyOf(inst, defaults) : form.mcp_proxy_reply,
-    library: libraryValue(inst, form.library_skills === undefined ? librarySkillsOf(inst) : form.library_skills),
+    library: libraryValue(inst, form.library_skills === undefined ? librarySkillsOf(inst) : form.library_skills, form.library_mcp === undefined ? undefined : form.library_mcp),
   };
   return Object.assign(changedFields(next, {
     backend: inst.backend || defaults.backend || "claude-code",
@@ -311,6 +324,7 @@ export function agentForm(inst, defaults, name = "") {
     resume_interrupted_work: resumeWorkOf(inst, defaults),
     mcp_proxy_reply: proxyReplyOf(inst, defaults),
     library_skills: librarySkillsOf(inst),
+    library_mcp: libraryMcpOf(inst),
     inherit: {
       auto_pause_after: inherit("auto_pause_after"), hang: !hasOwn(hang, "timeout_minutes"), agent_mode: inherit("agent_mode"),
       tool_set: inherit("tool_set"), tool_progress: inherit("tool_progress"), cross_instance_visibility: inherit("cross_instance_visibility"),

@@ -2,8 +2,8 @@
 
 The library is a place inside the AgEnD data folder to keep **skills** and **MCP server definitions**. An agent gets a library
 **skill** only when an administrator mounts it on that agent (see [Mounting skills](#mounting-skills-on-an-agent)); an agent with
-nothing mounted is exactly as it was, whether the library is empty or full. MCP servers are stored but cannot be mounted yet, and
-sharing library items inside an exported agent file is a separate later step (the export file already reserves an empty `library:`
+nothing mounted is exactly as it was, whether the library is empty or full. A library **MCP server** is mounted the same way, for Claude Code and
+Codex agents only for now (see [Mounting MCP servers](#mounting-mcp-servers-on-an-agent)). Sharing library items inside an exported agent file is a separate later step (the export file already reserves an empty `library:`
 section for it).
 
 Open it from the sidebar (**Library**, `/ui/library`). It is for an administrator; a fleet that never opens it gets no `library/` folder.
@@ -32,8 +32,8 @@ of that write). It takes effect the next time the agent starts. Built-in tags on
 
 The page reads the existing settings and changes nothing by itself: no agent file, setting or launch command moves unless you use **+**
 (or the agent's own Settings). A team skill mounted on an agent whose CLI has no skills folder (the backend table in
-`src/native-skills-dir.ts`) is flagged on its tag and on the agent's *Team skills* field: it cannot take effect there. MCP servers are stored
-here but cannot be given to agents yet.
+`src/native-skills-dir.ts`) is flagged on its tag and on the agent's *Team skills* field: it cannot take effect there. A team MCP server has the same **+** tag and the same "in use" tags (a tag on an agent whose CLI cannot take library MCP is flagged);
+the **+** dialog first shows what the server runs and confirms it (see below).
 
 ## Preview and Edit (skills)
 
@@ -127,6 +127,34 @@ the built-in record (`.agend-managed-skills.json`), which it never touches.
 - **When it runs:** skills are published only when a fleet agent or the General starts (not for a ClassicBot room or a Windows native agent). An agent that was
   deleted leaves its skills in a shared folder until another agent that shares the folder restarts, which then cleans up what is no longer mounted.
 
+## Mounting MCP servers on an agent
+
+*AGEND-261.* An administrator gives an agent library MCP servers in **Settings → the agent → Workspace → Team MCP servers (from the Library)** (under *Team skills*), or with the **+** tag on a
+Library MCP row. It is `library.mcp: [id, …]` in the agent's `fleet.yaml` entry, on the same permission line as `library.skills`: per agent only, only an administrator sets it, no agent tool
+(General included) can write it, and it is a cold key (an agent restart applies it).
+
+**What is written.** At each launch the daemon turns the mounted items into entries of the CLI's own MCP config, named `agend-lib-<id>`, next to AgEnD's own `agend` server:
+
+| CLI | Where | Shape |
+|---|---|---|
+| Claude Code | `<instance dir>/mcp-config.json` (`--mcp-config`), mode 0600 when it holds a value | `command`/`args`/`env`, or `type: http` + `url` + `headers` |
+| Codex | the isolated `CODEX_HOME/config.toml` (0600) | `[mcp_servers.agend-lib-<id>]` (+ `.env` / `.http_headers` tables); every string is escaped as a TOML basic string, and the block is parsed back and compared — one that does not read back as meant is left out |
+
+Your own MCP settings are never read or changed. An agent with nothing mounted gets byte-identical config files and launch command (pinned by golden tests). Other CLIs (OpenCode, Kiro, Grok, Muse,
+Antigravity…) are not supported yet: the settings card and the Library tags say so, taken from the table in `src/library/mcp-support.ts` (one table, no list in the page); a start with a mount on one of them
+writes nothing for it and logs it once.
+
+**Variables.** An item names variables (`env` for stdio, `headers` for http), never values. The values come from the data folder's `.env` at the moment the config is written. A missing or empty value
+means that server is **not started** (nothing is written for it) — the agent's settings card shows which variable is missing, and the log names it. Values never appear in any page, log line, API
+answer or export. A few variables that change how a program is found or loaded (`PATH`, `HOME`, `NODE_OPTIONS`, `LD_PRELOAD`, …) cannot be named by an item.
+
+**Confirmation.** Before a server is given to an agent, the page shows exactly what it would run — the whole `command` and `args`, or the address and its domain — and the variable names with
+*set / missing*. Confirming records the item's hash for that agent (`library/mcp-confirmed.json`, owner-only, written only by an administrator's `POST /ui/library/mcp-confirm`). If the item is edited
+afterwards, or changed outside the Library, it is not written again until it is confirmed again; the card shows *Changed — confirm again*.
+
+**Honest about what this is:** a variable's value is handed to its MCP server when the agent starts, the same as today's `.env` approach. Keeping the keys away from the agent altogether is later
+gateway work.
+
 ## Secrets
 
 Anything that looks like a key, token or password (the same scan the agent export uses) is refused with the file and line, never the value.
@@ -140,7 +168,9 @@ changed by hand (*Changed by hand*), one added outside this page (*Not recorded*
 ## Web routes (admin only)
 
 `GET /ui/library/list`, `GET /ui/library/item?kind=skill|mcp&id=<id>` (a skill also comes as `fields` + `body`, SKILL.md split for display), `GET /ui/library/overview` (built-in skills, tool sets, the `agend` MCP server and who uses what; read only),
-`POST /ui/library/save` (`expect`: the hash an editor read; `changed` if the skill is another one now), `POST /ui/library/delete`.
+`POST /ui/library/save` (`expect`: the hash an editor read; `changed` if the item is another one now; **replacing** (`overwrite: true`) without `expect` is refused with `expect_required`, and a skill named like a built-in one with `exists`), `POST /ui/library/delete`.
+
+MCP mounting (AGEND-261): `GET /ui/library/mcp-status?agent=<name>` (every MCP item as that agent's settings need it: what it would run, its variables as *set / missing* — names only —, whether it is confirmed for that agent at its current version, and the CLIs that take library MCP) and `POST /ui/library/mcp-confirm` (`{ agent, id, sha256 }`: `changed` if the item is another version now). `GET /ui/library/list` also carries `mcpBackends`; `overview` carries `teamMcpUsage` and, per agent, `libraryMcp`.
 
 Skills in and out (AGEND-257): `GET /ui/library/export?id=<id>[&builtin=1]` and `GET /ui/library/export-all` (zip downloads), `GET /ui/library/builtin?name=<name>` (a built-in skill for display),
 `POST /ui/library/import/preview?filename=` and `POST /ui/library/import?sha256=&decisions=` (the body is the uploaded file's bytes; `decisions` is URL-encoded JSON `{ "<name>": { "action": "overwrite"|"rename"|"skip", "as": "<new name>" } }`).

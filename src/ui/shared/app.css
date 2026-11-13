@@ -880,6 +880,12 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
   .p-library .lib-row .lib-act-extra, .p-library .lib-row .lib-size { display: none; }
   .p-library .lib-tag { max-width: 6em; }
 }
+/* AGEND-261: the agent settings' Team MCP card and its confirmation. The command is shown whole (it wraps, never cut), in the page's own code look. */
+.lib-mcp-row { min-width: 0; }
+.lib-mcp-row .lib-mcp-sub { margin: var(--s-1) 0 0 calc(var(--s-3) + 1.1em); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.lib-mcp-cmd { margin: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); color: var(--text); font-family: var(--font-mono); font-size: var(--fs-xs); line-height: var(--lh-xs); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+.lib-mcp-vars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.lib-mcp-vars li { display: flex; align-items: center; gap: var(--s-2); min-width: 0; overflow-wrap: anywhere; }
 /* The skill dialog: Preview / Edit tabs, the frontmatter as fields, the Markdown, the files; and the import dialog's list of what the file holds. */
 .lib-skill .lib-tabs { align-self: flex-start; }
 .lib-skill .lib-pane { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }

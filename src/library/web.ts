@@ -129,7 +129,7 @@ export function handleLibraryRequest(h: LibraryWebHost): boolean {
           }
           items.push(row);
         }
-        h.json(res, 200, { agent, backend: def.backend, supported: supportsLibraryMcp(def.backend), windows: def.runtime === "windows", items });
+        h.json(res, 200, { agent, backend: def.backend, supported: supportsLibraryMcp(def.backend), backends: Object.keys(LIBRARY_MCP_BACKENDS), windows: def.runtime === "windows", items });
         return true;
       }
       if (path === "/ui/library/overview") {
