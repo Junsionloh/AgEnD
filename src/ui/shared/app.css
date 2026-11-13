@@ -735,7 +735,7 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .s-section-layout { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .s-section-layout > *, .s-section-layout :is(.s-yaml-lock, .s-general, .s-web, .s-web-fields, .card) { min-width: 0; }
 .s-section-layout .card { margin-bottom: 0; padding: 20px; border: 1px solid var(--border); border-radius: 10px; box-shadow: none; }
-.s-section-layout .card > h3, .s-section-layout .s-ap-group { color: var(--text); font-size: var(--fs-lg); text-transform: none; letter-spacing: 0; }
+.s-section-layout .card > h3, .s-section-layout .card > .lib-card-head > h3, .s-section-layout .s-ap-group { color: var(--text); font-size: var(--fs-lg); text-transform: none; letter-spacing: 0; }
 .s-section-layout .s-ap-group { margin: 0 0 16px; }
 .s-section-layout :is(.s-general, .s-web) { gap: 20px; }
 .s-section-layout .grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -881,13 +881,36 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
   .p-library .lib-tag { max-width: 6em; }
 }
 /* AGEND-261: the agent settings' Team MCP card and its confirmation. The command is shown whole (it wraps, never cut), in the page's own code look. */
-.lib-builtin { opacity: 0.62; cursor: default; }
-.lib-builtin .lib-builtin-text { flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: var(--s-2); }
-.lib-builtin .lib-builtin-text > .strong, .lib-builtin .lib-builtin-text > .pill { flex: none; }
-.lib-builtin .lib-builtin-desc { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-[data-library-skills] .pill, [data-library-mcp-field] .pill { white-space: nowrap; }
+/* The Skills / MCP servers cards of an agent's settings: a title row with "+ Add", the built-in items as one line, one row per enabled Library item with a ×. */
+.lib-card .lib-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-bottom: var(--s-2); }
+.lib-card .lib-card-head h3 { margin: 0; min-width: 0; }
+.lib-card .lib-card-add { flex: none; }
+.lib-builtin-box { margin: 0 0 var(--s-2); }
+.lib-builtin-toggle { display: inline-flex; align-items: center; gap: var(--s-2); padding: var(--s-1) var(--s-2); margin-left: calc(var(--s-2) * -1); border: 0; border-radius: var(--r-sm); background: none; color: var(--text-2); font: inherit; cursor: pointer; }
+.lib-builtin-toggle:hover { background: var(--surface-2); color: var(--text); }
+.lib-builtin-toggle svg { transition: transform 0.15s; }
+.lib-builtin-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.lib-builtin-list { list-style: none; margin: var(--s-1) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); opacity: 0.8; }
+.lib-builtin-list .lib-builtin { display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
+.lib-builtin-list .lib-builtin > .strong { flex: none; }
+.lib-builtin-desc { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-en-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s-2); row-gap: var(--s-1); align-items: center; padding: var(--s-1) 0; }
+.lib-en-row + .lib-en-row { border-top: 1px solid var(--border); }
+.lib-en-main { display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
+.lib-en-main > .strong, .lib-en-main > .pill { flex: none; }
+.lib-en-desc { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-en-status { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.lib-en-status:empty { display: none; }
+.lib-card .pill { white-space: nowrap; }
+.lib-picker-filter { margin-bottom: var(--s-3); }
+.lib-picker-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.lib-picker-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1) var(--s-2); width: 100%; padding: var(--s-2) var(--s-3); border: 0; border-radius: var(--r-sm); background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.lib-picker-item:hover:not(:disabled) { background: var(--surface-2); }
+.lib-picker-item:disabled { opacity: 0.55; cursor: not-allowed; }
+.lib-picker-desc { flex: 1 1 12em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-picker-note { flex-basis: 100%; }
 .lib-mcp-row { min-width: 0; }
-.lib-mcp-row .lib-mcp-sub { margin: var(--s-1) 0 0 calc(var(--s-3) + 1.1em); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.lib-mcp-sub { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: 0; }
 .lib-mcp-cmd { margin: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); color: var(--text); font-family: var(--font-mono); font-size: var(--fs-xs); line-height: var(--lh-xs); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
 .lib-mcp-vars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
 .lib-mcp-vars li { display: flex; align-items: center; gap: var(--s-2); min-width: 0; overflow-wrap: anywhere; }

@@ -27,78 +27,142 @@ beforeAll(async () => {
 afterAll(() => p.restore());
 afterEach(async () => { await p.unmount(); vi.unstubAllGlobals(); });
 
-const answer = (status: number, body: unknown) => vi.stubGlobal("fetch", vi.fn(async () => ({ ok: status < 400, status, json: async () => body })));
+const DETAIL = (id: string) => ({ ok: true, detail: { kind: "skill", id, description: `${id} desc`, sha256: "a".repeat(64), fields: [{ key: "name", value: id }, { key: "description", value: `${id} desc` }], body: `# ${id}\n\nSteps`, files: [{ path: "SKILL.md", size: 40, content: `---\nname: ${id}\n---\n` }] } });
+/** Every URL answered by its own rule: the list, the overview and one skill's detail. */
+const answer = (status: number, body: unknown, over: Record<string, { status: number; body: unknown }> = {}) => vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+  const key = url.split("?")[0]!;
+  const a = over[key] ?? (key === "/ui/library/item" ? { status: 200, body: DETAIL(new URL(url, "http://x").searchParams.get("id")!) } : key === "/ui/library/overview" ? { status: 404, body: {} } : { status, body });
+  return { ok: a.status < 400, status: a.status, json: async () => a.body };
+}));
 const ctxFor = (inst: Record<string, unknown>) => ({
   fleet: { defaults: {}, instances: { coder: inst } }, schema: buildSettingsImpactSchema(), stageAgent: vi.fn(), drafts: new Map(),
   channelType: () => "telegram", shortName: (n: string) => n, staged: new Map(), reload: vi.fn(),
 });
+const q = (sel: string) => p.document.querySelector(sel) as any;
+const qa = (sel: string) => p.document.querySelectorAll(sel) as any[];
 async function work(inst: Record<string, unknown>) {
   const out: { m?: any } = {};
   const ctx = ctxFor(inst);
   function Page() { const m = D.useAgentForm({ name: "coder", inst, ctx }); out.m = m; return h(D.AgentFields, { m, cat: "work" }); }
   await p.unmount(); await p.mount(h(Page, null)); await settle(8);
-  const rows = () => p.root.querySelectorAll("[data-library-skill]").map((e: any) => e.getAttribute("data-library-skill"));
-  const box = (id: string) => p.root.querySelector(`[data-library-skill="${id}"] input`) as any;
-  const tick = async (id: string, on: boolean) => { const el = box(id); el.checked = on; fire(el, "change"); await settle(4); };
-  return { rows, box, tick, patch: () => out.m.pending(), text: () => p.root.textContent as string };
+  /** The skills that are enabled (the card's rows). */
+  const rows = () => qa("[data-library-skills] [data-library-skill]").map((e) => e.getAttribute("data-library-skill"));
+  const remove = async (id: string) => { q(`[data-library-skills] [data-library-remove="${id}"]`).click(); await settle(4); };
+  const openPicker = async () => { q("[data-library-skills] [data-library-add-open]").click(); await settle(6); };
+  const pickable = () => qa("[data-library-pick-item]").map((e) => e.getAttribute("data-library-pick-item"));
+  /** Open one item in the picker, read it, enable it. */
+  const enable = async (id: string) => { q(`[data-library-pick-item="${id}"]`).click(); await settle(8); q("[data-library-picker-enable]").click(); await settle(6); };
+  return { rows, remove, openPicker, pickable, enable, patch: () => out.m.pending(), text: () => (q("[data-library-skills]")?.textContent ?? "") as string };
 }
 
-describe("the field", () => {
-  it("lists the library's skills only (no MCP, no built-in), and offers a skill that is not in its saved state only as unavailable", async () => {
+describe("the card", () => {
+  it("lists only what is enabled; the picker offers the Library's skills that are not (no MCP, no built-in), one that cannot be given only as unavailable", async () => {
     answer(200, { items: ITEMS });
-    const w = await work({ working_directory: "/w" });
-    expect(w.rows()).toEqual(["review", "triage", "edited", "fresh"]);
-    expect(w.box("review").disabled).toBeFalsy();
-    expect(w.box("edited").disabled).toBe(true); expect(w.box("fresh").disabled).toBe(true);
-    expect(w.text()).toContain("Reviews code");
-    expect(w.text()).toContain("Skills"); expect(w.text()).toContain("Library");
+    const w = await work({ working_directory: "/w", library: { skills: ["review"] } });
+    expect(w.rows()).toEqual(["review"]);                                       // triage, edited and fresh are not on the card
+    expect(w.text()).toContain("Reviews code"); expect(w.text()).toContain("Library");
+    await w.openPicker();
+    expect(w.pickable()).toEqual(["triage", "edited", "fresh"]);
+    expect(q('[data-library-pick-item="edited"]').disabled).toBe(true); expect(q('[data-library-pick-item="fresh"]').disabled).toBe(true);
+    expect(q('[data-library-pick-item="triage"]').disabled).toBeFalsy();
     expect((globalThis as any).fetch.mock.calls[0][0]).toBe("/ui/library/list");
+  });
+
+  it("is titled 'Skills' with its tip and restart badge in the title row, and has no second 'Skills' heading inside", async () => {
+    answer(200, { items: ITEMS });
+    await work({ working_directory: "/w" });
+    const card = q("[data-library-skills]");
+    expect(card.querySelector(".lib-card-head h3").textContent).toContain("Skills");
+    expect(card.querySelector(".lib-card-head h3 .impact")).not.toBeNull();       // "Restart this Agent", next to the title
+    expect(card.querySelector(".lib-card-head [data-library-add-open]")).not.toBeNull();
+    expect(card.querySelectorAll(".s-lab").length).toBe(0);                       // the duplicate "Skills ⓘ" sub-heading is gone
   });
 
   it("an untouched form writes no `library` key (fleet.yaml stays as it is)", async () => {
     answer(200, { items: ITEMS });
     const w = await work({ working_directory: "/w", library: { skills: ["review"] } });
-    expect(w.box("review").checked).toBe(true);
+    expect(w.rows()).toEqual(["review"]);
     expect(w.patch()).not.toHaveProperty("library");
     const none = await work({ working_directory: "/w" });
     expect(none.patch()).not.toHaveProperty("library");
   });
 
-  it("ticking writes the whole list; unticking the last one removes the key", async () => {
+  it("an empty card says so; enabling through the picker (read first, then Enable) writes the whole list and the skill leaves the picker; removing the last one removes the key", async () => {
     answer(200, { items: ITEMS });
     const w = await work({ working_directory: "/w" });
-    await w.tick("review", true); await w.tick("triage", true);
+    expect(w.rows()).toEqual([]);
+    expect(q("[data-library-empty]").textContent).toContain("No Library skills enabled yet");
+    await w.openPicker();
+    // a click reads it (257's preview: fields, Markdown, files); nothing is written until Enable
+    q('[data-library-pick-item="review"]').click(); await settle(8);
+    expect(q('[data-library-picker-preview="review"] [data-library-fields]')).not.toBeNull();
+    expect(q('[data-library-picker-preview="review"] [data-library-md]')).not.toBeNull();
+    expect(w.patch()).not.toHaveProperty("library");
+    q("[data-library-picker-enable]").click(); await settle(6);
+    expect(w.patch().library).toEqual({ skills: ["review"] });
+    // back at the list, the enabled skill gone from it, and a line saying so; a second one can follow
+    expect(w.pickable()).toEqual(["triage", "edited", "fresh"]);
+    expect(q("[data-library-picker-done-note]").textContent).toContain("“review” is enabled");
+    await w.enable("triage");
     expect(w.patch().library).toEqual({ skills: ["review", "triage"] });
-    await w.tick("review", false);
+    q("[data-library-picker-done]").click(); await settle(4);
+    expect(q("[data-library-picker]")).toBeNull();
+    expect(w.rows()).toEqual(["review", "triage"]);
+    await w.remove("review");
     expect(w.patch().library).toEqual({ skills: ["triage"] });
+    await w.remove("triage");
+    expect(w.patch()).not.toHaveProperty("library");                           // back to what is saved: no key at all
     const w2 = await work({ working_directory: "/w", library: { skills: ["review"] } });
-    await w2.tick("review", false);
+    await w2.remove("review");
     expect(w2.patch().library).toBeNull();
   });
 
-  it("a mounted skill the Library no longer has stays in the list so it can be removed", async () => {
+  it("the picker filters by name and description, and says when nothing matches", async () => {
+    answer(200, { items: ITEMS });
+    const w = await work({ working_directory: "/w" });
+    await w.openPicker();
+    const filter = q("[data-library-picker-filter]");
+    filter.value = "sorts"; fire(filter, "input"); await settle(4);
+    expect(w.pickable()).toEqual(["triage"]);
+    filter.value = "zzz"; fire(filter, "input"); await settle(4);
+    expect(w.pickable()).toEqual([]); expect(q("[data-library-picker-empty]").textContent).toContain("Nothing matches “zzz”");
+  });
+
+  it("a skill that cannot be read in the picker says so and enables nothing", async () => {
+    answer(200, { items: ITEMS }, { "/ui/library/item": { status: 500, body: {} } });
+    const w = await work({ working_directory: "/w" });
+    await w.openPicker();
+    q('[data-library-pick-item="review"]').click(); await settle(8);
+    expect(q("[data-library-picker]").textContent).toContain("Could not read it");
+    expect(w.patch()).not.toHaveProperty("library");
+  });
+
+  it("an enabled skill the Library no longer has stays on the card so it can be removed", async () => {
     answer(200, { items: ITEMS });
     const w = await work({ working_directory: "/w", library: { skills: ["ghost"] } });
-    expect(w.rows()).toContain("ghost");
+    expect(w.rows()).toEqual(["ghost"]);
     expect(w.text()).toContain("Not in the Library any more");
-    expect(w.box("ghost").disabled).toBeFalsy();
-    await w.tick("ghost", false);
+    await w.remove("ghost");
     expect(w.patch().library).toBeNull();
   });
 
   it("an empty library and an unreadable one say so; neither writes anything", async () => {
     answer(200, { items: [{ kind: "mcp", id: "github", status: "ok" }] });
     let w = await work({ working_directory: "/w" });
-    expect(w.rows()).toEqual([]); expect(w.text()).toContain("no usable skills yet");
+    expect(w.rows()).toEqual([]);
+    await w.openPicker();
+    expect(q("[data-library-picker-empty]").textContent).toContain("no usable skills yet");
+    await p.unmount();
     answer(403, { error: "admin_required" });
     w = await work({ working_directory: "/w" });
     expect(w.text()).toContain("Could not read the Library"); expect(w.patch()).not.toHaveProperty("library");
   });
 
-  it("a Windows native agent has no such field", async () => {
+  it("a Windows native agent has no such card", async () => {
     answer(200, { items: ITEMS });
     const w = await work({ working_directory: "/w", runtime: "windows" });
     expect(w.rows()).toEqual([]);
+    expect(q("[data-library-skills]")).toBeNull();
     expect((globalThis as any).fetch).not.toHaveBeenCalledWith("/ui/library/list", expect.anything());
   });
 });
@@ -139,6 +203,6 @@ describe("words", () => {
     expect(e.size).toBeGreaterThanOrEqual(8);
     expect([...z.keys()].sort()).toEqual([...e.keys()].sort());
     for (const [k, v] of e) { expect(v.length, k).toBeGreaterThan(0); expect(z.get(k)!.length, k).toBeGreaterThan(0); }
-    expect(I.t("libraryMount.label")).toBe("Skills");
+    expect(I.t("libraryMount.card")).toBe("Skills");
   });
 });

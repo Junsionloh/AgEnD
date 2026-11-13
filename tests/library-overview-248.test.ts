@@ -456,8 +456,8 @@ describe("the agent's Skills card", () => {
     const D = await import("/ui/js/library-mount-field.js" as string);
     const field = async (backend: string, folderBackends: string[] | undefined) => {
       answer({ "/ui/library/list": { status: 200, body: { items: ITEMS, ...(folderBackends ? { skillsFolderBackends: folderBackends } : {}) } } });
-      const m = { f: { backend, library_skills: [] }, set: () => () => {} };
-      await p.mount(h(D.LibrarySkillsField, { m, L: (label: string) => h("label", null, label) })); await settle(6);
+      const m = { name: "coder", f: { backend, library_skills: [] }, set: () => () => {} };
+      await p.mount(h(D.LibrarySkillsCard, { m, title: "Skills" })); await settle(6);
     };
     await field("gemini-cli", Object.keys(NATIVE_SKILLS_DIR_SEGMENTS));
     expect(q("[data-library-no-folder]").textContent).toContain("gemini-cli");

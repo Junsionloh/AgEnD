@@ -1,6 +1,6 @@
 /**
- * AGEND-261: the "Team MCP servers" card of an agent's settings (tick → see exactly what it runs → confirm → the patch), the Library page's
- * MCP rows (the "in use" tags and the "+"), and the words in both languages.
+ * AGEND-261: the "MCP servers" and "Skills" cards of an agent's settings (only what is enabled; "+ Add" opens the picker: read what it runs,
+ * Enable = confirm, then the patch), the Library page's MCP rows (the "in use" tags and the "+"), and the words in both languages.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
@@ -54,133 +54,153 @@ async function work(inst: Record<string, unknown>) {
   const ctx = ctxFor(inst);
   function Page() { const m = D.useAgentForm({ name: "coder", inst, ctx }); out.m = m; return h(D.AgentFields, { m, cat: "work" }); }
   await p.unmount(); await p.mount(h(Page, null)); await settle(8);
-  const rows = () => qa("[data-library-mcp]").map((e) => e.getAttribute("data-library-mcp"));
-  const box = (id: string) => q(`[data-library-mcp="${id}"] input`);
-  const tick = async (id: string, on: boolean) => { const el = box(id); el.checked = on; fire(el, "change"); await settle(6); };
-  return { rows, box, tick, patch: () => out.m.pending(), text: () => (q("[data-library-mcp-field]")?.textContent ?? "") as string };
+  const rows = () => qa("[data-library-mcp-field] [data-library-mcp]").map((e) => e.getAttribute("data-library-mcp"));
+  const remove = async (id: string) => { q(`[data-library-mcp-field] [data-library-remove="${id}"]`).click(); await settle(6); };
+  const openPicker = async () => { q("[data-library-mcp-field] [data-library-add-open]").click(); await settle(6); };
+  const pickable = () => qa("[data-library-pick-item]").map((e) => e.getAttribute("data-library-pick-item"));
+  const read = async (id: string) => { q(`[data-library-pick-item="${id}"]`).click(); await settle(6); };
+  return { rows, remove, openPicker, pickable, read, patch: () => out.m.pending(), text: () => (q("[data-library-mcp-field]")?.textContent ?? "") as string };
 }
 
-describe("the card", () => {
-  it("sits right under Team skills in the Workspace category and lists the library's MCP servers", async () => {
-    answer({ "/ui/library/mcp-status": { status: 200, body: STATUS }, "/ui/library/list": { status: 200, body: { items: [] } } });
-    const w = await work({ working_directory: "/w" });
-    expect(w.rows()).toEqual(["gh", "ex", "broken"]);
-    expect(w.box("gh").disabled).toBeFalsy();
-    expect(w.box("broken").disabled).toBe(true);                                // changed outside the Library: not offered
-    expect(w.text()).toContain("gh server");
+describe("the MCP servers card", () => {
+  const withStatus = (items: unknown[] = STATUS.items, extra: Record<string, unknown> = {}) => ({ "/ui/library/mcp-status": { status: 200, body: { ...STATUS, items, ...extra } }, "/ui/library/list": { status: 200, body: { items: [] } } });
+
+  it("sits right under Skills in the Workspace category; its title row has the tip, the restart badge and '+ Add'; there is no second heading inside", async () => {
+    answer(withStatus());
+    await work({ working_directory: "/w" });
+    const card = q("[data-library-mcp-field]");
+    expect(card.querySelector(".lib-card-head h3").textContent).toContain("MCP servers");
+    expect(card.querySelector(".lib-card-head h3 .impact")).not.toBeNull();
+    expect(card.querySelector(".lib-card-head [data-library-add-open]").textContent).toContain("Add");
+    expect(card.querySelectorAll(".s-lab").length).toBe(0);
     expect((globalThis as any).fetch.mock.calls.map((c: any[]) => c[0])).toContain("/ui/library/mcp-status?agent=coder");
     const dlg = readFileSync("src/ui/settings-dialogs.js", "utf8");
     expect(dlg.indexOf("libraryMcpCardTitle()")).toBeGreaterThan(dlg.indexOf("libraryCardTitle()"));
     expect(dlg.indexOf("libraryMcpCardTitle()")).toBeLessThan(dlg.indexOf('pt("cardIdle")'));
   });
 
+  it("only what is enabled is on the card: with nothing enabled there is an empty state, and every Library server is in the picker", async () => {
+    answer(withStatus());
+    const w = await work({ working_directory: "/w" });
+    expect(w.rows()).toEqual([]);
+    expect(q("[data-library-mcp-field] [data-library-empty]").textContent).toContain("No Library MCP servers enabled yet");
+    await w.openPicker();
+    expect(w.pickable()).toEqual(["gh", "ex", "broken"]);
+    expect(q('[data-library-pick-item="broken"]').disabled).toBe(true);        // changed outside the Library: listed, not offered
+  });
+
   it("an untouched form writes no `library` key", async () => {
-    answer({ "/ui/library/mcp-status": { status: 200, body: { ...STATUS, items: [stdio("gh", { mounted: true, confirmed: true })] } }, "/ui/library/list": { status: 200, body: { items: [] } } });
+    answer(withStatus([stdio("gh", { mounted: true, confirmed: true })]));
     const w = await work({ working_directory: "/w", library: { mcp: ["gh"] } });
-    expect(w.box("gh").checked).toBe(true);
+    expect(w.rows()).toEqual(["gh"]);
     expect(w.patch()).not.toHaveProperty("library");
   });
 
-  it("ticking an unconfirmed server shows exactly what it runs and writes nothing until it is confirmed", async () => {
+  it("reading a server in the picker shows exactly what it runs; Enable is the confirmation (that version, for this agent) and then the patch has the id", async () => {
     const calls: Calls = [];
-    answer({ "/ui/library/mcp-status": { status: 200, body: STATUS }, "/ui/library/mcp-confirm": { status: 200, body: { ok: true } } }, calls);
+    answer({ ...withStatus(), "/ui/library/mcp-confirm": { status: 200, body: { ok: true } } }, calls);
     const w = await work({ working_directory: "/w" });
-    await w.tick("gh", true);
-    expect(q("[data-library-mcp-review]")).not.toBeNull();
+    await w.openPicker();
+    await w.read("gh");
     // the whole command, argument by argument (one with a space and one with quotes are quoted so none can be misread), and the variable names
     expect(q("[data-library-mcp-command]").textContent).toBe('npx -y "pkg with space" "--flag=\\"q\\""');
     expect(qa("[data-library-mcp-var]").map((e) => e.getAttribute("data-library-mcp-var"))).toEqual(["GH_TOKEN", "GH_HOST"]);
     expect(q('[data-library-mcp-var="GH_HOST"]').textContent).toContain("missing");
-    expect(q("[data-library-mcp-review]").textContent).toContain("same as today’s .env approach");
+    expect(q("[data-library-picker-preview]").textContent).toContain("same as today’s .env approach");
+    expect(q("[data-library-picker-preview]").textContent).toContain("Enabling it confirms this version");
+    // nothing is recorded or written until Enable
     expect(w.patch()).not.toHaveProperty("library");
-    expect(w.box("gh").checked).toBeFalsy();
-    // confirm: the exact version that was shown is recorded for this agent, then the box is ticked and the patch has the id
-    q("[data-library-mcp-confirm]").click(); await settle(10);
+    expect(calls.filter((c) => c.method === "POST")).toEqual([]);
+    q("[data-library-picker-enable]").click(); await settle(10);
     expect(calls.filter((c) => c.method === "POST")).toEqual([{ url: "/ui/library/mcp-confirm", method: "POST", body: { agent: "coder", id: "gh", sha256: SHA } }]);
-    expect(q("[data-library-mcp-review]")).toBeNull();
-    expect(w.box("gh").checked).toBe(true);
     expect(w.patch().library).toEqual({ mcp: ["gh"] });
+    // back at the picker's list: gh left it, with a line saying it is enabled; the card behind it lists gh with its status
+    expect(w.pickable()).toEqual(["ex", "broken"]);
+    expect(q("[data-library-picker-done-note]").textContent).toContain("“gh” is enabled");
+    q("[data-library-picker-done]").click(); await settle(6);
+    expect(w.rows()).toEqual(["gh"]);
   });
 
-  it("cancelling the confirmation changes nothing and records nothing", async () => {
+  it("Back from the preview changes nothing and records nothing", async () => {
     const calls: Calls = [];
-    answer({ "/ui/library/mcp-status": { status: 200, body: STATUS } }, calls);
+    answer(withStatus(), calls);
     const w = await work({ working_directory: "/w" });
-    await w.tick("gh", true);
-    const cancel = qa("button").find((b) => b.textContent.trim() === "Cancel"); cancel.click(); await settle(6);
-    expect(q("[data-library-mcp-review]")).toBeNull();
-    expect(w.box("gh").checked).toBeFalsy();
+    await w.openPicker(); await w.read("gh");
+    q("[data-library-picker-back]").click(); await settle(6);
+    expect(q('[data-library-picker="list"]')).not.toBeNull();
     expect(w.patch()).not.toHaveProperty("library");
     expect(calls.filter((c) => c.method === "POST")).toEqual([]);
   });
 
-  it("a stale version (409) is not applied: it says so and stays unticked", async () => {
-    answer({ "/ui/library/mcp-status": { status: 200, body: STATUS }, "/ui/library/mcp-confirm": { status: 409, body: { error: "changed" } } });
+  it("a stale version (409) is not enabled: the picker says so and the form is unchanged", async () => {
+    answer({ ...withStatus(), "/ui/library/mcp-confirm": { status: 409, body: { error: "changed" } } });
     const w = await work({ working_directory: "/w" });
-    await w.tick("gh", true);
-    q("[data-library-mcp-confirm]").click(); await settle(10);
+    await w.openPicker(); await w.read("gh");
+    q("[data-library-picker-enable]").click(); await settle(10);
     expect(q("[data-library-error]").textContent).toContain("changed after you opened");
-    expect(w.box("gh").checked).toBeFalsy();
     expect(w.patch()).not.toHaveProperty("library");
   });
 
-  it("an http server shows the whole address and its domain; one already confirmed at this version is ticked straight away", async () => {
-    answer({ "/ui/library/mcp-status": { status: 200, body: STATUS } });
+  it("an http server shows the whole address and its domain; enabling several in a row works and removing writes the list back", async () => {
+    answer({ ...withStatus(), "/ui/library/mcp-confirm": { status: 200, body: { ok: true } } });
     const w = await work({ working_directory: "/w" });
-    await w.tick("ex", true);
-    expect(q("[data-library-mcp-review]")).toBeNull();                          // confirmed for this agent at this version: nothing new to show
-    expect(w.patch().library).toEqual({ mcp: ["ex"] });
-    await w.tick("ex", false);
-    expect(w.patch()).not.toHaveProperty("library");
-    // the details block the review uses
-    await p.unmount();
-    await p.mount(h(LM.McpDetails, { item: http("ex") })); await settle(4);
+    await w.openPicker(); await w.read("ex");
     expect(q("[data-library-mcp-url]").textContent).toBe("https://mcp.example.com/v1");
     expect(q("[data-library-mcp-domain]").textContent).toBe("mcp.example.com");
+    q("[data-library-picker-enable]").click(); await settle(10);
+    await w.read("gh"); q("[data-library-picker-enable]").click(); await settle(10);
+    expect(w.patch().library).toEqual({ mcp: ["ex", "gh"] });
+    q("[data-library-picker-done]").click(); await settle(6);
+    await w.remove("ex");
+    expect(w.patch().library).toEqual({ mcp: ["gh"] });
+    await w.remove("gh");
+    expect(w.patch()).not.toHaveProperty("library");
   });
 
-  it("a mounted server with a missing variable says which, and is not started; a changed one asks to be confirmed again", async () => {
+  it("an enabled server with a missing variable says which, and is not started; a changed one asks to be confirmed again (the confirmation is not a settings change)", async () => {
     const calls: Calls = [];
     const items = [stdio("gh", { mounted: true, confirmed: true }), stdio("ex2", { mounted: true, confirmed: false, variables: [{ name: "A", set: true }] })];
-    answer({ "/ui/library/mcp-status": { status: 200, body: { ...STATUS, items } }, "/ui/library/mcp-confirm": { status: 200, body: { ok: true } } }, calls);
+    answer({ ...withStatus(items), "/ui/library/mcp-confirm": { status: 200, body: { ok: true } } }, calls);
     const w = await work({ working_directory: "/w", library: { mcp: ["gh", "ex2"] } });
+    expect(w.rows()).toEqual(["gh", "ex2"]);
     expect(q('[data-library-mcp="gh"] [data-library-mcp-missing]').getAttribute("data-library-mcp-missing")).toBe("GH_HOST");
     expect(q('[data-library-mcp="gh"]').textContent).toContain("no value for GH_HOST");
     expect(q('[data-library-mcp="ex2"] [data-library-mcp-changed]').textContent).toContain("Changed — confirm again");
     q('[data-library-mcp="ex2"] [data-library-mcp-review-open]').click(); await settle(6);
     q("[data-library-mcp-confirm]").click(); await settle(10);
     expect(calls.some((c) => c.method === "POST" && c.body.id === "ex2")).toBe(true);
-    expect(w.patch()).not.toHaveProperty("library");                              // it was mounted already: confirming is not a change of settings
+    expect(w.patch()).not.toHaveProperty("library");
   });
 
-  it("says so — from the server's table, not a list in the page — when the agent's CLI cannot take library MCP, and offers no new tick", async () => {
-    answer({ "/ui/library/mcp-status": { status: 200, body: { ...STATUS, backend: "grok", supported: false } } });
+  it("says so — from the server's table, not a list in the page — when the agent's CLI cannot take library MCP, and '+ Add' is held back", async () => {
     const field = async (backend: string, backends: string[] | undefined) => {
-      answer({ "/ui/library/mcp-status": { status: 200, body: { ...STATUS, ...(backends ? { backends } : { backends: undefined }) } } });
+      answer(withStatus(STATUS.items, backends ? { backends } : { backends: undefined }));
       const m = { name: "coder", f: { backend, library_mcp: [] }, set: () => () => {} };
-      await p.mount(h(LM.LibraryMcpField, { m, L: (label: string) => h("label", null, label) })); await settle(6);
+      await p.mount(h(LM.LibraryMcpCard, { m, title: "MCP servers" })); await settle(6);
     };
     await field("grok", ["claude-code", "codex"]);
     expect(q("[data-library-mcp-unsupported]").textContent).toContain("grok");
     expect(q("[data-library-mcp-unsupported]").textContent).toContain("does not support Library MCP servers yet");
-    expect(q('[data-library-mcp="gh"] input').disabled).toBe(true);
+    expect(q("[data-library-add-open]").disabled).toBe(true);
     await p.unmount();
     await field("codex", ["claude-code", "codex"]);
-    expect(q("[data-library-mcp-unsupported]")).toBeNull();
+    expect(q("[data-library-mcp-unsupported]")).toBeNull(); expect(q("[data-library-add-open]").disabled).toBe(false);
     await p.unmount();
     await field("grok", undefined);                                             // an older server: nothing is claimed
     expect(q("[data-library-mcp-unsupported]")).toBeNull();
   });
 
-  it("a server the Library no longer has stays listed so it can be removed; an empty or unreadable library says so and writes nothing", async () => {
-    answer({ "/ui/library/mcp-status": { status: 200, body: { ...STATUS, items: [] } } });
+  it("a server the Library no longer has stays on the card so it can be removed; an empty or unreadable library says so and writes nothing", async () => {
+    answer(withStatus([]));
     let w = await work({ working_directory: "/w", library: { mcp: ["ghost"] } });
     expect(w.rows()).toEqual(["ghost"]);
     expect(w.text()).toContain("Not in the Library any more");
-    await w.tick("ghost", false);
+    await w.remove("ghost");
     expect(w.patch().library).toBeNull();
     w = await work({ working_directory: "/w" });
-    expect(w.text()).toContain("no usable MCP server yet");
+    await w.openPicker();
+    expect(q("[data-library-picker-empty]").textContent).toContain("no usable MCP server yet");
+    await p.unmount();
     answer({ "/ui/library/mcp-status": { status: 403, body: { error: "admin_required" } } });
     w = await work({ working_directory: "/w" });
     expect(w.text()).toContain("Could not read the Library");
@@ -188,10 +208,17 @@ describe("the card", () => {
   });
 
   it("a Windows native agent has no such card", async () => {
-    answer({ "/ui/library/mcp-status": { status: 200, body: STATUS } });
+    answer(withStatus());
     const w = await work({ working_directory: "/w", runtime: "windows" });
     expect(w.rows()).toEqual([]);
+    expect(q("[data-library-mcp-field]")).toBeNull();
     expect((globalThis as any).fetch).not.toHaveBeenCalledWith(expect.stringContaining("/ui/library/mcp-status"), expect.anything());
+  });
+
+  it("the details block the picker and the reconfirmation share shows an http server whole", async () => {
+    await p.mount(h(LM.McpDetails, { item: http("ex") })); await settle(4);
+    expect(q("[data-library-mcp-url]").textContent).toBe("https://mcp.example.com/v1");
+    expect(q("[data-library-mcp-domain]").textContent).toBe("mcp.example.com");
   });
 
   it("is in both languages and the tags' link goes to it (#library-mcp)", () => {
@@ -202,73 +229,63 @@ describe("the card", () => {
   });
 });
 
-describe("the two cards list what the agent gets by itself first (AGEND-261 naming)", () => {
+describe("what the agent gets by itself is one line, opened on request (AGEND-261)", () => {
   const OV = buildOverview({ instances: { coder: { backend: "claude-code" }, general: { backend: "claude-code", general_topic: true } } });
   const ITEMS_ = [{ kind: "skill", id: "review", description: "Reviews code", status: "ok" }];
   const maps = (ov: unknown = { status: 200, body: OV }) => ({
     "/ui/library/overview": ov as any, "/ui/library/list": { status: 200, body: { items: ITEMS_ } }, "/ui/library/mcp-status": { status: 200, body: STATUS },
   });
-  const order = (sel: string) => qa(sel).map((e) => e.getAttribute("data-library-builtin-skill") ?? e.getAttribute("data-library-builtin-mcp") ?? e.getAttribute("data-library-skill") ?? e.getAttribute("data-library-mcp"));
 
-  it("Skills: the built-in skills of the agent's role are first — grey, ticked, disabled, tagged 'Built in · automatic' — then the Library's, tagged 'Library'", async () => {
-    answer(maps());
-    const w = await work({ working_directory: "/w" });
-    const builtinNames = OV.builtinSkills.filter((b: any) => b.agents.includes("coder")).map((b: any) => b.name);
-    expect(builtinNames.length).toBeGreaterThan(0);
-    const rows = qa("[data-library-skills] [data-library-builtin-skill]");
-    expect(rows.map((e) => e.getAttribute("data-library-builtin-skill"))).toEqual(builtinNames);
-    for (const r of rows) {
-      const box = r.querySelector("input");
-      expect(box.checked).toBe(true); expect(box.disabled).toBe(true);
-      expect(r.classList.contains("lib-builtin")).toBe(true);
-      expect(r.textContent).toContain("Built in · automatic");
-    }
-    // a worker does not get what only the General gets
-    expect(OV.builtinSkills.some((b: any) => !b.agents.includes("coder") && b.agents.includes("general"))).toBe(true);
-    expect(rows.length).toBeLessThan(OV.builtinSkills.length);
-    // order: every built-in row before the first library row
-    const all = qa("[data-library-skills] [data-library-builtin-skill], [data-library-skills] [data-library-skill]");
-    const lastBuiltin = all.map((e) => e.hasAttribute("data-library-builtin-skill")).lastIndexOf(true);
-    const firstLibrary = all.findIndex((e) => e.hasAttribute("data-library-skill"));
-    expect(lastBuiltin).toBeLessThan(firstLibrary);
-    expect(q('[data-library-skill="review"]').textContent).toContain("Library");
-    expect(q('[data-library-skill="review"] input').disabled).toBeFalsy();
-    // the built-in rows are display only: unticking is impossible and nothing is written
-    expect(w.patch()).not.toHaveProperty("library");
-  });
-
-  it("the General gets more built-in skills than a worker, from the overview's own rule", async () => {
+  it("Skills: the built-in skills of the agent's role are ONE summary line ('n built in · automatic'); opening it lists them read only, with no checkbox or ×", async () => {
     answer(maps());
     await work({ working_directory: "/w" });
-    const asWorker = qa("[data-library-builtin-skill]").length;
-    expect(asWorker).toBe(OV.builtinSkills.filter((b: any) => b.agents.includes("coder")).length);
-    expect(OV.builtinSkills.filter((b: any) => b.agents.includes("general")).length).toBeGreaterThan(asWorker);
+    const builtinNames = OV.builtinSkills.filter((b: any) => b.agents.includes("coder")).map((b: any) => b.name);
+    expect(builtinNames.length).toBeGreaterThan(0);
+    const box = q("[data-library-skills] [data-library-builtin-summary]");
+    expect(box.textContent).toContain(`${builtinNames.length} built in · automatic`);
+    expect(qa("[data-library-skills] [data-library-builtin-skill]").length).toBe(0);          // closed: no list
+    q("[data-library-skills] [data-library-builtin-toggle]").click(); await settle(4);
+    const rows = qa("[data-library-skills] [data-library-builtin-skill]");
+    expect(rows.map((e) => e.getAttribute("data-library-builtin-skill"))).toEqual(builtinNames);
+    for (const r of rows) { expect(r.querySelector("input")).toBeNull(); expect(r.querySelector("[data-library-remove]")).toBeNull(); }
+    expect(q("[data-library-skills] [data-library-builtin-toggle]").getAttribute("aria-expanded")).toBe("true");
+    q("[data-library-skills] [data-library-builtin-toggle]").click(); await settle(4);
+    expect(qa("[data-library-skills] [data-library-builtin-skill]").length).toBe(0);
+    // a worker does not get what only the General gets
+    expect(OV.builtinSkills.filter((b: any) => b.agents.includes("general")).length).toBeGreaterThan(builtinNames.length);
   });
 
-  it("MCP servers: AgEnD's own `agend` is first, grey and ticked, then the Library's, tagged 'Library'", async () => {
+  it("the built-in lines are display only: nothing is written, and a built-in skill is never in the picker", async () => {
     answer(maps());
     const w = await work({ working_directory: "/w" });
+    expect(w.patch()).not.toHaveProperty("library");
+    q("[data-library-skills] [data-library-add-open]").click(); await settle(6);
+    const names = qa("[data-library-pick-item]").map((e) => e.getAttribute("data-library-pick-item"));
+    expect(names).toEqual(["review"]);
+  });
+
+  it("MCP servers: AgEnD's own `agend` is one summary line that opens to a read-only list; the Library's enabled servers are rows below", async () => {
+    answer(maps());
+    const w = await work({ working_directory: "/w", library: { mcp: ["gh"] } });
+    expect(q("[data-library-mcp-field] [data-library-builtin-summary]").textContent).toContain("1 built in · automatic");
+    q("[data-library-mcp-field] [data-library-builtin-toggle]").click(); await settle(4);
     const row = q("[data-library-mcp-field] [data-library-builtin-mcp]");
     expect(row.getAttribute("data-library-builtin-mcp")).toBe("agend");
-    expect(row.querySelector("input").checked).toBe(true); expect(row.querySelector("input").disabled).toBe(true);
-    expect(row.textContent).toContain("Built in · automatic");
-    const all = qa("[data-library-mcp-field] [data-library-builtin-mcp], [data-library-mcp-field] [data-library-mcp]").map((e) => e.getAttribute("data-library-builtin-mcp") ?? e.getAttribute("data-library-mcp"));
-    expect(all[0]).toBe("agend");
-    expect(all.slice(1)).toEqual(["gh", "ex", "broken"]);
+    expect(row.querySelector("input")).toBeNull();
+    expect(w.rows()).toEqual(["gh"]);
     expect(q('[data-library-mcp="gh"]').textContent).toContain("Library");
     expect(w.patch()).not.toHaveProperty("library");
   });
 
-  it("an overview that cannot be read leaves the Library's rows exactly as before (no built-in rows, nothing broken)", async () => {
+  it("an overview that cannot be read leaves the Library's rows exactly as before (no built-in line, nothing broken)", async () => {
     answer(maps({ status: 500, body: { error: "library_failed" } }));
-    const w = await work({ working_directory: "/w" });
-    expect(qa("[data-library-builtin-skill]").length).toBe(0); expect(qa("[data-library-builtin-mcp]").length).toBe(0);
-    expect(w.rows()).toEqual(["gh", "ex", "broken"]);
-    expect(qa("[data-library-skill]").map((e) => e.getAttribute("data-library-skill"))).toEqual(["review"]);
+    const w = await work({ working_directory: "/w", library: { mcp: ["gh"] } });
+    expect(qa("[data-library-builtin-summary]").length).toBe(0);
+    expect(w.rows()).toEqual(["gh"]);
   });
 
   it("the cards, tags and groups say Library / Skills / MCP servers — no 'Team' anywhere the person reads", async () => {
-    for (const f of ["src/ui/library-mount-field.js", "src/ui/library-mcp-field.js", "src/ui/panel-library.js", "src/ui/library-skill.js"]) {
+    for (const f of ["src/ui/library-mount-field.js", "src/ui/library-mcp-field.js", "src/ui/library-card.js", "src/ui/panel-library.js", "src/ui/library-skill.js"]) {
       const src = readFileSync(f, "utf8");
       const copy = [...src.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]!).filter((x) => /\s/.test(x));
       for (const c of copy) { expect(c, `${f}: ${c.slice(0, 60)}`).not.toMatch(/\bTeam (skills?|MCP)\b|團隊 ?(Skill|MCP)|Added by your team|團隊新增/); }
@@ -403,6 +420,17 @@ describe("words", () => {
     for (const k of ["tagOpenMcp", "tagNoMcp", "addToBodyMcp", "addToNoMcp", "addToMcpLoading", "addToMcpFailed", "addToConfirmMcp", "addToChanged", "addToConfirmFailed", "deleteBodyUsedMcp", "e_expect_required"]) {
       expect(pe.has(k), k).toBe(true); expect(holes(pz.get(k)!), k).toBe(holes(pe.get(k)!));
     }
-    expect(I.t("libraryMcp.label")).toBe("MCP servers");
+    // the shared card parts (the picker, the built-in line, the × )
+    const card = readFileSync("src/ui/library-card.js", "utf8");
+    const ce = table(card.slice(card.indexOf("  en: {"), card.indexOf('  "zh-TW": {'))), cz = table(card.slice(card.indexOf('  "zh-TW": {'), card.indexOf("const lc =")));
+    expect(ce.size).toBeGreaterThanOrEqual(12);
+    expect([...cz.keys()].sort()).toEqual([...ce.keys()].sort());
+    for (const [k, v] of ce) { expect(cz.get(k)!.length, k).toBeGreaterThan(0); expect(holes(cz.get(k)!), k).toBe(holes(v)); }
+    // and the skills card's own
+    const ms = readFileSync("src/ui/library-mount-field.js", "utf8");
+    const me = table(ms.slice(ms.indexOf("  en: {"), ms.indexOf('  "zh-TW": {'))), mz = table(ms.slice(ms.indexOf('  "zh-TW": {'), ms.indexOf("const lw =")));
+    expect([...mz.keys()].sort()).toEqual([...me.keys()].sort());
+    for (const [k, v] of me) expect(holes(mz.get(k)!), k).toBe(holes(v));
+    expect(I.t("libraryMcp.card")).toBe("MCP servers");
   });
 });

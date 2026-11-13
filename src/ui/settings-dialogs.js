@@ -35,8 +35,8 @@ import {
 } from "./settings-model.js";
 import { ModelRefresh, useRefreshableModels, mw } from "./model-picker.js";
 import "./settings-codex-copy.js";   // M-2446: the Speed field's words (a retained old settings-strings lacks them)
-import { LibrarySkillsField, libraryCardTitle } from "./library-mount-field.js";
-import { LibraryMcpField, libraryMcpCardTitle } from "./library-mcp-field.js";   // AGEND-261: the same, for MCP servers (its own module and words)   // AGEND-244: its own module and words (never a stale named import)
+import { LibrarySkillsCard, libraryCardTitle, libraryCardTip } from "./library-mount-field.js";
+import { LibraryMcpCard, libraryMcpCardTitle, libraryMcpCardTip } from "./library-mcp-field.js";   // AGEND-261: the same, for MCP servers (its own module and words)   // AGEND-244: its own module and words (never a stale named import)
 import { AccountSelect } from "./accounts-view.js";   // #3212: the Account field (a new module: never a stale named import)
 import { capsOf } from "./cli-caps.js";
 /** M-2446: Codex speed choices (backend_options.codex.speed); "" = unset. Local, not imported: a stale tab may keep an
@@ -466,8 +466,8 @@ export function AgentFields({ m, cat, onDelete, idPrefix = "" }) {
     <${Card} title=${pt("cardWorkdir")}>
       <div class="field">${L(tn("workingDir"), "instance.working_directory", "ag-wd", pt("tip_workingDir"))}<input id=${fieldId("ag-wd")} type="text" value=${f.working_directory} onInput=${(e) => set("working_directory")(e.target.value)} /></div>
       <${Info}>${pt("note_workdir")}</${Info}></${Card}>
-    ${windows ? null : html`<${Card} title=${libraryCardTitle()} span=${true}><${LibrarySkillsField} m=${m} L=${L} /></${Card}>`}
-    ${windows ? null : html`<${Card} title=${libraryMcpCardTitle()} span=${true}><${LibraryMcpField} m=${m} L=${L} /></${Card}>`}
+    ${windows ? null : html`<${LibrarySkillsCard} m=${m} title=${html`${libraryCardTitle()} <${InfoTip} text=${libraryCardTip()} name=${libraryCardTitle()} /> <${Impact} schema=${schema} field="instance.library" />`} />`}
+    ${windows ? null : html`<${LibraryMcpCard} m=${m} title=${html`${libraryMcpCardTitle()} <${InfoTip} text=${libraryMcpCardTip()} name=${libraryMcpCardTitle()} /> <${Impact} schema=${schema} field="instance.library" />`} />`}
     <${Card} title=${pt("cardIdle")}>
       <div class="field">${L(`${tn("autoPause")} (${tn("minutes")})`, "instance.auto_pause_after", "ag-auto", pt("tip_autoPause"))}
         <${Override} inherit=${f.inherit.auto_pause_after} onInherit=${setInherit("auto_pause_after")} inherited=${inh("auto_pause_after", defaults.auto_pause_after ?? 0, "#g-auto", "minutes")}>

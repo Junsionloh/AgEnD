@@ -1,55 +1,68 @@
-// AGEND-261: the "MCP servers" card of an agent's settings (Settings → agent → Workspace, under "Skills"): AgEnD's own server (grey, listed first) and which of the library MCP
-// servers (the Library page, /ui/library/mcp) this agent is given. An administrator ticks them; ticking one that is not confirmed yet first
-// shows exactly what it would run and the variables it needs, and the confirmation is recorded for this agent at that version
-// (POST /ui/library/mcp-confirm). The agent gets the server in its CLI's MCP config at its next start (src/library/mcp-mount.ts): a server
-// with a variable that has no value in `.env` is NOT started, and the row says which variable is missing. Values are never shown here —
-// the server sends names only (GET /ui/library/mcp-status).
+// AGEND-261: the "MCP servers" card of an agent's settings (Settings → agent → Workspace, under "Skills"). It lists what the agent has switched on —
+// AgEnD's own `agend` server as one "built in · automatic" line that opens to a read-only list, and the Library's MCP servers that are enabled,
+// each with a × and what is wrong with it (no value for a variable, changed since it was confirmed) — and a "+ Add" in its title row opens the
+// picker of the Library's servers that are not enabled yet (src/ui/library-card.js has the shared parts). Reading one in the picker shows exactly
+// what it would run and the variables it needs, and "Enable" is also the confirmation: it records that version for this agent
+// (POST /ui/library/mcp-confirm) and then adds the id to the form. An enabled server that is edited afterwards asks to be confirmed again here.
+// The agent gets the server in its CLI's MCP config at its next start (src/library/mcp-mount.ts): a server with a variable that has no value in
+// `.env` is NOT started, and its row says which variable is missing. Values are never shown here — the server sends names only
+// (GET /ui/library/mcp-status).
 //
-// The words live in a module of their own, registered with the field (as library-mount-field.js does), so a tab opened before an upgrade never
-// shows a raw key. Nothing here writes settings: the ticked ids become the `library.mcp` value of the agent's patch (settings-model.js).
+// The words live in a module of their own, registered with the card (as library-mount-field.js does), so a tab opened before an upgrade never
+// shows a raw key. Nothing here writes settings: the enabled ids become the `library.mcp` value of the agent's patch (settings-model.js).
 import { html, useCallback, useEffect, useRef, useState } from "/assets/app-html.js";
 import { register, t } from "/assets/app-i18n.js";
 import { Dialog } from "/assets/ui-dialog.js";
-import { BuiltinRow, builtinFor } from "./library-mount-field.js";
+import { builtinFor } from "./library-mount-field.js";
+import { AddDialog, BuiltinSummary, EnabledRow, LibraryCardShell } from "./library-card.js";
 
 register("libraryMcp", {
   en: {
-    card: "MCP servers", label: "MCP servers",
-    tip: "The MCP servers this agent gets: AgEnD’s own, given automatically (grey, it cannot be turned off), and the ones from the Library that you tick. Library servers are written into the agent’s CLI MCP config when the agent starts, so a change applies after a restart. Your own MCP settings are not touched.",
-    builtinTag: "Built in · automatic", libraryTag: "Library", builtinTip: "Given to every agent automatically; it cannot be turned off here.", agendHint: "AgEnD’s own tools, by this agent’s tool set.",
-    none: "The Library has no usable MCP server yet. Add one on the Library page.", loadFailed: "Could not read the Library.", loading: "Reading the Library…",
+    card: "MCP servers",
+    tip: "The MCP servers this agent gets: AgEnD’s own, given automatically, and the ones you enable from the Library. Library servers are written into the agent’s CLI MCP config when the agent starts, so a change applies after a restart. Your own MCP settings are not touched.",
+    agendHint: "AgEnD’s own tools, by this agent’s tool set.",
+    empty: "No Library MCP servers enabled yet.",
+    none: "The Library has no usable MCP server yet. Add one on the Library page.", allOn: "Every MCP server in the Library is already enabled.",
+    loadFailed: "Could not read the Library.", loading: "Reading the Library…",
     gone: "Not in the Library any more", notReady: "Not given: it was changed outside the Library or breaks a rule — check it on the Library page",
-    unsupported: "This agent’s CLI ({0}) does not support Library MCP servers yet, so they do not take effect on it.",
+    unsupported: "This agent’s CLI ({0}) does not support Library MCP servers yet, so they do not take effect on it.", unsupportedAdd: "This agent’s CLI does not support Library MCP servers yet.",
+    pickerTitle: "Add an MCP server", filter: "Filter MCP servers",
     needsConfirm: "Changed — confirm again", review: "Review and confirm",
     missing: "Not started: no value for {0}. Set it in the .env file next to fleet.yaml and restart the agent.",
     missingOne: "Not started: no value for {0}.", varsSet: "set", varsMissing: "missing",
     honest: "A variable’s value is handed to its MCP server when the agent starts, the same as today’s .env approach. Keeping the keys away from the agent altogether is later gateway work.",
     confirmTitle: "Give “{0}” to {1}?", confirmLead: "This is exactly what will run when {0} starts. Check it before you confirm.",
+    enableLead: "This is exactly what will run when {0} starts. Enabling it confirms this version for {0}.",
     runs: "Runs", address: "Connects to", domain: "Domain", vars: "Variables it is given", noVars: "None.", describe: "What it is for",
-    headerVar: "{0} ← {1}", confirmBtn: "Confirm", confirmMount: "Confirm and give", cancel: "Cancel", saving: "Saving…", close: "Close",
+    confirmBtn: "Confirm", cancel: "Cancel", saving: "Saving…", close: "Close",
     confirmNote: "Applies after {0} restarts. If the server’s definition is changed in the Library later, it is not written again until you confirm it again.",
     changedMeanwhile: "It was changed after you opened this. Review it again.", confirmFailed: "Could not save the confirmation.",
   },
   "zh-TW": {
-    card: "MCP servers", label: "MCP servers",
-    tip: "這個 Agent 會拿到的 MCP server：AgEnD 自己的自動帶入（灰色，不能取消），以及你從資源庫勾選的。資源庫的 server 會在 Agent 啟動時寫進它 CLI 的 MCP 設定，所以變更要重啟後才生效。你自己的 MCP 設定不會被動到。",
-    builtinTag: "內建・自動", libraryTag: "資源庫", builtinTip: "自動交給每個 Agent，無法在這裡取消。", agendHint: "AgEnD 自己的工具，依這個 Agent 的工具組。",
-    none: "資源庫裡還沒有可用的 MCP server，請先到「資源庫」頁新增。", loadFailed: "無法讀取資源庫。", loading: "讀取資源庫中…",
+    card: "MCP servers",
+    tip: "這個 Agent 會拿到的 MCP server：AgEnD 自己的自動帶入，以及你從資源庫啟用的。資源庫的 server 會在 Agent 啟動時寫進它 CLI 的 MCP 設定，所以變更要重啟後才生效。你自己的 MCP 設定不會被動到。",
+    agendHint: "AgEnD 自己的工具，依這個 Agent 的工具組。",
+    empty: "還沒有啟用資源庫的 MCP server。",
+    none: "資源庫裡還沒有可用的 MCP server，請先到「資源庫」頁新增。", allOn: "資源庫的 MCP server 都已經啟用了。",
+    loadFailed: "無法讀取資源庫。", loading: "讀取資源庫中…",
     gone: "已不在資源庫", notReady: "不會交給 Agent：它在資源庫外被改過或不符規則，請到資源庫頁檢查",
-    unsupported: "這個 Agent 的 CLI（{0}）暫不支援資源庫 MCP，掛上去也不會生效。",
+    unsupported: "這個 Agent 的 CLI（{0}）暫不支援資源庫 MCP，啟用了也不會生效。", unsupportedAdd: "這個 Agent 的 CLI 暫不支援資源庫 MCP。",
+    pickerTitle: "新增 MCP server", filter: "篩選 MCP server",
     needsConfirm: "內容已變更，需重新確認", review: "檢視並確認",
     missing: "未啟動：缺少 {0} 的值。請在 fleet.yaml 旁的 .env 檔設定後重啟 Agent。",
     missingOne: "未啟動：缺少 {0} 的值。", varsSet: "已設定", varsMissing: "缺少",
     honest: "變數值會在 Agent 啟動時交給該 MCP server，和現在 .env 的做法相同；讓 Agent 完全拿不到密鑰是之後的閘道工作。",
     confirmTitle: "要把「{0}」交給 {1} 嗎？", confirmLead: "這就是 {0} 啟動時會執行的內容。請確認後再同意。",
+    enableLead: "這就是 {0} 啟動時會執行的內容。啟用即表示替 {0} 確認這個版本。",
     runs: "會執行", address: "會連到", domain: "網域", vars: "會交給它的變數", noVars: "沒有。", describe: "用途",
-    headerVar: "{0} ← {1}", confirmBtn: "確認", confirmMount: "確認並交給它", cancel: "取消", saving: "儲存中…", close: "關閉",
+    confirmBtn: "確認", cancel: "取消", saving: "儲存中…", close: "關閉",
     confirmNote: "{0} 重啟後生效。之後若資源庫裡這個 server 的定義被改動，要再確認一次才會重新寫入。",
     changedMeanwhile: "你打開之後它被改過了，請重新檢視。", confirmFailed: "無法儲存確認。",
   },
 });
 const lw = (key, ...values) => t(`libraryMcp.${key}`, ...values);
 export const libraryMcpCardTitle = () => lw("card");
+export const libraryMcpCardTip = () => lw("tip");
 
 /** One line a person can read: the command and each argument, quoted only where a space would blur it. */
 export const commandLine = (summary) => [summary.command, ...(summary.args || [])].map((p) => (/[\s"'\\]/.test(p) || p === "" ? JSON.stringify(p) : p)).join(" ");
@@ -83,7 +96,7 @@ function ReviewDialog({ item, agent, mounted, onClose, onConfirmed }) {
   };
   return html`<${Dialog} title=${lw("confirmTitle", item.id, agent)} onClose=${onClose} busy=${busy} wide=${true}
     actions=${html`<button type="button" class="btn" onClick=${onClose} disabled=${busy}>${lw("cancel")}</button>
-      <button type="button" class="btn btn-primary" onClick=${submit} disabled=${busy} data-library-mcp-confirm>${busy ? lw("saving") : lw(mounted ? "confirmBtn" : "confirmMount")}</button>`}>
+      <button type="button" class="btn btn-primary" onClick=${submit} disabled=${busy} data-library-mcp-confirm>${busy ? lw("saving") : lw("confirmBtn")}</button>`}>
     <div class="form" data-library-mcp-review=${item.id}>
       <p class="note">${lw("confirmLead", agent)}</p>
       <${McpDetails} item=${item} agent=${agent} />
@@ -93,11 +106,12 @@ function ReviewDialog({ item, agent, mounted, onClose, onConfirmed }) {
   </${Dialog}>`;
 }
 
-/** `m`: useAgentForm's result (its `f.library_mcp`, `set`, `name`). `L`: the label maker of the fields around it (AgentFields'). */
-export function LibraryMcpField({ m, L }) {
+/** `m`: useAgentForm's result (its `f.library_mcp`, `set`, `name`). `title`: the card's title node (settings-dialogs.js builds it with the usual tip and restart badge). */
+export function LibraryMcpCard({ m, title }) {
   const { f, set, name } = m;
   const [state, setState] = useState({ loading: true });
   const [review, setReview] = useState(null);
+  const [adding, setAdding] = useState(false);
   // What this agent gets by itself (AgEnD's own server), from the overview; read apart so the card still lists the library's without it.
   const [builtin, setBuiltin] = useState([]);
   useEffect(() => {
@@ -118,7 +132,7 @@ export function LibraryMcpField({ m, L }) {
   useEffect(() => load(), [load]);
   // The Library's agent tags link here (`…?cat=work#library-mcp`): bring the card into view once it is drawn.
   useEffect(() => {
-    if (typeof location === "undefined" || location.hash !== "#library-mcp" || !box.current || typeof box.current.scrollIntoView !== "function") return;
+    if (typeof location === "undefined" || location.hash !== "#library-mcp" || !box.current || typeof box.current.scrollIntoView !== "function") return undefined;
     // The cards above and below fill in as their lists arrive and move this one: look again once they have (and after the last of them).
     const again = setTimeout(() => { if (box.current) box.current.scrollIntoView({ block: "center" }); }, 400);
     box.current.scrollIntoView({ block: "center" });
@@ -126,39 +140,42 @@ export function LibraryMcpField({ m, L }) {
   }, [state.loading, builtin.length]);
   const chosen = f.library_mcp || [];
   const listed = (state.items || []).filter((i) => i.kind === undefined || i.kind === "mcp");
-  // A server the agent has but the Library does not list (deleted there) stays visible, so it can be unticked.
-  const rows = [...listed, ...chosen.filter((id) => !listed.some((s) => s.id === id)).map((id) => ({ id, description: "", status: "missing", confirmed: false }))];
+  // A server the agent has but the Library does not list (deleted there) stays visible, so it can be removed.
+  const rows = chosen.map((id) => listed.find((s) => s.id === id) || { id, description: "", status: "missing", confirmed: false });
   // The server says which CLIs take library MCP (the table in src/library/mcp-support.ts); until it has, nothing is claimed.
   const unsupported = !!state.backends && !!f.backend && !state.backends.includes(f.backend);
-  const pickable = (s) => (s.status === "ok" && !!s.summary) || chosen.includes(s.id);
-  const untick = (id) => set("library_mcp")(chosen.filter((x) => x !== id));
-  const tick = (id) => set("library_mcp")([...chosen.filter((x) => x !== id), id]);
-  const toggle = (item, on) => {
-    if (!on) { untick(item.id); return; }
-    // Confirmed for this agent at this very version: nothing new to show. Otherwise the person sees what it runs first.
-    if (item.confirmed) tick(item.id); else setReview(item);
-  };
-  const confirmed = (id) => { setReview(null); tick(id); load(); };
-  const reconfirmed = () => { setReview(null); load(); };
+  const remove = (id) => set("library_mcp")(chosen.filter((x) => x !== id));
   const missingOf = (s) => (s.variables || []).filter((v) => !v.set).map((v) => v.name);
-  return html`<div class="field" data-library-mcp-field ref=${box}>${L(lw("label"), "instance.library", undefined, lw("tip"))}
-    ${builtin.map((b) => html`<${BuiltinRow} key=${b.name} name=${b.name} description=${b.description} attr="data-library-builtin-mcp" tag=${lw("builtinTag")} tip=${lw("builtinTip")} />`)}
+  const candidates = listed.filter((s) => !chosen.includes(s.id)).map((s) => ({ ...s, disabled: !(s.status === "ok" && s.summary), note: lw("notReady") }));
+  const emptyPicker = state.error ? lw("loadFailed") : listed.length ? lw("allOn") : lw("none");
+  // "Enable" is the confirmation: this exact version is recorded for this agent, then the id joins the form (a 409 means it changed meanwhile).
+  const enable = async (item) => {
+    try {
+      const r = await fetch("/ui/library/mcp-confirm", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agent: name, id: item.id, sha256: item.sha256 }) });
+      if (!r.ok) { if (r.status === 409) load(); return { ok: false, error: r.status === 409 ? lw("changedMeanwhile") : lw("confirmFailed") }; }
+    } catch { return { ok: false, error: lw("confirmFailed") }; }
+    set("library_mcp")([...chosen.filter((x) => x !== item.id), item.id]);
+    load();
+    return { ok: true };
+  };
+  return html`<${LibraryCardShell} title=${title} innerRef=${box} attrs=${{ "data-library-mcp-field": "" }} onAdd=${() => setAdding(true)} addDisabled=${unsupported} addTitle=${unsupported ? lw("unsupportedAdd") : undefined}>
     ${unsupported ? html`<p class="feedback warning" role="note" data-library-mcp-unsupported>${lw("unsupported", f.backend)}</p>` : null}
+    <${BuiltinSummary} items=${builtin} attr="data-library-builtin-mcp" />
     ${state.loading ? html`<p class="note">${lw("loading")}</p>` : null}
     ${state.error && !rows.length ? html`<p class="note">${lw("loadFailed")}</p>` : null}
-    ${!state.loading && !state.error && !rows.length ? html`<p class="note">${lw("none")}</p>` : null}
+    ${!state.loading && !state.error && !rows.length ? html`<p class="note" data-library-empty>${lw("empty")}</p>` : null}
     ${rows.map((s) => {
-      const on = chosen.includes(s.id);
-      const miss = on ? missingOf(s) : [];
-      const changed = on && s.status === "ok" && s.summary && !s.confirmed;
-      return html`<div key=${s.id} class="lib-mcp-row" data-library-mcp=${s.id}>
-        <label class="check">
-          <input type="checkbox" disabled=${!pickable(s) || (unsupported && !on)} checked=${on} onChange=${(e) => toggle(s, e.target.checked)} />
-          <span><span class="strong">${s.id}</span>${s.description ? html` — ${s.description}` : null} <span class="pill lib-kind">${lw("libraryTag")}</span>${s.status === "missing" ? html` <span class="note">(${lw("gone")})</span>` : s.status !== "ok" ? html` <span class="note">(${lw("notReady")})</span>` : null}</span></label>
-        ${miss.length ? html`<p class="feedback warning lib-mcp-sub" role="note" data-library-mcp-missing=${miss.join(",")}>${miss.length === 1 ? lw("missingOne", miss[0]) : lw("missing", miss.join(", "))}</p>` : null}
-        ${changed ? html`<p class="lib-mcp-sub"><span class="pill off" data-library-mcp-changed>${lw("needsConfirm")}</span> <button type="button" class="btn btn-sm" onClick=${() => setReview(s)} data-library-mcp-review-open>${lw("review")}</button></p>` : null}
-      </div>`;
+      const miss = missingOf(s);
+      const changed = s.status === "ok" && s.summary && !s.confirmed;
+      return html`<${EnabledRow} key=${s.id} id=${s.id} description=${s.description} attr="data-library-mcp" onRemove=${() => remove(s.id)}>
+        ${s.status === "missing" ? html`<span class="note">${lw("gone")}</span>` : s.status !== "ok" ? html`<span class="note">${lw("notReady")}</span>` : null}
+        ${miss.length ? html`<span class="feedback warning lib-mcp-sub" role="note" data-library-mcp-missing=${miss.join(",")}>${miss.length === 1 ? lw("missingOne", miss[0]) : lw("missing", miss.join(", "))}</span>` : null}
+        ${changed ? html`<span class="lib-mcp-sub"><span class="pill off" data-library-mcp-changed>${lw("needsConfirm")}</span> <button type="button" class="btn btn-sm" onClick=${() => setReview(s)} data-library-mcp-review-open>${lw("review")}</button></span>` : null}
+      </${EnabledRow}>`;
     })}
     ${rows.length ? html`<p class="note">${lw("honest")}</p>` : null}
-    ${review ? html`<${ReviewDialog} item=${review} agent=${name} mounted=${chosen.includes(review.id)} onClose=${() => setReview(null)} onConfirmed=${chosen.includes(review.id) ? reconfirmed : confirmed} />` : null}</div>`;
+    ${adding ? html`<${AddDialog} title=${lw("pickerTitle")} items=${candidates} filterLabel=${lw("filter")} emptyText=${emptyPicker} onClose=${() => setAdding(false)} onEnable=${enable}
+      renderPreview=${(item) => html`<div class="form"><p class="note">${lw("enableLead", name)}</p><${McpDetails} item=${item} agent=${name} /><p class="note">${lw("confirmNote", name)}</p></div>`} />` : null}
+    ${review ? html`<${ReviewDialog} item=${review} agent=${name} mounted=${true} onClose=${() => setReview(null)} onConfirmed=${() => { setReview(null); load(); }} />` : null}
+  </${LibraryCardShell}>`;
 }

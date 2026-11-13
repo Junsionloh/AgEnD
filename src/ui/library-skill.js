@@ -13,7 +13,7 @@
 //
 // The words live here (their own namespace) so a tab opened before an upgrade never shows a raw key. `api` is the page's own { call, callRaw,
 // errorText }, so there is one way of talking to /ui/library/*.
-import { html, useEffect, useRef, useState } from "/assets/app-html.js";
+import { Fragment, html, useEffect, useRef, useState } from "/assets/app-html.js";
 import { register, t } from "/assets/app-i18n.js";
 import "/assets/chat-render.js";
 import { drawMarkdown } from "/assets/chat-thread.js";
@@ -97,13 +97,32 @@ function Tabs({ label, tabs, value, onChange }) {
     data-library-tab=${x.id} onClick=${() => onChange(x.id)} onKeyDown=${(e) => keys(e, i)}>${x.label}</button>`)}</div>`;
 }
 
+/**
+ * The preview of a skill as the Library shows it (AGEND-257): its frontmatter as plain fields, SKILL.md drawn as Markdown, and the files as a list
+ * that opens as text. `d` is the detail `/ui/library/item` (or `/builtin`) answers; `between` sits after the fields (the dialog puts "Used by" there).
+ * One component for the Library's dialog and for the agent settings' "add a skill" picker (AGEND-261), so a skill looks the same wherever it is read.
+ */
+export function SkillPreviewPane({ d, between = null }) {
+  const [open, setOpen] = useState(null);
+  return html`<${Fragment}>
+    ${d.fields && d.fields.length ? html`<dl class="lib-fields" data-library-fields>${d.fields.map((f) => html`<div key=${f.key} class="lib-field"><dt>${fieldLabel(f.key)}</dt><dd>${f.value}</dd></div>`)}</dl>` : html`<p class="note">${tn("noFields")}</p>`}
+    ${between}
+    <${Markdown} text=${d.body || ""} />
+    <h4 class="lib-files-h">${tn("filesTitle")}</h4>
+    <ul class="lib-files" data-library-files>${d.files.map((f) => html`<li key=${f.path}>
+      <div class="lib-file-row"><code>${f.path}</code><span class="note">${tn("kb", kb(f.size))}</span>
+        <button type="button" class="btn btn-sm btn-ghost" aria-expanded=${open === f.path ? "true" : "false"} data-library-file-toggle=${f.path}
+          onClick=${() => setOpen(open === f.path ? null : f.path)}>${open === f.path ? tn("hide") : tn("show")}</button></div>
+      ${open === f.path ? html`<pre class="pv-code lib-src" tabindex="0" data-library-file-text=${f.path}><code>${f.content}</code></pre>` : null}</li>`)}</ul>
+  </${Fragment}>`;
+}
+
 /** A skill, whole: Preview (always) and Edit (a library skill only — a built-in one is read only and has no such tab). */
 export function SkillDialog({ id, builtin, used, api, onClose, onSaved, onDelete }) {
   const [state, setState] = useState({ loading: true });
   const [tab, setTab] = useState("preview");
   const [drafts, setDrafts] = useState({});
   const [sel, setSel] = useState("SKILL.md");
-  const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const load = () => api.call(builtin ? `/ui/library/builtin?name=${encodeURIComponent(id)}` : `/ui/library/item?kind=skill&id=${encodeURIComponent(id)}`).then((r) => {
@@ -144,15 +163,7 @@ export function SkillDialog({ id, builtin, used, api, onClose, onSaved, onDelete
       ${d && tab === "preview" ? html`<div role="tabpanel" id="lib-panel-preview" aria-labelledby="lib-tab-preview" class="lib-pane" data-library-pane="preview">
         ${builtin ? html`<p class="note">${tn("builtinNote")}</p>` : html`<p class="note">${tn("teamNote", d.sha256.slice(0, 12))}</p>`}
         ${dirty ? html`<p class="note feedback warning" role="status">${tn("unsaved")}</p>` : null}
-        ${d.fields && d.fields.length ? html`<dl class="lib-fields" data-library-fields>${d.fields.map((f) => html`<div key=${f.key} class="lib-field"><dt>${fieldLabel(f.key)}</dt><dd>${f.value}</dd></div>`)}</dl>` : html`<p class="note">${tn("noFields")}</p>`}
-        <div class="lib-field"><dt>${tn("usedBy")}</dt><dd data-library-skill-used>${used.length ? used.join(", ") : tn("noUse")}</dd></div>
-        <${Markdown} text=${d.body || ""} />
-        <h4 class="lib-files-h">${tn("filesTitle")}</h4>
-        <ul class="lib-files" data-library-files>${d.files.map((f) => html`<li key=${f.path}>
-          <div class="lib-file-row"><code>${f.path}</code><span class="note">${tn("kb", kb(f.size))}</span>
-            <button type="button" class="btn btn-sm btn-ghost" aria-expanded=${open === f.path ? "true" : "false"} data-library-file-toggle=${f.path}
-              onClick=${() => setOpen(open === f.path ? null : f.path)}>${open === f.path ? tn("hide") : tn("show")}</button></div>
-          ${open === f.path ? html`<pre class="pv-code lib-src" tabindex="0" data-library-file-text=${f.path}><code>${f.content}</code></pre>` : null}</li>`)}</ul>
+        <${SkillPreviewPane} d=${d} between=${html`<div class="lib-field"><dt>${tn("usedBy")}</dt><dd data-library-skill-used>${used.length ? used.join(", ") : tn("noUse")}</dd></div>`} />
       </div>` : null}
       ${d && tab === "edit" && !builtin ? html`<div role="tabpanel" id="lib-panel-edit" aria-labelledby="lib-tab-edit" class="lib-pane" data-library-pane="edit">
         <p class="note">${tn("editLead")}</p>

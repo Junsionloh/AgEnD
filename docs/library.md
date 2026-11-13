@@ -27,7 +27,7 @@ workers, and only an agent whose CLI has a skills folder), tool sets by the agen
 MCP server by every agent, and library skills by the agents they are mounted on. A tag opens that agent: for a library skill straight to
 *Settings → the agent → Workspace → Skills*, otherwise to the agent. A library skill also has a **+** tag: pick agents
 and it is written into their settings — the same `library` value, through the same `PATCH /api/settings/fleet/instances/<name>` and the same
-Apply as ticking the skill on the agent's own Settings page (`agentPatchRequest` / `libraryMountPatch` in `settings-model.js` are the one copy
+Apply as enabling the skill on the agent's own Settings page (`agentPatchRequest` / `libraryMountPatch` in `settings-model.js` are the one copy
 of that write). It takes effect the next time the agent starts. Built-in tags only open an agent; nothing built in can be added or changed.
 
 The page reads the existing settings and changes nothing by itself: no agent file, setting or launch command moves unless you use **+**
@@ -97,9 +97,9 @@ An `http` server has `url` (no credentials, no query string) and `headers`, a ma
 
 ## Mounting skills on an agent
 
-In the agent's settings the two cards are named **Skills** and **MCP servers**, like the Library's categories. Each lists first what the agent gets by itself — the built-in skills of its role, AgEnD's own `agend` MCP server — in grey, ticked and not removable (tagged *Built in · automatic*), then the Library's items, which you tick (tagged *Library*). One card shows what the agent will actually get. (Display only: the settings are still `library.skills` and `library.mcp`.)
+In the agent's settings the two cards are named **Skills** and **MCP servers**, like the Library's categories, and each shows **only what the agent has switched on**: the built-in items it gets by itself (the built-in skills of its role; AgEnD's own `agend` MCP server) as one line — *9 built in · automatic* — that opens to a read-only list, then the Library's items that are enabled, one row each with a **×** to remove it and its state (a variable with no value, changed since it was confirmed, not supported by this CLI, gone from the Library), or *No Library skills enabled yet.* The title row carries the usual tip and *Restart this Agent* badge and, at the right, **+ Add**: a picker with the Library's items that are **not** enabled yet and a filter. Clicking one reads it first — a skill with the Library's own Preview (frontmatter, SKILL.md drawn as Markdown, files), an MCP server with the whole command (or address and domain) and the variable names — and **Enable** adds it; for an MCP server, Enable is also the confirmation (below), so there is no second step. Several can be enabled one after the other; closing the picker returns to the card. Enabling and removing only change the form: Save is the Settings page's own, and the settings are still `library.skills` and `library.mcp`.
 
-An administrator gives an agent library skills in **Settings → the agent → Workspace → Skills** (tick them), with the **+** tag on the Library page, or in
+An administrator gives an agent library skills in **Settings → the agent → Workspace → Skills** (**+ Add**), with the **+** tag on the Library page, or in
 `fleet.yaml`:
 
 ```yaml
@@ -131,7 +131,7 @@ the built-in record (`.agend-managed-skills.json`), which it never touches.
 
 ## Mounting MCP servers on an agent
 
-*AGEND-261.* An administrator gives an agent library MCP servers in **Settings → the agent → Workspace → MCP servers** (under *Skills*), or with the **+** tag on a
+*AGEND-261.* An administrator gives an agent library MCP servers in **Settings → the agent → Workspace → MCP servers** (under *Skills*, **+ Add**), or with the **+** tag on a
 Library MCP row. It is `library.mcp: [id, …]` in the agent's `fleet.yaml` entry, on the same permission line as `library.skills`: per agent only, only an administrator sets it, no agent tool
 (General included) can write it, and it is a cold key (an agent restart applies it).
 

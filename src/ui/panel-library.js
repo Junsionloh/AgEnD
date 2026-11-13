@@ -25,7 +25,7 @@ import { ImportDialog, SkillDialog } from "./library-skill.js";   // AGEND-257: 
 
 register("library", {
   en: {
-    title: "Library", sub: "An overview of what this AgEnD has: skills, tools and MCP servers, and which agents use them. Built-in items come with AgEnD and are read only; Library items are the ones you add here. This page changes no agent except through the “+” tag, which does what ticking the skill in the agent’s Settings does.",
+    title: "Library", sub: "An overview of what this AgEnD has: skills, tools and MCP servers, and which agents use them. Built-in items come with AgEnD and are read only; Library items are the ones you add here. This page changes no agent except through the “+” tag, which does what enabling the skill in the agent’s Settings does.",
     skills: "Skills", tools: "Tools", mcp: "MCP servers", groupResources: "Resources",
     lead_skills: "Skills agents can load. Built-in ones are given by an agent’s role; Library skills are given to the agents you pick.",
     lead_tools: "A tool set is the list of AgEnD tools an agent may use; an agent’s `tool_set` setting picks one.",
@@ -44,9 +44,9 @@ register("library", {
     agendMcp: "agend", agendMcpHint: "Gives each agent the tools of its tool set.",
     tagOpen: "Open the settings of {0}", tagOpenSkill: "Open {0} — Skills", tagNoFolder: "{0}: its CLI ({1}) has no skills folder, so this skill does not take effect there.",
     addTag: "Add to an agent", addTagLabel: "Add “{0}” to an agent", tagOpenMcp: "Open {0} — MCP servers", tagNoMcp: "{0}: its CLI ({1}) does not support Library MCP servers yet, so this one does not take effect there.",
-    addToBodyMcp: "Pick the agents that should get this MCP server. Check what it runs below: confirming records this exact version for each agent you pick, then writes it into the agent’s settings, exactly as ticking it in Settings → the agent → MCP servers would. Takes effect the next time the agent starts.", addToNoMcp: "not supported yet", addToMcpLoading: "Reading what it runs…", addToMcpFailed: "Could not read the server. Close this and try again.", addToConfirmMcp: "Confirm and add", addToChanged: "It was changed after you opened this. Close it and open it again.", addToConfirmFailed: "Could not save the confirmation.",
+    addToBodyMcp: "Pick the agents that should get this MCP server. Check what it runs below: confirming records this exact version for each agent you pick, then writes it into the agent’s settings, exactly as enabling it in Settings → the agent → MCP servers would. Takes effect the next time the agent starts.", addToNoMcp: "not supported yet", addToMcpLoading: "Reading what it runs…", addToMcpFailed: "Could not read the server. Close this and try again.", addToConfirmMcp: "Confirm and add", addToChanged: "It was changed after you opened this. Close it and open it again.", addToConfirmFailed: "Could not save the confirmation.",
     deleteBodyUsedMcp: "It is removed from the library. {0} still have it mounted and lose this MCP server the next time they start.",
-    addToTitle: "Add “{0}” to agents", addToBody: "Pick the agents that should get this skill. It is written into each agent’s settings, exactly as ticking it in Settings → the agent → Skills would. Takes effect the next time the agent starts.",
+    addToTitle: "Add “{0}” to agents", addToBody: "Pick the agents that should get this skill. It is written into each agent’s settings, exactly as enabling it in Settings → the agent → Skills would. Takes effect the next time the agent starts.",
     addToNone: "Every agent already has it.", addToNoFolder: "no skills folder", addToConfirm: "Add", addingLabel: "Add “{0}” to {1}", addBusy: "Another change is being saved. Try again in a moment.",
     addStarted: "Adding “{0}”. It takes effect when the agent next starts.", addLoadFailed: "Could not read the agents’ settings.",
     nextStart: "Takes effect at the agent’s next start",
@@ -84,7 +84,7 @@ register("library", {
     e_expect_required: "This item cannot be replaced from here. Delete it first, then add it again.",
   },
   "zh-TW": {
-    title: "資源庫", sub: "這一頁是總覽：這個 AgEnD 有哪些 Skill、工具和 MCP server，以及哪些 Agent 正在使用。內建項目隨 AgEnD 附帶，唯讀；資源庫項目是你在這裡新增的。除了「＋」標籤（效果等同在該 Agent 的設定裡勾選這個 Skill），這一頁不會改變任何 Agent。",
+    title: "資源庫", sub: "這一頁是總覽：這個 AgEnD 有哪些 Skill、工具和 MCP server，以及哪些 Agent 正在使用。內建項目隨 AgEnD 附帶，唯讀；資源庫項目是你在這裡新增的。除了「＋」標籤（效果等同在該 Agent 的設定裡啟用這個 Skill），這一頁不會改變任何 Agent。",
     skills: "Skills", tools: "工具", mcp: "MCP server", groupResources: "資源",
     lead_skills: "Agent 可以載入的 Skill。內建的依 Agent 的角色自動帶入；資源庫的 Skill 交給你挑的 Agent。",
     lead_tools: "工具組是 Agent 可以使用的 AgEnD 工具清單，由 Agent 的 `tool_set` 設定選擇。",
@@ -103,9 +103,9 @@ register("library", {
     agendMcp: "agend", agendMcpHint: "把各 Agent 所屬工具組的工具交給它。",
     tagOpen: "開啟 {0} 的設定", tagOpenSkill: "開啟 {0}：Skills", tagNoFolder: "{0}：它的 CLI（{1}）沒有 skill 資料夾，這個 Skill 在那裡不會生效。",
     addTag: "加給 Agent", addTagLabel: "把「{0}」加給 Agent", tagOpenMcp: "開啟 {0}：MCP servers", tagNoMcp: "{0}：它的 CLI（{1}）暫不支援資源庫 MCP，這個 server 在那裡不會生效。",
-    addToBodyMcp: "選要拿到這個 MCP server 的 Agent。請先看下面它會執行什麼：按下確認會替你選的每個 Agent 記下這個版本，再寫進各 Agent 的設定，效果和在「設定 → 該 Agent → MCP servers」勾選完全一樣，下次啟動時生效。", addToNoMcp: "暫不支援", addToMcpLoading: "讀取它會執行的內容…", addToMcpFailed: "無法讀取這個 server，請關掉再試一次。", addToConfirmMcp: "確認並加入", addToChanged: "你打開之後它被改過了，請關掉再重新打開。", addToConfirmFailed: "無法儲存確認。",
+    addToBodyMcp: "選要拿到這個 MCP server 的 Agent。請先看下面它會執行什麼：按下確認會替你選的每個 Agent 記下這個版本，再寫進各 Agent 的設定，效果和在「設定 → 該 Agent → MCP servers」啟用完全一樣，下次啟動時生效。", addToNoMcp: "暫不支援", addToMcpLoading: "讀取它會執行的內容…", addToMcpFailed: "無法讀取這個 server，請關掉再試一次。", addToConfirmMcp: "確認並加入", addToChanged: "你打開之後它被改過了，請關掉再重新打開。", addToConfirmFailed: "無法儲存確認。",
     deleteBodyUsedMcp: "它會從資源庫移除。{0} 還掛著它，下次啟動時會失去這個 MCP server。",
-    addToTitle: "把「{0}」加給 Agent", addToBody: "選要拿到這個 Skill 的 Agent。它會寫進各 Agent 的設定，效果和在「設定 → 該 Agent → Skills」勾選完全一樣，下次啟動時生效。",
+    addToTitle: "把「{0}」加給 Agent", addToBody: "選要拿到這個 Skill 的 Agent。它會寫進各 Agent 的設定，效果和在「設定 → 該 Agent → Skills」啟用完全一樣，下次啟動時生效。",
     addToNone: "每個 Agent 都已經有了。", addToNoFolder: "沒有 skill 資料夾", addToConfirm: "加入", addingLabel: "把「{0}」加給 {1}", addBusy: "還有另一項變更在儲存，請稍後再試。",
     addStarted: "正在加入「{0}」，Agent 下次啟動時生效。", addLoadFailed: "無法讀取 Agent 的設定。",
     nextStart: "下次啟動時生效",

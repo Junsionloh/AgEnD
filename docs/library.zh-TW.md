@@ -21,7 +21,7 @@
 **使用中**是一排標籤，每個 Agent 一個：內建 Skill 依 Agent 的角色（General 拿到全部，其他 Agent 拿到標給一般 Agent 的，且只算 CLI 有 skill 資料夾的）、
 工具組依 Agent 的 `tool_set`（和 daemon 用同一條規則）、`agend` MCP server 是所有 Agent、資源庫 Skill 依掛載到哪些 Agent。點標籤會開啟該 Agent：
 資源庫 Skill 直接到「設定 → 該 Agent → 工作目錄 → Skills」，其他到該 Agent 頁。資源庫 Skill 另有一個 **＋** 標籤：挑 Agent 就會寫進它們的設定，
-寫的是同一個 `library` 值、同一個 `PATCH /api/settings/fleet/instances/<name>`、同一個 Apply，和在 Agent 自己的設定頁勾選完全一樣
+寫的是同一個 `library` 值、同一個 `PATCH /api/settings/fleet/instances/<name>`、同一個 Apply，和在 Agent 自己的設定頁啟用完全一樣
 （`settings-model.js` 的 `agentPatchRequest`／`libraryMountPatch` 是這個寫入唯一的一份）。下次啟動時生效。內建的標籤只能跳轉，內建項目不能加也不能改。
 
 這一頁只讀現有設定，自己不改任何東西：除非你用 **＋**（或 Agent 自己的設定），否則不會改變任何 Agent 的檔案、設定或啟動指令。
@@ -64,9 +64,9 @@ env: [GITHUB_TOKEN]         # 只寫名稱；`KEY: value` 這種寫法會被拒�
 
 ## 把 Skill 掛載到 Agent
 
-Agent 設定頁的兩張卡叫 **Skills** 和 **MCP servers**，和資源庫的分類同名。卡內先列 Agent 自動拿到的項目——它角色的內建 Skill、AgEnD 自己的 `agend` MCP server——灰色、已勾選、不能取消（標「內建・自動」），再列資源庫的項目，可勾選（標「資源庫」）。一張卡就看得出 Agent 實際會拿到什麼。（只改顯示：設定欄位仍是 `library.skills` 和 `library.mcp`。）
+Agent 設定頁的兩張卡叫 **Skills** 和 **MCP servers**，和資源庫的分類同名，卡內**只顯示這個 Agent 已啟用的項目**：自動拿到的內建項目（它角色的內建 Skill；AgEnD 自己的 `agend` MCP server）收成一行——「內建 9 個・自動」——點開才展開唯讀清單；接著是已啟用的資源庫項目，每列有 **×** 可以移除，並標出狀態（缺變數、內容已變更需重新確認、此 CLI 不支援、已不在資源庫）；一個都沒有就顯示「還沒有啟用資源庫的 Skill」。標題列有一般的提示和「重新啟動此 Agent」標記，右邊是 **＋ 新增**：打開挑選對話框，列出資源庫裡**還沒啟用**的項目，有篩選框。點一項先預覽——Skill 用資源庫自己的預覽（frontmatter、渲染後的 SKILL.md、檔案），MCP 顯示完整指令（或網址與網域）和變數名稱——再按「啟用」才加入；MCP 的「啟用」同時就是確認（見下），不會再跳第二次。可以連續啟用多個，關掉對話框回到卡片。啟用與移除只改表單，存檔仍是設定頁自己的 Save，設定欄位仍是 `library.skills` 和 `library.mcp`。
 
-管理員在 **設定 → 該 Agent → 工作目錄 → Skills** 勾選資源庫的 Skill，或直接寫在 `fleet.yaml`：
+管理員在 **設定 → 該 Agent → 工作目錄 → Skills** 用 **＋ 新增** 啟用資源庫的 Skill，或直接寫在 `fleet.yaml`：
 
 ```yaml
 instances:
@@ -92,7 +92,7 @@ instances:
 
 ## 把 MCP server 掛載到 Agent
 
-*AGEND-261。* 管理員在 **設定 → 該 Agent → 工作目錄 → MCP servers**（在「Skills」下面）勾選，或用資源庫 MCP 列上的 **＋** 標籤。它是 Agent 在 `fleet.yaml` 裡的
+*AGEND-261。* 管理員在 **設定 → 該 Agent → 工作目錄 → MCP servers**（在「Skills」下面，**＋ 新增**），或用資源庫 MCP 列上的 **＋** 標籤。它是 Agent 在 `fleet.yaml` 裡的
 `library.mcp: [id, …]`，權限和 `library.skills` 同一條線：只能設給單一 Agent、只有管理員能改、沒有任何 Agent 工具（含 General）能寫、是冷鍵（重啟 Agent 才生效）。
 
 **寫了什麼。** 每次啟動時，daemon 把掛載的項目變成該 CLI 自己的 MCP 設定項目，名稱是 `agend-lib-<id>`，和 AgEnD 自己的 `agend` server 並列：
