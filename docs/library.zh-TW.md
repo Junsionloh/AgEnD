@@ -1,8 +1,8 @@
 # 資源庫（Skill 與 MCP server）
 
-資源庫是 AgEnD 資料夾裡的一個地方，用來存放 **Skill** 和 **MCP server 定義**。目前只負責存放與檢視：資源庫的內容不會交給任何 Agent，
-所以不論資源庫是空的還是滿的，任何 Agent 的檔案、設定與指示都不會改變。（把資源庫的 Skill 交給 Agent、以及在匯出的 Agent 檔案裡引用
-資源庫項目，是之後另外的步驟；匯出檔已經預留一個空的 `library:` 欄位給它們。）
+資源庫是 AgEnD 資料夾裡的一個地方，用來存放 **Skill** 和 **MCP server 定義**。Agent 只有在管理員把某個 **Skill** 掛載到它身上時才會拿到
+（見下方「把 Skill 掛載到 Agent」）；沒掛載任何東西的 Agent 完全不變，不論資源庫是空的還是滿的。MCP server 目前只能存放、還不能掛載；
+在匯出的 Agent 檔案裡引用資源庫項目是之後另外的步驟（匯出檔已經預留一個空的 `library:` 欄位）。
 
 從側邊欄的 **資源庫**（`/ui/library`）開啟。只有管理員可以使用；沒用過的 fleet 不會產生 `library/` 資料夾。
 
@@ -39,6 +39,32 @@ env: [GITHUB_TOKEN]         # 只寫名稱；`KEY: value` 這種寫法會被拒�
 ```
 
 `http` 類型有 `url`（不能含帳密或查詢字串）和 `headers`（標頭名稱對應到存放其值的變數，例如 `Authorization: GITHUB_TOKEN`）。
+
+## 把 Skill 掛載到 Agent
+
+管理員在 **設定 → 該 Agent → 工作區 → 資源庫** 勾選團隊 Skill，或直接寫在 `fleet.yaml`：
+
+```yaml
+instances:
+  reviewer:
+    library:
+      skills: [pr-review, triage]
+```
+
+只有管理員能設定（設定頁或 `fleet.yaml`）；沒有任何 Agent 工具能改它，fleet 的 `defaults` 也不能。它在 Agent 下次啟動時套用，所以變更會重啟該 Agent。
+內建 Skill 依 Agent 的角色自動帶入，不在這份清單裡。
+
+每次啟動，AgEnD 會把掛載的 Skill 複製到 Agent 的 CLI 讀取的資料夾（`.claude/skills`、`.agents/skills`、`.grok/skills`、`.kiro/skills`，和內建 Skill 相同），
+並把寫過的項目記在**自己的**檔案 `.agend-library-skills.json`，與內建 Skill 的記錄（`.agend-managed-skills.json`）並排，後者完全不碰。
+
+- **同名誰優先：** 你自己建的資料夾 > 內建 Skill > 資源庫 Skill。記錄裡沒有的資料夾是你的，絕不更動或刪除；和內建 Skill 同名的資源庫 Skill 會被略過（並在 log 說一次）。
+- **取消掛載**只刪記錄裡列出的資料夾，而且只刪「內容仍和 AgEnD 寫入時完全一樣」的（記錄裡保存了它的 hash）。沒掛載過、也沒有記錄的 Agent 不會多出任何檔案。
+- **只有通過所有規則、且仍是儲存當時內容的 Skill 才會交出去。** 在資源庫資料夾裡被手動改過、或沒經過資源庫頁儲存就放進去的 Skill，要重新儲存後才會交出去；已經交出去的維持原樣。
+- **共用同一個工作目錄的 Agent** 共用它的 skill 資料夾，所以該資料夾拿到它們掛載的聯集（否則每次啟動都會刪掉另一個 Agent 拿到的東西）。
+- **你在已發佈資料夾裡做的修改就是你的。** 若已發佈的資料夾和 AgEnD 寫入的內容不同（你改過，或換成你自己的同名資料夾），AgEnD 不會用資源庫的更新覆蓋它，
+  也絕不刪除它，連取消掛載也不會（只是把它從記錄移除，並在 log 說明）。想拿回資源庫的版本，請刪掉該資料夾並重啟 Agent。
+- **何時同步：** 只有 fleet Agent 或 General 啟動時才會發佈（ClassicBot 房間、Windows native Agent 不會）。已刪除的 Agent 留在共用資料夾的 skill，
+  要等同一資料夾的另一個 Agent 重啟後才會被清掉（那次啟動會清除不再掛載的項目）。
 
 ## 密鑰
 

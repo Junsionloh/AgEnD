@@ -90,6 +90,8 @@ const INSTANCE_FIELDS = [
   "dashboard", "office_access", "office_pack_access",
   // M-2446: the agent dialog's Codex speed (backend_options.codex.speed) — read at launch, so an agent restart.
   "backend_options",
+  // AGEND-244: library skills mounted on the agent — published at each start, so an agent restart (cold, like the keys above).
+  "library",
 ] as const;
 
 /** ClassicBot channel fields the settings page renders. */

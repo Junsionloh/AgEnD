@@ -185,6 +185,17 @@ export function codexSpeedOf(inst) {
 export const boardCardsOf = (inst) => (Number.isInteger(inst && inst.board_cards_at_once) && inst.board_cards_at_once >= 1 ? inst.board_cards_at_once : 1);
 export const resumeWorkOf = (inst, defaults) => (typeof (inst && inst.resume_interrupted_work) === "boolean" ? inst.resume_interrupted_work : (defaults && typeof defaults.resume_interrupted_work === "boolean" ? defaults.resume_interrupted_work : true));
 export const proxyReplyOf = (inst, defaults) => (typeof (inst && inst.mcp_proxy_reply) === "boolean" ? inst.mcp_proxy_reply : (defaults && typeof defaults.mcp_proxy_reply === "boolean" ? defaults.mcp_proxy_reply : false));
+/**
+ * AGEND-244: the library skills an agent is given (`library.skills`) — and the `library` value that holds a list of them. The value
+ * keeps whatever else `library` holds (`mcp`) and is null (the key goes) when nothing is left, so a patch never drops what it did not touch.
+ */
+export const librarySkillsOf = (inst) => (inst && inst.library && Array.isArray(inst.library.skills) ? inst.library.skills.filter((id) => typeof id === "string") : []);
+export function libraryValue(inst, ids) {
+  const rest = { ...((inst && inst.library) || {}) };
+  delete rest.skills;
+  const next = ids.length ? { skills: [...ids], ...rest } : rest;
+  return Object.keys(next).length ? next : null;
+}
 export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmojisBaseline) {
   const hang = inst.hang_detector || {};
   const next = {
@@ -212,6 +223,7 @@ export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmoji
     board_cards_at_once: form.board_cards_at_once === undefined ? boardCardsOf(inst) : Number(form.board_cards_at_once),
     resume_interrupted_work: form.resume_interrupted_work === undefined ? resumeWorkOf(inst, defaults) : form.resume_interrupted_work,
     mcp_proxy_reply: form.mcp_proxy_reply === undefined ? proxyReplyOf(inst, defaults) : form.mcp_proxy_reply,
+    library: libraryValue(inst, form.library_skills === undefined ? librarySkillsOf(inst) : form.library_skills),
   };
   return Object.assign(changedFields(next, {
     backend: inst.backend || defaults.backend || "claude-code",
@@ -240,6 +252,7 @@ export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmoji
     board_cards_at_once: boardCardsOf(inst),
     resume_interrupted_work: resumeWorkOf(inst, defaults),
     mcp_proxy_reply: proxyReplyOf(inst, defaults),
+    library: libraryValue(inst, librarySkillsOf(inst)),
   }), codexSpeedPatch(form, inst));
 }
 /**
@@ -283,6 +296,7 @@ export function agentForm(inst, defaults, name = "") {
     board_cards_at_once: String(boardCardsOf(inst)),
     resume_interrupted_work: resumeWorkOf(inst, defaults),
     mcp_proxy_reply: proxyReplyOf(inst, defaults),
+    library_skills: librarySkillsOf(inst),
     inherit: {
       auto_pause_after: inherit("auto_pause_after"), hang: !hasOwn(hang, "timeout_minutes"), agent_mode: inherit("agent_mode"),
       tool_set: inherit("tool_set"), tool_progress: inherit("tool_progress"), cross_instance_visibility: inherit("cross_instance_visibility"),

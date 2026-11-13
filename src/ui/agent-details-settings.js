@@ -49,7 +49,7 @@ export const categoryPath = (name, cat) => (cat ? `${detailsPath(name)}?cat=${ca
 const AGENT_KEYS = {
   basic: ["display_name", "description", "systemPrompt", "tags"],
   runtime: ["backend", "model", "model_failover", "backend_options"],
-  work: ["working_directory", "auto_pause_after", "hang_detector", "agent_mode", "tool_set", "reply_completion_guard", "lightweight"],
+  work: ["working_directory", "auto_pause_after", "hang_detector", "agent_mode", "tool_set", "reply_completion_guard", "lightweight", "library"],
   channel: ["channel_id", "general_topic", "tool_progress", "cross_instance_visibility", "status_emojis"],
   adv: ["log_level", "resume_interrupted_work", "mcp_proxy_reply", "board_cards_at_once", "dashboard", "office_access", "office_pack_access"],
 };
