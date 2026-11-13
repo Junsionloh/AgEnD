@@ -73,7 +73,9 @@ describe("Export and Import on the Skills page", () => {
     expect(one.getAttribute("href")).toBe("/ui/library/export?id=review");
     expect(one.getAttribute("download")).toBe("review.zip");
     expect(one.getAttribute("aria-label")).toBe("Export “review”");
-    expect(q('[data-library-builtin="skill:concepts"] [data-library-export]')).not.toBeNull();
+    const built = q('[data-library-builtin="skill:concepts"] [data-library-export]');
+    expect(built.getAttribute("href")).toBe("/ui/library/export?id=concepts&builtin=1");          // a built-in one is asked for as such
+    expect(built.getAttribute("download")).toBe("concepts.zip");
     await p.unmount(); serve(); await open("mcp");
     expect(qa("[data-library-export]").length).toBe(0);
     expect(q("[data-library-import]")).toBeNull();

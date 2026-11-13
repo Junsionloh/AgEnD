@@ -266,7 +266,7 @@ function UsedBy({ names, to, agents, limit, onMore, onAdd }) {
 /**
  * One row, the same in every category (skills, tools, MCP servers; built in or team): two lines. Line 1 is the name and its description;
  * line 2 is who uses it, what it is for / how big it is, and whether it is built in or the team's. The actions are one column at the right,
- * centered on the row: "Details" always, then (on a screen wide enough) Export and Delete. A row with no agent tags has the same two lines.
+ * centered on the row: Export and Delete (on a screen wide enough) and, always last — so always in the same place — "Details". A row with no agent tags has the same two lines.
  */
 function ItemRow({ icon, name, description, tags, extra, warn, rowAttrs, children }) {
   return html`<div class=${`row-item lib-row${warn ? " is-warn" : ""}`} ...${rowAttrs}>
@@ -277,7 +277,7 @@ function ItemRow({ icon, name, description, tags, extra, warn, rowAttrs, childre
   </div>`;
 }
 
-const exportLink = (item) => html`<a class="icon-btn lib-act-extra" href=${`/ui/library/export?id=${encodeURIComponent(item.id)}`} download=${`${item.id}.zip`}
+const exportLink = (item, builtin = false) => html`<a class="icon-btn lib-act-extra" href=${`/ui/library/export?id=${encodeURIComponent(item.id)}${builtin ? "&builtin=1" : ""}`} download=${`${item.id}.zip`}
   aria-label=${tn("exportOne", item.id)} title=${tn("exportOne", item.id)} data-library-export=${item.id}><${Icon} name="download" size=${16} /></a>`;
 
 /** A team item's row. */
@@ -290,23 +290,23 @@ function Row({ item, used, agents, limit, onView, onDelete, onAdd }) {
   const add = onAdd ? Object.assign(() => onAdd(item), { label: tn("addTagLabel", item.id) }) : null;
   const tags = item.kind === "skill" && used ? html`<${UsedBy} names=${used} to="skill" agents=${agents} limit=${limit} onMore=${() => onView(item)} onAdd=${add} />` : null;
   const extra = html`${warn ? html`<span class="pill off" title=${hasHint ? hint : undefined}>${tn(`st_${item.status}`)}</span>` : null}
-    ${meta ? html`<span class="note lib-size">${meta}</span>` : null}<span class="pill">${tn("team")}</span>`;
+    ${meta ? html`<span class="note lib-size">${meta}</span>` : null}<span class="pill lib-kind">${tn("team")}</span>`;
   return html`<${ItemRow} icon=${item.kind === "skill" ? "book" : "plug"} name=${item.id}
     description=${`${item.description || ""}${item.status === "invalid" && item.reason ? ` ${item.reason}` : ""}`.trim()}
     tags=${tags} extra=${extra} warn=${warn} rowAttrs=${{ "data-library-item": `${item.kind}:${item.id}` }}>
-    <button type="button" class="btn btn-sm" onClick=${() => onView(item)} disabled=${!openable} data-library-view>${tn("details")}</button>
     ${item.kind === "skill" ? (openable ? exportLink(item) : html`<button type="button" class="icon-btn lib-act-extra" disabled aria-label=${tn("exportOne", item.id)}><${Icon} name="download" size=${16} /></button>`) : null}
     <button type="button" class="icon-btn lib-act-extra" onClick=${() => onDelete(item)} data-library-delete aria-label=${`${tn("delete")} ${item.id}`} title=${`${tn("delete")} ${item.id}`}><${Icon} name="trash" size=${16} /></button>
+    <button type="button" class="btn btn-sm" onClick=${() => onView(item)} disabled=${!openable} data-library-view>${tn("details")}</button>
   </${ItemRow}>`;
 }
 
 /** A built-in row: read only — the same two lines and the same place for Details (and Export, for a skill); no Delete. */
 function BuiltinRow({ kind, name, icon, description, agents, to, onDetails, extra, limit, exportable }) {
   const tags = html`<${UsedBy} names=${agents.names} to=${to} agents=${agents.all} limit=${limit} onMore=${onDetails} onAdd=${null} />`;
-  const more = html`${extra ? html`<span class="note lib-size">${extra}</span>` : null}<span class="pill">${tn("builtin")}</span>`;
+  const more = html`${extra ? html`<span class="note lib-size">${extra}</span>` : null}<span class="pill lib-kind">${tn("builtin")}</span>`;
   return html`<${ItemRow} icon=${icon} name=${name} description=${description} tags=${tags} extra=${more} rowAttrs=${{ "data-library-builtin": `${kind}:${name}` }}>
+    ${exportable ? exportLink({ id: name }, true) : null}
     <button type="button" class="btn btn-sm" onClick=${onDetails} data-library-details>${tn("details")}</button>
-    ${exportable ? exportLink({ id: name }) : null}
   </${ItemRow}>`;
 }
 
