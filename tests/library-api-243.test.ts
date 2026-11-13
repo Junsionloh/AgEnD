@@ -64,7 +64,14 @@ it("answers the library's errors with a code and the place, never the secret", a
   const ok = { kind: "skill", id: "demo", files: [{ path: "SKILL.md", content: SKILL }] };
   expect((await r.admin.post("/ui/library/save", ok)).status).toBe(200);
   expect((await r.admin.post("/ui/library/save", ok)).status).toBe(409);
-  expect((await r.admin.post("/ui/library/save", { ...ok, overwrite: true })).status).toBe(200);
+  // AGEND-260: a replacement must name the version it read (`expect`); without it nothing is written
+  const noExpect = await r.admin.post("/ui/library/save", { ...ok, overwrite: true, files: [{ path: "SKILL.md", content: SKILL + "\nchanged\n" }] });
+  expect(noExpect.status).toBe(400);
+  expect(await noExpect.json()).toMatchObject({ error: "invalid_request", detail: "expect" });
+  const sha = (await (await r.admin.get("/ui/library/item?kind=skill&id=demo")).json() as any).detail.sha256;
+  expect((await r.admin.post("/ui/library/save", { ...ok, overwrite: true, expect: "0".repeat(64) })).status).toBe(409);
+  expect((await r.admin.post("/ui/library/save", { ...ok, overwrite: true, expect: "short" })).status).toBe(400);
+  expect((await r.admin.post("/ui/library/save", { ...ok, overwrite: true, expect: sha })).status).toBe(200);
   expect((await r.admin.post("/ui/library/delete", { kind: "skill", id: "missing" })).status).toBe(404);
 });
 

@@ -157,10 +157,17 @@ export function handleLibraryRequest(h: LibraryWebHost): boolean {
     if (!body || Array.isArray(body) || typeof body !== "object" || !kind) { h.json(res, 400, { error: "invalid_request" }); return; }
     if (path === "/ui/library/delete") { send(store.remove(kind, body.id)); return; }
     const overwrite = body.overwrite === true;
-    // An edit says which version it started from; a skill that is another one now is not overwritten.
-    if (kind === "skill" && typeof body.expect === "string") {
-      const now = isLibraryId(body.id) ? store.get("skill", body.id) : null;
+    // AGEND-260: a replacement says which version it started from (`expect`, the hash the editor read) — it is required, so a direct
+    // call cannot replace an item without having read it. An item that is another one now is not overwritten (409 `changed`).
+    if (overwrite || body.expect !== undefined) {
+      if (typeof body.expect !== "string" || !/^[0-9a-f]{64}$/.test(body.expect)) { h.json(res, 400, { error: "invalid_request", detail: "expect" }); return; }
+      const now = isLibraryId(body.id) ? store.get(kind, body.id) : null;
       if (!now || !now.ok || now.detail.sha256 !== body.expect) { send({ ok: false, error: "changed" } as LibraryError); return; }
+    }
+    // AGEND-260: a built-in skill's name is AgEnD's (import already refuses it): a team skill may not take it by hand either.
+    if (kind === "skill" && isLibraryId(body.id) && builtinSkillNames().has(body.id) && !overwrite) {
+      const taken = store.get("skill", body.id);
+      if (!taken.ok) { send({ ok: false, error: "exists", detail: "builtin" } as LibraryError); return; }
     }
     send(kind === "skill" ? store.addSkill(body.id, body.files, { overwrite }) : store.addMcp(body.id, body.text, { overwrite }));
   })().catch(() => { if (!res.headersSent) h.json(res, 500, { error: "library_failed" }); });

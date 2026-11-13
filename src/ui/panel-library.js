@@ -69,7 +69,7 @@ register("library", {
     e_invalid_path: "That file path is not allowed: {0}", e_duplicate_path: "Two files have the same path: {0}", e_missing_skill_md: "A skill needs a SKILL.md.",
     e_bad_frontmatter: "SKILL.md must start with a --- block holding name and description.", e_name_mismatch: "The `name` inside must be the same as the name above.",
     e_missing_description: "SKILL.md needs a description.", e_too_large: "That is too large for the library.", e_too_many_files: "Too many files.",
-    e_not_text: "Only text files can be kept.", e_exists: "That name is already in use.", e_not_found: "It is not in the library.", e_too_many_items: "The library is full.",
+    e_not_text: "Only text files can be kept.", e_exists: "That name is already in use.", e_exists_builtin: "That name belongs to a built-in skill. Choose another name.", e_not_found: "It is not in the library.", e_too_many_items: "The library is full.",
     e_invalid_yaml: "That is not valid YAML.", e_bad_mcp: "The MCP file has a problem in “{0}”. Variables are listed by name only; an address may not hold a password or a query.",
     e_secret_found: "Something here looks like a secret ({0}). Remove it first: the library keeps no keys or passwords.", e_unsafe_item: "That item cannot be read safely.", e_invalid_request: "The request was not valid.",
     secretAt: "{0}, line {1}",
@@ -125,7 +125,7 @@ register("library", {
     e_invalid_path: "這個檔案路徑不允許：{0}", e_duplicate_path: "有兩個檔案路徑相同：{0}", e_missing_skill_md: "Skill 需要一個 SKILL.md。",
     e_bad_frontmatter: "SKILL.md 開頭必須有 --- 區塊，寫上 name 和 description。", e_name_mismatch: "裡面的 `name` 必須和上面的名稱相同。",
     e_missing_description: "SKILL.md 需要 description。", e_too_large: "太大了，資源庫放不下。", e_too_many_files: "檔案太多。",
-    e_not_text: "只能存文字檔。", e_exists: "這個名稱已經有人用了。", e_not_found: "資源庫裡沒有這一項。", e_too_many_items: "資源庫已滿。",
+    e_not_text: "只能存文字檔。", e_exists: "這個名稱已經有人用了。", e_exists_builtin: "這個名稱是內建 Skill 的名字，請換一個。", e_not_found: "資源庫裡沒有這一項。", e_too_many_items: "資源庫已滿。",
     e_invalid_yaml: "這不是有效的 YAML。", e_bad_mcp: "MCP 檔案的「{0}」有問題。變數只能寫名稱；網址不能含密碼或查詢字串。",
     e_secret_found: "這裡有東西看起來像密鑰（{0}）。請先移除：資源庫不存金鑰或密碼。", e_unsafe_item: "這一項無法安全讀取。", e_invalid_request: "請求不正確。",
     secretAt: "{0}，第 {1} 行",
@@ -144,6 +144,7 @@ export function libraryErrorText(body, fallbackKey) {
   const key = `e_${body.error}`;
   const known = t(`library.${key}`) !== `library.${key}`;
   if (!known) return tn(fallbackKey);
+  if (body.error === "exists" && body.detail === "builtin") return tn("e_exists_builtin");
   if (body.error === "secret_found") {
     const at = Array.isArray(body.findings) ? body.findings.slice(0, 3).map((f) => tn("secretAt", f.field, f.line)).join("; ") : "";
     return tn(key, at);
@@ -186,7 +187,9 @@ function AddDialog({ kind, existing, onClose, onSaved }) {
     if (taken && !(await confirmDialog({ title: tn("replaceTitle", id), message: tn("replaceBody", id, kind === "skill" ? "skill" : "MCP"), confirmLabel: tn("replace"), danger: true }))) return;
     setBusy(true);
     try {
-      const payload = kind === "skill" ? { kind, id, files: [{ path: "SKILL.md", content: text }], overwrite: taken } : { kind, id, text, overwrite: taken };
+      // A replacement names the version it was confirmed against (the hash the list showed): the server requires it.
+      const expect = taken ? existing.get(id) : undefined;
+      const payload = { kind, id, ...(kind === "skill" ? { files: [{ path: "SKILL.md", content: text }] } : { text }), ...(taken ? { overwrite: true, ...(expect ? { expect } : {}) } : {}) };
       const r = await call("/ui/library/save", payload);
       if (r.ok) { toast(tn("saved", id)); onSaved(); onClose(); } else setError(libraryErrorText(r.data, "saveFailed"));
     } catch { setError(tn("saveFailed")); } finally { setBusy(false); }
@@ -419,7 +422,7 @@ export function LibraryPanel({ route, navKey }) {
   };
   const items = state.items || [];
   const skills = items.filter((i) => i.kind === "skill"), mcp = items.filter((i) => i.kind === "mcp");
-  const existing = (kind) => new Set(items.filter((i) => i.kind === kind).map((i) => i.id));
+  const existing = (kind) => new Map(items.filter((i) => i.kind === kind).map((i) => [i.id, i.sha256]));
   const q = filter.trim().toLowerCase();
   const names = (list, to) => ({ names: list, all: agents });
   const roleText = (r) => (t(`library.role_${r}`) !== `library.role_${r}` ? tn(`role_${r}`) : r);

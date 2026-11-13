@@ -175,3 +175,25 @@ it("editing: a save runs the same checks and writes nothing when one fails; a go
   expect(disk()).toBe(md("demo", " edited"));
   expect((await edit([{ path: "SKILL.md", content: md("demo", " again") }, { path: "ref/a.md", content: "a" }], after.sha256)).status).toBe(200);
 });
+
+// ── AGEND-260: the three #76 review follow-ups ──
+it("a replacement without `expect` is refused for skills and MCP alike; a built-in name cannot be taken by hand", async () => {
+  const r = await rig();
+  const mcp = "agend_library: 1\nkind: mcp\nname: echo\ntransport: stdio\ncommand: node\n";
+  expect((await r.admin.post("/ui/library/save", { kind: "mcp", id: "echo", text: mcp })).status).toBe(200);
+  expect((await r.admin.post("/ui/library/save", { kind: "mcp", id: "echo", text: mcp.replace("node", "deno"), overwrite: true })).status).toBe(400);
+  expect(readFileSync(join(r.dataDir, "library", "mcp", "echo.yaml"), "utf8")).toContain("node");
+  // `concepts` is a built-in skill's name: saving a team skill under it by hand is refused, like an import
+  const refused = await r.admin.post("/ui/library/save", { kind: "skill", id: "concepts", files: [{ path: "SKILL.md", content: md("concepts") }] });
+  expect(refused.status).toBe(409);
+  expect(await refused.json()).toMatchObject({ error: "exists", detail: "builtin" });
+  expect(existsSync(join(r.dataDir, "library", "skills", "concepts"))).toBe(false);
+  expect((await r.admin.post("/ui/library/save", { kind: "skill", id: "not-builtin", files: [{ path: "SKILL.md", content: md("not-builtin") }] })).status).toBe(200);
+});
+
+it("a zip's duplicate names are compared after Unicode normalisation (é composed vs decomposed)", () => {
+  const composed = "demo/caf\u00e9.md", decomposed = "demo/cafe\u0301.md";
+  expect(composed).not.toBe(decomposed);
+  expect(readZip(writeZip([{ name: composed, data: Buffer.from("a") }, { name: decomposed, data: Buffer.from("b") }]))).toMatchObject({ ok: false, error: "duplicate_path" });
+  expect(readZip(writeZip([{ name: composed, data: Buffer.from("a") }, { name: "demo/other.md", data: Buffer.from("b") }]))).toMatchObject({ ok: true });
+});
