@@ -2046,7 +2046,7 @@ export class InstanceLifecycle {
     daemon.setDecisionTeams(() => instanceTeams(this.ctx.fleetConfig?.teams, name));
     daemon.setDecisionSource(this.ctx.activeDecisions ? () => this.ctx.activeDecisions!() : undefined);
     // AGEND-261: read at each launch; an agent with nothing mounted never calls it.
-    daemon.setLibraryMcpSource(this.ctx.libraryMcpFor ? ids => this.ctx.libraryMcpFor!(name, ids, backendName) : undefined);
+    daemon.setLibraryMcpSource?.(this.ctx.libraryMcpFor ? ids => this.ctx.libraryMcpFor!(name, ids, backendName) : undefined);
     // Read at each spawn so a fleet.yaml reload is honoured (#984).
     daemon.setPeerWorkingDirectories(backendName === "kiro-cli"
       ? this.ctx.kiroPeerWorkingDirectories ? () => this.ctx.kiroPeerWorkingDirectories!(name) : undefined
