@@ -10,6 +10,9 @@ import { classifyInstanceChange } from "./instance-config-impact.js";
 import type { ActiveDecisionRow } from "./daemon.js";
 import { measureSyncWork } from "./sync-work-attribution.js";
 import { hostFacts, hostIds } from "./cli-registry.js";
+import type { InstanceRunner } from "./adapters/types.js";
+import { adapterOf } from "./adapters/registry.js";
+import { selectAdapter } from "./adapters/select.js";
 import { REMOVED_BACKENDS, isRemovedBackend, removedBackendMessage } from "./backend/removed.js";
 import { existsSync, readFileSync, mkdirSync, realpathSync, writeFileSync, statSync } from "node:fs";
 import { ensureInstanceDir } from "./private-dir.js";
@@ -378,7 +381,6 @@ export class SupersededStartError extends Error {
  */
 export const PRECLAIM_LEASE_MS = 120_000;
 
-type Daemon = InstanceType<typeof import("./daemon.js").Daemon>;
 
 /**
  * Working directories of the fleet's other instances on `backendName` (#984):
@@ -590,7 +592,7 @@ export async function verifyClaudeQuotaStatus(
 
 export class InstanceLifecycle {
   /** Active daemon processes: instanceName → Daemon */
-  readonly daemons = new Map<string, Daemon>();
+  readonly daemons = new Map<string, InstanceRunner>();
   /**
    * Phase 2a: one transition (start / stop / wake / restart) at a time per
    * instance. A call that passes the current transition's handle runs inline;
@@ -667,7 +669,7 @@ export class InstanceLifecycle {
   }
 
   /** Seed only the Codex daemon replacing a scheduled capacity retry. */
-  private applyCapacityBackoffBaseline(name: string, backendName: string, daemon: Daemon): void {
+  private applyCapacityBackoffBaseline(name: string, backendName: string, daemon: InstanceRunner): void {
     if (backendName !== "codex") return;
     const baseline = this.capacityBackoffBaselines.get(name);
     if (baseline) daemon.seedErrorPatternOccurrenceCount("model_error", baseline.pattern, baseline.count);
@@ -1931,7 +1933,7 @@ export class InstanceLifecycle {
     runtimeIdentity?: FleetInstructionsParams["runtimeIdentity"],
     transition?: TransitionHandle,
     execution?: SettingsExecution,
-    published?: (daemon: Daemon) => void,
+    published?: (daemon: InstanceRunner) => void,
   ): Promise<void> {
     return this.runTransition(name, () => this.startInTransition(name, config, topicMode, runtimeIdentity, execution, published), transition);
   }
@@ -1942,7 +1944,7 @@ export class InstanceLifecycle {
     topicMode: boolean,
     runtimeIdentity?: FleetInstructionsParams["runtimeIdentity"],
     execution?: SettingsExecution,
-    published?: (daemon: Daemon) => void,
+    published?: (daemon: InstanceRunner) => void,
   ): Promise<void> {
     const epoch = this.epochOf(name);
     const check = (): void => { execution?.assert(); if (this.epochOf(name) !== epoch) throw new SupersededStartError(name); };
@@ -2031,24 +2033,30 @@ export class InstanceLifecycle {
         credentialHold.release(); credentialHold = null;          // a save changed its account while it waited: ask again
       }
     }
-    const backend = native?.backend ?? createBackend(backendName, instanceDir);
-    const daemon = new Daemon(
-      name,
-      config,
-      instanceDir,
-      topicMode,
-      backend,
-      this.ctx.controlClient ?? undefined,
-      this.ctx.logger,
-      runtimeIdentity ?? {
-        kind: "fleet-topic",
-        backend: backendName,
-        model: config.model ?? "default",
+    const adapter = selectAdapter(backendName, config, {
+      tmux: () => {
+        const backend = native?.backend ?? createBackend(backendName, instanceDir);
+        const runner = new Daemon(
+          name,
+          config,
+          instanceDir,
+          topicMode,
+          backend,
+          this.ctx.controlClient ?? undefined,
+          this.ctx.logger,
+          runtimeIdentity ?? {
+            kind: "fleet-topic",
+            backend: backendName,
+            model: config.model ?? "default",
+          },
+          this.ctx.spawnGate,
+          this.ctx.stormWindow,
+          this.ctx.backendOutage,
+        );
+        return { runner, backend };
       },
-      this.ctx.spawnGate,
-      this.ctx.stormWindow,
-      this.ctx.backendOutage,
-    );
+    });
+    const daemon = adapter.runner;
     launched = daemon;
     if (native) { daemon.setNativePaneLifecycle(native); native.bindDaemon?.(daemon); }
     // Register before start: a pre-launch refusal has no published daemon or later incident handlers.
@@ -2445,7 +2453,10 @@ export class InstanceLifecycle {
       let stopped = false;
       try {
         if (daemon.usesNativePane?.()) await daemon.stop({ nativePane: "close" });
-        else await daemon.stop();
+        else {
+          const adapter = adapterOf(daemon);
+          if (adapter) await adapter.stop(); else await daemon.stop();
+        }
         stopped = true;
       } finally {
         if (captured && this.ctx.deliveryOutbox) {
