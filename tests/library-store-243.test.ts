@@ -231,7 +231,7 @@ describe("lock file", () => {
 });
 
 describe("nothing else uses the library yet", () => {
-  it("only the web route file (and the library itself) imports src/library — no agent start, publish or config path reaches it", async () => {
+  it("only the web route, the config check and the fleet's skill mount import src/library — no other agent start, publish or config path reaches it", async () => {
     const { readdirSync, readFileSync, statSync } = await import("node:fs");
     const importers: string[] = [];
     const walk = (dir: string): void => {
@@ -242,6 +242,7 @@ describe("nothing else uses the library yet", () => {
       }
     };
     walk(join(__dirname, "..", "src"));
-    expect(importers.sort()).toEqual(["web-api.ts"]);
+    // AGEND-244: the mount (fleet-manager.ts) and the shape check of an agent's `library` setting (config-validator.ts).
+    expect(importers.sort()).toEqual(["config-validator.ts", "fleet-manager.ts", "web-api.ts"]);
   });
 });
