@@ -1,6 +1,6 @@
 # #3731: per-instance CLI adapters: tmux (default), official ACP, and native protocols
 
-Status: **draft design for review after 2.5. Nothing here is implemented.** No code change accompanies this document.
+Status: **draft design for review after 2.5. Only phase 0 (§8) is implemented**, as fork PR [#77](https://github.com/Junsionloh/AgEnD/pull/77) at `337c2374f`; it changes no behaviour. Everything about the structured adapters is still a design.
 Direction (maintainer): **official ACP first, otherwise a native adapter.** One adapter per instance; `tmux` stays the default adapter.
 Issue: [#3731](https://github.com/songsid/AgEnD/issues/3731) (Step 2 of the plan in that issue). Related: #3648, #739, #1411, #1209, #2950, #1218.
 
@@ -22,6 +22,7 @@ AgEnD code references are `path:line`, relative to the repository root.
 
 - Unqualified references are at **`main` @ `43e570835`**.
 - References to the Step 1 spike are to fork PR [#68](https://github.com/Junsionloh/AgEnD/pull/68), branch `improve/grok-leader-observer-spike`. **The spike has been fixed to match this document** (§7.4, §9.5): code and tests at commit **`c4e8996e6`**, and the evidence write-up `docs/evidence/grok-leader-observer-236/README.md` (its head commit only adds that write-up and logs under `docs/`; `src/` and `tests/` are those of `c4e8996e6`). The measurements about grok's behaviour quoted in §7.4 and §9.5 (what a leader does, the permission copies, the socket limit) were taken at the earlier commit `fe36d3911`, which is **before** the fixes; the fixes were then re-checked on `c4e8996e6` with a new end-to-end run, a mutation check and tests, and the write-up says which log is from which commit. Where this document says "the spike" it means `c4e8996e6`; "the spike as first built" means `fe36d3911`. Line references to the spike's files (below) are to `fe36d3911` where they describe the first build.
+- References prefixed **`#77:`** are to the phase 0 implementation, fork PR [#77](https://github.com/Junsionloh/AgEnD/pull/77) at commit **`337c2374f`**. They are used only where the code exists only there (the lifecycle lines that changed, and `src/adapters/`).
 - References prefixed **`alpha:`** are at `release/2.3.5-alpha` @ `aed5a074a`. The Windows runtime, and the #3648 chat timeline work, are on that line and are **not on `main` yet**. Line numbers will drift; the file and symbol names are the stable part.
 
 ### Terms
@@ -165,7 +166,7 @@ Lessons to take, and one to avoid:
                          instance config: cli_adapter  (absent = tmux)
                                         │
                                         ▼
-        InstanceLifecycle ── selectAdapter(backend, cli_adapter) ──► one CliAdapter per instance
+        InstanceLifecycle ── selectAdapter(backend, config, builders) ──► one CliAdapter per instance
                                         │
         ┌───────────────────┬───────────┴───────────┬──────────────────────────┐
         ▼                   ▼                       ▼                          ▼
@@ -178,40 +179,45 @@ Lessons to take, and one to avoid:
 There are two layers, and the split is what makes the choice easy to see and cheap to add to:
 
 - **`CliAdapter`**: what differs by CLI protocol. One instance of it per fleet instance. It is the only thing `selectAdapter` chooses.
-- **`InstanceRunner`**: what is the same for every structured adapter and is written once: crash/backoff, the busy/idle state snapshot, the hang timer, the permission policy (§7), mapping adapter events to timeline `LogStep`s, and the "consumed" callback for the delivery outbox. `InstanceLifecycle` holds an `InstanceRunner` per instance (today it holds a `Daemon`: `readonly daemons = new Map<string, Daemon>()`, `src/instance-lifecycle.ts:556`, built in one place at `:1872` from `start` at `:1789`).
-- **For `tmux` the two layers are the same object.** The `Daemon` already contains all of the runner logic *and* the pane logic, so the `TmuxAdapter` is a thin facade over `Daemon`, and `Daemon` satisfies the `InstanceRunner` surface directly. Phase 0 (§8) does not move any of that code.
+- **`InstanceRunner`**: what the rest of the fleet calls on a running instance. For the structured adapters it is also where what is the same for all of them is written once: crash/backoff, the busy/idle state snapshot, the hang timer, the permission policy (§7), mapping adapter events to timeline `LogStep`s, and the "consumed" callback for the delivery outbox. `InstanceLifecycle` holds an `InstanceRunner` per instance (it held a `Daemon`; now `readonly daemons = new Map<string, InstanceRunner>()`, `#77:src/instance-lifecycle.ts:560`, built in one place at `#77:src/instance-lifecycle.ts:1877` from `start` at `:1795`).
+- **`InstanceRunner` is `Pick<Daemon, …>`, not a hand-written list.** Its 50 members (`#77:src/adapters/types.ts`) are exactly what other modules call on a running instance. They were found by retyping `lifecycle.daemons` as the empty interface and letting the compiler list what was missing. Signatures follow `Daemon`, so the two cannot drift, and a new caller adds its member's name to the `Pick`. It extends `EventEmitter` because the fleet subscribes to daemon events.
+- **`InstanceRunner` has no `sendPrompt`, `steer` or `cancel`.** The fleet never calls those on a daemon: a message reaches it as an IPC message (`fleet_inbound`, `steer`) on its socket, and cancel is `sendEscape`. They are on `CliAdapter`, where a structured adapter needs them; `TmuxAdapter` forwards them to `Daemon.pushChannelMessage`, `steerMessage` and `sendEscape`.
+- **For `tmux` the two layers are the same object.** The `Daemon` already contains all of the runner logic *and* the pane logic, so the `TmuxAdapter` is a thin facade over `Daemon`, and `Daemon` satisfies the `InstanceRunner` surface directly (`TmuxAdapter.runner` is the daemon). Phase 0 (§8) does not move any of that code: `src/daemon.ts` and `src/backend/` have no diff.
 
-The capabilities an adapter provides (names illustrative; the real list comes from grepping what other modules call on a daemon, in phase 0):
+The adapter interface as implemented in phase 0 (`#77:src/adapters/types.ts`). The sketch that stood here had `sendPrompt` return a promise, `answerPermission` return nothing, and no `runner`; those are the differences:
 
 ```ts
+type CliAdapterId = "tmux";                    // phase 0; an id is added together with the code that implements it
+
 interface CliAdapter {
-  readonly id: "tmux" | "acp" | "claude-stream-json" | "codex-app-server";
-  readonly capabilities: {                     // static per adapter + profile; the UI and validator read this
+  readonly id: CliAdapterId;
+  readonly capabilities: {                     // static per adapter + profile; the UI, the validator and the fleet read this
     steer: boolean;                            // Codex: true. ACP: false (queues). tmux: per backend (src/steer-capability.ts:5)
     livePermissions: boolean;                  // structured permission requests (false for tmux: dialog scraping)
     liveThought: boolean;                      // thought text while the turn runs
     contextUsage: boolean; quota: boolean;     // a structured source exists
     paneView: boolean;                         // true only for tmux
   };
+  readonly runner: InstanceRunner;             // what the fleet holds per instance (lifecycle.daemons); for tmux, the Daemon
 
   // lifecycle
-  start(ctx: AdapterStartContext): Promise<void>;     // spawn / open; resume by stored session id        (src/daemon.ts:2996)
-  stop(): Promise<void>;                              //                                                     (src/daemon.ts:5405)
-  health(): { process: "running" | "crashed" | "stopped"; lastEventAt: number | null };  // (src/daemon.ts:2027)
+  start(ctx: { admission?: () => void }): Promise<void>;   // spawn / open; resume by stored session id
+  stop(): Promise<void>;
+  health(): { process: "running" | "crashed" | "stopped"; lastEventAt: number | null };   // lastEventAt: null for tmux
 
   // turn control
-  sendPrompt(p: PromptRequest): Promise<PromptAck>;   // the delivery path                                  (src/daemon.ts:8142)
-  steer?(text: string, meta: Record<string, string>): void;   // only when capabilities.steer             (src/daemon.ts:7830)
-  cancel(): Promise<void>;                            //                                                     (src/daemon.ts:4856)
-  answerPermission(requestId: string, decision: PermissionDecision): void;
+  sendPrompt(p: { content: string; meta: Record<string, string>; deliveryEpoch?: number; targetSession?: string }): { accepted: true };
+  steer?(content: string, meta: Record<string, string>, deliveryEpoch?: number): void;   // only when capabilities.steer can be true
+  cancel(): Promise<void>;
+  answerPermission(requestId: string, decision: PermissionDecision): boolean;   // false: no such request to answer
 
   // observation
-  events(): AsyncIterable<AdapterEvent>;              // the one stream: thought, message, tool, plan, permission, usage, quota, turn_end, auth_required
-  sessionId(): string | null;                         //                                                     (src/backend/types.ts:840)
+  events(): AsyncIterable<AdapterEvent>;       // the one stream: thought, message, tool, plan, permission, usage, quota, turn_end, auth_required
+  sessionId(): string | null;
 }
 ```
 
-`tmux` implements `sendPrompt`, `steer`, `cancel`, `health` and `sessionId` with today's code, and implements `events()` by feeding the existing transcript monitor and pane state machine; it reports `livePermissions`, `liveThought` and `paneView` as the fixed values that describe it today. The structured adapters implement everything from protocol messages. The event vocabulary is one small union that every structured adapter translates into:
+`tmux` implements `start`, `stop`, `health`, `sendPrompt`, `steer`, `cancel` and `sessionId` by forwarding to today's code (`Daemon.start`/`stop`/`getProcessStatus`/`pushChannelMessage`/`steerMessage`/`sendEscape`, and the backend's `getSessionId`). Two members have nothing to forward to and return fixed values, for stated reasons: **`events()` is an empty stream**, because tmux has no push stream (the chat steps still come from the transcript file and the state from the pane, through the monitors that exist today, unchanged), and **`answerPermission` always returns `false`**, because under tmux a permission request is a dialog on the screen that is recognised by reading the pane and answered with keys (`livePermissions` is `false`), so there is no request id to answer. Its capabilities are `paneView: true`, `livePermissions: false`, `liveThought: false`, `contextUsage: true`, `quota: true` and `steer` per backend (`#77:src/adapters/tmux-adapter.ts`). The structured adapters implement everything from protocol messages. The event vocabulary is one small union that every structured adapter translates into:
 
 ```ts
 type AdapterEvent =
@@ -239,10 +245,12 @@ The protocol difference is therefore confined to three translators, and to the c
 ### 5.4 How the daemon picks an adapter
 
 1. **Config.** `cli_adapter` is read from the instance (or fleet defaults), validated against the `backend` table in §2.1 by `src/config-validator.ts`. An absent value is `tmux`. A value the table does not allow is a config error, reported at load, not at launch.
-2. **Selection point.** `InstanceLifecycle.start` (`src/instance-lifecycle.ts:1789`) is the only place that constructs a runner (`:1872`). It calls `selectAdapter(backendName, config)`:
-   - `tmux` → today's path unchanged: `createBackend(...)` (`src/backend/factory.ts:12`) and `new Daemon(...)`.
-   - anything else → an `InstanceRunner` that hosts the chosen adapter, built from that CLI's launch profile (§3.2).
-3. **Registry.** `lifecycle.daemons` becomes a map of `InstanceRunner` (keeping the name for the first change to keep the diff small). Code that needs pane-only operations (attach, pane capture, raw keys, the web terminal) asks `adapter.capabilities.paneView` and refuses with a clear message when it is false, rather than testing the adapter's name.
+2. **Selection point.** `InstanceLifecycle.start` (`#77:src/instance-lifecycle.ts:1795`) is the only place that constructs a runner (`#77:src/instance-lifecycle.ts:1877`). It calls `selectAdapter(backendName, config, builders)` (`#77:src/adapters/select.ts`):
+   - `builders` says how to build each adapter's runner; `selectAdapter` calls exactly one. In phase 0 there is one, `tmux`, and it is today's code moved into a closure unchanged: `createBackend(...)` (`src/backend/factory.ts:12`) and `new Daemon(...)` with the same arguments in the same order. The closure stays in the lifecycle so the diff is small.
+   - A `cli_adapter` that is not supported throws before any builder runs. It is refused at config load first (`#77:src/adapters/config.ts`, used by `src/config.ts` and `src/config-validator.ts`), so this is the backstop for a config that did not go through the loader.
+   - **Phase 0 returns the concrete `TmuxAdapter`, not `CliAdapter`.** The lifecycle still wires about twenty tmux-specific hooks on `adapter.runner` (outbox port, credential issuer, incident handlers). Widening the return type to `CliAdapter` is done when a second adapter exists, and that is also when that wiring has to move behind the interface.
+   - Later phases add a builder per adapter: an `InstanceRunner` that hosts the chosen adapter, built from that CLI's launch profile (§3.2).
+3. **Registry.** `lifecycle.daemons` is a map of `InstanceRunner` (the name is kept to keep the diff small). The adapter that built a runner is found through a weak registry, `adapterOf(runner)` (`#77:src/adapters/registry.ts`), together with `capabilitiesOf(runner)` and `cancelRunner(runner)`. The registry exists because `Daemon` is not changed, so the daemon cannot carry its adapter; keyed weakly, an entry goes when its runner does. A runner with no adapter bound (a daemon built before adapters, or a test double for one) is treated as `tmux`, the only adapter that can lack a binding. Code that needs pane-only operations asks `capabilitiesOf(runner).paneView` and refuses with a clear message when it is false, rather than testing the adapter's name. `cancelRunner` calls the bound adapter's `cancel()`, or the daemon's `sendEscape()` when none is bound; `stop` goes through the adapter the same way.
 4. **Switching.** Changing `cli_adapter` on an existing instance is a configuration change that restarts it on the new adapter, like changing `backend`. Whether the conversation carries over is §9.1 item 7. Nothing switches automatically.
 5. **Failure.** A structured adapter that cannot start (version gate refuses, binary lacks the entry point) reports the reason on the instance and stays stopped. It does not fall back to `tmux`.
 
@@ -250,8 +258,8 @@ The protocol difference is therefore confined to three translators, and to the c
 
 | Module | Change | Size |
 |---|---|---|
-| `src/types.ts` | New per-instance field `cli_adapter`, and its validation in `src/config-validator.ts` (the backend × adapter table). | small |
-| `src/instance-lifecycle.ts` (`:556`, `:1789`, `:1872`) | `selectAdapter`; hold `InstanceRunner`; reuse crash/backoff event wiring (`:988`, `:1106`). | medium |
+| `src/types.ts` | New per-instance field `cli_adapter`, and its validation in `src/config-validator.ts` (the backend × adapter table). **Phase 0:** the field is accepted with the value `tmux` only, in the instance and in `defaults`, by `src/config.ts` (throws at load) and `src/config-validator.ts`; there is no table yet. | small |
+| `src/instance-lifecycle.ts` (`#77:` `:560`, `:1795`, `:1877`) | `selectAdapter`; hold `InstanceRunner`; reuse crash/backoff event wiring (`:988`, `:1106`). | medium |
 | `src/fleet-manager.ts` (`startInstance` `:5916`) | Pass-through; refuse pane-only operations by capability. | medium (many touch points, each small) |
 | `src/backend/types.ts` (`CliBackend`, `:550`) | **Not extended.** It stays the `tmux` adapter's pane-shaped backend description. Structured launch profiles are a separate small type (binary, args, env, wire format, version gate). | small |
 | New `src/adapters/` | `CliAdapter` and `InstanceRunner` types, `TmuxAdapter` facade, `AcpAdapter` + `AcpClient` + profiles, `ClaudeStreamJsonAdapter`, `CodexAppServerAdapter`, fakes for tests. | the bulk |
@@ -346,6 +354,21 @@ The Step 1 spike (fork PR #68, `c4e8996e6`) implements points 1–3 and 5 and ha
 | **2. `acp` for kiro + opencode** | Verify first (§9); then a profile each. | The same acceptance as phase 1 for each CLI, preceded by a one-day verification spike per CLI that fills in every [U] in §3. If a CLI turns out **not** to have official ACP, the rule in §3.1 applies: it needs its own native adapter (a separate design and estimate) or stays on `tmux`. It is not forced onto `acp`. | 1–2 weeks each |
 | **3. `claude-stream-json` and `codex-app-server`** | One adapter each, behind the same `AdapterEvent`s; Codex `steer` exposed through the capability flag. | Fixtures generated from the CLI's own schema where it offers one (Codex: `generate-json-schema`, [V]); real-CLI smoke runs; explicit handling of Codex's "experimental" label. Claude: a verification spike first for every Claude [U] in §3.2 (thinking deltas, the permission-prompt contract, interrupt). | 1–2 weeks each |
 
+### Phase 0: implemented
+
+Fork PR [#77](https://github.com/Junsionloh/AgEnD/pull/77), commit `337c2374f` (draft, base fork `main`, which was fast-forwarded to upstream `df9229b58`). It follows §5.3 to §5.5 with the differences recorded there. State of the acceptance criteria:
+
+- **Existing tests pass unchanged.** No existing test file was modified. `tsc --noEmit` and `tsc --noEmit -p tsconfig.test.json` pass. The full run has 47 failures in 8 files, the same 47 that fail on `df9229b58` in a clean worktree (they need things the test machine lacks, such as a built `dist/`).
+- **A mutation check shows the interface is what the fleet uses.** Each mutation applied alone made new tests fail: `TmuxAdapter.cancel` doing nothing (2), `selectAdapter` building an adapter around a copy of the runner (9), `selectAdapter` not binding (6), lifecycle stop bypassing the adapter (1), `cancelInstance` bypassing the adapter (1), the context read ignoring `paneView` (1), `selectAdapter` accepting any `cli_adapter` (2), the `cli_adapter` rule accepting anything (10).
+- **A fleet with no `cli_adapter` runs the same.** `src/daemon.ts` and `src/backend/` have no diff; the daemon is constructed with the same arguments in the same order (a test pins them); stop and cancel reach the same `Daemon.stop()` and `sendEscape()`; every `paneView` check is true, so the guarded reads take the branch they always took. Not done: an end-to-end run of a live tmux fleet.
+
+What `paneView` guards today (`#77`): the context read off the pane (`FleetManager.getPaneContextSource`), the compact-follow that watches the pane (`paneFollow` in the compact watch), and `agend attach`, which reads `cli_adapter` from `fleet.yaml` because it runs without a daemon. Raw keys exist only as `sendEscape`, which is the adapter's `cancel`. The web terminal is the sign-in flow and is not bound to an instance, so it is not guarded.
+
+Two things are deliberately left for later:
+
+1. **`start` does not go through `adapter.start` yet.** `adapter.start` is implemented and tested, but the lifecycle still calls `InstanceLifecycle.startOrDispose(daemon, …)`. Two existing tests that must pass unmodified depend on that call: one compares the lifecycle's source text for it, and one passes its first argument to a fake. Routing it changes those tests, so it is done together with the first adapter that needs it. `stop` and cancel do go through the adapter.
+2. **A Windows-runtime instance rejecting `cli_adapter` (§9.3) is not enforced.** `main` has no Windows exec runtime and no `native_adapter` field (they are on the alpha line, §0), so there is nothing to key the rule on. It is added when this work is rebased onto alpha.
+
 Phase 0 is the only phase that touches shared code paths in a way existing users could notice, which is why it is separated and why it is the first thing to be reviewed if the maintainers agree with the direction. Each later phase is a separate PR and is opt-in per instance at runtime; none of them changes defaults.
 
 ## 9. Risks and open questions
@@ -381,7 +404,7 @@ The maintainer asked for an adapter choice per instance. Three spellings were co
 | `adapter: …` (same values) | Matches the maintainer's wording exactly. | In this code base "adapter" already means the *channel* adapter (`ChannelAdapter`, `src/channel/types.ts:78`; an instance's `channel_id` is documented as "which channel adapter this instance is bound to", `src/types.ts:145`; `src/web-api.ts:372`) and, on the alpha line, `native_adapter` (`alpha:src/types.ts:112`). A reader or a grep would hit the wrong thing. |
 | `execution: tmux \| structured` plus a sub-field for the adapter | Keeps "tmux or not" separate from "which protocol". | Two fields that must agree, and the second is meaningless unless the first is `structured`. Nothing needs the coarse split that the capability flags (§5.3) do not already give. |
 
-Also avoided: `runtime` (already `wsl` | `windows`, `alpha:src/types.ts:106`) and anything with `acp` in the key, since two of the four adapters are not ACP. A Windows-runtime instance keeps `native_adapter` and does **not** accept `cli_adapter`; the validator rejects the combination. Unifying the two is out of scope here.
+Also avoided: `runtime` (already `wsl` | `windows`, `alpha:src/types.ts:106`) and anything with `acp` in the key, since two of the four adapters are not ACP. A Windows-runtime instance keeps `native_adapter` and does **not** accept `cli_adapter`; the validator rejects the combination (not yet enforced on `main`, where that runtime does not exist: §8, phase 0). Unifying the two is out of scope here.
 
 ### 9.4 Relationship to Step 1 (grok per-instance leader spike)
 
