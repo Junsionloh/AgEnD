@@ -1,3 +1,4 @@
+import type { ResolvedLibraryMcp } from "../library/mcp-mount.js";
 import { measureSyncWork } from "../sync-work-attribution.js";
 import type { KiroLogLaunch } from "../kiro-log-gate.js";
 import type { KiroTranscriptLaunch } from "../transcript-sources.js";
@@ -111,6 +112,12 @@ export interface CliBackendConfig {
   instanceDir: string;
   instanceName: string;
   mcpServers: Record<string, McpServerEntry>;
+  /**
+   * AGEND-260: library MCP servers an administrator mounted on this agent, already resolved (src/library/mcp-mount.ts): only the ones
+   * that can run now. Claude Code adds them to its `mcp-config.json` as `agend-lib-<id>` and hands the CLI the variables they name; the
+   * config holds variable NAMES only, never a value. Absent (every agent with no mount): nothing is added and nothing changes.
+   */
+  libraryMcp?: ResolvedLibraryMcp[];
   skipPermissions?: boolean;
   model?: string;
   /** Reasoning effort for backends that take it as a launch flag. */

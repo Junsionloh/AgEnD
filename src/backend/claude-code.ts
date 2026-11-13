@@ -1566,6 +1566,14 @@ export class ClaudeCodeBackend extends ClaudePaneDetectors implements CliBackend
     if (process.env.ANTHROPIC_API_KEY && !this.hasOAuthSession(profileDir)) {
       envPrefix.push(`ANTHROPIC_API_KEY=${shellQuote(process.env.ANTHROPIC_API_KEY)}`);
     }
+    // AGEND-260: a mounted library MCP server's variables, read from the daemon's environment now and handed to the CLI under an alias
+    // (the config file holds only `${alias}`). Nothing is added for an agent with no mount.
+    for (const m of config.libraryMcp ?? []) {
+      for (const { alias, name } of m.secrets) {
+        const value = process.env[name];
+        if (value) envPrefix.push(`${alias}=${shellQuote(value)}`);
+      }
+    }
     let cmd = `${envPrefix.join(" ")} ${this.binaryPath} --settings ${settingsPath} --mcp-config ${mcpConfigPath}`;
     if (config.skipPermissions !== false) cmd += " --dangerously-skip-permissions";
 
@@ -1629,7 +1637,11 @@ export class ClaudeCodeBackend extends ClaudePaneDetectors implements CliBackend
   writeConfig(config: CliBackendConfig): void {
     // 1. Write mcp-config.json to instance dir (loaded via --mcp-config)
     const mcpConfigPath = join(this.instanceDir, "mcp-config.json");
-    const mcpConfig = { mcpServers: config.mcpServers };
+    // AGEND-260: the library's MCP servers mounted on this agent are added under their own `agend-lib-<id>` names. No mount: the same
+    // object as before, so the file is byte-identical.
+    const mcpConfig = { mcpServers: config.libraryMcp?.length
+      ? { ...config.mcpServers, ...Object.fromEntries(config.libraryMcp.map((m) => [m.serverName, m.entry])) }
+      : config.mcpServers };
     writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
 
     // 2. Write statusline script

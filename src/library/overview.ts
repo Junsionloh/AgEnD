@@ -7,7 +7,7 @@
  *    by role (General gets every one; any other agent gets those marked `worker`; a native Windows agent, or one whose CLI has no skills
  *    folder, gets none published);
  *  - tool profiles (`tool_set`): each profile and its tools, and the agents that run under it (resolveToolSet, the one rule the daemon uses);
- *  - the `agend` MCP server every agent is given (its tools are the profile's);
+ *  - the `agend` MCP server every agent is given (its tools are the profile's), and (AGEND-260) which agents mount each team MCP server;
  *  - team skills' usage: `librarySkillUsage` (AGEND-244) — and, per agent, whether its CLI has a skills folder at all (a skill mounted on
  *    a backend without one cannot take effect).
  */
@@ -16,10 +16,11 @@ import { hasNativeSkillsDir } from "../native-skills-dir.js";
 import { TOOL_PROFILES, resolveToolSet } from "../tool-permissions.js";
 import { generalByName } from "../general-instance.js";
 import { librarySkillUsage } from "./mount.js";
+import { libraryMcpUsage, supportsLibraryMcp } from "./mcp-mount.js";
 
 /** The fleet's `instances`, as far as the overview reads them. */
 export type OverviewInstances = Record<string, {
-  backend?: string; runtime?: string; general_topic?: boolean; tool_set?: string; library?: { skills?: unknown };
+  backend?: string; runtime?: string; general_topic?: boolean; tool_set?: string; library?: { skills?: unknown; mcp?: unknown };
 } | null | undefined>;
 
 export interface OverviewAgent {
@@ -32,6 +33,8 @@ export interface OverviewAgent {
   windows: boolean;
   /** Its CLI reads skills from a folder in the workspace (false: a skill mounted on it cannot take effect). */
   nativeSkills: boolean;
+  /** AGEND-260: its CLI takes a mounted library MCP server (Claude Code only for now). */
+  libraryMcp: boolean;
 }
 export interface Overview {
   agents: OverviewAgent[];
@@ -40,6 +43,8 @@ export interface Overview {
   mcp: Array<{ name: string; agents: string[] }>;
   /** `{ librarySkillId: [agent names] }`, only for ids mounted somewhere (librarySkillUsage). */
   teamUsage: Record<string, string[]>;
+  /** AGEND-260: `{ libraryMcpId: [agent names] }`, only for ids mounted somewhere (libraryMcpUsage). */
+  teamMcpUsage: Record<string, string[]>;
 }
 
 export interface OverviewInput {
@@ -61,6 +66,7 @@ export function buildOverview(input: OverviewInput): Overview {
     agents.push({
       name, backend, role: general ? "general" : "worker", toolSet: resolveToolSet(def, name),
       windows: def.runtime === "windows", nativeSkills: hasNativeSkillsDir(backend),
+      libraryMcp: supportsLibraryMcp(backend, def.runtime),
     });
   }
   // An agent whose CLI has no skills folder is not given a bundled skill either (syncRoleSkills returns before it writes): not listed as using one.
@@ -78,5 +84,6 @@ export function buildOverview(input: OverviewInput): Overview {
     agents, builtinSkills, toolSets,
     mcp: [{ name: "agend", agents: agents.map(a => a.name) }],
     teamUsage: { ...librarySkillUsage(instances as never) },
+    teamMcpUsage: { ...libraryMcpUsage(instances as never) },
   };
 }

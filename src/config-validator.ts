@@ -256,7 +256,10 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
     if (value.library !== undefined) {
       const problem = libraryMountProblem(value.library, path === "defaults");
       if (problem) err(`${path}.library`, problem);
-      else if ((value.library as { mcp?: unknown[] }).mcp?.length) warn(`${path}.library.mcp`, "MCP mounting is not available yet — ignored");
+      else if ((value.library as { mcp?: unknown[] }).mcp?.length && (value.backend ?? "claude-code") !== "claude-code") {
+        // AGEND-260: a first step — only Claude Code takes a mounted MCP server; the others are listed as "not supported yet".
+        warn(`${path}.library.mcp`, "mounting MCP servers is only available on the claude-code backend for now — ignored on this agent");
+      }
     }
     if (value.board_cards_at_once !== undefined && !(Number.isInteger(value.board_cards_at_once) && (value.board_cards_at_once as number) >= 1)) {
       err(`${path}.board_cards_at_once`, "must be a whole number of at least 1");

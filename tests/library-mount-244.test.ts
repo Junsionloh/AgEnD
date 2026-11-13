@@ -324,10 +324,15 @@ describe("fleet.yaml: library", () => {
     expect(cfg({}, { library: { skills: ["a"] } }).errors.some((e) => e.path === "defaults.library")).toBe(true);
     expect(libraryMountProblem({ skills: ["ok"] }, false)).toBeNull();
   });
-  it("mcp is reserved: accepted with a warning, not applied", () => {
-    const r = cfg({ library: { mcp: ["github"] } });
-    expect(r.errors).toEqual([]);
-    expect(r.warnings.some((w) => w.path === "instances.a.library.mcp")).toBe(true);
+  it("mcp (AGEND-260): a list of library ids; applied on claude-code, a warning on a backend that does not take it yet", () => {
+    expect(cfg({ library: { mcp: ["github"] } }).errors).toEqual([]);
+    expect(cfg({ library: { mcp: ["github"] } }).warnings.some((w) => w.path === "instances.a.library.mcp")).toBe(false);
+    const other = cfg({ backend: "codex", library: { mcp: ["github"] } });
+    expect(other.errors).toEqual([]);
+    expect(other.warnings.some((w) => w.path === "instances.a.library.mcp")).toBe(true);
+    for (const library of [{ mcp: "a" }, { mcp: ["../x"] }, { mcp: ["a", "a"] }, { mcp: ["con"] }]) {
+      expect(cfg({ library }).errors.some((e) => e.path === "instances.a.library"), JSON.stringify(library)).toBe(true);
+    }
   });
 });
 

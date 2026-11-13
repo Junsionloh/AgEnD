@@ -26,6 +26,8 @@ import { ZIP_LIMITS } from "./zip.js";
 import { NATIVE_SKILLS_DIR_SEGMENTS } from "../native-skills-dir.js";
 import { buildOverview, type OverviewInstances } from "./overview.js";
 import { LIBRARY_LIMITS, isLibraryId, type LibraryError, type LibraryKind } from "./schema.js";
+import { LIBRARY_MCP_BACKENDS, mcpVariables, missingVariables } from "./mcp-mount.js";
+import type { LibraryItemSummary } from "./store.js";
 
 export interface LibraryWebHost {
   method: string;
@@ -41,6 +43,8 @@ export interface LibraryWebHost {
   admission(): string | null;
   /** AGEND-248: the fleet's `instances` and default backend, for the overview (read only). */
   fleet?(): { instances?: OverviewInstances | null; defaultBackend?: string } | null | undefined;
+  /** AGEND-260: the environment the daemon runs in, read for NAMES only (which variables a mounted MCP server needs are set). Tests give their own. */
+  env?: NodeJS.ProcessEnv;
   /** False (and the answer already sent) when the connection was closed or the session changed while the body was read. */
   stillOpen(): boolean;
 }
@@ -67,6 +71,18 @@ function readDecisions(raw: string | null): Map<string, ImportDecision> | null {
   }
   return out;
 }
+/**
+ * AGEND-260: each usable MCP item with what a mount needs to know — how it runs and which variables it reads, and which of those the
+ * daemon does not have (`missing`: Settings says "missing X" and the item is not enabled). Names only: no value is read into the answer.
+ */
+function withMcpDetails(store: LibraryStore, items: LibraryItemSummary[], env: NodeJS.ProcessEnv): Array<LibraryItemSummary & { mcp?: { transport: "stdio" | "http"; vars: string[]; missing: string[] } }> {
+  return items.map((it) => {
+    if (it.kind !== "mcp" || it.status === "missing" || it.status === "invalid") return it;
+    const got = store.get("mcp", it.id);
+    if (!got.ok || got.detail.kind !== "mcp") return it;
+    return { ...it, mcp: { transport: got.detail.item.transport, vars: mcpVariables(got.detail.item), missing: missingVariables(got.detail.item, env) } };
+  });
+}
 const kindOf = (v: unknown): LibraryKind | null => (v === "skill" || v === "mcp" ? v : null);
 
 /** True when the request was a library route (answered here, whatever the outcome). */
@@ -86,7 +102,10 @@ export function handleLibraryRequest(h: LibraryWebHost): boolean {
   };
   try {
     if (method === "GET") {
-      if (path === "/ui/library/list") { h.json(res, 200, { items: store.list(), limits: LIBRARY_LIMITS, skillsFolderBackends: Object.keys(NATIVE_SKILLS_DIR_SEGMENTS) }); return true; }
+      if (path === "/ui/library/list") {
+        h.json(res, 200, { items: withMcpDetails(store, store.list(), h.env ?? process.env), limits: LIBRARY_LIMITS, skillsFolderBackends: Object.keys(NATIVE_SKILLS_DIR_SEGMENTS), mcpBackends: LIBRARY_MCP_BACKENDS });
+        return true;
+      }
       if (path === "/ui/library/overview") {
         const fleet = h.fleet?.();
         h.json(res, 200, buildOverview({ instances: fleet?.instances, defaultBackend: fleet?.defaultBackend }));

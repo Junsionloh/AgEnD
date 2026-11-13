@@ -231,7 +231,7 @@ describe("lock file", () => {
 });
 
 describe("nothing else uses the library yet", () => {
-  it("only the web route, the config check and the fleet's skill mount import src/library — no other agent start, publish or config path reaches it", async () => {
+  it("only the web route, the config check, the fleet's skill mount and the daemon's MCP mount import src/library — no other agent start, publish or config path reaches it", async () => {
     const { readdirSync, readFileSync, statSync } = await import("node:fs");
     const importers: string[] = [];
     const walk = (dir: string): void => {
@@ -243,6 +243,7 @@ describe("nothing else uses the library yet", () => {
     };
     walk(join(__dirname, "..", "src"));
     // AGEND-244: the mount (fleet-manager.ts) and the shape check of an agent's `library` setting (config-validator.ts).
-    expect(importers.sort()).toEqual(["config-validator.ts", "fleet-manager.ts", "web-api.ts"]);
+    // AGEND-260: the MCP mount — the daemon resolves `library.mcp` at each start (daemon.ts), and the backend config type carries the result (backend/types.ts).
+    expect(importers.sort()).toEqual(["backend/types.ts", "config-validator.ts", "daemon.ts", "fleet-manager.ts", "web-api.ts"]);
   });
 });

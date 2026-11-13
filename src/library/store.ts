@@ -288,6 +288,21 @@ export class LibraryStore {
     return { ok: true, sha256: detail.sha256, files };
   }
 
+  /**
+   * AGEND-260: an MCP server in the form a mount may use — only when its file passes every rule AND is the one the lock recorded
+   * (as `skillForMount`): an MCP item runs a command, so a hand-edited (`modified`) or hand-placed (`untracked`) file is not handed
+   * to an agent until someone saves it in the Library.
+   */
+  mcpForMount(id: string): Ok<{ sha256: string; item: McpItem }> | { ok: false; reason: "not_found" | "invalid" | "untracked" | "modified" } {
+    const d = this.get("mcp", id);
+    if (!d.ok) return { ok: false, reason: d.error === "not_found" ? "not_found" : "invalid" };
+    if (d.detail.kind !== "mcp") return { ok: false, reason: "invalid" };
+    const entry = this.readLock().items[`mcp:${id}`];
+    if (!entry) return { ok: false, reason: "untracked" };
+    if (entry.sha256 !== d.detail.sha256) return { ok: false, reason: "modified" };
+    return { ok: true, sha256: d.detail.sha256, item: d.detail.item };
+  }
+
   // ── writes ───────────────────────────────────────────────────────────
 
   private countOf(kind: LibraryKind): number { return this.ids(kind).length; }

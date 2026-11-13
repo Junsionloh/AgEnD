@@ -65,17 +65,17 @@ export function normalizeMount(list: unknown): string[] {
 /** What is wrong with an instance's `library` value (null when fine). The one place fleet.yaml's shape is judged. */
 export function libraryMountProblem(value: unknown, isDefaults: boolean): string | null {
   if (isDefaults) return "is set per agent: the fleet defaults cannot mount library items";
-  if (!value || typeof value !== "object" || Array.isArray(value)) return "must be a mapping like { skills: [id, …] }";
-  for (const key of Object.keys(value)) if (key !== "skills" && key !== "mcp") return `has an unknown key "${key}" (only skills is available)`;
-  const { skills, mcp } = value as { skills?: unknown; mcp?: unknown };
-  if (skills !== undefined) {
-    if (!Array.isArray(skills) || !skills.every((id) => isLibraryId(id))) {
-      return "skills must be a list of library skill ids (lowercase letters, digits and hyphens, not a Windows device name)";
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "must be a mapping like { skills: [id, …], mcp: [id, …] }";
+  for (const key of Object.keys(value)) if (key !== "skills" && key !== "mcp") return `has an unknown key "${key}" (only skills and mcp are available)`;
+  for (const kind of ["skills", "mcp"] as const) {
+    const list = (value as Record<string, unknown>)[kind];
+    if (list === undefined) continue;
+    if (!Array.isArray(list) || !list.every((id) => isLibraryId(id))) {
+      return `${kind} must be a list of library ${kind === "skills" ? "skill" : "MCP"} ids (lowercase letters, digits and hyphens, not a Windows device name)`;
     }
-    if (new Set(skills).size !== skills.length) return "skills lists the same id twice";
-    if (skills.length > LIBRARY_LIMITS.itemsPerKind) return `skills lists more than ${LIBRARY_LIMITS.itemsPerKind} ids`;
+    if (new Set(list).size !== list.length) return `${kind} lists the same id twice`;
+    if (list.length > LIBRARY_LIMITS.itemsPerKind) return `${kind} lists more than ${LIBRARY_LIMITS.itemsPerKind} ids`;
   }
-  if (mcp !== undefined && !Array.isArray(mcp)) return "mcp must be a list";
   return null;
 }
 

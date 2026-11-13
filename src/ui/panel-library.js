@@ -42,6 +42,8 @@ register("library", {
     ts_general: "For the General, the fleet’s administrator.", ts_standard: "A smaller everyday set.", ts_minimal: "Reply and message only.",
     agendMcp: "agend", agendMcpHint: "Gives each agent the tools of its tool set.",
     tagOpen: "Open the settings of {0}", tagOpenSkill: "Open {0} — Team skills", tagNoFolder: "{0}: its CLI ({1}) has no skills folder, so this skill does not take effect there.",
+    tagOpenMcp: "Open {0} — Team MCP servers", tagNoMcp: "{0}: its CLI ({1}) cannot take a mounted MCP server yet (only Claude Code can), so this server does not take effect there.",
+    mcpMissing: "Missing {0}", mcpMissingTip: "Not set in the environment AgEnD runs in, so agents that mount this server do not get it until it is set.",
     addTag: "Add to an agent", addTagLabel: "Add “{0}” to an agent",
     addToTitle: "Add “{0}” to agents", addToBody: "Pick the agents that should get this skill. It is written into each agent’s settings, exactly as ticking it in Settings → the agent → Team skills would. Takes effect the next time the agent starts.",
     addToNone: "Every agent already has it.", addToNoFolder: "no skills folder", addToConfirm: "Add", addingLabel: "Add “{0}” to {1}", addBusy: "Another change is being saved. Try again in a moment.",
@@ -98,6 +100,8 @@ register("library", {
     ts_general: "給 General（fleet 的管理員）。", ts_standard: "較精簡的日常組合。", ts_minimal: "只能回覆與傳訊息。",
     agendMcp: "agend", agendMcpHint: "把各 Agent 所屬工具組的工具交給它。",
     tagOpen: "開啟 {0} 的設定", tagOpenSkill: "開啟 {0}：團隊 Skill", tagNoFolder: "{0}：它的 CLI（{1}）沒有 skill 資料夾，這個 Skill 在那裡不會生效。",
+    tagOpenMcp: "開啟 {0}：團隊 MCP", tagNoMcp: "{0}：它的 CLI（{1}）尚未支援掛載 MCP（目前只有 Claude Code 可以），這個 MCP 在那裡不會生效。",
+    mcpMissing: "缺少 {0}", mcpMissingTip: "AgEnD 執行環境沒有設定這個變數，掛了這個 MCP 的 Agent 在設定之前不會啟用它。",
     addTag: "加給 Agent", addTagLabel: "把「{0}」加給 Agent",
     addToTitle: "把「{0}」加給 Agent", addToBody: "選要拿到這個 Skill 的 Agent。它會寫進各 Agent 的設定，效果和在「設定 → 該 Agent → 團隊 Skill」勾選完全一樣，下次啟動時生效。",
     addToNone: "每個 Agent 都已經有了。", addToNoFolder: "沒有 skill 資料夾", addToConfirm: "加入", addingLabel: "把「{0}」加給 {1}", addBusy: "還有另一項變更在儲存，請稍後再試。",
@@ -232,7 +236,7 @@ function ViewDialog({ item, onClose, onDelete }) {
 }
 
 /** An agent's tag: a link to that agent's settings. Team skills go straight to the Team skills field (`?cat=work#library-skills`). */
-const agentHref = (name, to) => (to === "skill" ? `${detailsPath(name)}?cat=work#library-skills` : to === "tools" ? `${detailsPath(name)}?cat=work` : detailsPath(name));
+const agentHref = (name, to) => (to === "skill" ? `${detailsPath(name)}?cat=work#library-skills` : to === "mcp-team" ? `${detailsPath(name)}?cat=work#library-mcp` : to === "tools" ? `${detailsPath(name)}?cat=work` : detailsPath(name));
 
 /** How many agent tags a row shows before "+N": fewer on a phone, where the line is short. The rest is "+N", which opens the item (its Details lists every one): a row never grows taller for it. */
 function useTagLimit() {
@@ -253,12 +257,14 @@ function useTagLimit() {
 function UsedBy({ names, to, agents, limit, onMore, onAdd }) {
   const shown = names.slice(0, limit);
   const noFolder = (n) => { const a = agents.find((x) => x.name === n); return a && !a.nativeSkills ? a : null; };
+  // AGEND-260: a team MCP server mounted on an agent whose CLI cannot take one is flagged the same way.
+  const noMcp = (n) => { const a = agents.find((x) => x.name === n); return a && a.libraryMcp === false ? a : null; };
   return html`<span class="lib-tags" data-library-used-by>
     ${names.length ? null : html`<span class="note">${tn("noUse")}</span>`}
     ${shown.map((n) => {
-      const bad = to === "skill" ? noFolder(n) : null;
+      const bad = to === "skill" ? noFolder(n) : to === "mcp-team" ? noMcp(n) : null;
       return html`<a key=${n} class=${`pill lib-tag${bad ? " warn" : ""}`} href=${agentHref(n, to)} data-library-tag=${n}
-        title=${bad ? tn("tagNoFolder", n, bad.backend) : to === "skill" ? tn("tagOpenSkill", n) : tn("tagOpen", n)}>${bad ? html`<${Icon} name="alert" size=${12} />` : null}${n}</a>`;
+        title=${bad ? tn(to === "mcp-team" ? "tagNoMcp" : "tagNoFolder", n, bad.backend) : to === "skill" ? tn("tagOpenSkill", n) : to === "mcp-team" ? tn("tagOpenMcp", n) : tn("tagOpen", n)}>${bad ? html`<${Icon} name="alert" size=${12} />` : null}${n}</a>`;
     })}
     ${names.length > limit ? html`<button type="button" class="pill lib-tag lib-more" onClick=${onMore} data-library-more title=${tn("moreAgents", names.length - limit, names.slice(limit).join(", "))}
       aria-label=${tn("seeAll")}>+${names.length - limit}</button>` : null}
@@ -291,8 +297,10 @@ function Row({ item, used, agents, limit, onView, onDelete, onAdd }) {
   const warn = item.status !== "ok";
   const openable = item.status !== "missing" && item.status !== "invalid";
   const add = onAdd ? Object.assign(() => onAdd(item), { label: tn("addTagLabel", item.id) }) : null;
-  const tags = item.kind === "skill" && used ? html`<${UsedBy} names=${used} to="skill" agents=${agents} limit=${limit} onMore=${() => onView(item)} onAdd=${add} />` : null;
+  const tags = used ? html`<${UsedBy} names=${used} to=${item.kind === "skill" ? "skill" : "mcp-team"} agents=${agents} limit=${limit} onMore=${() => onView(item)} onAdd=${item.kind === "skill" ? add : null} />` : null;
+  const missing = item.kind === "mcp" && item.mcp && item.mcp.missing && item.mcp.missing.length ? item.mcp.missing : null;
   const extra = html`${warn ? html`<span class="pill off" title=${hasHint ? hint : undefined}>${tn(`st_${item.status}`)}</span>` : null}
+    ${missing ? html`<span class="pill off" title=${tn("mcpMissingTip")} data-library-mcp-missing=${missing.join(",")}>${tn("mcpMissing", missing.join(", "))}</span>` : null}
     ${meta ? html`<span class="note lib-size">${meta}</span>` : null}<span class="pill lib-kind">${tn("team")}</span>`;
   return html`<${ItemRow} icon=${item.kind === "skill" ? "book" : "plug"} name=${item.id}
     description=${`${item.description || ""}${item.status === "invalid" && item.reason ? ` ${item.reason}` : ""}`.trim()}
@@ -409,7 +417,8 @@ export function LibraryPanel({ route, navKey }) {
   const data = ov.data;
   const agents = (data && data.agents) || [];
   const teamUsage = (data && data.teamUsage) || {};
-  const usedBy = (item) => (item.kind === "skill" && data ? (Object.hasOwn(teamUsage, item.id) ? teamUsage[item.id] : []) : null);
+  const teamMcpUsage = (data && data.teamMcpUsage) || {};
+  const usedBy = (item) => (data ? (item.kind === "skill" ? (Object.hasOwn(teamUsage, item.id) ? teamUsage[item.id] : []) : item.kind === "mcp" ? (Object.hasOwn(teamMcpUsage, item.id) ? teamMcpUsage[item.id] : []) : null) : null);
   const remove = async (item) => {
     const used = usedBy(item) || [];
     const message = used.length ? tn("deleteBodyUsed", used.join(", ")) : tn("deleteBody");

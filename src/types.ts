@@ -217,7 +217,9 @@ export interface InstanceConfig {
    * AGEND-244: library items mounted into this agent (src/library/mount.ts). `skills` lists library skill ids that are published
    * into the agent's CLI skills folder at each start, beside the bundled ones. Unset (the default): nothing is mounted and
    * nothing is written. Per agent only (not in `defaults`), and only an administrator sets it (Settings or fleet.yaml): no agent
-   * tool can write it, so an agent cannot widen what it is given. A cold key: an agent restart applies it. `mcp` is reserved.
+   * tool can write it, so an agent cannot widen what it is given. A cold key: an agent restart applies it.
+   * AGEND-260: `mcp` lists library MCP servers (the Library's `mcp/<id>.yaml`) added to a Claude Code agent's `mcp-config.json` as
+   * `agend-lib-<id>` (src/library/mcp-mount.ts); other backends ignore it for now.
    */
   library?: { skills?: string[]; mcp?: string[] };
   /**

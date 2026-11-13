@@ -120,6 +120,7 @@ import { selectionCard } from "./selection-card.js";
 import type { InteractionOwner, InteractionSnapshot } from "./backend/types.js";
 import type { KiroLogLaunch } from "./kiro-log-gate.js";
 import { applyEnvIsolation } from "./env-isolation.js";
+import { LibraryStore, resolveLibraryMcp, supportsLibraryMcp, type ResolvedLibraryMcp } from "./library/index.js";   // AGEND-260
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12384,6 +12385,32 @@ export class Daemon extends EventEmitter {
     };
   }
 
+  /**
+   * AGEND-260: the library MCP servers (`library.mcp`) that can run on this launch. Only Claude Code takes them; an id that is gone from
+   * the Library, was changed outside it, or needs a variable the daemon does not have is left out and said so (names only — never a
+   * value). An agent with no mount costs one property read.
+   */
+  private libraryMcpForLaunch(backendName: string): ResolvedLibraryMcp[] {
+    const mount = this.config.library?.mcp;
+    if (!mount?.length) return [];
+    if (!supportsLibraryMcp(backendName, (this.config as { runtime?: string }).runtime)) {
+      this.logger.warn({ backend: backendName }, "library.mcp is ignored: this backend does not take mounted MCP servers yet");
+      return [];
+    }
+    try {
+      const { active, states } = resolveLibraryMcp({ mount, store: new LibraryStore(join(this.instanceDir, "..", "..")), env: process.env });
+      const skipped = states.filter((s) => s.status !== "active");
+      if (skipped.length) {
+        this.logger.warn({ skipped: skipped.map((s) => ({ id: s.id, status: s.status, ...(s.status === "missing_vars" ? { missing: s.missing } : {}) })) },
+          "Library MCP servers not enabled on this start (see status per id)");
+      }
+      return active;
+    } catch (err) {
+      this.logger.warn({ err }, "Failed to resolve library MCP servers — starting without them");
+      return [];
+    }
+  }
+
   /** Build config object for the CLI backend */
   private buildBackendConfig(): CliBackendConfig {
     // Antigravity 1.1.17 has no per-workspace MCP config, but its global MCP
@@ -12520,6 +12547,8 @@ export class Daemon extends EventEmitter {
 
     const backendName = this.config.backend ?? "claude-code";
     const backendOptions = this.config.backend_options?.[backendName];
+    // AGEND-260: library MCP servers an administrator mounted (Claude Code only). Empty — and nothing added below — for every agent without a mount.
+    const libraryMcp = this.libraryMcpForLaunch(backendName);
 
     return {
       workingDirectory: this.config.working_directory,
@@ -12543,6 +12572,7 @@ export class Daemon extends EventEmitter {
       agentMode: isCliMode ? "cli" : "mcp",
       agentPort: isCliMode ? agentPort : undefined,
       backendOptions,
+      ...(libraryMcp.length ? { libraryMcp } : {}),
       peerWorkingDirectories: this.peerWorkingDirectories,
       ...(this.thinkingSummaries?.() === true ? { thinkingSummaries: true } : {}),
     };
