@@ -325,7 +325,10 @@ function accountProfilePath(path: readonly string[], old: unknown, next: unknown
 const LIBRARY_MOUNT_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 function libraryMountPath(path: readonly string[], old: unknown, next: unknown): boolean {
   const key = path.at(-1);
-  if ((key !== "skills" && key !== "mcp") || path.at(-2) !== "library" || path.at(-4) !== "instances") return false;
+  // `…instances.<name>.library.skills|mcp`, and (AGEND-261) the paused lists beside them: `…instances.<name>.library.paused.skills|mcp`.
+  const given = (key === "skills" || key === "mcp") && path.at(-2) === "library" && path.at(-4) === "instances";
+  const paused = (key === "skills" || key === "mcp") && path.at(-2) === "paused" && path.at(-3) === "library" && path.at(-5) === "instances";
+  if (!given && !paused) return false;
   const ids = (v: unknown): boolean => v === undefined || v === null || (Array.isArray(v) && v.length <= 500 && v.every(id => typeof id === "string" && LIBRARY_MOUNT_ID.test(id)));
   return ids(old) && ids(next);
 }

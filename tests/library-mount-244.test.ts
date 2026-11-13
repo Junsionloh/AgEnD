@@ -324,6 +324,16 @@ describe("fleet.yaml: library", () => {
     expect(cfg({}, { library: { skills: ["a"] } }).errors.some((e) => e.path === "defaults.library")).toBe(true);
     expect(libraryMountProblem({ skills: ["ok"] }, false)).toBeNull();
   });
+  it("AGEND-261 paused: `{ skills, mcp }` lists of library ids that the active lists do not also give; anything else is refused", () => {
+    expect(cfg({ library: { skills: ["a"], paused: { skills: ["b"], mcp: ["m"] } } }).errors).toEqual([]);
+    expect(libraryMountProblem({ paused: {} }, false)).toBeNull();
+    for (const library of [{ paused: "x" }, { paused: ["a"] }, { paused: { other: [] } }, { paused: { skills: "a" } }, { paused: { skills: ["../x"] } }, { paused: { mcp: ["a", "a"] } },
+      { skills: ["a"], paused: { skills: ["a"] } }, { mcp: ["m"], paused: { mcp: ["m"] } }, { paused: null }]) {
+      expect(cfg({ library }).errors.some((e) => e.path === "instances.a.library"), JSON.stringify(library)).toBe(true);
+    }
+    expect(libraryMountProblem({ skills: ["a"], paused: { mcp: ["a"] } }, false)).toBeNull();       // the same id in the OTHER kind is fine
+    expect(cfg({}, { library: { paused: { skills: ["a"] } } }).errors.some((e) => e.path === "defaults.library")).toBe(true);
+  });
   it("mcp: a list of library MCP ids (AGEND-261 mounts them; the 244-era \"not available yet\" warning is gone)", () => {
     const r = cfg({ library: { mcp: ["github"] } });
     expect(r.errors).toEqual([]);
@@ -373,6 +383,22 @@ describe("start-up wiring (FleetManager)", () => {
     await start("worker", config());
     expect(tree(join(workDir, ".claude", "skills"))).toEqual(expected);
     expect(tree(workDir).hasOwnProperty(`.claude/skills/${LIBRARY_SKILLS_MANIFEST}`)).toBe(false);
+  });
+
+  it("AGEND-261 GOLDEN: a paused skill is not published — the folder is the very same as for an agent with no mount; un-pausing (moving it to `skills`) publishes it", async () => {
+    const reference = tmp("agend-fm-ref-");
+    (fm as any).syncRoleSkills(reference, "claude-code", "worker");
+    const expected = tree(join(reference, ".claude", "skills"));
+    add(store, "review");
+    await start("worker", config({ library: { paused: { skills: ["review"] } } as never }));
+    expect(tree(join(workDir, ".claude", "skills"))).toEqual(expected);
+    expect(existsSync(join(workDir, ".claude", "skills", "review"))).toBe(false);
+    await start("worker", config({ library: { skills: ["review"] } }));
+    expect(readFileSync(join(workDir, ".claude", "skills", "review", "SKILL.md"), "utf8")).toBe(md("review"));
+    // pausing it again (it leaves `skills`) takes the published copy away at the next start
+    await start("worker", config({ library: { paused: { skills: ["review"] } } as never }));
+    expect(existsSync(join(workDir, ".claude", "skills", "review"))).toBe(false);
+    expect(tree(join(workDir, ".claude", "skills"))).toEqual(expected);
   });
 
   it("GOLDEN: the same holds when the library folder does not exist at all", async () => {

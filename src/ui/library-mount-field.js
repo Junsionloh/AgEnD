@@ -9,14 +9,14 @@
 // skills the agent gets from GET /ui/library/overview.
 import { html, useEffect, useRef, useState } from "/assets/app-html.js";
 import { register, t } from "/assets/app-i18n.js";
-import { AddDialog, BuiltinSummary, EnabledRow, LibraryCardShell, LoadedPreview } from "./library-card.js";
+import { AddDialog, AssignedControls, AssignedHeader, BuiltinSection, EmptyList, ItemList, LibraryCardShell, ListRow, LoadedPreview, cardWords, keepSavedOrder } from "./library-card.js";
 import { SkillPreviewPane } from "./library-skill.js";
 
 register("libraryMount", {
   en: {
     card: "Skills",
-    tip: "The skills this agent gets: the built-in ones, given automatically by its role, and the ones you enable from the Library. Library skills are written into the agent's CLI skills folder when the agent starts, so a change applies after a restart.",
-    empty: "No Library skills enabled yet.",
+    tip: "The skills this agent gets: the ones assigned to it from the Library, and the built-in ones its role gives it automatically. Library skills are written into the agent's CLI skills folder when the agent starts, so a change applies after a restart.",
+    empty: "No Library skills assigned yet.",
     none: "The Library has no usable skills yet. Add one on the Library page.", allOn: "Every skill in the Library is already enabled.",
     loadFailed: "Could not read the Library.", loading: "Reading the Library…",
     gone: "Not in the Library any more", notReady: "Not given: it was changed outside the Library or breaks a rule — check it on the Library page",
@@ -26,8 +26,8 @@ register("libraryMount", {
   },
   "zh-TW": {
     card: "Skills",
-    tip: "這個 Agent 會拿到的 Skill：內建的依 Agent 的角色自動帶入，以及你從資源庫啟用的。資源庫的 Skill 會在 Agent 啟動時寫進它 CLI 的 skill 資料夾，所以變更要重啟後才生效。",
-    empty: "還沒有啟用資源庫的 Skill。",
+    tip: "這個 Agent 會拿到的 Skill：你從資源庫指派給它的，以及它的角色自動帶入的內建 Skill。資源庫的 Skill 會在 Agent 啟動時寫進它 CLI 的 skill 資料夾，所以變更要重啟後才生效。",
+    empty: "還沒有指派資源庫的 Skill。",
     none: "資源庫裡還沒有可用的 Skill，請先到「資源庫」頁新增。", allOn: "資源庫的 Skill 都已經啟用了。",
     loadFailed: "無法讀取資源庫。", loading: "讀取資源庫中…",
     gone: "已不在資源庫", notReady: "不會交給 Agent：它在資源庫外被改過或不符規則，請到資源庫頁檢查",
@@ -51,9 +51,9 @@ export function builtinFor(list, agent) {
   return list.filter((s) => s && typeof s.name === "string" && Array.isArray(s.agents) && s.agents.includes(agent)).map((s) => ({ name: s.name, description: typeof s.description === "string" ? s.description : "" }));
 }
 
-/** `m`: useAgentForm's result (its `f.library_skills`, `set`, `name`). `title`: the card's title node (settings-dialogs.js builds it with the usual tip and restart badge). */
+/** `m`: useAgentForm's result (its `f.library_skills`, `f.library_paused`, `setF`, `name`). `title`: the card's title node (settings-dialogs.js builds it with the usual tip and restart badge). */
 export function LibrarySkillsCard({ m, title }) {
-  const { f, set } = m;
+  const { f, setF } = m;
   const [state, setState] = useState({ loading: true });
   // The built-in skills this agent gets by its role, from the overview (the one place that says who gets what). Read apart: without it the card still lists the library's.
   const [builtin, setBuiltin] = useState([]);
@@ -77,25 +77,38 @@ export function LibrarySkillsCard({ m, title }) {
     box.current.scrollIntoView({ block: "center" });
     return () => clearTimeout(again);
   }, [state.loading, builtin.length]);
-  const chosen = f.library_skills || [];
+  const active = f.library_skills || [];
+  const paused = (f.library_paused && f.library_paused.skills) || [];
   const listed = state.skills || [];
-  const enable = (id) => set("library_skills")([...chosen.filter((x) => x !== id), id]);
-  const remove = (id) => set("library_skills")(chosen.filter((x) => x !== id));
-  // A skill the agent has but the Library does not list (deleted there) stays visible, so it can be removed.
-  const rows = chosen.map((id) => listed.find((s) => s.id === id) || { id, description: "", status: "missing" });
+  // On = in `library.skills`; paused = in `library.paused.skills` (assigned, not given). One place changes both lists, from the form's latest state.
+  const apply = (nextActive, nextPaused) => setF((x) => ({ ...x, library_skills: keepSavedOrder(m.inst && m.inst.library && m.inst.library.skills, nextActive), library_paused: { skills: [], mcp: [], ...(x.library_paused || {}), skills: nextPaused } }));
+  const without = (list, id) => list.filter((x) => x !== id);
+  const toggle = (id, on) => (on ? apply([...without(active, id), id], without(paused, id)) : apply(without(active, id), [...without(paused, id), id]));
+  const remove = (id) => apply(without(active, id), without(paused, id));
+  const enable = (id) => apply([...without(active, id), id], without(paused, id));
+  // Everything assigned, in one stable order (a switch does not move a row). A skill the agent has but the Library does not list (deleted there) stays, so it can be removed.
+  const assigned = [...new Set([...active, ...paused])].sort();
+  const rows = assigned.map((id) => listed.find((s) => s.id === id) || { id, description: "", status: "missing" });
   // The server says which CLIs read a skills folder (no list is written here); until it has, nothing is claimed.
   const noFolder = !!state.folderBackends && !!f.backend && !state.folderBackends.includes(f.backend);
-  const candidates = listed.filter((s) => !chosen.includes(s.id)).map((s) => ({ id: s.id, description: s.description, disabled: s.status !== "ok", note: lw("notReady") }));
+  const candidates = listed.filter((s) => !assigned.includes(s.id)).map((s) => ({ id: s.id, description: s.description, disabled: s.status !== "ok", note: lw("notReady") }));
   const emptyPicker = state.error ? lw("loadFailed") : listed.length ? lw("allOn") : lw("none");
-  return html`<${LibraryCardShell} title=${title} innerRef=${box} attrs=${{ "data-library-skills": "" }} onAdd=${() => setAdding(true)}>
-    ${noFolder ? html`<p class="feedback warning" role="note" data-library-no-folder>${lw("noFolder", f.backend)}</p>` : null}
-    <${BuiltinSummary} items=${builtin} attr="data-library-builtin-skill" />
-    ${state.loading ? html`<p class="note">${lw("loading")}</p>` : null}
-    ${state.error && !rows.length ? html`<p class="note">${lw("loadFailed")}</p>` : null}
-    ${!state.loading && !state.error && !rows.length ? html`<p class="note" data-library-empty>${lw("empty")}</p>` : null}
-    ${rows.map((s) => html`<${EnabledRow} key=${s.id} id=${s.id} description=${s.description} attr="data-library-skill" onRemove=${() => remove(s.id)}>
-      ${s.status === "missing" ? html`<span class="note">${lw("gone")}</span>` : s.status !== "ok" ? html`<span class="note">${lw("notReady")}</span>` : null}</${EnabledRow}>`)}
-    ${rows.length ? html`<p class="note">${lw("note")}</p>` : null}
+  return html`<${LibraryCardShell} title=${title} innerRef=${box} attrs=${{ "data-library-skills": "" }}>
+    <div class="lib-sec" data-library-assigned>
+      <${AssignedHeader} onAdd=${() => setAdding(true)} />
+      ${noFolder ? html`<p class="feedback warning" role="note" data-library-no-folder>${lw("noFolder", f.backend)}</p>` : null}
+      ${state.loading ? html`<p class="note">${lw("loading")}</p>` : null}
+      ${state.error && !rows.length ? html`<p class="note">${lw("loadFailed")}</p>` : null}
+      ${!state.loading && !state.error && !rows.length ? html`<${EmptyList} text=${lw("empty")} />` : null}
+      ${rows.length ? html`<${ItemList}>${rows.map((s) => {
+        const on = active.includes(s.id);
+        return html`<${ListRow} key=${s.id} icon="book" name=${s.id} description=${s.description} off=${!on} attr=${{ "data-library-skill": s.id, "data-library-on": on ? "1" : "0" }}
+          status=${s.status === "missing" ? html`<span class="note">${lw("gone")}</span>` : s.status !== "ok" ? html`<span class="note">${lw("notReady")}</span>` : !on ? html`<span class="note">${cardWords.paused()}</span>` : null}
+          controls=${html`<${AssignedControls} id=${s.id} on=${on} onToggle=${(v) => toggle(s.id, v)} onRemove=${() => remove(s.id)} />`} />`;
+      })}</${ItemList}>` : null}
+      ${rows.length ? html`<p class="note">${lw("note")}</p>` : null}
+    </div>
+    <${BuiltinSection} items=${builtin} attr="data-library-builtin-skill" icon="book" />
     ${adding ? html`<${AddDialog} title=${lw("pickerTitle")} items=${candidates} filterLabel=${lw("filter")} emptyText=${emptyPicker} onClose=${() => setAdding(false)}
       onEnable=${async (item) => { enable(item.id); return { ok: true }; }}
       renderPreview=${(item) => html`<${LoadedPreview} deps=${[item.id]}

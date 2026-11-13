@@ -735,7 +735,7 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .s-section-layout { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .s-section-layout > *, .s-section-layout :is(.s-yaml-lock, .s-general, .s-web, .s-web-fields, .card) { min-width: 0; }
 .s-section-layout .card { margin-bottom: 0; padding: 20px; border: 1px solid var(--border); border-radius: 10px; box-shadow: none; }
-.s-section-layout .card > h3, .s-section-layout .card > .lib-card-head > h3, .s-section-layout .s-ap-group { color: var(--text); font-size: var(--fs-lg); text-transform: none; letter-spacing: 0; }
+.s-section-layout .card > h3, .s-section-layout .s-ap-group { color: var(--text); font-size: var(--fs-lg); text-transform: none; letter-spacing: 0; }
 .s-section-layout .s-ap-group { margin: 0 0 16px; }
 .s-section-layout :is(.s-general, .s-web) { gap: 20px; }
 .s-section-layout .grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -881,26 +881,34 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
   .p-library .lib-tag { max-width: 6em; }
 }
 /* AGEND-261: the agent settings' Team MCP card and its confirmation. The command is shown whole (it wraps, never cut), in the page's own code look. */
-/* The Skills / MCP servers cards of an agent's settings: a title row with "+ Add", the built-in items as one line, one row per enabled Library item with a ×. */
-.lib-card .lib-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-bottom: var(--s-2); }
-.lib-card .lib-card-head h3 { margin: 0; min-width: 0; }
+/* The Skills / MCP servers cards of an agent's settings: two sections ("Assigned to this agent" with "+ Add"; "Built in", collapsed), each a bordered list, a divider between rows. */
+.lib-card .lib-sec { margin-top: var(--s-3); }
+.lib-card .lib-sec:first-of-type { margin-top: 0; }
+.lib-sec-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-2); }
+.lib-sec-text { min-width: 0; }
+.lib-sec-title { margin: 0; font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text); text-transform: none; letter-spacing: 0; }
+.lib-sec-hint { margin: var(--s-1) 0 0; }
 .lib-card .lib-card-add { flex: none; }
-.lib-builtin-box { margin: 0 0 var(--s-2); }
+.lib-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border-strong); border-radius: var(--r-md); overflow: hidden; background: var(--surface); }
+.lib-li { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3); min-width: 0; }
+.lib-li + .lib-li { border-top: 1px solid var(--border-strong); }
+.lib-li.is-off .lib-li-main { opacity: 0.62; }
+.lib-li-ico { flex: none; display: inline-flex; color: var(--text-2); }
+.lib-li-main { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lib-li-name { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.lib-switch .s-switch input[type="checkbox"] { position: absolute; inset: 0 auto 0 0; width: 38px; height: 100%; margin: 0; opacity: 0; cursor: pointer; }   /* the page's own Switch: its checkbox is the track, as in a .field */
+.lib-li-name > .strong { font-weight: var(--fw-semibold); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-li-name > .pill { flex: none; white-space: nowrap; }
+.lib-li-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-li-desc:empty { display: none; }
+.lib-li-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); font-size: var(--fs-xs); }
+.lib-li-ctl { flex: none; display: inline-flex; align-items: center; gap: var(--s-2); }
+.lib-empty { padding: var(--s-4); border: 1px dashed var(--border-strong); border-radius: var(--r-md); color: var(--text-2); text-align: center; font-size: var(--fs-sm); }
 .lib-builtin-toggle { display: inline-flex; align-items: center; gap: var(--s-2); padding: var(--s-1) var(--s-2); margin-left: calc(var(--s-2) * -1); border: 0; border-radius: var(--r-sm); background: none; color: var(--text-2); font: inherit; cursor: pointer; }
 .lib-builtin-toggle:hover { background: var(--surface-2); color: var(--text); }
-.lib-builtin-toggle svg { transition: transform 0.15s; }
-.lib-builtin-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
-.lib-builtin-list { list-style: none; margin: var(--s-1) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); opacity: 0.8; }
-.lib-builtin-list .lib-builtin { display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
-.lib-builtin-list .lib-builtin > .strong { flex: none; }
-.lib-builtin-desc { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lib-en-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s-2); row-gap: var(--s-1); align-items: center; padding: var(--s-1) 0; }
-.lib-en-row + .lib-en-row { border-top: 1px solid var(--border); }
-.lib-en-main { display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
-.lib-en-main > .strong, .lib-en-main > .pill { flex: none; }
-.lib-en-desc { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lib-en-status { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
-.lib-en-status:empty { display: none; }
+.lib-builtin-toggle svg { transition: transform 0.15s; transform: rotate(-90deg); }
+.lib-builtin-toggle[aria-expanded="true"] svg { transform: rotate(0); }
+.lib-builtin-box .lib-sec-hint { margin: var(--s-1) 0 var(--s-2); }
 .lib-card .pill { white-space: nowrap; }
 .lib-picker-filter { margin-bottom: var(--s-3); }
 .lib-picker-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }

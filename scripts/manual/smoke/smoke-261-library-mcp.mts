@@ -1,7 +1,7 @@
 // AGEND-261: library MCP servers mounted on an agent — in Chromium on the realistic fixture. The "Team MCP servers" card of an agent's settings
 // (with a mount; none; a variable with no value and a changed item; a CLI that cannot take them), the confirmation dialog, and the Library's MCP
 // rows. Measures that nothing overflows the card or the dialog and the page does not scroll sideways; checks the page never holds a value of
-// a variable. Output: 261/<case>-empty.png | -mounted.png | -unsupported.png | -picker-list.png | -picker-skill.png | -picker-mcp.png | -mcp-library.png | -mcp-add.png and result.json.
+// a variable. Output: 261/<case>-empty.png | -mounted.png | -builtin.png | -unsupported.png | -picker-list.png | -picker-skill.png | -picker-mcp.png | -mcp-library.png | -mcp-add.png and result.json.
 //   PW_DIR=~/.cache/agend-smoke/pw REPO=<checkout> OUT=<dir> MATRIX=full npx --prefix <checkout> tsx scripts/manual/smoke/smoke-261-library-mcp.mts
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -36,7 +36,8 @@ const seed = async () => {
   }
   const inst = fx.fm.fleetConfig.instances, raw = fx.fm.rawFleetConfig.instances;
   for (const o of [inst, raw]) {
-    o[a].backend = "claude-code"; o[a].library = { skills: ["code-review"], mcp: ["github", "linear"] };
+    // a: a skill on and one paused; github (a variable has no value) and linear (changed since confirmed) on, notes paused
+    o[a].backend = "claude-code"; o[a].library = { skills: ["code-review"], mcp: ["github", "linear"], paused: { skills: ["release-notes"], mcp: ["notes"] } };
     o[b].backend = "claude-code";
     o[c].backend = "grok"; o[c].library = { mcp: ["notes"] };
   }
@@ -66,15 +67,20 @@ for (const c of matrix()) {
     const body = await x.page.content();
     r[`${tag}-${shot}`] = { ...(await x.page.evaluate(measure)), valueInPage: body.includes(SECRET), errs, csp: await x.csp(),
       skillRows: await x.page.locator("[data-library-skills] [data-library-skill]").count(), mcpRows: await x.page.locator("[data-library-mcp-field] [data-library-mcp]").count(),
-      builtinLines: await x.page.locator("[data-library-builtin-summary]").count(), noCheckbox: (await x.page.locator("[data-library-skills] input[type=checkbox], [data-library-mcp-field] input[type=checkbox]").count()) === 0,
+      builtinLines: await x.page.locator("[data-library-builtin-summary]").count(), noCheckbox: (await x.page.locator("[data-library-skills] input[type=checkbox]:not([role=switch]), [data-library-mcp-field] input[type=checkbox]:not([role=switch])").count()) === 0,
+      switches: await x.page.locator("[data-library-switch] input[role=switch]").count(), paused: await x.page.locator('[data-library-on="0"]').count(), bordered: await x.page.locator(".lib-list").count(),
       missing: await x.page.locator("[data-library-mcp-missing]").count(), changed: await x.page.locator("[data-library-mcp-changed]").count(), unsupported: await x.page.locator("[data-library-mcp-unsupported]").count(),
       oldSubheading: await x.page.locator("[data-library-skills] .s-lab, [data-library-mcp-field] .s-lab").count() };
     await x.ctx.close();
   };
   // only the built-in ones (an agent with nothing from the Library): the empty state
   await agent(names[1], "empty");
-  // with enabled items: a skill, github (a variable has no value) and linear (changed since it was confirmed); the built-in line opened on the MCP card
-  await agent(names[0], "mounted", async (x) => { await x.page.locator("[data-library-mcp-field] [data-library-builtin-toggle]").click(); await x.page.waitForTimeout(300); });
+  // assigned items: a skill on and one paused; github (a variable has no value), linear (changed since it was confirmed) and a paused server
+  await agent(names[0], "mounted");
+  // the built-in lists opened on both cards (same list style, "Built in" marks, no controls)
+  await agent(names[1], "builtin", async (x) => {
+    await x.page.locator("[data-library-skills] [data-library-builtin-toggle]").click(); await x.page.locator("[data-library-mcp-field] [data-library-builtin-toggle]").click(); await x.page.waitForTimeout(400);
+  });
   // a CLI that cannot take library MCP
   await agent(names[2], "unsupported", undefined, "[data-library-mcp-field]");
   // the picker: the list (not yet enabled, with a filter), a skill's preview (257's), an MCP server's preview (the command, the variables)

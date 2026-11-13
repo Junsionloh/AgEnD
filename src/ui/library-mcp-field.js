@@ -14,14 +14,14 @@ import { html, useCallback, useEffect, useRef, useState } from "/assets/app-html
 import { register, t } from "/assets/app-i18n.js";
 import { Dialog } from "/assets/ui-dialog.js";
 import { builtinFor } from "./library-mount-field.js";
-import { AddDialog, BuiltinSummary, EnabledRow, LibraryCardShell } from "./library-card.js";
+import { AddDialog, AssignedControls, AssignedHeader, BuiltinSection, EmptyList, ItemList, LibraryCardShell, ListRow, cardWords, keepSavedOrder } from "./library-card.js";
 
 register("libraryMcp", {
   en: {
     card: "MCP servers",
-    tip: "The MCP servers this agent gets: AgEnD’s own, given automatically, and the ones you enable from the Library. Library servers are written into the agent’s CLI MCP config when the agent starts, so a change applies after a restart. Your own MCP settings are not touched.",
+    tip: "The MCP servers this agent gets: the ones assigned to it from the Library, and AgEnD’s own, given automatically. Library servers are written into the agent’s CLI MCP config when the agent starts, so a change applies after a restart. Your own MCP settings are not touched.",
     agendHint: "AgEnD’s own tools, by this agent’s tool set.",
-    empty: "No Library MCP servers enabled yet.",
+    empty: "No Library MCP servers assigned yet.",
     none: "The Library has no usable MCP server yet. Add one on the Library page.", allOn: "Every MCP server in the Library is already enabled.",
     loadFailed: "Could not read the Library.", loading: "Reading the Library…",
     gone: "Not in the Library any more", notReady: "Not given: it was changed outside the Library or breaks a rule — check it on the Library page",
@@ -40,9 +40,9 @@ register("libraryMcp", {
   },
   "zh-TW": {
     card: "MCP servers",
-    tip: "這個 Agent 會拿到的 MCP server：AgEnD 自己的自動帶入，以及你從資源庫啟用的。資源庫的 server 會在 Agent 啟動時寫進它 CLI 的 MCP 設定，所以變更要重啟後才生效。你自己的 MCP 設定不會被動到。",
+    tip: "這個 Agent 會拿到的 MCP server：你從資源庫指派給它的，以及 AgEnD 自己的（自動帶入）。資源庫的 server 會在 Agent 啟動時寫進它 CLI 的 MCP 設定，所以變更要重啟後才生效。你自己的 MCP 設定不會被動到。",
     agendHint: "AgEnD 自己的工具，依這個 Agent 的工具組。",
-    empty: "還沒有啟用資源庫的 MCP server。",
+    empty: "還沒有指派資源庫的 MCP server。",
     none: "資源庫裡還沒有可用的 MCP server，請先到「資源庫」頁新增。", allOn: "資源庫的 MCP server 都已經啟用了。",
     loadFailed: "無法讀取資源庫。", loading: "讀取資源庫中…",
     gone: "已不在資源庫", notReady: "不會交給 Agent：它在資源庫外被改過或不符規則，請到資源庫頁檢查",
@@ -106,9 +106,9 @@ function ReviewDialog({ item, agent, mounted, onClose, onConfirmed }) {
   </${Dialog}>`;
 }
 
-/** `m`: useAgentForm's result (its `f.library_mcp`, `set`, `name`). `title`: the card's title node (settings-dialogs.js builds it with the usual tip and restart badge). */
+/** `m`: useAgentForm's result (its `f.library_mcp`, `f.library_paused`, `set`, `setF`, `name`). `title`: the card's title node (settings-dialogs.js builds it with the usual tip and restart badge). */
 export function LibraryMcpCard({ m, title }) {
-  const { f, set, name } = m;
+  const { f, setF, name } = m;
   const [state, setState] = useState({ loading: true });
   const [review, setReview] = useState(null);
   const [adding, setAdding] = useState(false);
@@ -138,15 +138,21 @@ export function LibraryMcpCard({ m, title }) {
     box.current.scrollIntoView({ block: "center" });
     return () => clearTimeout(again);
   }, [state.loading, builtin.length]);
-  const chosen = f.library_mcp || [];
+  const active = f.library_mcp || [];
+  const paused = (f.library_paused && f.library_paused.mcp) || [];
   const listed = (state.items || []).filter((i) => i.kind === undefined || i.kind === "mcp");
-  // A server the agent has but the Library does not list (deleted there) stays visible, so it can be removed.
-  const rows = chosen.map((id) => listed.find((s) => s.id === id) || { id, description: "", status: "missing", confirmed: false });
+  // On = in `library.mcp`; paused = in `library.paused.mcp` (assigned, not written). One place changes both lists, from the form's latest state.
+  const apply = (nextActive, nextPaused) => setF((x) => ({ ...x, library_mcp: keepSavedOrder(m.inst && m.inst.library && m.inst.library.mcp, nextActive), library_paused: { skills: [], mcp: [], ...(x.library_paused || {}), mcp: nextPaused } }));
+  const without = (list, id) => list.filter((x) => x !== id);
+  const toggle = (id, on) => (on ? apply([...without(active, id), id], without(paused, id)) : apply(without(active, id), [...without(paused, id), id]));
+  const remove = (id) => apply(without(active, id), without(paused, id));
+  // Everything assigned, in one stable order. A server the agent has but the Library does not list (deleted there) stays, so it can be removed.
+  const assigned = [...new Set([...active, ...paused])].sort();
+  const rows = assigned.map((id) => listed.find((s) => s.id === id) || { id, description: "", status: "missing", confirmed: false });
   // The server says which CLIs take library MCP (the table in src/library/mcp-support.ts); until it has, nothing is claimed.
   const unsupported = !!state.backends && !!f.backend && !state.backends.includes(f.backend);
-  const remove = (id) => set("library_mcp")(chosen.filter((x) => x !== id));
   const missingOf = (s) => (s.variables || []).filter((v) => !v.set).map((v) => v.name);
-  const candidates = listed.filter((s) => !chosen.includes(s.id)).map((s) => ({ ...s, disabled: !(s.status === "ok" && s.summary), note: lw("notReady") }));
+  const candidates = listed.filter((s) => !assigned.includes(s.id)).map((s) => ({ ...s, disabled: !(s.status === "ok" && s.summary), note: lw("notReady") }));
   const emptyPicker = state.error ? lw("loadFailed") : listed.length ? lw("allOn") : lw("none");
   // "Enable" is the confirmation: this exact version is recorded for this agent, then the id joins the form (a 409 means it changed meanwhile).
   const enable = async (item) => {
@@ -154,26 +160,35 @@ export function LibraryMcpCard({ m, title }) {
       const r = await fetch("/ui/library/mcp-confirm", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agent: name, id: item.id, sha256: item.sha256 }) });
       if (!r.ok) { if (r.status === 409) load(); return { ok: false, error: r.status === 409 ? lw("changedMeanwhile") : lw("confirmFailed") }; }
     } catch { return { ok: false, error: lw("confirmFailed") }; }
-    set("library_mcp")([...chosen.filter((x) => x !== item.id), item.id]);
+    apply([...without(active, item.id), item.id], without(paused, item.id));
     load();
     return { ok: true };
   };
-  return html`<${LibraryCardShell} title=${title} innerRef=${box} attrs=${{ "data-library-mcp-field": "" }} onAdd=${() => setAdding(true)} addDisabled=${unsupported} addTitle=${unsupported ? lw("unsupportedAdd") : undefined}>
-    ${unsupported ? html`<p class="feedback warning" role="note" data-library-mcp-unsupported>${lw("unsupported", f.backend)}</p>` : null}
-    <${BuiltinSummary} items=${builtin} attr="data-library-builtin-mcp" />
-    ${state.loading ? html`<p class="note">${lw("loading")}</p>` : null}
-    ${state.error && !rows.length ? html`<p class="note">${lw("loadFailed")}</p>` : null}
-    ${!state.loading && !state.error && !rows.length ? html`<p class="note" data-library-empty>${lw("empty")}</p>` : null}
-    ${rows.map((s) => {
-      const miss = missingOf(s);
-      const changed = s.status === "ok" && s.summary && !s.confirmed;
-      return html`<${EnabledRow} key=${s.id} id=${s.id} description=${s.description} attr="data-library-mcp" onRemove=${() => remove(s.id)}>
-        ${s.status === "missing" ? html`<span class="note">${lw("gone")}</span>` : s.status !== "ok" ? html`<span class="note">${lw("notReady")}</span>` : null}
-        ${miss.length ? html`<span class="feedback warning lib-mcp-sub" role="note" data-library-mcp-missing=${miss.join(",")}>${miss.length === 1 ? lw("missingOne", miss[0]) : lw("missing", miss.join(", "))}</span>` : null}
-        ${changed ? html`<span class="lib-mcp-sub"><span class="pill off" data-library-mcp-changed>${lw("needsConfirm")}</span> <button type="button" class="btn btn-sm" onClick=${() => setReview(s)} data-library-mcp-review-open>${lw("review")}</button></span>` : null}
-      </${EnabledRow}>`;
-    })}
-    ${rows.length ? html`<p class="note">${lw("honest")}</p>` : null}
+  return html`<${LibraryCardShell} title=${title} innerRef=${box} attrs=${{ "data-library-mcp-field": "" }}>
+    <div class="lib-sec" data-library-assigned>
+      <${AssignedHeader} onAdd=${() => setAdding(true)} addDisabled=${unsupported} addTitle=${unsupported ? lw("unsupportedAdd") : undefined} />
+      ${unsupported ? html`<p class="feedback warning" role="note" data-library-mcp-unsupported>${lw("unsupported", f.backend)}</p>` : null}
+      ${state.loading ? html`<p class="note">${lw("loading")}</p>` : null}
+      ${state.error && !rows.length ? html`<p class="note">${lw("loadFailed")}</p>` : null}
+      ${!state.loading && !state.error && !rows.length ? html`<${EmptyList} text=${lw("empty")} />` : null}
+      ${rows.length ? html`<${ItemList}>${rows.map((s) => {
+        const on = active.includes(s.id);
+        // What is wrong only matters while it is on: a paused server is not written, so a missing variable or a change is not news.
+        const miss = on ? missingOf(s) : [];
+        const changed = on && s.status === "ok" && s.summary && !s.confirmed;
+        const status = [
+          s.status === "missing" ? html`<span class="note" key="g">${lw("gone")}</span>` : s.status !== "ok" ? html`<span class="note" key="n">${lw("notReady")}</span>` : null,
+          !on ? html`<span class="note" key="p">${cardWords.paused()}</span>` : null,
+          miss.length ? html`<span class="feedback warning lib-mcp-sub" role="note" key="m" data-library-mcp-missing=${miss.join(",")}>${miss.length === 1 ? lw("missingOne", miss[0]) : lw("missing", miss.join(", "))}</span>` : null,
+          changed ? html`<span class="lib-mcp-sub" key="c"><span class="pill off" data-library-mcp-changed>${lw("needsConfirm")}</span> <button type="button" class="btn btn-sm" onClick=${() => setReview(s)} data-library-mcp-review-open>${lw("review")}</button></span>` : null,
+        ].filter(Boolean);
+        return html`<${ListRow} key=${s.id} icon="plug" name=${s.id} description=${s.description} off=${!on} attr=${{ "data-library-mcp": s.id, "data-library-on": on ? "1" : "0" }}
+          status=${status.length ? status : null}
+          controls=${html`<${AssignedControls} id=${s.id} on=${on} onToggle=${(v) => toggle(s.id, v)} onRemove=${() => remove(s.id)} />`} />`;
+      })}</${ItemList}>` : null}
+      ${rows.length ? html`<p class="note">${lw("honest")}</p>` : null}
+    </div>
+    <${BuiltinSection} items=${builtin} attr="data-library-builtin-mcp" icon="plug" />
     ${adding ? html`<${AddDialog} title=${lw("pickerTitle")} items=${candidates} filterLabel=${lw("filter")} emptyText=${emptyPicker} onClose=${() => setAdding(false)} onEnable=${enable}
       renderPreview=${(item) => html`<div class="form"><p class="note">${lw("enableLead", name)}</p><${McpDetails} item=${item} agent=${name} /><p class="note">${lw("confirmNote", name)}</p></div>`} />` : null}
     ${review ? html`<${ReviewDialog} item=${review} agent=${name} mounted=${true} onClose=${() => setReview(null)} onConfirmed=${() => { setReview(null); load(); }} />` : null}

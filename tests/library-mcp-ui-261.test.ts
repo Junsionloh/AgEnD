@@ -7,9 +7,10 @@ import { readFileSync } from "node:fs";
 import { page, settle, h, type AppPage } from "./helpers/app-harness.js";
 import { fire } from "./helpers/mini-dom.js";
 import { buildSettingsImpactSchema } from "../src/instance-config-impact.js";
+import { normalizeSettingsInstancePatch } from "../src/settings-instance-patch.js";
 import { buildOverview } from "../src/library/overview.js";
 // @ts-expect-error — JS modules of the app, with no types
-import { agentForm, agentPatch, agentPatchRequest, libraryMcpMountPatch, libraryMcpOf, libraryMountPatch, libraryValue } from "../src/ui/settings-model.js";
+import { agentForm, agentPatch, agentPatchRequest, libraryMcpMountPatch, libraryMcpOf, libraryMountPatch, libraryPausedOf, libraryValue } from "../src/ui/settings-model.js";
 
 let p: AppPage, D: any, I: any, LM: any, L: any;
 beforeAll(async () => {
@@ -55,23 +56,36 @@ async function work(inst: Record<string, unknown>) {
   function Page() { const m = D.useAgentForm({ name: "coder", inst, ctx }); out.m = m; return h(D.AgentFields, { m, cat: "work" }); }
   await p.unmount(); await p.mount(h(Page, null)); await settle(8);
   const rows = () => qa("[data-library-mcp-field] [data-library-mcp]").map((e) => e.getAttribute("data-library-mcp"));
-  const remove = async (id: string) => { q(`[data-library-mcp-field] [data-library-remove="${id}"]`).click(); await settle(6); };
+  /** The trash asks first (the app's own confirmation); `yes` answers it. */
+  const remove = async (id: string, yes = true) => {
+    (globalThis as any).confirm = undefined; (p as any).window.confirm = undefined;     // the harness answers a question by itself only while this is a function
+    q(`[data-library-mcp-field] [data-library-remove="${id}"]`).click(); await settle(6);
+    const C = await import("/assets/ui-confirm.js" as string);
+    const asked = C.confirmStore.get().queue[0];
+    if (asked) C.answerConfirm(asked.id, yes);
+    await settle(6);
+    return asked;
+  };
+  /** The switch of an assigned row: on = written to the agent's MCP config, off = paused (assigned, not written). */
+  const flip = async (id: string, on: boolean) => { const el = q(`[data-library-mcp-field] [data-library-switch="${id}"] input`); el.checked = on; fire(el, "change"); await settle(6); };
   const openPicker = async () => { q("[data-library-mcp-field] [data-library-add-open]").click(); await settle(6); };
   const pickable = () => qa("[data-library-pick-item]").map((e) => e.getAttribute("data-library-pick-item"));
   const read = async (id: string) => { q(`[data-library-pick-item="${id}"]`).click(); await settle(6); };
-  return { rows, remove, openPicker, pickable, read, patch: () => out.m.pending(), text: () => (q("[data-library-mcp-field]")?.textContent ?? "") as string };
+  return { rows, remove, flip, openPicker, pickable, read, patch: () => out.m.pending(), text: () => (q("[data-library-mcp-field]")?.textContent ?? "") as string };
 }
 
 describe("the MCP servers card", () => {
   const withStatus = (items: unknown[] = STATUS.items, extra: Record<string, unknown> = {}) => ({ "/ui/library/mcp-status": { status: 200, body: { ...STATUS, items, ...extra } }, "/ui/library/list": { status: 200, body: { items: [] } } });
 
-  it("sits right under Skills in the Workspace category; its title row has the tip, the restart badge and '+ Add'; there is no second heading inside", async () => {
+  it("sits right under Skills in the Workspace category; '+ Add' is in the 'Assigned to this agent' header (not the title row); no second heading inside", async () => {
     answer(withStatus());
     await work({ working_directory: "/w" });
     const card = q("[data-library-mcp-field]");
-    expect(card.querySelector(".lib-card-head h3").textContent).toContain("MCP servers");
-    expect(card.querySelector(".lib-card-head h3 .impact")).not.toBeNull();
-    expect(card.querySelector(".lib-card-head [data-library-add-open]").textContent).toContain("Add");
+    expect(card.querySelector("h3").textContent).toContain("MCP servers");
+    expect(card.querySelector("h3 .impact")).not.toBeNull();
+    expect(card.querySelector("h3 [data-library-add-open]")).toBeNull();
+    expect(card.querySelector("[data-library-assigned] .lib-sec-head [data-library-add-open]").textContent).toContain("Add");
+    expect(card.querySelector("[data-library-assigned] .lib-sec-title").textContent).toBe("Assigned to this agent");
     expect(card.querySelectorAll(".s-lab").length).toBe(0);
     expect((globalThis as any).fetch.mock.calls.map((c: any[]) => c[0])).toContain("/ui/library/mcp-status?agent=coder");
     const dlg = readFileSync("src/ui/settings-dialogs.js", "utf8");
@@ -79,11 +93,11 @@ describe("the MCP servers card", () => {
     expect(dlg.indexOf("libraryMcpCardTitle()")).toBeLessThan(dlg.indexOf('pt("cardIdle")'));
   });
 
-  it("only what is enabled is on the card: with nothing enabled there is an empty state, and every Library server is in the picker", async () => {
+  it("nothing assigned: a dashed empty state; every Library server is in the picker", async () => {
     answer(withStatus());
     const w = await work({ working_directory: "/w" });
     expect(w.rows()).toEqual([]);
-    expect(q("[data-library-mcp-field] [data-library-empty]").textContent).toContain("No Library MCP servers enabled yet");
+    expect(q("[data-library-mcp-field] .lib-empty").textContent).toContain("No Library MCP servers assigned yet");
     await w.openPicker();
     expect(w.pickable()).toEqual(["gh", "ex", "broken"]);
     expect(q('[data-library-pick-item="broken"]').disabled).toBe(true);        // changed outside the Library: listed, not offered
@@ -96,7 +110,7 @@ describe("the MCP servers card", () => {
     expect(w.patch()).not.toHaveProperty("library");
   });
 
-  it("reading a server in the picker shows exactly what it runs; Enable is the confirmation (that version, for this agent) and then the patch has the id", async () => {
+  it("reading a server in the picker shows exactly what it runs; Enable is the confirmation (that version, for this agent) and then the patch has the id (on, not paused)", async () => {
     const calls: Calls = [];
     answer({ ...withStatus(), "/ui/library/mcp-confirm": { status: 200, body: { ok: true } } }, calls);
     const w = await work({ working_directory: "/w" });
@@ -114,9 +128,10 @@ describe("the MCP servers card", () => {
     q("[data-library-picker-enable]").click(); await settle(10);
     expect(calls.filter((c) => c.method === "POST")).toEqual([{ url: "/ui/library/mcp-confirm", method: "POST", body: { agent: "coder", id: "gh", sha256: SHA } }]);
     expect(w.patch().library).toEqual({ mcp: ["gh"] });
+    expect(w.patch().library).not.toHaveProperty("paused");
     // back at the picker's list: gh left it, with a line saying it is enabled; the card behind it lists gh with its status
     expect(w.pickable()).toEqual(["ex", "broken"]);
-    expect(q("[data-library-picker-done-note]").textContent).toContain("“gh” is enabled");
+    expect(q("[data-library-picker-done-note]").textContent).toContain("“gh” is assigned");
     q("[data-library-picker-done]").click(); await settle(6);
     expect(w.rows()).toEqual(["gh"]);
   });
@@ -162,7 +177,7 @@ describe("the MCP servers card", () => {
     const items = [stdio("gh", { mounted: true, confirmed: true }), stdio("ex2", { mounted: true, confirmed: false, variables: [{ name: "A", set: true }] })];
     answer({ ...withStatus(items), "/ui/library/mcp-confirm": { status: 200, body: { ok: true } } }, calls);
     const w = await work({ working_directory: "/w", library: { mcp: ["gh", "ex2"] } });
-    expect(w.rows()).toEqual(["gh", "ex2"]);
+    expect(w.rows()).toEqual(["ex2", "gh"]);
     expect(q('[data-library-mcp="gh"] [data-library-mcp-missing]').getAttribute("data-library-mcp-missing")).toBe("GH_HOST");
     expect(q('[data-library-mcp="gh"]').textContent).toContain("no value for GH_HOST");
     expect(q('[data-library-mcp="ex2"] [data-library-mcp-changed]').textContent).toContain("Changed — confirm again");
@@ -170,6 +185,30 @@ describe("the MCP servers card", () => {
     q("[data-library-mcp-confirm]").click(); await settle(10);
     expect(calls.some((c) => c.method === "POST" && c.body.id === "ex2")).toBe(true);
     expect(w.patch()).not.toHaveProperty("library");
+  });
+
+  it("the switch pauses a server without removing it: it moves to `library.paused.mcp`, is not in `library.mcp`, shows 'Paused' and no longer warns about a missing variable; on again restores the saved value; the trash asks first", async () => {
+    const items = [stdio("gh", { mounted: true, confirmed: true }), http("ex")];
+    answer(withStatus(items));
+    const w = await work({ working_directory: "/w", library: { mcp: ["gh", "ex"] } });
+    expect(q('[data-library-mcp="gh"] [data-library-mcp-missing]')).not.toBeNull();
+    await w.flip("gh", false);
+    expect(w.rows()).toEqual(["ex", "gh"]);                                     // assigned, in one stable (sorted) order: a switch does not hide a row
+    expect(q('[data-library-mcp="gh"]').getAttribute("data-library-on")).toBe("0");
+    expect(q('[data-library-mcp="gh"]').textContent).toContain("Paused: not given to the agent");
+    expect(q('[data-library-mcp="gh"] [data-library-mcp-missing]')).toBeNull();
+    expect(w.patch().library).toEqual({ mcp: ["ex"], paused: { mcp: ["gh"] } });
+    await w.openPicker();
+    expect(w.pickable()).not.toContain("gh");                                   // paused is assigned: not offered again
+    q("[data-library-picker-done]").click(); await settle(4);
+    await w.flip("gh", true);
+    expect(w.patch()).toEqual({});                                              // exactly what was saved, in the saved order
+    await w.flip("ex", false);
+    expect((await w.remove("ex", false)).title).toContain("Remove “ex” from this agent?");
+    expect(w.rows()).toContain("ex");
+    await w.remove("ex");
+    expect(w.rows()).toEqual(["gh"]);
+    expect(w.patch().library).toEqual({ mcp: ["gh"] });                         // gone from both lists
   });
 
   it("says so — from the server's table, not a list in the page — when the agent's CLI cannot take library MCP, and '+ Add' is held back", async () => {
@@ -236,18 +275,25 @@ describe("what the agent gets by itself is one line, opened on request (AGEND-26
     "/ui/library/overview": ov as any, "/ui/library/list": { status: 200, body: { items: ITEMS_ } }, "/ui/library/mcp-status": { status: 200, body: STATUS },
   });
 
-  it("Skills: the built-in skills of the agent's role are ONE summary line ('n built in · automatic'); opening it lists them read only, with no checkbox or ×", async () => {
+  it("Skills: 'Built in (given by role)' is collapsed by default; opened it is a read-only list in the same style, each row marked 'Built in', with no switch, trash or checkbox", async () => {
     answer(maps());
     await work({ working_directory: "/w" });
     const builtinNames = OV.builtinSkills.filter((b: any) => b.agents.includes("coder")).map((b: any) => b.name);
     expect(builtinNames.length).toBeGreaterThan(0);
     const box = q("[data-library-skills] [data-library-builtin-summary]");
-    expect(box.textContent).toContain(`${builtinNames.length} built in · automatic`);
-    expect(qa("[data-library-skills] [data-library-builtin-skill]").length).toBe(0);          // closed: no list
+    expect(box.textContent).toContain("Built in (given by role)");
+    expect(box.textContent).toContain(String(builtinNames.length));
+    expect(qa("[data-library-skills] [data-library-builtin-skill]").length).toBe(0);          // collapsed: no list
     q("[data-library-skills] [data-library-builtin-toggle]").click(); await settle(4);
+    expect(box.textContent).toContain("AgEnD provides these automatically; they cannot be turned off here.");
     const rows = qa("[data-library-skills] [data-library-builtin-skill]");
     expect(rows.map((e) => e.getAttribute("data-library-builtin-skill"))).toEqual(builtinNames);
-    for (const r of rows) { expect(r.querySelector("input")).toBeNull(); expect(r.querySelector("[data-library-remove]")).toBeNull(); }
+    for (const r of rows) {
+      expect(r.tagName).toBe("LI");
+      expect(r.querySelector("input")).toBeNull(); expect(r.querySelector("[data-library-remove]")).toBeNull(); expect(r.querySelector("[data-library-switch]")).toBeNull();
+      expect(r.querySelector(".pill").textContent).toBe("Built in");
+    }
+    expect(q("[data-library-skills] [data-library-builtin-list]").classList.contains("lib-list")).toBe(true);   // the same bordered list as the assigned one
     expect(q("[data-library-skills] [data-library-builtin-toggle]").getAttribute("aria-expanded")).toBe("true");
     q("[data-library-skills] [data-library-builtin-toggle]").click(); await settle(4);
     expect(qa("[data-library-skills] [data-library-builtin-skill]").length).toBe(0);
@@ -255,7 +301,7 @@ describe("what the agent gets by itself is one line, opened on request (AGEND-26
     expect(OV.builtinSkills.filter((b: any) => b.agents.includes("general")).length).toBeGreaterThan(builtinNames.length);
   });
 
-  it("the built-in lines are display only: nothing is written, and a built-in skill is never in the picker", async () => {
+  it("the built-in rows are display only: nothing is written, and a built-in skill is never in the picker", async () => {
     answer(maps());
     const w = await work({ working_directory: "/w" });
     expect(w.patch()).not.toHaveProperty("library");
@@ -264,17 +310,27 @@ describe("what the agent gets by itself is one line, opened on request (AGEND-26
     expect(names).toEqual(["review"]);
   });
 
-  it("MCP servers: AgEnD's own `agend` is one summary line that opens to a read-only list; the Library's enabled servers are rows below", async () => {
+  it("MCP servers: AgEnD's own `agend` is under 'Built in (given by role)', collapsed, read only; the Library's assigned servers are the rows of the first section", async () => {
     answer(maps());
     const w = await work({ working_directory: "/w", library: { mcp: ["gh"] } });
-    expect(q("[data-library-mcp-field] [data-library-builtin-summary]").textContent).toContain("1 built in · automatic");
+    expect(q("[data-library-mcp-field] [data-library-builtin-summary]").textContent).toContain("Built in (given by role)");
     q("[data-library-mcp-field] [data-library-builtin-toggle]").click(); await settle(4);
     const row = q("[data-library-mcp-field] [data-library-builtin-mcp]");
     expect(row.getAttribute("data-library-builtin-mcp")).toBe("agend");
     expect(row.querySelector("input")).toBeNull();
     expect(w.rows()).toEqual(["gh"]);
-    expect(q('[data-library-mcp="gh"]').textContent).toContain("Library");
+    expect(q('[data-library-mcp="gh"] [data-library-switch] input').checked).toBe(true);
+    expect(q('[data-library-mcp="gh"] [data-library-remove]')).not.toBeNull();
     expect(w.patch()).not.toHaveProperty("library");
+  });
+
+  it("the lists are bordered with a divider between rows, each row icon → name and a line → controls, using the page's own Switch (no custom colours)", () => {
+    const css = readFileSync("src/ui/shared/app.css", "utf8");
+    expect(css).toMatch(/\.lib-list \{[^}]*border: 1px solid/); expect(css).toMatch(/\.lib-li \+ \.lib-li \{[^}]*border-top/); expect(css).toMatch(/\.lib-empty \{[^}]*dashed/);
+    const card = readFileSync("src/ui/library-card.js", "utf8");
+    expect(card).toContain('import { Switch } from "./settings-shared.js"');
+    const block = css.slice(css.indexOf("/* The Skills / MCP servers cards"), css.indexOf(".lib-mcp-row {"));
+    expect(block).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/);           // only the page's own tokens
   });
 
   it("an overview that cannot be read leaves the Library's rows exactly as before (no built-in line, nothing broken)", async () => {
@@ -306,6 +362,38 @@ describe("the patch", () => {
     expect(libraryValue({ library: { mcp: ["m"] } }, [], [])).toBeNull();
     expect(libraryMcpOf({ library: { mcp: ["a", 3, "b"] } })).toEqual(["a", "b"]);
     expect(libraryMcpOf({ library: "x" })).toEqual([]);
+  });
+
+  it("`library.paused` keeps what is assigned but off; the given lists stay what they were, and no `paused` key appears unless something is paused", () => {
+    // libraryPausedOf reads it defensively
+    expect(libraryPausedOf({ library: { paused: { skills: ["a", 3], mcp: ["m"] } } })).toEqual({ skills: ["a"], mcp: ["m"] });
+    expect(libraryPausedOf({ library: { paused: "x" } })).toEqual({ skills: [], mcp: [] });
+    expect(libraryPausedOf({})).toEqual({ skills: [], mcp: [] });
+    // written beside skills and mcp, in that order; empty parts and an empty `paused` are left out
+    expect(libraryValue({}, ["a"], ["m"], { skills: ["p"], mcp: [] })).toEqual({ skills: ["a"], mcp: ["m"], paused: { skills: ["p"] } });
+    expect(Object.keys(libraryValue({}, ["a"], ["m"], { skills: ["p"], mcp: ["q"] }))).toEqual(["skills", "mcp", "paused"]);
+    expect(libraryValue({}, ["a"], ["m"], { skills: [], mcp: [] })).toEqual({ skills: ["a"], mcp: ["m"] });
+    expect(libraryValue({}, [], [], { skills: ["p"], mcp: [] })).toEqual({ paused: { skills: ["p"] } });     // everything paused: still assigned
+    // a caller that does not know about pausing keeps what is there
+    expect(libraryValue({ library: { skills: ["a"], paused: { mcp: ["m"] } } }, ["b"])).toEqual({ skills: ["b"], paused: { mcp: ["m"] } });
+    expect(libraryValue({ library: { skills: ["a"] } }, ["a"])).toEqual({ skills: ["a"] });
+    expect(libraryValue({}, [])).toBeNull();
+  });
+
+  it("the form writes `library` for a pause only when it changed; the server merges it as a whole value; adding a paused item turns it on", () => {
+    const inst = { working_directory: "/w", library: { skills: ["a", "b"], mcp: ["m"] } };
+    const form = agentForm(inst, {}, "coder");
+    expect(form.library_paused).toEqual({ skills: [], mcp: [] });
+    expect(agentPatch(form, inst, {}, null, null)).not.toHaveProperty("library");
+    const paused = agentPatch({ ...form, library_skills: ["b"], library_paused: { skills: ["a"], mcp: [] } }, inst, {}, null, null);
+    expect(paused.library).toEqual({ skills: ["b"], mcp: ["m"], paused: { skills: ["a"] } });
+    expect(normalizeSettingsInstancePatch(inst, paused).library).toEqual({ skills: ["b"], mcp: ["m"], paused: { skills: ["a"] } });
+    const there = { working_directory: "/w", library: { skills: ["b"], paused: { skills: ["a"], mcp: ["m"] } } };
+    expect(libraryMountPatch(there, "a").library).toEqual({ skills: ["b", "a"], paused: { mcp: ["m"] } });
+    expect(libraryMcpMountPatch(there, "m").library).toEqual({ skills: ["b"], mcp: ["m"], paused: { skills: ["a"] } });
+    expect(libraryMountPatch(there, "b")).toEqual({});
+    // the Library's + for a skill that was never paused is the value it always was
+    expect(libraryMountPatch({ library: { skills: ["a"] } }, "b")).toEqual({ library: { skills: ["a", "b"] } });
   });
 
   it("the form writes `library` only when the mcp list changed; the server merges it as a whole value", () => {

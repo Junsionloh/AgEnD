@@ -68,8 +68,8 @@ export function normalizeMount(list: unknown): string[] {
 export function libraryMountProblem(value: unknown, isDefaults: boolean): string | null {
   if (isDefaults) return "is set per agent: the fleet defaults cannot mount library items";
   if (!value || typeof value !== "object" || Array.isArray(value)) return "must be a mapping like { skills: [id, …] }";
-  for (const key of Object.keys(value)) if (key !== "skills" && key !== "mcp") return `has an unknown key "${key}" (only skills and mcp are available)`;
-  const { skills, mcp } = value as { skills?: unknown; mcp?: unknown };
+  for (const key of Object.keys(value)) if (key !== "skills" && key !== "mcp" && key !== "paused") return `has an unknown key "${key}" (only skills, mcp and paused are available)`;
+  const { skills, mcp, paused } = value as { skills?: unknown; mcp?: unknown; paused?: unknown };
   if (skills !== undefined) {
     if (!Array.isArray(skills) || !skills.every((id) => isLibraryId(id))) {
       return "skills must be a list of library skill ids (lowercase letters, digits and hyphens, not a Windows device name)";
@@ -83,6 +83,21 @@ export function libraryMountProblem(value: unknown, isDefaults: boolean): string
     }
     if (new Set(mcp).size !== mcp.length) return "mcp lists the same id twice";
     if (mcp.length > LIBRARY_LIMITS.itemsPerKind) return `mcp lists more than ${LIBRARY_LIMITS.itemsPerKind} ids`;
+  }
+  // AGEND-261: `paused` keeps what is assigned to the agent but switched off — `{ skills: [id…], mcp: [id…] }`. `skills` / `mcp` stay exactly what
+  // is given (a paused id is NOT in them), so nothing that reads them — the publisher, the MCP writer, an older AgEnD — ever gives a paused item.
+  if (paused !== undefined) {
+    if (!paused || typeof paused !== "object" || Array.isArray(paused)) return "paused must be a mapping like { skills: [id, …], mcp: [id, …] }";
+    for (const key of Object.keys(paused)) if (key !== "skills" && key !== "mcp") return `paused has an unknown key "${key}" (only skills and mcp)`;
+    for (const kind of ["skills", "mcp"] as const) {
+      const list = (paused as Record<string, unknown>)[kind];
+      if (list === undefined) continue;
+      if (!Array.isArray(list) || !list.every((id) => isLibraryId(id))) return `paused.${kind} must be a list of library ids (lowercase letters, digits and hyphens, not a Windows device name)`;
+      if (new Set(list).size !== list.length) return `paused.${kind} lists the same id twice`;
+      if (list.length > LIBRARY_LIMITS.itemsPerKind) return `paused.${kind} lists more than ${LIBRARY_LIMITS.itemsPerKind} ids`;
+      const given = (kind === "skills" ? skills : mcp) as unknown[] | undefined;
+      if (Array.isArray(given) && list.some((id) => given.includes(id))) return `paused.${kind} lists an id that ${kind} gives (an item is either on or paused)`;
+    }
   }
   return null;
 }

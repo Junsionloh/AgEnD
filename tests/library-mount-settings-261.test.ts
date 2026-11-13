@@ -27,6 +27,15 @@ describe("mounting library items is an ordinary setting", () => {
     expect(refused(fleet(), fleet({ [key]: ["../x"] }))).toBe("unsupported_sensitive_effect");
   });
 
+  it.each(["skills", "mcp"])("AGEND-261: the paused %s list is an ordinary setting too, and only when it is exactly library ids", (key) => {
+    expect(diff(fleet(), fleet({ paused: { [key]: ["a"] } }))).toBeNull();
+    expect(diff(fleet({ skills: ["a"] }), fleet({ paused: { skills: ["a"] } }))).toBeNull();            // switching one off: it moves from the given list to the paused one
+    expect(diff(fleet({ paused: { [key]: ["a"] } }), fleet())).toBeNull();
+    for (const bad of [["../x"], [3], [{ id: "a" }], "a", { a: 1 }]) expect(notQuiet(fleet(), fleet({ paused: { [key]: bad } })), JSON.stringify(bad)).toBe(true);
+    expect(refused(fleet(), fleet({ paused: { [key]: ["../x"] } }))).toBe("unsupported_sensitive_effect");
+    expect(notQuiet(fleet(), fleet({ paused: { other: ["a"] } }))).toBe(true);
+  });
+
   it("only an agent's own library: another key, or the same key anywhere else, is judged as before", () => {
     expect(refused(fleet(), fleet({ other: ["a"] }))).toBe("unsupported_sensitive_effect");
     expect(refused({ fleet: { defaults: {} } }, { fleet: { defaults: { library: { mcp: ["a"] } } } })).toBe("unsupported_sensitive_effect");

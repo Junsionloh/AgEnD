@@ -185,6 +185,8 @@ describe("the backend table", () => {
     } });
     expect(o.agents.map((x) => [x.name, x.libraryMcp])).toEqual([["a", true], ["b", false], ["w", true]]);
     expect(o.teamMcpUsage).toEqual({ gh: ["a", "b"], ex: ["a"] });
+    // a paused server is not "in use": only what is given counts
+    expect(libraryMcpUsage({ a: { library: { mcp: ["gh"], paused: { mcp: ["ex"] } } as never } })).toEqual({ gh: ["a"] });
     expect(libraryMcpUsage(null)).toEqual({});
   });
 });
@@ -360,6 +362,11 @@ describe("the daemon: nothing mounted adds nothing to the backend config", () =>
     const emptyList = make({ library: { skills: ["a"] } }, root);
     emptyList.setLibraryMcpSource(source);
     expect("libraryMcp" in (emptyList as any).buildBackendConfig()).toBe(false);
+    expect(source).not.toHaveBeenCalled();
+    // AGEND-261: a paused server is assigned but not in `library.mcp`: the source is not asked, nothing is added — the same config as no mount at all
+    const pausedOnly = make({ library: { paused: { mcp: ["gh"] } } }, root);
+    pausedOnly.setLibraryMcpSource(source);
+    expect("libraryMcp" in (pausedOnly as any).buildBackendConfig()).toBe(false);
     expect(source).not.toHaveBeenCalled();
     const mounted = make({ library: { mcp: ["gh"] } }, root);
     mounted.setLibraryMcpSource(source);
