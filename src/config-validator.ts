@@ -21,6 +21,7 @@ import { CROSS_INSTANCE_VISIBILITY_MODES, isCrossInstanceVisibility } from "./cr
 import { dashboardAccessProblem } from "./dashboard-permissions.js";
 import { validWindowsAgentId, validWindowsDirectory } from "./windows-cli-worker.js";
 import { isNativeProviderId, nativeProvider } from "./windows-cli-providers.js";
+import { cliAdapterProblem } from "./adapters/config.js";
 
 /**
  * Shared config validation for fleet.yaml and classicBot.yaml.
@@ -575,6 +576,8 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
     const b = config.defaults.backend;
     const problem = backendProblem(b);
     if (problem) err("defaults.backend", problem);
+    const adapterProblem = cliAdapterProblem(config.defaults.cli_adapter);
+    if (adapterProblem) err("defaults.cli_adapter", adapterProblem);
     validateAutoPause(config.defaults.auto_pause_after, "defaults.auto_pause_after");
     validateDeliveryWorker(config.defaults.delivery_worker, "defaults.delivery_worker");
     if (config.defaults.warm_overflow !== undefined && (!Number.isInteger(config.defaults.warm_overflow) || (config.defaults.warm_overflow as number) < 0)) {
@@ -658,6 +661,8 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
       const b = inst.backend;
       const problem = backendProblem(b, name);
       if (problem) err(`instances.${name}.backend`, problem);
+      const adapterProblem = cliAdapterProblem(inst.cli_adapter);
+      if (adapterProblem) err(`instances.${name}.cli_adapter`, adapterProblem);
       if (inst.working_directory !== undefined && typeof inst.working_directory !== "string") {
         err(`instances.${name}.working_directory`, "must be a string path");
       }

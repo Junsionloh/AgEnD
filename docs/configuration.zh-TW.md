@@ -308,6 +308,7 @@ General 可透過 `update_instance_config({ name, config: { tool_set: "worker" }
 | `channel_id` | string | — | 多連線模式中綁定的 adapter ID |
 | `general_topic` | boolean | `false` | 標記為 General Topic（接收未路由的訊息） |
 | `backend` | string | `"claude-code"` | CLI backend：`claude-code`、`codex`、`opencode`、`kiro-cli`、`antigravity`、`grok`、`muse` |
+| `cli_adapter` | `"tmux"` | `"tmux"` | instance 以什麼方式執行 CLI（#3731）。目前只有 `tmux`（終端機 pane，也就是現在的行為）；不填即 `tmux`。其他值在載入設定時就會被拒絕。也可寫在 `defaults`。 |
 | `kiro_ui` | `"legacy"` \| `"tui"` | `"legacy"`；新建的 instance 會寫入 `"tui"`（#2598） | 僅供 Kiro 使用的啟動模式。所有建立 kiro instance 的方式（`create_instance`、網頁精靈、`agend setup` 或 `agend quickstart` 建立的新 fleet、fleet 自動建立的 General 或 topic）都會寫入 `tui`，除非 fleet 預設已指定。沒有設定的既有項目維持 `legacy`：要搬請用 `migrate_kiro_instance`，不要直接改這個值。`legacy` 跑在 kiro 的 v1 engine，`tui` 跑在 v2 engine；每次啟動都會明確指定，kiro-cli 的預設值或已存的設定都無法把 instance 換到別的 engine（#1109）。在 Kiro v3 介面能無人值守執行之前，`"v3"` 會被設定驗證拒絕（#849）。 |
 | `auto_pause_after` | number | `0`（停用） | 閒置多少分鐘後自動暫停。0 = 不暫停。 |
 | `model` | string | — | 模型覆寫；有效名稱與格式依 backend 而定 |
