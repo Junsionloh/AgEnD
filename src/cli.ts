@@ -3722,6 +3722,14 @@ program
     const name = await resolveInstance(query, config);
     const status = getInstanceStatusStandalone(name);
 
+    const { configuredCapabilities } = await import("./adapters/select.js");
+    const { noPaneMessage } = await import("./adapters/registry.js");
+    const inst = config.instances?.[name];
+    if (!configuredCapabilities(inst?.backend ?? config.defaults?.backend ?? "claude-code", { cli_adapter: inst?.cli_adapter ?? config.defaults?.cli_adapter }).paneView) {
+      console.error(noPaneMessage(name, "Attach"));
+      process.exit(1);
+    }
+
     if (status !== "running") {
       console.error(`Instance "${name}" is ${status}. Start it first with: agend start ${name}`);
       process.exit(1);

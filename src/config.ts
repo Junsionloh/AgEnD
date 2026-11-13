@@ -6,6 +6,7 @@ import yaml from "js-yaml";
 import { unshareParsed } from "./yaml-shared-nodes.js";
 import { getAgendHome, getTmuxSessionName, ensureWorkspaceGit } from "./paths.js";
 import { normalizeOfficeStorage, dashboardSwitches } from "./dashboard-permissions.js";
+import { cliAdapterProblem } from "./adapters/config.js";
 import type { CostGuardConfig, HangDetectorConfig, DailySummaryConfig, FleetConfig, FleetDefaults, FleetTemplate, InstanceConfig, RawFleetConfig } from "./types.js";
 
 export function deepMergeGeneric<T extends object>(target: T, source: Partial<T>): T {
@@ -224,6 +225,12 @@ export function loadFleetConfigSource(raw: string): FleetConfig {
   }
 
   normalizeOfficeStorage(parsed);
+  // #3731: an adapter that does not exist yet is refused at load, with the key named, rather than at launch.
+  for (const [where, value] of [["defaults", parsed.defaults?.cli_adapter] as const,
+    ...Object.entries(parsed.instances ?? {}).map(([n, i]) => [`instances.${n}`, i?.cli_adapter] as const)]) {
+    const problem = cliAdapterProblem(value);
+    if (problem) throw new Error(`${where}.cli_adapter: ${problem}`);
+  }
   const fleetDefaults: FleetDefaults = parsed.defaults ?? {};
   const rawInstances = parsed.instances ?? {};
   const instances: Record<string, InstanceConfig> = {};
