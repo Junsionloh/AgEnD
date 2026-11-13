@@ -8,6 +8,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseDocument } from "yaml";
 
 export const BUNDLED_SKILLS_DIR = join(dirname(fileURLToPath(import.meta.url)), "general-knowledge", "skills");
 const NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -32,4 +33,33 @@ export function readBundledSkill(name: string, dir: string = BUNDLED_SKILLS_DIR)
   const known = listBundledSkills(dir).map(s => s.name);
   if (!NAME.test(name) || !known.includes(name)) return { ok: false, error: `no bundled skill "${name.slice(0, 64)}" — one of: ${known.join(", ")}` };
   return { ok: true, text: bundledSkillContents(join(dir, name)) };
+}
+
+/** The roles a bundled skill is published to (the `roles:` line of its frontmatter). */
+export type BundledSkillRole = "general" | "worker" | "classic";
+
+/**
+ * AGEND-248: AgEnD's `roles` extension in a SKILL.md frontmatter, one rule for the publisher and the library overview. A skill with no
+ * `roles` is General's only; a malformed or unknown value fails closed to General only too (`error` says why), so an administrative
+ * skill never reaches a worker by a typo.
+ */
+export function parseBundledSkillRoles(text: string): { roles: BundledSkillRole[]; error?: unknown } {
+  const fallback: BundledSkillRole[] = ["general"];
+  try {
+    const match = text.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+    if (!match) return { roles: fallback };
+    const document = parseDocument(match[1]!);
+    if (document.errors.length > 0) throw document.errors[0];
+    const frontmatter = document.toJS() as { roles?: unknown } | null;
+    if (!frontmatter || frontmatter.roles === undefined) return { roles: fallback };
+    if (!Array.isArray(frontmatter.roles)) throw new Error("roles must be an array");
+    const roles = [...new Set(frontmatter.roles)]
+      .filter((value): value is BundledSkillRole => value === "general" || value === "worker" || value === "classic");
+    if (roles.length !== frontmatter.roles.length || roles.length === 0) {
+      throw new Error("roles must contain only general, worker and/or classic");
+    }
+    return { roles };
+  } catch (error) {
+    return { roles: fallback, error };
+  }
 }

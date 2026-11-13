@@ -36,7 +36,9 @@ const FAMILIES: ReadonlyArray<{ why: string; files: Readonly<Record<string, numb
   } },
   { why: "per-backend behaviour switches (steer, effort, MCP mode, the Codex speed field, the flag that stops a Windows CLI updating itself, the variables each CLI keeps in an isolated environment)", files: { "src/steer-capability.ts": 1, "src/backend/launch-effort.ts": 1, "src/ui/settings-model.js": 3, "src/ui/settings-dialogs.js": 1, "src/windows-cli-providers.ts": 2,
     // AGEND-242: the variables each backend's own CLI needs kept when the agent environment is isolated (one table keyed by CLI id; names are best-effort, see the file).
-    "src/env-isolation.ts": 1 } },
+    "src/env-isolation.ts": 1,
+    // AGEND-248: where each backend reads skills from (one table keyed by CLI id; it moved out of fleet-manager.ts so the library overview reads the same one).
+    "src/native-skills-dir.ts": 1 } },
   { why: "display names, marks and colours, and the vendor commands the Runtime page shows (the standalone setup script cannot import the registry)", files: {
     "src/ui/panel-chat.js": 1, "src/ui/shared/instance-nav.js": 2, "src/ui/fleet-office-model.js": 1, "src/ui/provider-marks.js": 1, "src/ui/shared/panel-view.js": 1, "src/interaction-observation.ts": 3,
     "src/ui/structured-signin.js": 1, "src/ui/runtime-cli-install.js": 1,
