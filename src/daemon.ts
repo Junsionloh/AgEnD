@@ -55,6 +55,7 @@ import { ContextGuardian } from "./context-guardian.js";
 import { IpcServer } from "./channel/ipc-bridge.js";
 import { daemonBudgetMs } from "./channel/ipc-timeouts.js";
 import { MessageBus } from "./channel/message-bus.js";
+import type { LibraryMcpEntry } from "./library/mcp-mount.js";
 import type { CliBackend, CliBackendConfig, ErrorPattern, InputBox, InputDraft, InputUnavailableTransient, InstanceState, InstanceStateSnapshot, RuntimeDialog, StartupDialog, SteerComposerMode } from "./backend/types.js";
 import { shellQuote, KiroCompatibilityError, UnsupportedCliError, ResumeBlockedError } from "./backend/types.js";
 import type { ChannelAdapter, InboundMessage } from "./channel/types.js";
@@ -2555,6 +2556,13 @@ export class Daemon extends EventEmitter {
   /** The fleet's active decisions (startup snapshot), read at each spawn; absent: the AGEND_DECISIONS env (tests). */
   private decisionSource: (() => readonly ActiveDecisionRow[]) | undefined;
   setDecisionSource(source: (() => readonly ActiveDecisionRow[]) | undefined): void { this.decisionSource = source; }
+  /**
+   * AGEND-261: the library MCP servers an administrator mounted on this agent (`library.mcp`), with their values, read at each launch.
+   * The fleet answers for it (src/fleet-manager.ts libraryMcpFor): nothing when the backend cannot take them, an item is not confirmed,
+   * or a variable has no value. Absent: nothing is added to the launch.
+   */
+  private libraryMcpSource: ((ids: readonly string[]) => Record<string, LibraryMcpEntry> | undefined) | undefined;
+  setLibraryMcpSource(source: ((ids: readonly string[]) => Record<string, LibraryMcpEntry> | undefined) | undefined): void { this.libraryMcpSource = source; }
 
   setPeerWorkingDirectories(peers: (() => string[]) | undefined): void {
     this.peerWorkingDirectories = peers;
@@ -12520,6 +12528,8 @@ export class Daemon extends EventEmitter {
 
     const backendName = this.config.backend ?? "claude-code";
     const backendOptions = this.config.backend_options?.[backendName];
+    // AGEND-261: only an agent with something mounted reaches the source; everyone else's config is built exactly as before.
+    const mountedMcp = this.config.library?.mcp?.length && this.libraryMcpSource ? this.libraryMcpSource(this.config.library.mcp) : undefined;
 
     return {
       workingDirectory: this.config.working_directory,
@@ -12545,6 +12555,7 @@ export class Daemon extends EventEmitter {
       backendOptions,
       peerWorkingDirectories: this.peerWorkingDirectories,
       ...(this.thinkingSummaries?.() === true ? { thinkingSummaries: true } : {}),
+      ...(mountedMcp && Object.keys(mountedMcp).length ? { libraryMcp: mountedMcp } : {}),
     };
   }
 

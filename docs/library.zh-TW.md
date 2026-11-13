@@ -1,7 +1,7 @@
 # 資源庫（Skill 與 MCP server）
 
 資源庫是 AgEnD 資料夾裡的一個地方，用來存放 **Skill** 和 **MCP server 定義**。Agent 只有在管理員把某個 **Skill** 掛載到它身上時才會拿到
-（見下方「把 Skill 掛載到 Agent」）；沒掛載任何東西的 Agent 完全不變，不論資源庫是空的還是滿的。MCP server 目前只能存放、還不能掛載；
+（見下方「把 Skill 掛載到 Agent」）；沒掛載任何東西的 Agent 完全不變，不論資源庫是空的還是滿的。資源庫 **MCP server** 用同樣方式掛載，目前只支援 Claude Code 和 Codex 的 Agent（見「把 MCP server 掛載到 Agent」）；
 在匯出的 Agent 檔案裡引用資源庫項目是之後另外的步驟（匯出檔已經預留一個空的 `library:` 欄位）。
 
 從側邊欄的 **資源庫**（`/ui/library`）開啟。只有管理員可以使用；沒用過的 fleet 不會產生 `library/` 資料夾。
@@ -10,23 +10,23 @@
 
 這一頁是總覽：這個 AgEnD 有哪些 **Skill**、**工具**和 **MCP server**，以及哪些 Agent 在使用。版面和設定頁一樣：左邊是分類列表（設定頁自己的 `.s-nav`），
 右邊只顯示選到的分類，上面有篩選框；手機上 `/ui/library` 是分類列表，點一個分類才進到它自己的頁面（`/ui/library/skills`、`/tools`、`/mcp`），有返回連結。
-每個項目是**兩行**的一列，三個分類一模一樣：第一行是名稱和說明（截斷成一行），第二行是使用中的 Agent、適用角色或大小、以及內建／團隊標記。
+每個項目是**兩行**的一列，三個分類一模一樣：第一行是名稱和說明（截斷成一行），第二行是使用中的 Agent、適用角色或大小、以及內建／資源庫標記。
 「詳細內容」固定在列的右側、對列垂直置中，不會跟著內容移位（旁邊還有導出和刪除；寬度小於 600 px 時，列裡只留「詳細內容」，導出和刪除在它打開的對話框裡）。
 一列最多顯示三個 Agent 標籤（手機一個），其餘收成 **+N**，點它會打開該項目，不會讓列變高。每個分類有兩組：
 
 - **內建・唯讀**：隨 AgEnD 附帶，從套件與程式碼列出，不能在這裡修改：內建 Skill（`src/general-knowledge/skills`，並標出適用角色：General、一般 Agent、Classic bot）、
   `tool_set` 各 profile（`TOOL_PROFILES`，含工具清單）、AgEnD 自己的 `agend` MCP server。
-- **團隊新增**：下面的資源庫項目，可新增、導入、導出、檢視、編輯（Skill）、刪除。
+- **資源庫**：下面的資源庫項目，可新增、導入、導出、檢視、編輯（Skill）、刪除。
 
 **使用中**是一排標籤，每個 Agent 一個：內建 Skill 依 Agent 的角色（General 拿到全部，其他 Agent 拿到標給一般 Agent 的，且只算 CLI 有 skill 資料夾的）、
-工具組依 Agent 的 `tool_set`（和 daemon 用同一條規則）、`agend` MCP server 是所有 Agent、團隊 Skill 依掛載到哪些 Agent。點標籤會開啟該 Agent：
-團隊 Skill 直接到「設定 → 該 Agent → 工作目錄 → 團隊 Skill（來自資源庫）」，其他到該 Agent 頁。團隊 Skill 另有一個 **＋** 標籤：挑 Agent 就會寫進它們的設定，
-寫的是同一個 `library` 值、同一個 `PATCH /api/settings/fleet/instances/<name>`、同一個 Apply，和在 Agent 自己的設定頁勾選完全一樣
+工具組依 Agent 的 `tool_set`（和 daemon 用同一條規則）、`agend` MCP server 是所有 Agent、資源庫 Skill 依掛載到哪些 Agent。點標籤會開啟該 Agent：
+資源庫 Skill 直接到「設定 → 該 Agent → 工作目錄 → Skills」，其他到該 Agent 頁。資源庫 Skill 另有一個 **＋** 標籤：挑 Agent 就會寫進它們的設定，
+寫的是同一個 `library` 值、同一個 `PATCH /api/settings/fleet/instances/<name>`、同一個 Apply，和在 Agent 自己的設定頁啟用完全一樣
 （`settings-model.js` 的 `agentPatchRequest`／`libraryMountPatch` 是這個寫入唯一的一份）。下次啟動時生效。內建的標籤只能跳轉，內建項目不能加也不能改。
 
 這一頁只讀現有設定，自己不改任何東西：除非你用 **＋**（或 Agent 自己的設定），否則不會改變任何 Agent 的檔案、設定或啟動指令。
-團隊 Skill 掛在 CLI 沒有 skill 資料夾的 Agent 上（對照表在 `src/native-skills-dir.ts`），標籤和 Agent 設定頁的「團隊 Skill」欄位都會標出：它在那裡不會生效。
-MCP server 目前只能存放，還不能交給 Agent。
+資源庫 Skill 掛在 CLI 沒有 skill 資料夾的 Agent 上（對照表在 `src/native-skills-dir.ts`），標籤和 Agent 設定頁的「Skills」卡都會標出：它在那裡不會生效。
+資源庫 MCP server 同樣有 **＋** 標籤和「使用中」標籤（掛在 CLI 不支援資源庫 MCP 的 Agent 上會標出）；按 **＋** 會先顯示它要執行什麼並請你確認（見下）。
 
 ## 位置
 
@@ -57,14 +57,25 @@ description: GitHub issues and pull requests
 transport: stdio            # 或 http
 command: npx
 args: [-y, "@modelcontextprotocol/server-github"]
-env: [GITHUB_TOKEN]         # 只寫名稱；`KEY: value` 這種寫法會被拒絕
+env: [MCP_GITHUB_TOKEN]     # 只寫名稱，每個都要以 MCP_ 開頭；寫成帶字面值的 `KEY: value` 會被拒絕
 ```
 
-`http` 類型有 `url`（不能含帳密或查詢字串）和 `headers`（標頭名稱對應到存放其值的變數，例如 `Authorization: GITHUB_TOKEN`）。
+server 需要用另一個名稱拿到這個值時，用對應寫法（map）——右邊是對 `.env` 變數的**引用**，不是值：
+
+```yaml
+env:
+  GITHUB_PERSONAL_ACCESS_TOKEN: ${MCP_GITHUB_TOKEN}   # server 看到的名稱是 GITHUB_PERSONAL_ACCESS_TOKEN；值是 .env 裡的 MCP_GITHUB_TOKEN
+```
+
+一個檔案用清單寫法或對應寫法其中一種，不能混用；先前（只有清單寫法時）寫好的項目不變。`http` 類型有 `url`（不能含帳密或查詢字串）和 `headers`（標頭名稱對應到存放其值的變數，例如 `Authorization: MCP_GITHUB_TOKEN`；標頭名稱就是 server 看到的名稱，不需要另外改名）。
 
 ## 把 Skill 掛載到 Agent
 
-管理員在 **設定 → 該 Agent → 工作目錄 → 團隊 Skill（來自資源庫）** 勾選團隊 Skill，或直接寫在 `fleet.yaml`：
+Agent 設定頁的兩張卡叫 **Skills** 和 **MCP servers**，和資源庫的分類同名，各分兩區。**已指派給此 Agent** 列出資源庫裡指派給它的項目——有外框的清單、列與列之間有分隔線，每列依序是圖示、粗體名稱加一行說明（過長截斷）、下方是狀態（缺變數、內容已變更需重新確認、已暫停、已不在資源庫…），右側是 **啟用開關**和**刪除（垃圾桶）**；刪除會先確認，並把項目從這個 Agent 移除，開關則是**暫停但不移除**。這一區標題列有「關閉開關可暫停使用而不移除；重新啟動此 Agent 後生效」，右側是 **＋ 新增**：挑選對話框列出還沒指派的資源庫項目，有篩選框；點一項先預覽——Skill 用資源庫自己的預覽（frontmatter、渲染後的 SKILL.md、檔案），MCP 顯示完整指令（或網址與網域）和變數名稱——再按「啟用」才指派；MCP 的「啟用」同時就是確認（見下），不會再跳第二次。可以連續指派多個，關掉對話框回到卡片。這一區是空的時候顯示虛線外框和一行說明（「還沒有指派資源庫的 Skill」）。**內建（依角色自動帶入）**預設收合：該角色的內建 Skill、AgEnD 自己的 `agend` MCP server，展開後樣式和上一區一致，標「內建」、沒有控制項。切換、移除、新增都只改表單，存檔仍是設定頁自己的 Save。
+
+**暫停的項目（`library.paused`）。**暫停的項目是「已指派但不交給 Agent」：它會從 `library.skills`／`library.mcp` 移到 `library.paused: { skills: [id…], mcp: [id…] }`。所以 `skills`、`mcp` 仍然就是「交給 Agent 的」——發佈程式、MCP 寫入、舊版 AgEnD 都只讀它們——暫停的 Skill 不會發佈進 skill 資料夾（先前發佈過的副本在下次啟動時移除），暫停的 MCP server 不會寫進 Agent 的 MCP 設定。同一個 id 只能在 `skills` 或 `paused.skills` 其中之一（`fleet.yaml` 兩邊都有會被拒絕）。沒用到暫停的 Agent 沒有 `paused` 鍵，設定檔與啟動指令逐 byte 不變（有 golden 測試）。資源庫的「使用中」標籤只算交給 Agent 的。
+
+管理員在 **設定 → 該 Agent → 工作目錄 → Skills** 用 **＋ 新增** 啟用資源庫的 Skill，或直接寫在 `fleet.yaml`：
 
 ```yaml
 instances:
@@ -88,6 +99,31 @@ instances:
 - **何時同步：** 只有 fleet Agent 或 General 啟動時才會發佈（ClassicBot 房間、Windows native Agent 不會）。已刪除的 Agent 留在共用資料夾的 skill，
   要等同一資料夾的另一個 Agent 重啟後才會被清掉（那次啟動會清除不再掛載的項目）。
 
+## 把 MCP server 掛載到 Agent
+
+*AGEND-261。* 管理員在 **設定 → 該 Agent → 工作目錄 → MCP servers**（在「Skills」下面，**＋ 新增**），或用資源庫 MCP 列上的 **＋** 標籤。它是 Agent 在 `fleet.yaml` 裡的
+`library.mcp: [id, …]`，權限和 `library.skills` 同一條線：只能設給單一 Agent、只有管理員能改、沒有任何 Agent 工具（含 General）能寫、是冷鍵（重啟 Agent 才生效）。
+
+**寫了什麼。** 每次啟動時，daemon 把掛載的項目變成該 CLI 自己的 MCP 設定項目，名稱是 `agend-lib-<id>`，和 AgEnD 自己的 `agend` server 並列：
+
+| CLI | 位置 | 形式 |
+|---|---|---|
+| Claude Code | `<instance 目錄>/mcp-config.json`（`--mcp-config`），有值時權限 0600 | `command`/`args`/`env`，或 `type: http` + `url` + `headers` |
+| Codex | 隔離的 `CODEX_HOME/config.toml`（0600） | `[mcp_servers.agend-lib-<id>]`（另有 `.env`／`.http_headers` 表）；每個字串都以 TOML 基本字串跳脫，寫完會再解析回來比對，讀回來不一樣的就不寫入 |
+
+你自己的 MCP 設定一律不讀、不動。沒掛載任何東西的 Agent，設定檔和啟動指令逐 byte 不變（有 golden 測試固定）。其他 CLI（OpenCode、Kiro、Grok、Muse、Antigravity…）暫不支援：
+設定卡和資源庫標籤都會標示，來源是 `src/library/mcp-support.ts` 的對照表（只有這一張表，頁面裡沒有清單）；掛在這些 CLI 上的 Agent 啟動時不寫任何東西，並記一次日誌。
+
+**變數。** 項目只寫變數名稱（stdio 用 `env`、http 用 `headers`），不寫值。值在寫設定的當下從資料夾的 `.env` 取。缺值或值是空的，該 MCP **不啟動**（什麼都不寫）——
+Agent 設定卡會顯示缺哪個變數，日誌也會寫出名稱。值不會出現在任何畫面、日誌、API 回應或導出裡。交給 server 的名稱（對應寫法左邊的名稱，或清單裡的那個名稱）另外不能是會改變程式尋找或載入方式、工具行為或流量去向的變數（`PATH`、`HOME`、`IFS`、`NODE_OPTIONS`、`NODE_PATH`、`PYTHONPATH`、`PERL5OPT`、`RUBYOPT`、`JAVA_TOOL_OPTIONS`、`GIT_SSH_COMMAND`、`CODEX_HOME`、`HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`、`SSL_CERT_FILE`、`NODE_EXTRA_CA_CERTS`、`GIT_ASKPASS`，以及整個 `LD_*`、`DYLD_*` 系列等；不分大小寫），兩條規則同時適用。
+
+**`MCP_` 規則在哪裡檢查。**項目**存檔**時（在資源庫新增或編輯，`POST /ui/library/save`）：名稱不符就在寫入之前被擋下，訊息寫明「變數名稱需以 MCP_ 開頭」和出錯的欄位。**每次寫 Agent 設定時再檢查一次**：不合格的項目——手動放進資源庫資料夾，或舊版 AgEnD 留下的——一律不會掛載，不論先前確認過什麼；Agent 本身照常啟動，設定卡在原本顯示缺變數的位置多一行小字（「變數 X 不符合 MCP_ 規則」），日誌寫出變數名稱（不寫值）。確認畫面仍然重要：它列出每個變數名稱和指令（或網址的 host），`http` 類型的 server 也會把值送到它的網址——但項目能拿到的值，只有有人刻意在 `.env` 裡替 MCP server 寫成 `MCP_…` 的那些。
+
+**確認。** 把 server 交給 Agent 之前，頁面會顯示它實際會執行什麼——完整的 `command` 和 `args`，或網址與網域——以及變數名稱和「已設定／缺少」。按確認會替該 Agent 記下項目的雜湊
+（`library/mcp-confirmed.json`，僅擁有者可讀寫，只有管理員的 `POST /ui/library/mcp-confirm` 會寫）。之後項目被編輯，或在資源庫外被改動，要再確認一次才會重新寫入；設定卡會顯示「內容已變更，需重新確認」。
+
+**誠實說明：**變數值會在 Agent 啟動時交給該 MCP server，和現在 `.env` 的做法相同；讓 Agent 完全拿不到密鑰是之後的閘道工作。
+
 ## 密鑰
 
 任何看起來像金鑰、token 或密碼的內容（和 Agent 匯出用同一套掃描）都會被拒絕，並說明哪個檔案、第幾行，不會顯示值。
@@ -99,7 +135,9 @@ instances:
 
 ## Web 路由（僅管理員）
 
-`GET /ui/library/list`、`GET /ui/library/item?kind=skill|mcp&id=<id>`、`GET /ui/library/overview`（內建 Skill、工具組、`agend` MCP server 與使用情形；唯讀）、`POST /ui/library/save`（`expect`：編輯器讀到的雜湊；Skill 已被改過則回 `changed`）、`POST /ui/library/delete`。Skill 的 `item` 另外附 `fields` 和 `body`（把 SKILL.md 拆開給畫面用）。
+`GET /ui/library/list`、`GET /ui/library/item?kind=skill|mcp&id=<id>`、`GET /ui/library/overview`（內建 Skill、工具組、`agend` MCP server 與使用情形；唯讀）、`POST /ui/library/save`（`expect`：編輯器讀到的雜湊；項目已被改過則回 `changed`；**取代**（`overwrite: true`）不帶 `expect` 會被拒絕（`expect_required`），Skill 和內建同名則回 `exists`）、`POST /ui/library/delete`。Skill 的 `item` 另外附 `fields` 和 `body`（把 SKILL.md 拆開給畫面用）。
+
+MCP 掛載（AGEND-261）：`GET /ui/library/mcp-status?agent=<名稱>`（該 Agent 設定頁需要的所有 MCP 項目：會執行什麼、變數的「已設定／缺少」——只有名稱——、是否已為該 Agent 確認過目前版本、以及哪些 CLI 支援資源庫 MCP）和 `POST /ui/library/mcp-confirm`（`{ agent, id, sha256 }`；項目已是別的版本則回 `changed`）。`GET /ui/library/list` 另附 `mcpBackends`；`overview` 附 `teamMcpUsage`，每個 Agent 另有 `libraryMcp`。
 
 Skill 的導入與導出（AGEND-257）：`GET /ui/library/export?id=<id>[&builtin=1]`、`GET /ui/library/export-all`（zip 下載）、`GET /ui/library/builtin?name=<name>`（顯示用的內建 Skill）、
 `POST /ui/library/import/preview?filename=` 和 `POST /ui/library/import?sha256=&decisions=`（body 是上傳檔案的 bytes；`decisions` 是 URL 編碼的 JSON：`{ "<名稱>": { "action": "overwrite"|"rename"|"skip", "as": "<新名稱>" } }`）。

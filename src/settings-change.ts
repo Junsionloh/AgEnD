@@ -315,6 +315,23 @@ function accountProfilePath(path: readonly string[], old: unknown, next: unknown
   const allowed = (v: unknown) => v === undefined || v === null || typeof v === "string" && isCredentialProfileName(v);
   return allowed(old) && allowed(next);
 }
+/**
+ * AGEND-261 (a gap left by AGEND-244): an agent's `library.skills` / `library.mcp` — the ids an administrator mounts on it — is an ordinary
+ * setting like its tags: applied directly when it is exactly a list of library ids (the same rule as src/library/schema.ts LIBRARY_ID_RE,
+ * repeated here so the confirmation layer imports nothing of the library), and still refused as anything else. Without this the generic walk
+ * below met a string list under a key it does not know and refused every mount ("unsupported_sensitive_effect"). What makes mounting an MCP
+ * server safe is not a card here but the per-agent confirmation of its exact content (src/library/mcp-mount.ts) and the admin-only write.
+ */
+const LIBRARY_MOUNT_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+function libraryMountPath(path: readonly string[], old: unknown, next: unknown): boolean {
+  const key = path.at(-1);
+  // `…instances.<name>.library.skills|mcp`, and (AGEND-261) the paused lists beside them: `…instances.<name>.library.paused.skills|mcp`.
+  const given = (key === "skills" || key === "mcp") && path.at(-2) === "library" && path.at(-4) === "instances";
+  const paused = (key === "skills" || key === "mcp") && path.at(-2) === "paused" && path.at(-3) === "library" && path.at(-5) === "instances";
+  if (!given && !paused) return false;
+  const ids = (v: unknown): boolean => v === undefined || v === null || (Array.isArray(v) && v.length <= 500 && v.every(id => typeof id === "string" && LIBRARY_MOUNT_ID.test(id)));
+  return ids(old) && ids(next);
+}
 function plainList(path: readonly string[], old: unknown, next: unknown): boolean {
   if (!PLAIN_LISTS.has(path.at(-1) ?? "") || namedEntry(path, -1) || path.some(key => SENSITIVE_SEGMENT.test(key))) return false;
   // Only an agent's own list or the defaults' (#2346 review: never a child of an immediate key, e.g. startup.tags).
@@ -512,7 +529,7 @@ export function settingsChangeDiff(before: unknown, after: unknown, options: {
       { const was = longTextSummary(old), now = longTextSummary(next); add(summaryLine(`${settingsDisplay(path.join("."))}: ${was.text} → ${now.text}`, settingsDisplay(path.join(".")), ": ", ...was.parts, " → ", ...now.parts)); }
       return;
     }
-    if (ordinary(path, old, next) || plainList(path, old, next) || codexSpeedPath(path, old, next) || accountProfilePath(path, old, next)) return;
+    if (ordinary(path, old, next) || plainList(path, old, next) || libraryMountPath(path, old, next) || codexSpeedPath(path, old, next) || accountProfilePath(path, old, next)) return;
     if (path.some(key => /access|permission|admin/i.test(key)) && section !== "secret") section = "access";
     const key = path.at(-1) ?? "configuration", label = settingsDisplay(path.join("."));
     // Native creation projects a strictly validated request at this exact root. These fields affect where code
