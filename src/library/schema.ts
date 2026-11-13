@@ -46,7 +46,9 @@ export const isLibraryId = (v: unknown): v is string => typeof v === "string" &&
 export type LibraryErrorCode =
   | "invalid_request" | "invalid_id" | "invalid_path" | "duplicate_path" | "missing_skill_md" | "bad_frontmatter" | "name_mismatch"
   | "missing_description" | "too_large" | "too_many_files" | "not_text" | "secret_found" | "exists" | "not_found" | "too_many_items"
-  | "invalid_yaml" | "bad_mcp" | "unsafe_item";
+  | "invalid_yaml" | "bad_mcp" | "unsafe_item"
+  // AGEND-257: an upload that is not a usable archive / has no skill in it; a skill that changed since it was read.
+  | "bad_archive" | "no_skill" | "changed";
 export interface LibraryError { ok: false; error: LibraryErrorCode; path?: string; detail?: string; findings?: SecretFinding[] }
 const fail = (error: LibraryErrorCode, extra: { path?: string; detail?: string; findings?: SecretFinding[] } = {}): LibraryError => ({ ok: false, error, ...extra });
 
