@@ -20,6 +20,7 @@ import { appStore } from "/assets/app-store.js";
 import { LIBRARY_SECTIONS, detailsPath, librarySectionPath } from "/assets/app-route.js";
 import { DEFAULT_SCHEMA, agentPatchRequest, libraryMountPatch, requestImpact } from "./settings-model.js";
 import { operationActive, startOperation } from "./settings-apply.js";
+import { ImportDialog, SkillDialog } from "./library-skill.js";   // AGEND-257: Preview / Edit, and Import — their own module and words
 
 register("library", {
   en: {
@@ -72,6 +73,11 @@ register("library", {
     e_invalid_yaml: "That is not valid YAML.", e_bad_mcp: "The MCP file has a problem in “{0}”. Variables are listed by name only; an address may not hold a password or a query.",
     e_secret_found: "Something here looks like a secret ({0}). Remove it first: the library keeps no keys or passwords.", e_unsafe_item: "That item cannot be read safely.", e_invalid_request: "The request was not valid.",
     secretAt: "{0}, line {1}",
+    exportAll: "Export all", exportAllTitle: "Download every team skill in one .zip", exportOne: "Export “{0}”", importBtn: "Import", importTitle: "Import skills from a .zip, .skill or SKILL.md file",
+    moreAgents: "{0} more: {1}", seeAll: "See every agent that uses it",
+    e_bad_archive: "That file is not a ZIP, a .skill file or a SKILL.md, or it is damaged or uses something that is not supported.",
+    e_no_skill: "No skill found. The archive needs a SKILL.md, in a folder named for the skill or at the top.",
+    e_changed: "It was changed after you opened it. Close this and open it again.",
   },
   "zh-TW": {
     title: "資源庫", sub: "這一頁是總覽：這個 AgEnD 有哪些 Skill、工具和 MCP server，以及哪些 Agent 正在使用。內建項目隨 AgEnD 附帶，唯讀；團隊項目是你在這裡新增的。除了「＋」標籤（效果等同在該 Agent 的設定裡勾選這個 Skill），這一頁不會改變任何 Agent。",
@@ -123,6 +129,11 @@ register("library", {
     e_invalid_yaml: "這不是有效的 YAML。", e_bad_mcp: "MCP 檔案的「{0}」有問題。變數只能寫名稱；網址不能含密碼或查詢字串。",
     e_secret_found: "這裡有東西看起來像密鑰（{0}）。請先移除：資源庫不存金鑰或密碼。", e_unsafe_item: "這一項無法安全讀取。", e_invalid_request: "請求不正確。",
     secretAt: "{0}，第 {1} 行",
+    exportAll: "導出全部", exportAllTitle: "把所有團隊 Skill 下載成一個 .zip", exportOne: "導出「{0}」", importBtn: "導入", importTitle: "從 .zip、.skill 或 SKILL.md 檔案導入 Skill",
+    moreAgents: "另外 {0} 個：{1}", seeAll: "查看所有使用它的 Agent",
+    e_bad_archive: "這個檔案不是 ZIP、.skill 或 SKILL.md，或是已經損壞，或使用了不支援的功能。",
+    e_no_skill: "找不到 Skill。壓縮檔裡需要有 SKILL.md，放在以 Skill 名稱命名的資料夾裡，或放在最上層。",
+    e_changed: "它在你打開之後被改過了。請關掉再重新打開。",
   },
 });
 const tn = (k, ...v) => t(`library.${k}`, ...v);
@@ -148,6 +159,15 @@ async function call(path, body) {
   try { data = await r.json(); } catch { /* not JSON */ }
   return { ok: r.ok, status: r.status, data };
 }
+
+/** A POST whose body is a file's bytes (the import routes). */
+async function callRaw(path, bytes) {
+  const r = await fetch(path, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/octet-stream" }, body: bytes });
+  let data = null;
+  try { data = await r.json(); } catch { /* not JSON */ }
+  return { ok: r.ok, status: r.status, data };
+}
+const api = { call, callRaw, errorText: libraryErrorText };
 
 const kb = (n) => Math.max(1, Math.round((n || 0) / 1024));
 
@@ -186,7 +206,7 @@ function AddDialog({ kind, existing, onClose, onSaved }) {
 }
 
 /** View: the item as stored — a skill's files, or the MCP file. Read only. */
-function ViewDialog({ item, onClose }) {
+function ViewDialog({ item, onClose, onDelete }) {
   const [state, setState] = useState({ loading: true });
   useEffect(() => {
     let live = true;
@@ -197,7 +217,7 @@ function ViewDialog({ item, onClose }) {
   }, [item.kind, item.id]);
   const d = state.detail;
   const files = d && d.kind === "skill" ? d.files : d ? [{ path: `${d.id}.yaml`, content: d.text }] : [];
-  return html`<${Dialog} title=${item.id} onClose=${onClose} wide=${true} actions=${html`<button type="button" class="btn" onClick=${onClose}>${tn("close")}</button>`}>
+  return html`<${Dialog} title=${item.id} onClose=${onClose} wide=${true} actions=${html`${onDelete ? html`<button type="button" class="btn btn-ghost" onClick=${() => onDelete(item)} data-library-dialog-delete>${tn("delete")}</button><span class="dlg-spacer"></span>` : null}<button type="button" class="btn" onClick=${onClose}>${tn("close")}</button>`}>
     <div class="form">
       ${state.loading ? html`<${Skeleton} lines=${3} />` : null}
       ${state.error ? html`<p class="feedback error" role="alert">${state.error}</p>` : null}
@@ -210,12 +230,25 @@ function ViewDialog({ item, onClose }) {
 
 /** An agent's tag: a link to that agent's settings. Team skills go straight to the Team skills field (`?cat=work#library-skills`). */
 const agentHref = (name, to) => (to === "skill" ? `${detailsPath(name)}?cat=work#library-skills` : to === "tools" ? `${detailsPath(name)}?cat=work` : detailsPath(name));
-const VISIBLE_TAGS = 3;
 
-/** The agents that use an item, as tags that open them (and, for a team skill, a "+" that gives it to more). */
-function UsedBy({ names, to, agents, onAdd }) {
-  const [all, setAll] = useState(false);
-  const shown = all ? names : names.slice(0, VISIBLE_TAGS);
+/** How many agent tags a row shows before "+N": fewer on a phone, where the line is short. The rest is "+N", which opens the item (its Details lists every one): a row never grows taller for it. */
+function useTagLimit() {
+  const query = "(max-width: 599px)";
+  const has = typeof window !== "undefined" && typeof window.matchMedia === "function";
+  const [narrow, setNarrow] = useState(() => has && window.matchMedia(query).matches);
+  useEffect(() => {
+    if (!has) return undefined;
+    const m = window.matchMedia(query), on = () => setNarrow(m.matches);
+    on();
+    if (m.addEventListener) { m.addEventListener("change", on); return () => m.removeEventListener("change", on); }
+    return undefined;
+  }, []);
+  return narrow ? 1 : 3;
+}
+
+/** The agents that use an item, as tags that open them (and, for a team skill, a "+" that gives it to more). Always one line: what does not fit is "+N". */
+function UsedBy({ names, to, agents, limit, onMore, onAdd }) {
+  const shown = names.slice(0, limit);
   const noFolder = (n) => { const a = agents.find((x) => x.name === n); return a && !a.nativeSkills ? a : null; };
   return html`<span class="lib-tags" data-library-used-by>
     ${names.length ? null : html`<span class="note">${tn("noUse")}</span>`}
@@ -224,39 +257,57 @@ function UsedBy({ names, to, agents, onAdd }) {
       return html`<a key=${n} class=${`pill lib-tag${bad ? " warn" : ""}`} href=${agentHref(n, to)} data-library-tag=${n}
         title=${bad ? tn("tagNoFolder", n, bad.backend) : to === "skill" ? tn("tagOpenSkill", n) : tn("tagOpen", n)}>${bad ? html`<${Icon} name="alert" size=${12} />` : null}${n}</a>`;
     })}
-    ${names.length > VISIBLE_TAGS ? html`<button type="button" class="pill lib-tag lib-more" onClick=${() => setAll(!all)} data-library-more>${all ? tn("less") : `+${names.length - VISIBLE_TAGS}`}</button>` : null}
+    ${names.length > limit ? html`<button type="button" class="pill lib-tag lib-more" onClick=${onMore} data-library-more title=${tn("moreAgents", names.length - limit, names.slice(limit).join(", "))}
+      aria-label=${tn("seeAll")}>+${names.length - limit}</button>` : null}
     ${onAdd ? html`<button type="button" class="pill lib-tag lib-add" onClick=${onAdd} data-library-add-agent aria-label=${onAdd.label} title=${onAdd.label}><${Icon} name="plus" size=${12} /></button>` : null}
   </span>`;
 }
 
-/** A team item's row: compact — name, one line of description, who uses it, View / Delete. */
-function Row({ item, used, agents, onView, onDelete, onAdd }) {
+/**
+ * One row, the same in every category (skills, tools, MCP servers; built in or team): two lines. Line 1 is the name and its description;
+ * line 2 is who uses it, what it is for / how big it is, and whether it is built in or the team's. The actions are one column at the right,
+ * centered on the row: "Details" always, then (on a screen wide enough) Export and Delete. A row with no agent tags has the same two lines.
+ */
+function ItemRow({ icon, name, description, tags, extra, warn, rowAttrs, children }) {
+  return html`<div class=${`row-item lib-row${warn ? " is-warn" : ""}`} ...${rowAttrs}>
+    <span class="lib-ico"><${Icon} name=${icon} size=${18} /></span>
+    <div class="lib-main"><span class="strong">${name}</span><span class="note lib-desc" title=${description || undefined}>${description || ""}</span></div>
+    <div class="lib-meta">${tags}${extra}</div>
+    <div class="lib-actions">${children}</div>
+  </div>`;
+}
+
+const exportLink = (item) => html`<a class="icon-btn lib-act-extra" href=${`/ui/library/export?id=${encodeURIComponent(item.id)}`} download=${`${item.id}.zip`}
+  aria-label=${tn("exportOne", item.id)} title=${tn("exportOne", item.id)} data-library-export=${item.id}><${Icon} name="download" size=${16} /></a>`;
+
+/** A team item's row. */
+function Row({ item, used, agents, limit, onView, onDelete, onAdd }) {
   const meta = item.kind === "skill" && item.files ? (item.files === 1 ? tn("file1") : tn("files", item.files)) : item.size ? tn("bytes", kb(item.size)) : "";
   const hint = tn(`hint_${item.status}`);
   const hasHint = hint !== "library.hint_" + item.status;
   const warn = item.status !== "ok";
+  const openable = item.status !== "missing" && item.status !== "invalid";
   const add = onAdd ? Object.assign(() => onAdd(item), { label: tn("addTagLabel", item.id) }) : null;
-  return html`<div class=${`row-item lib-row${warn ? " is-warn" : ""}`} data-library-item=${`${item.kind}:${item.id}`}>
-    <${Icon} name=${item.kind === "skill" ? "book" : "plug"} size=${18} />
-    <div class="grow"><span class="strong">${item.id}</span><div class="note lib-desc" title=${item.description || undefined}>${item.description || ""}${item.status === "invalid" && item.reason ? ` ${item.reason}` : ""}${hasHint ? ` ${hint}` : ""}</div></div>
-    ${item.kind === "skill" && used ? html`<${UsedBy} names=${used} to="skill" agents=${agents} onAdd=${add} />` : null}
-    ${warn ? html`<span class="pill off">${tn(`st_${item.status}`)}</span>` : null}
-    ${meta ? html`<span class="note">${meta}</span>` : null}
-    ${item.status !== "missing" && item.status !== "invalid" ? html`<button type="button" class="btn btn-sm" onClick=${() => onView(item)} data-library-view>${tn("view")}</button>` : null}
-    <button type="button" class="btn btn-sm btn-ghost" onClick=${() => onDelete(item)} data-library-delete aria-label=${`${tn("delete")} ${item.id}`}>${tn("delete")}</button>
-  </div>`;
+  const tags = item.kind === "skill" && used ? html`<${UsedBy} names=${used} to="skill" agents=${agents} limit=${limit} onMore=${() => onView(item)} onAdd=${add} />` : null;
+  const extra = html`${warn ? html`<span class="pill off" title=${hasHint ? hint : undefined}>${tn(`st_${item.status}`)}</span>` : null}
+    ${meta ? html`<span class="note lib-size">${meta}</span>` : null}<span class="pill">${tn("team")}</span>`;
+  return html`<${ItemRow} icon=${item.kind === "skill" ? "book" : "plug"} name=${item.id}
+    description=${`${item.description || ""}${item.status === "invalid" && item.reason ? ` ${item.reason}` : ""}`.trim()}
+    tags=${tags} extra=${extra} warn=${warn} rowAttrs=${{ "data-library-item": `${item.kind}:${item.id}` }}>
+    <button type="button" class="btn btn-sm" onClick=${() => onView(item)} disabled=${!openable} data-library-view>${tn("details")}</button>
+    ${item.kind === "skill" ? (openable ? exportLink(item) : html`<button type="button" class="icon-btn lib-act-extra" disabled aria-label=${tn("exportOne", item.id)}><${Icon} name="download" size=${16} /></button>`) : null}
+    <button type="button" class="icon-btn lib-act-extra" onClick=${() => onDelete(item)} data-library-delete aria-label=${`${tn("delete")} ${item.id}`} title=${`${tn("delete")} ${item.id}`}><${Icon} name="trash" size=${16} /></button>
+  </${ItemRow}>`;
 }
 
-/** A built-in row: read only — the same compact line, a Built in pill, tags that only open an agent, and Details. */
-function BuiltinRow({ kind, name, icon, description, agents, to, onDetails, extra }) {
-  return html`<div class="row-item lib-row" data-library-builtin=${`${kind}:${name}`}>
-    <${Icon} name=${icon} size=${18} />
-    <div class="grow"><span class="strong">${name}</span><div class="note lib-desc" title=${description || undefined}>${description || ""}</div></div>
-    <${UsedBy} names=${agents.names} to=${to} agents=${agents.all} onAdd=${null} />
-    ${extra ? html`<span class="note">${extra}</span>` : null}
-    <span class="pill">${tn("builtin")}</span>
+/** A built-in row: read only — the same two lines and the same place for Details (and Export, for a skill); no Delete. */
+function BuiltinRow({ kind, name, icon, description, agents, to, onDetails, extra, limit, exportable }) {
+  const tags = html`<${UsedBy} names=${agents.names} to=${to} agents=${agents.all} limit=${limit} onMore=${onDetails} onAdd=${null} />`;
+  const more = html`${extra ? html`<span class="note lib-size">${extra}</span>` : null}<span class="pill">${tn("builtin")}</span>`;
+  return html`<${ItemRow} icon=${icon} name=${name} description=${description} tags=${tags} extra=${more} rowAttrs=${{ "data-library-builtin": `${kind}:${name}` }}>
     <button type="button" class="btn btn-sm" onClick=${onDetails} data-library-details>${tn("details")}</button>
-  </div>`;
+    ${exportable ? exportLink({ id: name }) : null}
+  </${ItemRow}>`;
 }
 
 /** What a built-in item is, whole: its full description, roles, tools and who uses it. Read only. */
@@ -328,6 +379,7 @@ export function LibraryPanel({ route, navKey }) {
   const [dialog, setDialog] = useState(null);
   const [filter, setFilter] = useState("");
   const watching = useRef(null);
+  const limit = useTagLimit();
   useEffect(() => { setTitle(tn("title")); }, [navKey]);
   const load = useCallback(async () => {
     try {
@@ -380,8 +432,8 @@ export function LibraryPanel({ route, navKey }) {
 
   const teamRows = (list, kind) => {
     const shown = list.filter((i) => matches(q, i.id, i.description));
-    return shown.length ? shown.map((i) => html`<${Row} key=${`${i.kind}:${i.id}`} item=${i} used=${usedBy(i)} agents=${agents}
-        onView=${(it) => setDialog({ type: "view", item: it })} onDelete=${remove} onAdd=${kind === "skill" && data ? (it) => setDialog({ type: "addto", item: it }) : null} />`)
+    return shown.length ? shown.map((i) => html`<${Row} key=${`${i.kind}:${i.id}`} item=${i} used=${usedBy(i)} agents=${agents} limit=${limit}
+        onView=${(it) => setDialog(it.kind === "skill" ? { type: "skill", id: it.id, item: it } : { type: "view", item: it })} onDelete=${remove} onAdd=${kind === "skill" && data ? (it) => setDialog({ type: "addto", item: it }) : null} />`)
       : (list.length ? none([]) : html`<${Empty} icon=${kind === "skill" ? "book" : "plug"} title=${kind === "skill" ? tn("noneSkills") : tn("noneMcp")} hint=${tn("emptyHint")} />`);
   };
 
@@ -390,21 +442,20 @@ export function LibraryPanel({ route, navKey }) {
       const b = data ? data.builtinSkills.filter((s) => matches(q, s.name, s.description)) : [];
       return html`${group("team-skills", tn("teamGroup"), tn("teamSkillsLead"), teamRows(skills, "skill"))}
         ${group("builtin-skills", tn("builtinGroup"), tn("builtinSkillsLead"), builtin(() => b.length ? b.map((s) => html`<${BuiltinRow} key=${s.name} kind="skill" name=${s.name} icon="book" description=${s.description}
-          agents=${names(s.agents)} to="skill-built" extra=${s.roles.map(roleText).join(", ")}
-          onDetails=${() => detailsOf(s.name, s.description, [[tn("givenTo"), s.roles.map(roleText).join(", ")], [tn("usedBy"), s.agents.length ? s.agents.join(", ") : tn("noUse")],
-            ...(s.roles.includes("classic") ? [[tn("roles"), tn("classicNote")]] : [])])} />`) : none(b)))}`;
+          agents=${names(s.agents)} to="skill-built" extra=${s.roles.map(roleText).join(", ")} limit=${limit} exportable=${true}
+          onDetails=${() => setDialog({ type: "skill", id: s.name, builtin: true, used: s.agents })} />`) : none(b)))}`;
     }
     if (section === "tools") {
       const b = data ? data.toolSets.filter((ts) => matches(q, ts.name, tn(`ts_${ts.name}`), ...ts.tools)) : [];
       return group("builtin-tools", tn("builtinGroup"), tn("builtinToolsLead"), builtin(() => b.length ? b.map((ts) => {
         const key = `ts_${ts.name}`, known = t(`library.${key}`) !== `library.${key}`;
-        return html`<${BuiltinRow} key=${ts.name} kind="tools" name=${ts.name} icon="sliders" description=${known ? tn(key) : ""} agents=${names(ts.agents)} to="tools" extra=${tn("toolsCount", ts.tools.length)}
+        return html`<${BuiltinRow} key=${ts.name} kind="tools" name=${ts.name} icon="sliders" description=${known ? tn(key) : ""} agents=${names(ts.agents)} to="tools" extra=${tn("toolsCount", ts.tools.length)} limit=${limit}
           onDetails=${() => detailsOf(tn("toolsOf", ts.name), known ? tn(key) : "", [[tn("toolsCount", ts.tools.length), ts.tools.length ? ts.tools.join(" · ") : tn("noTools")], [tn("usedBy"), ts.agents.length ? ts.agents.join(", ") : tn("noUse")]])} />`;
       }) : none(b)));
     }
     const m = data ? data.mcp.filter((x) => matches(q, x.name, tn("agendMcpHint"))) : [];
     return html`${group("team-mcp", tn("teamGroup"), tn("teamMcpLead"), teamRows(mcp, "mcp"))}
-      ${group("builtin-mcp", tn("builtinGroup"), tn("builtinMcpLead"), builtin(() => m.length ? m.map((x) => html`<${BuiltinRow} key=${x.name} kind="mcp" name=${x.name} icon="plug" description=${tn("agendMcpHint")} agents=${names(x.agents)} to="mcp"
+      ${group("builtin-mcp", tn("builtinGroup"), tn("builtinMcpLead"), builtin(() => m.length ? m.map((x) => html`<${BuiltinRow} key=${x.name} kind="mcp" name=${x.name} icon="plug" description=${tn("agendMcpHint")} agents=${names(x.agents)} to="mcp" limit=${limit}
         onDetails=${() => detailsOf(x.name, tn("agendMcpHint"), [[tn("usedBy"), x.agents.length ? x.agents.join(", ") : tn("noUse")]])} />`) : none(m)))}`;
   };
 
@@ -422,14 +473,21 @@ export function LibraryPanel({ route, navKey }) {
       <a class="s-back" href="/ui/library"><${Icon} name="back" size=${16} /><span>${tn("title")}</span><span class="s-back-here">${tn(section)}</span></a>
       ${state.loading ? html`<${Skeleton} variant="rows" lines=${3} />`
         : state.error ? (state.denied ? html`<${Empty} icon="key" title=${state.error} />` : html`<${ErrorState} onRetry=${load} />`)
-        : html`<${PageHead} title=${tn(section)} scope=${countOf(section) || ""} lead=${tn(`lead_${section}`)}>${addKind ? html`<button type="button" class="btn btn-primary" onClick=${() => setDialog({ type: "add", kind: addKind })} data-library-add=${addKind}><${Icon} name="plus" size=${15} /> ${tn(addKind === "skill" ? "addSkill" : "addMcp")}</button>` : null}</${PageHead}>
+        : html`<${PageHead} title=${tn(section)} scope=${countOf(section) || ""} lead=${tn(`lead_${section}`)}>${addKind === "skill" ? html`${skills.length ? html`<a class="btn" href="/ui/library/export-all" download="agend-team-skills.zip" title=${tn("exportAllTitle")} data-library-export-all><${Icon} name="download" size=${15} /> ${tn("exportAll")}</a>`
+              : html`<button type="button" class="btn" disabled title=${tn("exportAllTitle")} data-library-export-all><${Icon} name="download" size=${15} /> ${tn("exportAll")}</button>`}
+            <button type="button" class="btn" onClick=${() => setDialog({ type: "import" })} title=${tn("importTitle")} data-library-import><${Icon} name="up" size=${15} /> ${tn("importBtn")}</button>` : null}
+          ${addKind ? html`<button type="button" class="btn btn-primary" onClick=${() => setDialog({ type: "add", kind: addKind })} data-library-add=${addKind}><${Icon} name="plus" size=${15} /> ${tn(addKind === "skill" ? "addSkill" : "addMcp")}</button>` : null}</${PageHead}>
           <div class="s-toolbar"><label class="s-search"><${Icon} name="search" size=${14} /><span class="sr-only">${tn(section === "skills" ? "filterSkills" : section === "tools" ? "filterTools" : "filterMcp")}</span>
             <input type="search" value=${filter} placeholder=${tn(section === "skills" ? "filterSkills" : section === "tools" ? "filterTools" : "filterMcp")} data-library-filter onInput=${(e) => setFilter(e.target.value)} /></label></div>
           <section class="card lib-card" aria-label=${tn(section)} data-library-card=${section}>${sectionBody()}</section>
           <p class="note lib-foot">${tn("sub")}</p>`}
     </div></div>
     ${dialog && dialog.type === "add" ? html`<${AddDialog} kind=${dialog.kind} existing=${existing(dialog.kind)} onClose=${() => setDialog(null)} onSaved=${() => { load(); loadOverview(); }} />` : null}
-    ${dialog && dialog.type === "view" ? html`<${ViewDialog} item=${dialog.item} onClose=${() => setDialog(null)} />` : null}
+    ${dialog && dialog.type === "view" ? html`<${ViewDialog} item=${dialog.item} onClose=${() => setDialog(null)} onDelete=${(it) => { setDialog(null); remove(it); }} />` : null}
+    ${dialog && dialog.type === "skill" ? html`<${SkillDialog} key=${`${dialog.builtin ? "b" : "t"}:${dialog.id}`} id=${dialog.id} builtin=${!!dialog.builtin} api=${api}
+      used=${dialog.builtin ? dialog.used : (usedBy({ kind: "skill", id: dialog.id }) || [])} onClose=${() => setDialog(null)} onSaved=${() => { load(); loadOverview(); }}
+      onDelete=${dialog.builtin ? null : () => { setDialog(null); remove(dialog.item || { kind: "skill", id: dialog.id }); }} />` : null}
+    ${dialog && dialog.type === "import" ? html`<${ImportDialog} api=${api} onClose=${() => setDialog(null)} onDone=${() => { load(); loadOverview(); }} />` : null}
     ${dialog && dialog.type === "details" ? html`<${DetailsDialog} detail=${dialog.detail} onClose=${() => setDialog(null)} />` : null}
     ${dialog && dialog.type === "addto" ? html`<${AddToAgentsDialog} item=${dialog.item} agents=${agents} usedNames=${usedBy(dialog.item) || []} onClose=${() => setDialog(null)} onStarted=${(id) => { watching.current = id; }} />` : null}
   </div>`;

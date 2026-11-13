@@ -861,10 +861,45 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .p-library .lib-group > h4 { margin: 0; }
 .p-library .lib-card .row-item { background: var(--surface-2); }
 .p-library .lib-card .empty { padding: var(--s-4) var(--s-2); }
-.p-library .lib-row { flex-wrap: wrap; row-gap: var(--s-1); }
-.p-library .lib-row .grow { flex: 1 1 220px; min-width: 0; }
-.p-library .lib-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.p-library .lib-tags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); min-width: 0; }
+/* AGEND-257: one row layout for every item in every category — two lines, always. Line 1: name and description (one line, the description gives way).
+   Line 2: who uses it, what it is for or how big it is, built in or team. The actions are one column on the right, centered on the row, so
+   "Details" never moves with the content: a row with many agents, one with none, built in or the team's, all have the same two lines. Agent tags
+   never wrap ("+N" is the rest); a screen under 600px keeps only "Details" in the row (Export and Delete are in the dialog it opens). */
+.p-library .lib-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "ico main act" "ico meta act"; column-gap: var(--s-3); row-gap: var(--s-1); align-items: center; flex-wrap: nowrap; }
+.p-library .lib-ico { grid-area: ico; display: inline-flex; align-self: center; color: var(--text-2); }
+.p-library .lib-main { grid-area: main; display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
+.p-library .lib-main > .strong { flex: 0 1 auto; min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-library .lib-desc { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-library .lib-meta { grid-area: meta; display: flex; align-items: center; flex-wrap: nowrap; gap: var(--s-2); min-width: 0; overflow: hidden; }
+.p-library .lib-meta > * { flex: none; }
+.p-library .lib-meta > .lib-tags { flex: 0 1 auto; min-width: 0; }
+.p-library .lib-actions { grid-area: act; display: flex; align-items: center; gap: var(--s-1); justify-self: end; align-self: center; }
+.p-library .lib-tags { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: var(--s-1); min-width: 0; overflow: hidden; }
+@media (max-width: 599px) {
+  .p-library .lib-row .lib-act-extra, .p-library .lib-row .lib-size { display: none; }
+  .p-library .lib-tag { max-width: 6em; }
+}
+/* The skill dialog: Preview / Edit tabs, the frontmatter as fields, the Markdown, the files; and the import dialog's list of what the file holds. */
+.lib-skill .lib-tabs { align-self: flex-start; }
+.lib-skill .lib-pane { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
+.lib-skill .lib-fields { display: flex; flex-direction: column; gap: var(--s-2); margin: 0; }
+.lib-skill .lib-field { display: grid; grid-template-columns: 7em minmax(0, 1fr); gap: var(--s-3); align-items: baseline; }
+.lib-skill .lib-field dt { color: var(--text-3); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.04em; }
+.lib-skill .lib-field dd { margin: 0; overflow-wrap: anywhere; }
+.lib-skill .lib-md { max-height: 22rem; }
+.lib-skill .lib-files-h { margin: 0; }
+.lib-skill .lib-files { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.lib-skill .lib-file-row { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.lib-skill .lib-file-row code { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-skill .lib-src, .lib-import .lib-src { max-height: 18rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: var(--fs-xs); }
+.lib-skill textarea { font-family: var(--font-mono); font-size: var(--fs-sm); width: 100%; }
+.lib-import .lib-import-list { display: flex; flex-direction: column; gap: var(--s-3); }
+.lib-import .lib-import-skill { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-4); }
+.lib-import .lib-import-skill.is-bad { box-shadow: inset 3px 0 0 var(--danger-fill); }
+.lib-import .lib-import-head { display: flex; align-items: center; gap: var(--s-2); }
+.lib-import .lib-clash { border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--s-2) var(--s-3); margin: 0; display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+.lib-import .lib-results { margin: 0; padding-left: var(--s-5); display: flex; flex-direction: column; gap: var(--s-1); }
+.p-library .s-page-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .p-library .lib-tag { display: inline-flex; align-items: center; gap: var(--s-1); max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   text-transform: none; letter-spacing: 0; text-decoration: none; border: 0; cursor: pointer; font-family: var(--font-ui); background: var(--surface); }
 .p-library .lib-tag:hover { background: var(--accent-dim); color: var(--accent); }

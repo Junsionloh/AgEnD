@@ -271,8 +271,13 @@ describe("many items", () => {
       expect(r.querySelector("[data-library-details]")).not.toBeNull();
     }
     expect(readFileSync("src/ui/shared/app.css", "utf8")).toMatch(/\.p-library \.lib-desc \{[^}]*white-space: nowrap/);
+    // AGEND-257: a built-in skill's Details is the skill dialog (preview only); a tool set's stays the read-only list
+    answer({ ...ok, "/ui/library/builtin": { status: 200, body: { ok: true, detail: { kind: "skill", id: "admin-only", builtin: true, sha256: "", fields: [], body: "# Hi", files: [{ path: "SKILL.md", content: "# Hi", size: 4 }] } } } });
     qa("[data-library-details]")[0].click(); await settle();
-    expect(q("[data-library-details-dialog]").textContent).toContain("Given to");
+    expect(q('[data-library-skill-dialog="builtin"]')).not.toBeNull();
+    await p.unmount(); answer(ok); await open("tools");
+    qa("[data-library-details]")[0].click(); await settle();
+    expect(q("[data-library-details-dialog]").textContent).toContain("Used by");
   });
 
   it("a filter narrows the category's rows (team and built-in), and says when nothing matches", async () => {
@@ -322,8 +327,14 @@ describe("agents as tags", () => {
     answer({ ...ok, "/ui/library/overview": { status: 200, body: many } }); await open("skills");
     const row = '[data-library-item="skill:review"]';
     expect(qa(`${row} [data-library-tag]`).length).toBe(3);
+    // AGEND-257: "+N" never makes the row taller; it opens the skill, whose Preview lists every agent
+    expect(q(`${row} [data-library-more]`).textContent).toContain("+2");
+    expect(q(`${row} [data-library-more]`).getAttribute("title")).toContain("d, e");
+    answer({ ...ok, "/ui/library/overview": { status: 200, body: many }, "/ui/library/item": { status: 200, body: { ok: true, detail: { kind: "skill", id: "review", sha256: "a".repeat(64), fields: [], body: "", files: [{ path: "SKILL.md", content: "x", size: 1 }] } } } });
     q(`${row} [data-library-more]`).click(); await settle();
-    expect(qa(`${row} [data-library-tag]`).length).toBe(5);
+    expect(qa(`${row} [data-library-tag]`).length).toBe(3);
+    expect(q('[data-library-skill-dialog="team"]')).not.toBeNull();
+    expect(q("[data-library-skill-used]").textContent).toBe("a, b, c, d, e");
   });
 
   it("the page says the missing built-in agents too: a skill nobody gets shows 'No agent'", async () => {
