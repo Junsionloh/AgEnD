@@ -249,6 +249,7 @@ General may set another agent’s `tool_set` directly through `update_instance_c
 | `channel_id` | string | — | Bound channel adapter ID (for multi-channel) |
 | `general_topic` | boolean | `false` | Mark as General dispatcher instance |
 | `backend` | string | `"claude-code"` | CLI backend: `claude-code`, `codex`, `opencode`, `kiro-cli`, `antigravity`, `grok`, `muse` |
+| `cli_adapter` | `"tmux"` | `"tmux"` | How the instance runs its CLI (#3731). Only `tmux` (a terminal pane, today's behaviour) is available; leaving it unset means `tmux`. Any other value is refused when the config loads. Also accepted under `defaults`. |
 | `kiro_ui` | `"legacy"` \| `"tui"` | `"legacy"`; new instances are written with `"tui"` (#2598) | Kiro-only launch mode. Every way of creating a kiro instance (`create_instance`, the web wizard, a new fleet from `agend setup` or `agend quickstart`, a General or topic the fleet creates) writes `tui` unless the fleet default names one. An existing entry that sets none stays `legacy`: move it with `migrate_kiro_instance`, never by editing this. `legacy` runs on kiro's v1 engine and `tui` on its v2 engine; both are pinned on every launch so a kiro-cli default or saved setting cannot move an instance to another engine (#1109). `"v3"` is refused by validation until Kiro's v3 interface can run unattended (#849). |
 | `model` | string | — | Model override (format depends on backend) |
 | `model_failover` | string[] | — | Ordered fallback models on rate limit |
