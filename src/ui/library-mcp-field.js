@@ -55,7 +55,7 @@ export const commandLine = (summary) => [summary.command, ...(summary.args || []
 export function McpDetails({ item }) {
   const s = item.summary;
   const vars = item.variables || [];
-  return html`<div class="lib-mcp-details" data-library-mcp-details=${item.id}>
+  return html`<div class="form lib-mcp-details" data-library-mcp-details=${item.id}>
     ${item.description ? html`<div class="field"><label>${lw("describe")}</label><p>${item.description}</p></div>` : null}
     ${s && s.transport === "stdio" ? html`<div class="field"><label>${lw("runs")}</label><pre class="lib-mcp-cmd" data-library-mcp-command>${commandLine(s)}</pre></div>` : null}
     ${s && s.transport === "http" ? html`<div class="field"><label>${lw("address")}</label><pre class="lib-mcp-cmd" data-library-mcp-url>${s.url}</pre>
