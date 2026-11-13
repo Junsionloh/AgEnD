@@ -117,6 +117,11 @@ export interface InstanceConfig {
   quota_notice?: QuotaNoticeRule;
   /** Proactive interrupted-work continuation; defaults true, inherited from fleet defaults. */
   resume_interrupted_work?: boolean;
+  /**
+   * How this instance runs its CLI (#3731). Absent means "tmux", today's pane-based execution. No other value is
+   * accepted yet; it is refused when the config loads.
+   */
+  cli_adapter?: import("./adapters/config.js").CliAdapterId;
   working_directory: string;
   /** Minutes an idle CLI may remain resident before auto-pause. 0 disables it. */
   auto_pause_after?: number;
