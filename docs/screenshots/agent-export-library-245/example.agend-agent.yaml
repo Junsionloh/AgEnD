@@ -1,0 +1,63 @@
+agend_export: 1
+kind: agent
+role: reviewer
+agent:
+  description: Reviews UI changes
+  tags:
+    - review
+    - ui
+library:
+  skills:
+    - id: ui-review
+      sha256: 1c39f77631058cbd0c9c33cb5f51c192c4895fd214f8aabd11e85dbeebc1d185
+      archive: UEsDBBQAAAgIAAAAIQDEwqCrkAAAANsAAAASAAAAdWktcmV2aWV3L1NLSUxMLm1khcuxDoIwFEbh/T7Fn7jaRmBRVidXjA9wpRfaoC0pxcrbGzu5uZ18yVFKkeentFidivJyksnI0kc3Jxd8i64YGLcLest+FDiPZAX3GPIikZRSRLufn/4+mqjS6IRNUeOGQVOtcbbST4UevIU1gROa0wHzG+wNqvr47T0ebrSpkOE4aWo0rrwhW07YwoqFs6YPUEsBAhQDFAAACAgAAAAhAMTCoKuQAAAA2wAAABIAAAAAAAAAAAAAAKSBAAAAAHVpLXJldmlldy9TS0lMTC5tZFBLBQYAAAAAAQABAEAAAADAAAAAAAA=
+    - id: notes-writer
+      sha256: edaab2b6dead8e347d5811da865c2bc57a7f8662270bdeafe4b369db9f01e93e
+      archive: UEsDBBQAAAgIAAAAIQCnxURXlQAAAOUAAAAVAAAAbm90ZXMtd3JpdGVyL1NLSUxMLm1kjcyxDoIwGATg/X+KS1xtI7Aoqy9gcHD+Q39oA7SkLUHe3oCTm9vly90ppcjzJDV8yJLUGl2WSEZSG92cXfA1Xrshyiic5NtDF8OESWIvBo8mkVKK6PR7Qn8MNVGh0QgbZCswrus0lRp3K+1w0MhbWDI4o7pdML/B3qAor3s+Y3S9zQcZjoOmSuPJG1bLGVtYkHjV9AFQSwMEFAAACAAAAAAhAEqzTEQQAAAAEAAAAB8AAABub3Rlcy13cml0ZXIvdGVtcGxhdGVzL25vdGVzLm1kIyBSZWxlYXNlIG5vdGVzClBLAQIUAxQAAAgIAAAAIQCnxURXlQAAAOUAAAAVAAAAAAAAAAAAAACkgQAAAABub3Rlcy13cml0ZXIvU0tJTEwubWRQSwECFAMUAAAIAAAAACEASrNMRBAAAAAQAAAAHwAAAAAAAAAAAAAApIHIAAAAbm90ZXMtd3JpdGVyL3RlbXBsYXRlcy9ub3Rlcy5tZFBLBQYAAAAAAgACAJAAAAAVAQAAAAA=
+    - id: legacy-helper
+      sha256: aab86745c03713c008a3f6a98776fbe1088fad46358616ef288cc8216a362d5b
+    - id: sleepy
+      sha256: d9d547d70d3ed0fad9624f201c0db8b2832c8bc4202567cb1d40fbc2f7a8a94c
+      archive: UEsDBBQAAAgIAAAAIQDBryJqiAAAAL8AAAAPAAAAc2xlZXB5L1NLSUxMLm1kbYsxD4IwFAb39yu+xNU2AouyMrnq4PxCH7YBaVMewf57I4mb2+VyZ4yhmV/SYplEUiEnS59D0hDnFg8OiiFmdFfw7JAlxaxkjCE6/A76X1miyuIm7KBe4MIwWKotOi/9uKuJS1wVrGguJ6T3Plf1+ctHTOHpdVeO82ipsbhzweZZUeKKhTdLH1BLAQIUAxQAAAgIAAAAIQDBryJqiAAAAL8AAAAPAAAAAAAAAAAAAACkgQAAAABzbGVlcHkvU0tJTEwubWRQSwUGAAAAAAEAAQA9AAAAtQAAAAAA
+  mcp:
+    - id: github
+      sha256: 7f0c8114efabce435c8e1fcc473c4db52b2b2c25d64ba5ec8c0e9e24f3565108
+      vars:
+        - MCP_GITHUB_TOKEN
+      definition: |
+        agend_library: 1
+        kind: mcp
+        name: github
+        description: GitHub issues and pull requests
+        transport: stdio
+        command: npx
+        args:
+          - -y
+          - "@modelcontextprotocol/server-github"
+        env:
+          - MCP_GITHUB_TOKEN
+    - id: jira
+      sha256: e81c72e6de48dd0e61dbcd6b5bd1629ea60226ee00f21912b8f0eab6e0e7f217
+      vars:
+        - MCP_JIRA_TOKEN
+    - id: linear
+      sha256: e5df57e633b22565566159e7111023927f62fc0b842c5d7bd39f910f36b137d5
+      vars:
+        - MCP_LINEAR_TOKEN
+      definition: |
+        agend_library: 1
+        kind: mcp
+        name: linear
+        description: Linear tickets
+        transport: stdio
+        command: npx
+        args:
+          - -y
+          - "@modelcontextprotocol/server-linear"
+        env:
+          - MCP_LINEAR_TOKEN
+  paused:
+    skills:
+      - sleepy
+    mcp:
+      - linear
