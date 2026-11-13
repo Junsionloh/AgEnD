@@ -65,6 +65,15 @@ function readPlainFile(path: string, max: number): Buffer | null {
   } catch { return null; } finally { if (fd !== undefined) try { closeSync(fd); } catch { /* done */ } }
 }
 
+/**
+ * What `list()` learned about one item, kept while its files are unchanged. The key is where the item lives; the signature is
+ * what `lstat` says about every file under it (size, times, inode), so a listing of an unchanged library reads no file at all
+ * (before: every skill in full on every call, up to ~190 MB at the limits). A store is made per request, so this lives here.
+ */
+type ListedBody = { ok: true; sha256: string; size: number; description: string; files?: number } | { ok: false; reason: string };
+const LISTED = new Map<string, { sig: string; body: ListedBody }>();
+const LISTED_MAX = 2 * LIBRARY_LIMITS.itemsPerKind;
+
 export class LibraryStore {
   readonly root: string;
   constructor(agendHome: string) { this.root = join(agendHome, LIBRARY_DIRNAME); }
@@ -150,6 +159,25 @@ export class LibraryStore {
     return { ok: true, files: out };
   }
 
+  /** A cheap fingerprint of an item's files from `lstat` alone; null when it cannot be had cheaply (then the item is read in full). */
+  private signature(kind: LibraryKind, id: string): string | null {
+    const stamp = (st: { size: number; mtimeMs: number; ctimeMs: number; ino: number }): string => `${st.size}:${st.mtimeMs}:${st.ctimeMs}:${st.ino}`;
+    try {
+      if (kind === "mcp") return stamp(lstatSync(this.mcpPath(id)));
+      const dir = this.skillPath(id);
+      const parts: string[] = [];
+      const walk = (abs: string, rel: string): boolean => {
+        const st = lstatSync(abs);
+        parts.push(`${rel}|${st.isDirectory() ? "d" : st.isFile() ? "f" : "x"}|${stamp(st)}`);
+        if (parts.length > LIBRARY_LIMITS.skillFiles * 2) return false;
+        if (!st.isDirectory()) return true;
+        for (const name of readdirSync(abs).sort()) if (!walk(join(abs, name), rel ? `${rel}/${name}` : name)) return false;
+        return true;
+      };
+      return walk(dir, "") ? parts.join("\n") : null;
+    } catch { return null; }
+  }
+
   private ids(kind: LibraryKind): string[] {
     const dir = kind === "skill" ? this.skillsDir() : this.mcpDir();
     let names: string[];
@@ -163,6 +191,30 @@ export class LibraryStore {
     return ids.sort();
   }
 
+  /** One item as `list()` shows it: from the cache while its files are unchanged, else read in full (and remembered). */
+  private listedBody(kind: LibraryKind, id: string): ListedBody {
+    const cacheKey = `${this.root}\u0000${kind}:${id}`;
+    const sig = this.signature(kind, id);
+    const hit = sig === null ? undefined : LISTED.get(cacheKey);
+    if (hit && hit.sig === sig) return hit.body;
+    const d = this.get(kind, id);
+    let body: ListedBody;
+    if (!d.ok) body = { ok: false, reason: d.detail ?? d.error };
+    else {
+      const detail = d.detail;
+      body = { ok: true, sha256: detail.sha256,
+        size: detail.kind === "skill" ? detail.files.reduce((n, f) => n + f.size, 0) : Buffer.byteLength(detail.text),
+        description: detail.kind === "skill" ? detail.description : detail.item.description ?? "",
+        ...(detail.kind === "skill" ? { files: detail.files.length } : {}) };
+    }
+    // Only a listing whose signature was taken before AND after the read is trusted: a file changed in between is read again next time.
+    if (sig !== null && this.signature(kind, id) === sig) {
+      if (LISTED.size >= LISTED_MAX && !LISTED.has(cacheKey)) LISTED.delete(LISTED.keys().next().value as string);
+      LISTED.set(cacheKey, { sig, body });
+    }
+    return body;
+  }
+
   /** Every item, newest state from disk, compared with the lock. A fleet with no `library/` folder gets an empty list. */
   list(): LibraryItemSummary[] {
     const lock = this.readLock();
@@ -173,15 +225,12 @@ export class LibraryStore {
         const key = `${kind}:${id}`;
         seenKeys.add(key);
         const entry = lock.items[key];
-        const d = this.get(kind, id);
-        if (!d.ok) { out.push({ kind, id, description: "", status: "invalid", reason: d.error, ...(entry ? { source: entry.source } : {}) }); continue; }
-        const detail = d.detail;
-        const size = detail.kind === "skill" ? detail.files.reduce((n, f) => n + f.size, 0) : Buffer.byteLength(detail.text);
-        const status: LibraryStatus = !entry ? "untracked" : entry.sha256 === detail.sha256 ? "ok" : "modified";
+        const body = this.listedBody(kind, id);
+        if (!body.ok) { out.push({ kind, id, description: "", status: "invalid", reason: body.reason, ...(entry ? { source: entry.source } : {}) }); continue; }
+        const status: LibraryStatus = !entry ? "untracked" : entry.sha256 === body.sha256 ? "ok" : "modified";
         out.push({
-          kind, id, status, sha256: detail.sha256, size,
-          description: detail.kind === "skill" ? detail.description : detail.item.description ?? "",
-          ...(detail.kind === "skill" ? { files: detail.files.length } : {}),
+          kind, id, status, sha256: body.sha256, size: body.size, description: body.description,
+          ...(body.files !== undefined ? { files: body.files } : {}),
           ...(entry ? { source: entry.source, updatedAt: entry.updatedAt } : {}),
         });
       }
@@ -200,15 +249,18 @@ export class LibraryStore {
     if (kind === "skill") {
       const r = this.readSkillFiles(id);
       if (!r.ok) return fail(r.reason === "not_found" ? "not_found" : "unsafe_item", r.reason === "not_found" ? {} : { detail: r.reason });
-      const md = r.files.find((f) => f.path === "SKILL.md")!;
-      const fm = parseSkillFrontmatter(md.buf.toString("utf8"));
-      const description = fm.ok && typeof fm.data.description === "string" ? fm.data.description.trim() : "";
-      return { ok: true, detail: { kind: "skill", id, description, sha256: hashSkill(r.files),
-        files: r.files.map((f) => {
-          const text = f.buf.toString("utf8");
-          const isText = !f.buf.includes(0) && Buffer.byteLength(text) === f.buf.length;
-          return isText ? { path: f.path, size: f.size, content: text } : { path: f.path, size: f.size, binary: true as const };
-        }) } };
+      // A skill that was put there by hand has not been through addSkill: it meets the same rules now (frontmatter, `name` =
+      // folder, description, text only, no secret), so nothing that breaks one is ever listed as usable or mounted.
+      const text: Array<{ path: string; content: string; size: number }> = [];
+      for (const f of r.files) {
+        const content = f.buf.toString("utf8");
+        if (f.buf.includes(0) || Buffer.byteLength(content) !== f.buf.length) return fail("unsafe_item", { detail: "not_text", path: f.path });
+        text.push({ path: f.path, content, size: f.size });
+      }
+      const v = validateSkill(id, text.map(({ path, content }) => ({ path, content })));
+      if (!v.ok) return fail("unsafe_item", { detail: v.error });
+      return { ok: true, detail: { kind: "skill", id, description: v.meta.description, sha256: hashSkill(r.files),
+        files: text.map((f) => ({ path: f.path, size: f.size, content: f.content })) } };
     }
     const buf = readPlainFile(this.mcpPath(id), LIBRARY_LIMITS.mcpBytes);
     if (!buf) return existsSync(this.mcpPath(id)) ? fail("unsafe_item") : fail("not_found");
@@ -216,6 +268,24 @@ export class LibraryStore {
     const v = validateMcpText(id, text);
     if (!v.ok) return fail("unsafe_item", { detail: v.error });
     return { ok: true, detail: { kind: "mcp", id, sha256: sha(buf), text, item: v.item } };
+  }
+
+  /**
+   * A skill as mounting needs it: whole, through every rule of validateSkill, and only when its content is the one the lock
+   * recorded (`ok`). A hand-edited (`modified`) or hand-placed (`untracked`) skill is not handed on until someone saves it in the
+   * Library, which records its hash — the same rule the list shows as a status.
+   */
+  skillForMount(id: string): Ok<{ sha256: string; files: SkillFile[] }> | { ok: false; reason: "not_found" | "invalid" | "untracked" | "modified" } {
+    const d = this.get("skill", id);
+    if (!d.ok) return { ok: false, reason: d.error === "not_found" ? "not_found" : "invalid" };
+    const detail = d.detail;
+    if (detail.kind !== "skill") return { ok: false, reason: "invalid" };
+    const entry = this.readLock().items[`skill:${id}`];
+    if (!entry) return { ok: false, reason: "untracked" };
+    if (entry.sha256 !== detail.sha256) return { ok: false, reason: "modified" };
+    const files: SkillFile[] = [];
+    for (const f of detail.files) { if (f.content === undefined) return { ok: false, reason: "invalid" }; files.push({ path: f.path, content: f.content }); }
+    return { ok: true, sha256: detail.sha256, files };
   }
 
   // ── writes ───────────────────────────────────────────────────────────

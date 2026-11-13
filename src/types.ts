@@ -214,6 +214,13 @@ export interface InstanceConfig {
    */
   env_passthrough?: string[];
   /**
+   * AGEND-244: library items mounted into this agent (src/library/mount.ts). `skills` lists library skill ids that are published
+   * into the agent's CLI skills folder at each start, beside the bundled ones. Unset (the default): nothing is mounted and
+   * nothing is written. Per agent only (not in `defaults`), and only an administrator sets it (Settings or fleet.yaml): no agent
+   * tool can write it, so an agent cannot widen what it is given. A cold key: an agent restart applies it. `mcp` is reserved.
+   */
+  library?: { skills?: string[]; mcp?: string[] };
+  /**
    * #2303: how many task board cards handed to this instance it may have in progress at once (claiming another at the
    * limit is refused). A whole number of at least 1; unset is 1. Cards it opened for itself never count. The fleet
    * reads it at each claim; the daemon only keeps it current.

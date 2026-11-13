@@ -430,6 +430,7 @@ import { allowedHostNames, applyWebSecurityHeaders, hostnameOf, isHostAllowed, L
 import { createPreviewListener, normalizeOrigin, previewAvailability, previewSettings, type PreviewAvailability, type PreviewListener, type PreviewOffCode } from "./web-preview.js";
 import { isCanvasWorkerTool, CANVAS_WORKER_EXPERIMENTAL_MESSAGE } from "./web-experimental.js";
 import { bundledSkillContents } from "./bundled-skills.js";
+import { LIBRARY_SKILLS_MANIFEST, LibraryStore, normalizeMount, syncLibrarySkills } from "./library/index.js";
 import { fleetLevelDifferences, fleetLevelSignature, appendedConnections } from "./fleet-level-config.js";
 import { checkSelfRestartAllowance, recordSelfRestartAttempt } from "./self-restart-limit.js";
 import { SecretStore } from "./secret-store.js";
@@ -8303,6 +8304,9 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       }
       const binary = BACKEND_INSTALLATION_INFO[backend]?.binary;
       if (binary && !windows) noteResolvedBinary(binary, resolved ?? binary);
+      // AGEND-244: library skills mounted by an administrator; before the bundled sync, so a name the bundle has just taken
+      // is released first. Nothing happens for an agent with no mount and no record of an earlier one.
+      if (!windows && (config.general_topic || kind === "fleet-topic")) this.syncInstanceLibrarySkills(name, config, backend);
       if (!windows && config.general_topic) {
         this.ensureGeneralInstructions(config.working_directory, backend, name);
       } else if (!isWindowsInstance(config) && kind === "fleet-topic") {
@@ -23289,6 +23293,53 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       role === "classic" ? (path: string) => insideManagedWorkspaces(path) : undefined,
     );
     this.logger.debug({ workDir, backend, role }, "Synced role-based bundled skills");
+  }
+
+  /** AGEND-244: what `syncInstanceLibrarySkills` has already said per skills folder, so a start-up repeats nothing it said before. */
+  private librarySkillsSaid = new Map<string, string>();
+
+  /**
+   * AGEND-244: publish the library skills an administrator mounted on this agent (`library.skills`) into its CLI's skills folder.
+   * Runs beside — never inside — the bundled-skill sync: its own record (`.agend-library-skills.json`), and an agent with no mount
+   * and no record there is not touched at all. Agents that share one workspace share its skills folder, so the folder gets the
+   * UNION of their mounts (otherwise each start would remove what the other agent was given). Fail-open like the bundled sync.
+   */
+  private syncInstanceLibrarySkills(name: string, config: InstanceConfig, backend: string): void {
+    const skillSegments = FleetManager.SKILLS_DIR_SEGMENTS[backend];
+    if (!skillSegments || isWindowsInstance(config)) return;
+    try {
+      const instances = this.fleetConfig?.instances ?? {};
+      // The common case — no agent in the fleet has a mount and this folder has no record of one — costs two lookups and nothing
+      // else (no backend is built to resolve the workspace). Only antigravity's workspace differs from the configured path.
+      const inUse = !!config.library?.skills?.length || Object.values(instances).some(def => !!def.library?.skills?.length);
+      if (!inUse && backend !== "antigravity"
+          && !existsSync(join(config.working_directory, ...skillSegments, LIBRARY_SKILLS_MANIFEST))) return;
+      const destSkills = join(this.resolveKnowledgeWorkDir(config.working_directory, backend, name), ...skillSegments);
+      const mount = new Set(normalizeMount(config.library?.skills));
+      for (const [other, def] of Object.entries(instances)) {
+        if (other === name || !def.library?.skills?.length || isWindowsInstance(def)) continue;
+        const otherBackend = def.backend ?? this.fleetConfig?.defaults?.backend ?? "claude-code";
+        const otherSegments = FleetManager.SKILLS_DIR_SEGMENTS[otherBackend];
+        if (!otherSegments) continue;
+        const otherDir = def.working_directory;
+        if (!otherDir) continue;
+        if (join(this.resolveKnowledgeWorkDir(otherDir, otherBackend, other), ...otherSegments) === destSkills) {
+          for (const id of normalizeMount(def.library.skills)) mount.add(id);
+        }
+      }
+      const knowledge = join(dirname(fileURLToPath(import.meta.url)), "general-knowledge", "skills");
+      const reserved = new Set<string>();
+      try { for (const n of readdirSync(knowledge)) if (existsSync(join(knowledge, n, "SKILL.md"))) reserved.add(n); } catch { /* no bundle here */ }
+      const result = syncLibrarySkills({ destSkills, mount: [...mount], store: new LibraryStore(this.dataDir), reserved });
+      const said = JSON.stringify([result.skipped, result.removed]);
+      if ((result.skipped.length || result.removed.length) && this.librarySkillsSaid.get(destSkills) !== said) {
+        this.librarySkillsSaid.set(destSkills, said);
+        if (result.skipped.length) this.logger.warn({ skipped: result.skipped, destSkills, name }, "Library skills not published (see reason per skill)");
+        if (result.removed.length) this.logger.info({ removed: result.removed, destSkills, name }, "Removed library skills that are no longer mounted");
+      }
+    } catch (err) {
+      this.logger.warn({ err, name, backend }, "Failed to sync library skills — continuing startup");
+    }
   }
 
   /**
