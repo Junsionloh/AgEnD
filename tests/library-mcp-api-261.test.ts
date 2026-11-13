@@ -32,7 +32,7 @@ async function rig(instances: Record<string, unknown> = { a: { backend: "claude-
   });
   return { dataDir, admin: who(admin.sessionId), viewer: who(viewer.sessionId) };
 }
-const MCP = "agend_library: 1\nkind: mcp\nname: gh\ndescription: GitHub\ntransport: stdio\ncommand: npx\nargs:\n  - -y\n  - gh-mcp\nenv:\n  - GH_TOKEN\n  - GH_HOST\n";
+const MCP = "agend_library: 1\nkind: mcp\nname: gh\ndescription: GitHub\ntransport: stdio\ncommand: npx\nargs:\n  - -y\n  - gh-mcp\nenv:\n  - MCP_GH_TOKEN\n  - MCP_GH_HOST\n";
 
 it("only an administrator reads the mount status or confirms an item", async () => {
   const r = await rig();
@@ -45,7 +45,7 @@ it("only an administrator reads the mount status or confirms an item", async () 
 it("the status shows what would run and which variables are set or missing — and never a value", async () => {
   const r = await rig();
   await r.admin.post("/ui/library/save", { kind: "mcp", id: "gh", text: MCP });
-  writeFileSync(join(r.dataDir, ".env"), `GH_TOKEN=${SECRET}\nOTHER=zzz\n`);
+  writeFileSync(join(r.dataDir, ".env"), `MCP_GH_TOKEN=${SECRET}\nOTHER=zzz\n`);
   const res = await r.admin.get("/ui/library/mcp-status?agent=a");
   const text = await res.text();
   expect(text).not.toContain(SECRET);
@@ -53,8 +53,8 @@ it("the status shows what would run and which variables are set or missing — a
   expect(JSON.parse(text)).toMatchObject({
     agent: "a", backend: "claude-code", supported: true, windows: false,
     items: [{ id: "gh", status: "ok", mounted: true, confirmed: false,
-      summary: { transport: "stdio", command: "npx", args: ["-y", "gh-mcp"], variables: ["GH_TOKEN", "GH_HOST"] },
-      variables: [{ name: "GH_TOKEN", set: true }, { name: "GH_HOST", set: false }] }],
+      summary: { transport: "stdio", command: "npx", args: ["-y", "gh-mcp"], variables: ["MCP_GH_TOKEN", "MCP_GH_HOST"] },
+      variables: [{ name: "MCP_GH_TOKEN", set: true }, { name: "MCP_GH_HOST", set: false }] }],
   });
 });
 
@@ -105,6 +105,39 @@ it("the list names the backends that take library MCP; the overview says who has
 
 it("an item that holds a variable's value is refused at the library, so no value can reach the status either", async () => {
   const r = await rig();
-  const withValue = MCP.replace("  - GH_TOKEN\n", "  GH_TOKEN: ghp_abcdefghijklmnopqrstuvwxyz0123456789\n");
+  const withValue = MCP.replace("  - MCP_GH_TOKEN\n", "  MCP_GH_TOKEN: ghp_abcdefghijklmnopqrstuvwxyz0123456789\n");
   expect((await r.admin.post("/ui/library/save", { kind: "mcp", id: "gh", text: withValue })).status).toBe(400);
+});
+
+it("AGEND-261 rule A: saving an item whose variable names do not start with MCP_ is refused with 400 and a code the page words — nothing is written; a viewer cannot save at all", async () => {
+  const r = await rig();
+  const bad = MCP.replace("MCP_GH_TOKEN", "GH_TOKEN");
+  const res = await r.admin.post("/ui/library/save", { kind: "mcp", id: "gh", text: bad });
+  expect(res.status).toBe(400);
+  expect(await res.json()).toEqual({ error: "mcp_var_prefix", detail: "env", names: ["GH_TOKEN"] });
+  expect(existsSync(join(r.dataDir, "library", "mcp", "gh.yaml"))).toBe(false);
+  const header = "agend_library: 1\nkind: mcp\nname: h\ntransport: http\nurl: https://a.example/\nheaders:\n  Authorization: SERVICE_TOKEN\n";
+  expect(await (await r.admin.post("/ui/library/save", { kind: "mcp", id: "h", text: header })).json()).toEqual({ error: "mcp_var_prefix", detail: "headers", names: ["SERVICE_TOKEN"] });
+  // an edit of a saved item is the same save: it cannot be turned into one that breaks the rule
+  expect((await r.admin.post("/ui/library/save", { kind: "mcp", id: "gh", text: MCP })).status).toBe(200);
+  const sha = (await (await r.admin.get("/ui/library/item?kind=mcp&id=gh")).json()).detail.sha256;
+  expect((await r.admin.post("/ui/library/save", { kind: "mcp", id: "gh", text: bad, overwrite: true, expect: sha })).status).toBe(400);
+  expect((await r.viewer.post("/ui/library/save", { kind: "mcp", id: "z", text: MCP.replace("name: gh", "name: z") })).status).toBe(403);
+});
+
+it("AGEND-261 rule A: the status shows a hand-placed item with a bad name as unusable, with the names (never a value), and the picker data says why; a renamed variable shows what the server sees", async () => {
+  const r = await rig();
+  expect((await r.admin.post("/ui/library/save", { kind: "mcp", id: "gh", text: MCP.replace("  - MCP_GH_TOKEN\n  - MCP_GH_HOST\n", "  GITHUB_PERSONAL_ACCESS_TOKEN: ${MCP_GH_TOKEN}\n") })).status).toBe(200);
+  writeFileSync(join(r.dataDir, "library", "mcp", "legacy.yaml"), MCP.replace("name: gh", "name: legacy").replace("MCP_GH_TOKEN", "LEGACY_TOKEN"));
+  writeFileSync(join(r.dataDir, ".env"), `LEGACY_TOKEN=${SECRET}\nMCP_GH_TOKEN=${SECRET}\n`);
+  const text = await (await r.admin.get("/ui/library/mcp-status?agent=a")).text();
+  expect(text).not.toContain(SECRET);
+  const items = JSON.parse(text).items;
+  const gh = items.find((i: any) => i.id === "gh"), legacy = items.find((i: any) => i.id === "legacy");
+  expect(gh.variables).toEqual([{ name: "MCP_GH_TOKEN", set: true, as: [{ name: "GITHUB_PERSONAL_ACCESS_TOKEN", kind: "env" }] }]);
+  expect(legacy).toMatchObject({ id: "legacy", status: "invalid", badVars: ["LEGACY_TOKEN"], confirmed: false });
+  expect(legacy.summary).toBeUndefined();
+  // it cannot be confirmed (nothing to mount) — so there is no way to give it
+  const confirm = await r.admin.post("/ui/library/mcp-confirm", { agent: "a", id: "legacy", sha256: "0".repeat(64) });
+  expect(confirm.status).toBe(422);
 });

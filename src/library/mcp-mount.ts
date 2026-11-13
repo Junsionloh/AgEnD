@@ -33,7 +33,7 @@ export type LibraryMcpEntry =
   | { transport: "stdio"; command: string; args: string[]; env: Record<string, string> }
   | { transport: "http"; url: string; headers: Record<string, string> };
 
-export type McpSkipReason = "not_found" | "invalid" | "untracked" | "modified" | "unconfirmed" | "missing_vars" | "bad_value";
+export type McpSkipReason = "not_found" | "invalid" | "untracked" | "modified" | "unconfirmed" | "missing_vars" | "bad_value" | "bad_vars";
 export interface McpMountResult {
   /** Config name (`agend-lib-<id>`) → entry. Holds values: hand it to the backend, do not log it. */
   entries: Record<string, LibraryMcpEntry>;
@@ -43,14 +43,20 @@ export interface McpMountResult {
   skipped: Array<{ id: string; reason: McpSkipReason; names?: string[] }>;
 }
 
-/** The variable names an item needs, in the order it lists them, once each. */
+/** The `.env` variable names an item needs, in the order it lists them, once each. */
 export function mcpVariables(item: McpItem): string[] {
-  const names = item.transport === "stdio" ? (item.env ?? []) : Object.values(item.headers ?? {});
+  const names = item.transport === "stdio" ? [...(item.env ?? []), ...Object.values(item.envMap ?? {})] : Object.values(item.headers ?? {});
   return [...new Set(names)];
 }
 
+/** Where each variable goes: the environment variable the server sees (`env`), or the header that carries it. For the confirmation to say "MCP_GITHUB_TOKEN → GITHUB_PERSONAL_ACCESS_TOKEN". */
+export function mcpUses(item: McpItem): Array<{ variable: string; as: string; kind: "env" | "header" }> {
+  if (item.transport === "http") return Object.entries(item.headers ?? {}).map(([h, v]) => ({ variable: v, as: h, kind: "header" as const }));
+  return [...(item.env ?? []).map((n) => ({ variable: n, as: n, kind: "env" as const })), ...Object.entries(item.envMap ?? {}).map(([target, v]) => ({ variable: v, as: target, kind: "env" as const }))];
+}
+
 /** What an administrator is shown before an item is mounted: exactly what will run, and the variables it will be given. */
-export interface McpSummary { transport: "stdio" | "http"; command?: string; args?: string[]; url?: string; host?: string; variables: string[] }
+export interface McpSummary { transport: "stdio" | "http"; command?: string; args?: string[]; url?: string; host?: string; variables: string[]; uses: Array<{ variable: string; as: string; kind: "env" | "header" }> }
 export function mcpSummary(item: McpItem): McpSummary {
   let host: string | undefined;
   if (item.url) { try { host = new URL(item.url).host; } catch { /* validated on save; nothing to show */ } }
@@ -61,6 +67,7 @@ export function mcpSummary(item: McpItem): McpSummary {
     ...(item.url ? { url: item.url } : {}),
     ...(host ? { host } : {}),
     variables: mcpVariables(item),
+    uses: mcpUses(item),
   };
 }
 
@@ -166,7 +173,7 @@ export function resolveMcpMount(input: ResolveMcpInput): McpMountResult {
   const result: McpMountResult = { entries: {}, mounted: [], skipped: [] };
   for (const id of normalizeMount([...input.ids])) {
     const got = input.store.mcpForMount(id);
-    if (!got.ok) { result.skipped.push({ id, reason: got.reason }); continue; }
+    if (!got.ok) { result.skipped.push(got.reason === "bad_vars" ? { id, reason: "bad_vars", names: got.names } : { id, reason: got.reason }); continue; }
     if (!Object.hasOwn(input.confirmed, id) || input.confirmed[id] !== got.sha256) { result.skipped.push({ id, reason: "unconfirmed" }); continue; }
     const item = got.item;
     const names = mcpVariables(item);
@@ -176,7 +183,7 @@ export function resolveMcpMount(input: ResolveMcpInput): McpMountResult {
     if (item.transport === "stdio") {
       result.entries[libraryMcpName(id)] = {
         transport: "stdio", command: item.command!, args: [...(item.args ?? [])],
-        env: Object.fromEntries((item.env ?? []).map((n) => [n, value(n)])),
+        env: { ...Object.fromEntries((item.env ?? []).map((n) => [n, value(n)])), ...Object.fromEntries(Object.entries(item.envMap ?? {}).map(([target, source]) => [target, value(source)])) },
       };
     } else {
       const headers: Record<string, string> = {};

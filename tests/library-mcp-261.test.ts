@@ -6,6 +6,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, st
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse as parseToml } from "smol-toml";
+import { createHash } from "node:crypto";
+import { parse as parseYaml } from "yaml";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ClaudeCodeBackend } from "../src/backend/claude-code.js";
 import { CodexBackend } from "../src/backend/codex.js";
@@ -14,7 +16,7 @@ import { FleetManager } from "../src/fleet-manager.js";
 import { validateFleetConfig } from "../src/config-validator.js";
 import {
   LIBRARY_MCP_BACKENDS, LibraryStore, isReservedMcpEnvName, McpConfirmations, envNamesSet, libraryMcpName, libraryMcpUsage, libraryMountProblem, mcpSummary, readEnvValues,
-  resolveMcpMount, supportsLibraryMcp, validateMcpText, type LibraryMcpEntry,
+  resolveMcpMount, stringifyMcp, supportsLibraryMcp, validateMcpText, type LibraryMcpEntry,
 } from "../src/library/index.js";
 import { claudeMcpEntry, codexMcpBlock, codexMcpToml, tomlBasic } from "../src/library/mcp-render.js";
 import { buildOverview } from "../src/library/overview.js";
@@ -23,10 +25,10 @@ const dirs: string[] = [];
 const tmp = (prefix: string): string => { const d = mkdtempSync(join(tmpdir(), prefix)); dirs.push(d); return d; };
 afterEach(() => { vi.restoreAllMocks(); for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
-const STDIO = (name: string, extra = "command: npx\nargs:\n  - -y\n  - some-server\nenv:\n  - GH_TOKEN\n  - GH_HOST\n"): string =>
+const STDIO = (name: string, extra = "command: npx\nargs:\n  - -y\n  - some-server\nenv:\n  - MCP_GH_TOKEN\n  - MCP_GH_HOST\n"): string =>
   `agend_library: 1\nkind: mcp\nname: ${name}\ndescription: A server\ntransport: stdio\n${extra}`;
 const HTTP = (name: string): string =>
-  `agend_library: 1\nkind: mcp\nname: ${name}\ntransport: http\nurl: https://mcp.example.com/v1\nheaders:\n  Authorization: EX_AUTH\n`;
+  `agend_library: 1\nkind: mcp\nname: ${name}\ntransport: http\nurl: https://mcp.example.com/v1\nheaders:\n  Authorization: MCP_EX_AUTH\n`;
 const SECRET = "s3cr3t-VALUE-9f8e7d";
 
 function rig() {
@@ -42,20 +44,20 @@ describe("resolveMcpMount: what is written and what is left out", () => {
     const r = rig();
     expect(r.store.addMcp("gh", STDIO("gh"))).toMatchObject({ ok: true });
     r.confirmations.confirm("a", "gh", r.sha("gh"));
-    const out = resolveMcpMount({ ids: ["gh"], store: r.store, confirmed: r.confirmations.forAgent("a"), values: new Map([["GH_TOKEN", SECRET], ["GH_HOST", "h.example"]]) });
+    const out = resolveMcpMount({ ids: ["gh"], store: r.store, confirmed: r.confirmations.forAgent("a"), values: new Map([["MCP_GH_TOKEN", SECRET], ["MCP_GH_HOST", "h.example"]]) });
     expect(out.mounted).toEqual(["gh"]);
     expect(out.skipped).toEqual([]);
-    expect(out.entries[libraryMcpName("gh")]).toEqual({ transport: "stdio", command: "npx", args: ["-y", "some-server"], env: { GH_TOKEN: SECRET, GH_HOST: "h.example" } });
+    expect(out.entries[libraryMcpName("gh")]).toEqual({ transport: "stdio", command: "npx", args: ["-y", "some-server"], env: { MCP_GH_TOKEN: SECRET, MCP_GH_HOST: "h.example" } });
   });
 
   it("a missing variable means the server is not started at all, and the skip names the variable (never a value)", () => {
     const r = rig();
     r.store.addMcp("gh", STDIO("gh"));
     r.confirmations.confirm("a", "gh", r.sha("gh"));
-    const out = resolveMcpMount({ ids: ["gh"], store: r.store, confirmed: r.confirmations.forAgent("a"), values: new Map([["GH_HOST", SECRET]]) });
+    const out = resolveMcpMount({ ids: ["gh"], store: r.store, confirmed: r.confirmations.forAgent("a"), values: new Map([["MCP_GH_HOST", SECRET]]) });
     expect(out.entries).toEqual({});
     expect(out.mounted).toEqual([]);
-    expect(out.skipped).toEqual([{ id: "gh", reason: "missing_vars", names: ["GH_TOKEN"] }]);
+    expect(out.skipped).toEqual([{ id: "gh", reason: "missing_vars", names: ["MCP_GH_TOKEN"] }]);
     expect(JSON.stringify(out.skipped)).not.toContain(SECRET);
   });
 
@@ -63,7 +65,7 @@ describe("resolveMcpMount: what is written and what is left out", () => {
     const r = rig();
     r.store.addMcp("gh", STDIO("gh"));
     r.confirmations.confirm("other", "gh", r.sha("gh"));
-    const values = new Map([["GH_TOKEN", "x"], ["GH_HOST", "y"]]);
+    const values = new Map([["MCP_GH_TOKEN", "x"], ["MCP_GH_HOST", "y"]]);
     expect(resolveMcpMount({ ids: ["gh"], store: r.store, confirmed: r.confirmations.forAgent("a"), values }).skipped).toEqual([{ id: "gh", reason: "unconfirmed" }]);
   });
 
@@ -71,11 +73,11 @@ describe("resolveMcpMount: what is written and what is left out", () => {
     const r = rig();
     r.store.addMcp("gh", STDIO("gh"));
     r.confirmations.confirm("a", "gh", r.sha("gh"));
-    const values = new Map([["GH_TOKEN", "x"], ["GH_HOST", "y"]]);
+    const values = new Map([["MCP_GH_TOKEN", "x"], ["MCP_GH_HOST", "y"]]);
     const run = () => resolveMcpMount({ ids: ["gh"], store: r.store, confirmed: r.confirmations.forAgent("a"), values });
     expect(run().mounted).toEqual(["gh"]);
     // the command changes (same item, new content, saved properly in the Library)
-    expect(r.store.addMcp("gh", STDIO("gh", "command: evil\nenv:\n  - GH_TOKEN\n  - GH_HOST\n"), { overwrite: true })).toMatchObject({ ok: true });
+    expect(r.store.addMcp("gh", STDIO("gh", "command: evil\nenv:\n  - MCP_GH_TOKEN\n  - MCP_GH_HOST\n"), { overwrite: true })).toMatchObject({ ok: true });
     expect(run()).toMatchObject({ mounted: [], skipped: [{ id: "gh", reason: "unconfirmed" }] });
     r.confirmations.confirm("a", "gh", r.sha("gh"));
     expect(run().entries[libraryMcpName("gh")]).toMatchObject({ command: "evil" });
@@ -87,7 +89,7 @@ describe("resolveMcpMount: what is written and what is left out", () => {
     r.confirmations.confirm("a", "gh", r.sha("gh"));
     const file = join(r.store.root, "mcp", "gh.yaml");
     writeFileSync(file, STDIO("gh", "command: sneaky\n"));
-    const run = (ids: string[]) => resolveMcpMount({ ids, store: r.store, confirmed: r.confirmations.forAgent("a"), values: new Map([["GH_TOKEN", "x"]]) }).skipped;
+    const run = (ids: string[]) => resolveMcpMount({ ids, store: r.store, confirmed: r.confirmations.forAgent("a"), values: new Map([["MCP_GH_TOKEN", "x"]]) }).skipped;
     expect(run(["gh"])).toEqual([{ id: "gh", reason: "modified" }]);
     writeFileSync(file, "not: [valid");
     expect(run(["gh"])).toEqual([{ id: "gh", reason: "invalid" }]);
@@ -100,11 +102,11 @@ describe("resolveMcpMount: what is written and what is left out", () => {
     const r = rig();
     r.store.addMcp("ex", HTTP("ex"));
     r.confirmations.confirm("a", "ex", r.sha("ex"));
-    const ok = resolveMcpMount({ ids: ["ex"], store: r.store, confirmed: r.confirmations.forAgent("a"), values: new Map([["EX_AUTH", `Bearer ${SECRET}`]]) });
+    const ok = resolveMcpMount({ ids: ["ex"], store: r.store, confirmed: r.confirmations.forAgent("a"), values: new Map([["MCP_EX_AUTH", `Bearer ${SECRET}`]]) });
     expect(ok.entries[libraryMcpName("ex")]).toEqual({ transport: "http", url: "https://mcp.example.com/v1", headers: { Authorization: `Bearer ${SECRET}` } });
-    const bad = resolveMcpMount({ ids: ["ex"], store: r.store, confirmed: r.confirmations.forAgent("a"), values: new Map([["EX_AUTH", `Bearer x\r\nX-Evil: ${SECRET}`]]) });
+    const bad = resolveMcpMount({ ids: ["ex"], store: r.store, confirmed: r.confirmations.forAgent("a"), values: new Map([["MCP_EX_AUTH", `Bearer x\r\nX-Evil: ${SECRET}`]]) });
     expect(bad.entries).toEqual({});
-    expect(bad.skipped).toEqual([{ id: "ex", reason: "bad_value", names: ["EX_AUTH"] }]);
+    expect(bad.skipped).toEqual([{ id: "ex", reason: "bad_value", names: ["MCP_EX_AUTH"] }]);
     expect(JSON.stringify(bad.skipped)).not.toContain(SECRET);
   });
 
@@ -116,30 +118,119 @@ describe("resolveMcpMount: what is written and what is left out", () => {
 });
 
 describe("what an administrator is shown", () => {
-  it("the full command and arguments, or the address and its domain, and the variable names", () => {
+  it("the full command and arguments, or the address and its domain, the variable names and what the server sees each as", () => {
     const stdio = validateMcpText("gh", STDIO("gh"));
     const http = validateMcpText("ex", HTTP("ex"));
-    expect(stdio.ok && mcpSummary(stdio.item)).toEqual({ transport: "stdio", command: "npx", args: ["-y", "some-server"], variables: ["GH_TOKEN", "GH_HOST"] });
-    expect(http.ok && mcpSummary(http.item)).toEqual({ transport: "http", url: "https://mcp.example.com/v1", host: "mcp.example.com", variables: ["EX_AUTH"] });
+    expect(stdio.ok && mcpSummary(stdio.item)).toEqual({ transport: "stdio", command: "npx", args: ["-y", "some-server"], variables: ["MCP_GH_TOKEN", "MCP_GH_HOST"],
+      uses: [{ variable: "MCP_GH_TOKEN", as: "MCP_GH_TOKEN", kind: "env" }, { variable: "MCP_GH_HOST", as: "MCP_GH_HOST", kind: "env" }] });
+    expect(http.ok && mcpSummary(http.item)).toEqual({ transport: "http", url: "https://mcp.example.com/v1", host: "mcp.example.com", variables: ["MCP_EX_AUTH"], uses: [{ variable: "MCP_EX_AUTH", as: "Authorization", kind: "header" }] });
+    const renamed = validateMcpText("r", STDIO("r", "command: npx\nenv:\n  GITHUB_PERSONAL_ACCESS_TOKEN: ${MCP_GITHUB_TOKEN}\n"));
+    expect(renamed.ok && mcpSummary(renamed.item).uses).toEqual([{ variable: "MCP_GITHUB_TOKEN", as: "GITHUB_PERSONAL_ACCESS_TOKEN", kind: "env" }]);
   });
 
-  it("variables that change how a program is found or loaded are refused in a library item", () => {
+  it("variables that change how a program is found or loaded are refused as the name a server is given, however the item is written", () => {
+    // the list form: the name must start with MCP_ first, so these stop at the prefix rule…
     for (const name of ["PATH", "NODE_OPTIONS", "LD_PRELOAD", "HOME"]) {
-      expect(validateMcpText("x", STDIO("x", `command: npx\nenv:\n  - ${name}\n`))).toMatchObject({ ok: false, error: "bad_mcp", detail: "env" });
+      expect(validateMcpText("x", STDIO("x", `command: npx\nenv:\n  - ${name}\n`)), name).toMatchObject({ ok: false, error: "mcp_var_prefix", detail: "env" });
     }
-    // not case sensitive, whole families by prefix, and the other loader / interpreter / tool switches
-    for (const name of ["path", "Path", "node_options", "Ld_Preload", "LD_LIBRARY_PATH", "LD_AUDIT", "ld_debug", "DYLD_INSERT_LIBRARIES", "dyld_library_path",
-      "PYTHONPATH", "pythonstartup", "PYTHONHOME", "NODE_PATH", "PERL5OPT", "RUBYOPT", "JAVA_TOOL_OPTIONS", "GIT_SSH_COMMAND", "IFS", "ifs", "CODEX_HOME", "codex_home"]) {
-      expect(validateMcpText("x", STDIO("x", `command: npx\nenv:\n  - ${name}\n`)), name).toMatchObject({ ok: false, error: "bad_mcp", detail: "env" });
+    // …and in the renaming form, where the MCP_ source is fine, the NAME the server sees may not be one of them (case-insensitive, whole families by prefix)
+    for (const name of ["PATH", "path", "Path", "NODE_OPTIONS", "node_options", "LD_PRELOAD", "Ld_Preload", "LD_LIBRARY_PATH", "LD_AUDIT", "ld_debug", "DYLD_INSERT_LIBRARIES", "dyld_library_path",
+      "PYTHONPATH", "pythonstartup", "PYTHONHOME", "NODE_PATH", "PERL5OPT", "RUBYOPT", "JAVA_TOOL_OPTIONS", "GIT_SSH_COMMAND", "IFS", "ifs", "CODEX_HOME", "codex_home", "HOME",
+      "HTTP_PROXY", "https_proxy", "ALL_PROXY", "no_proxy", "SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS", "GIT_ASKPASS", "GIT_EXEC_PATH", "CLASSPATH", "TMPDIR", "PYTHONUSERBASE"]) {
+      expect(validateMcpText("x", STDIO("x", `command: npx\nenv:\n  ${name}: \${MCP_OK}\n`)), name).toMatchObject({ ok: false, error: "bad_mcp", detail: "env" });
       expect(isReservedMcpEnvName(name), name).toBe(true);
     }
-    // an ordinary name, and one that only looks like a family, is fine (this is not an allowlist: AgEnD's own variables are not blocked here)
-    for (const name of ["GH_TOKEN", "LDAP_PASSWORD", "OLD_PATH_TOKEN", "TELEGRAM_BOT_TOKEN", "DYLDX", "PATHS"]) {
+    for (const name of ["LDAP_PASSWORD", "OLD_PATH_TOKEN", "DYLDX", "PATHS", "GITHUB_PERSONAL_ACCESS_TOKEN"]) {
       expect(isReservedMcpEnvName(name), name).toBe(false);
-      expect(validateMcpText("x", STDIO("x", `command: npx\nenv:\n  - ${name}\n`)), name).toMatchObject({ ok: true });
+      expect(validateMcpText("x", STDIO("x", `command: npx\nenv:\n  ${name}: \${MCP_OK}\n`)), name).toMatchObject({ ok: true });
     }
-    expect(validateMcpText("x", `agend_library: 1\nkind: mcp\nname: x\ntransport: http\nurl: https://a.example/\nheaders:\n  X-A: ld_preload\n`)).toMatchObject({ ok: false, detail: "headers" });
-    expect(validateMcpText("x", `agend_library: 1\nkind: mcp\nname: x\ntransport: http\nurl: https://a.example/\nheaders:\n  X-A: PATH\n`)).toMatchObject({ ok: false, detail: "headers" });
+    expect(validateMcpText("x", `agend_library: 1\nkind: mcp\nname: x\ntransport: http\nurl: https://a.example/\nheaders:\n  X-A: ld_preload\n`)).toMatchObject({ ok: false, error: "mcp_var_prefix", detail: "headers" });
+  });
+});
+
+/** AGEND-261, the user's rule A: a variable an MCP item takes from `.env` must start with MCP_ (upper case, exactly). */
+describe("the MCP_ rule", () => {
+  const names = (text: string) => { const v = validateMcpText("x", text); return v.ok ? null : { error: v.error, detail: v.detail, names: v.names }; };
+
+  it("is checked when an item is SAVED: a list entry, a renaming source and a header variable that do not start with MCP_ are refused, with the field and the names", () => {
+    expect(names(STDIO("x", "command: npx\nenv:\n  - GITHUB_TOKEN\n  - MCP_OK\n"))).toEqual({ error: "mcp_var_prefix", detail: "env", names: ["GITHUB_TOKEN"] });
+    expect(names(STDIO("x", "command: npx\nenv:\n  SERVER_NAME: ${TELEGRAM_BOT_TOKEN}\n"))).toEqual({ error: "mcp_var_prefix", detail: "env", names: ["TELEGRAM_BOT_TOKEN"] });
+    expect(names(`agend_library: 1\nkind: mcp\nname: x\ntransport: http\nurl: https://a.example/\nheaders:\n  Authorization: LINEAR_AUTH\n`)).toEqual({ error: "mcp_var_prefix", detail: "headers", names: ["LINEAR_AUTH"] });
+    // case is exact, and a bare prefix is not a name
+    for (const bad of ["mcp_token", "Mcp_Token", "MCP", "MCP_", "XMCP_TOKEN", "_MCP_TOKEN"]) expect(names(STDIO("x", `command: npx\nenv:\n  - ${bad}\n`)), bad).toMatchObject({ error: expect.stringMatching(/mcp_var_prefix|bad_mcp/) });
+    // the ones that do follow it
+    for (const good of ["MCP_TOKEN", "MCP_github_token", "MCP_A", "MCP_1"]) expect(names(STDIO("x", `command: npx\nenv:\n  - ${good}\n`)), good).toBeNull();
+    expect(names(STDIO("x", "command: npx\nenv:\n  - MCP_A\n  - MCP_B\n"))).toBeNull();
+  });
+
+  it("an error never repeats a value pasted where a name belongs", () => {
+    const pasted = `ghp_${"x".repeat(36)}`;
+    expect(names(STDIO("x", `command: npx\nenv:\n  - ${pasted}\n`))).toEqual({ error: "mcp_var_prefix", detail: "env", names: ["?"] });
+    expect(JSON.stringify(names(STDIO("x", `command: npx\nenv:\n  - ${pasted}\n`)))).not.toContain(pasted);
+    expect(names(STDIO("x", "command: npx\nenv:\n  - has space\n"))).toMatchObject({ error: "bad_mcp", detail: "env" });
+  });
+
+  it("the store refuses to save one (nothing is written) and the web route answers 400 with a code the page words — see the API test", () => {
+    const r = rig();
+    expect(r.store.addMcp("gh", STDIO("gh", "command: npx\nenv:\n  - GITHUB_TOKEN\n"))).toMatchObject({ ok: false, error: "mcp_var_prefix" });
+    expect(existsSync(join(r.store.root, "mcp", "gh.yaml"))).toBe(false);
+    expect(r.store.addMcp("gh", STDIO("gh", "command: npx\nenv:\n  - MCP_GITHUB_TOKEN\n"))).toMatchObject({ ok: true });
+    // an edit of a saved item is the same call: it cannot be changed to break the rule either
+    expect(r.store.addMcp("gh", STDIO("gh", "command: npx\nenv:\n  - GITHUB_TOKEN\n"), { overwrite: true })).toMatchObject({ ok: false, error: "mcp_var_prefix" });
+    expect(readFileSync(join(r.store.root, "mcp", "gh.yaml"), "utf8")).toContain("MCP_GITHUB_TOKEN");
+  });
+
+  it("is checked AGAIN when the config is written: an item placed by hand, or left by an older AgEnD, is not mounted — the skip says which names; the agent still starts", () => {
+    const r = rig();
+    r.store.addMcp("old", STDIO("old", "command: npx\nenv:\n  - MCP_OLD\n"));
+    r.confirmations.confirm("a", "old", r.sha("old"));
+    // an older AgEnD saved it with a plain name (the file and its lock entry are consistent: `ok`, confirmed)
+    const file = join(r.store.root, "mcp", "old.yaml");
+    const legacy = readFileSync(file, "utf8").replace("MCP_OLD", "OLD_TOKEN");
+    writeFileSync(file, legacy);
+    const lock = JSON.parse(readFileSync(join(r.store.root, "library.lock.json"), "utf8"));
+    lock.items["mcp:old"].sha256 = createHash("sha256").update(legacy).digest("hex");
+    writeFileSync(join(r.store.root, "library.lock.json"), JSON.stringify(lock));
+    r.confirmations.confirm("a", "old", createHash("sha256").update(legacy).digest("hex"));
+    expect(r.store.mcpForMount("old")).toEqual({ ok: false, reason: "bad_vars", names: ["OLD_TOKEN"] });
+    const out = resolveMcpMount({ ids: ["old"], store: r.store, confirmed: r.confirmations.forAgent("a"), values: new Map([["OLD_TOKEN", SECRET]]) });
+    expect(out.entries).toEqual({});
+    expect(out.skipped).toEqual([{ id: "old", reason: "bad_vars", names: ["OLD_TOKEN"] }]);
+    expect(JSON.stringify(out.skipped)).not.toContain(SECRET);
+    // a hand-placed one, never saved through the Library
+    writeFileSync(join(r.store.root, "mcp", "hand.yaml"), STDIO("hand", "command: npx\nenv:\n  - LEGACY\n"));
+    expect(resolveMcpMount({ ids: ["hand"], store: r.store, confirmed: {}, values: new Map() }).skipped).toEqual([{ id: "hand", reason: "bad_vars", names: ["LEGACY"] }]);
+  });
+
+  it("the name a server is given can differ from the .env variable: `env: { NAME: ${MCP_VAR} }` reads MCP_VAR and hands it over as NAME (and the list form hands it over under its own name)", () => {
+    const r = rig();
+    expect(r.store.addMcp("gh", STDIO("gh", "command: npx\nargs:\n  - -y\n  - gh-mcp\nenv:\n  GITHUB_PERSONAL_ACCESS_TOKEN: ${MCP_GITHUB_TOKEN}\n  GITHUB_HOST: ${MCP_GITHUB_HOST}\n"))).toMatchObject({ ok: true });
+    r.confirmations.confirm("a", "gh", r.sha("gh"));
+    const stored = readFileSync(join(r.store.root, "mcp", "gh.yaml"), "utf8");
+    expect(stored).toContain("GITHUB_PERSONAL_ACCESS_TOKEN");
+    expect(parseYaml(stored).env).toEqual({ GITHUB_PERSONAL_ACCESS_TOKEN: "${MCP_GITHUB_TOKEN}", GITHUB_HOST: "${MCP_GITHUB_HOST}" });
+    const out = resolveMcpMount({ ids: ["gh"], store: r.store, confirmed: r.confirmations.forAgent("a"), values: new Map([["MCP_GITHUB_TOKEN", SECRET], ["MCP_GITHUB_HOST", "h.example"], ["GITHUB_PERSONAL_ACCESS_TOKEN", "WRONG"]]) });
+    expect(out.entries[libraryMcpName("gh")]).toEqual({ transport: "stdio", command: "npx", args: ["-y", "gh-mcp"], env: { GITHUB_PERSONAL_ACCESS_TOKEN: SECRET, GITHUB_HOST: "h.example" } });
+    // the missing-variable rule names the `.env` variable (not the name the server sees)
+    const miss = resolveMcpMount({ ids: ["gh"], store: r.store, confirmed: r.confirmations.forAgent("a"), values: new Map([["MCP_GITHUB_HOST", "h"]]) });
+    expect(miss.skipped).toEqual([{ id: "gh", reason: "missing_vars", names: ["MCP_GITHUB_TOKEN"] }]);
+    expect(JSON.stringify(miss.skipped)).not.toContain("GITHUB_PERSONAL_ACCESS_TOKEN");
+    // a list and a map cannot be mixed, a literal on the right is a value (refused), and the target may not be a reserved name
+    expect(names(STDIO("x", "command: npx\nenv:\n  NAME: literal-value\n"))).toMatchObject({ error: "bad_mcp", detail: "env" });
+    expect(names(STDIO("x", "command: npx\nenv:\n  NAME: ghp_abcdefghijklmnopqrstuvwxyz0123456789\n"))).toMatchObject({ error: "bad_mcp", detail: "env" });
+    expect(names(STDIO("x", "command: npx\nenv:\n  - MCP_A\n  - B: ${MCP_B}\n"))).toMatchObject({ error: "bad_mcp", detail: "env" });
+    expect(names(STDIO("x", "command: npx\nenv: MCP_A\n"))).toMatchObject({ error: "bad_mcp", detail: "env" });
+    // the claude / codex writers get the resolved entry: the renamed variable is what is written
+    expect(claudeMcpEntry(out.entries[libraryMcpName("gh")]!)).toMatchObject({ env: { GITHUB_PERSONAL_ACCESS_TOKEN: SECRET } });
+    expect(parseToml(codexMcpToml("agend-lib-gh", out.entries[libraryMcpName("gh")]!)).mcp_servers["agend-lib-gh"].env.GITHUB_PERSONAL_ACCESS_TOKEN).toBe(SECRET);
+  });
+
+  it("the list form is still `MCP_NAME` → the same name, and an item written before renaming existed (list of MCP_ names) keeps its exact text and hash", () => {
+    const r = rig();
+    const text = STDIO("gh");
+    expect(r.store.addMcp("gh", text)).toMatchObject({ ok: true });
+    expect(readFileSync(join(r.store.root, "mcp", "gh.yaml"), "utf8")).toBe(stringifyMcp((validateMcpText("gh", text) as any).item));
+    expect(parseYaml(readFileSync(join(r.store.root, "mcp", "gh.yaml"), "utf8")).env).toEqual(["MCP_GH_TOKEN", "MCP_GH_HOST"]);
   });
 });
 
@@ -276,18 +367,18 @@ describe("GOLDEN: an agent with nothing mounted gets the same files as before", 
   });
 
   it("Claude Code: a mounted server is appended under its agend-lib- name, the agend one and the rest are unchanged, and the file is owner-only", () => {
-    const entry: LibraryMcpEntry = { transport: "stdio", command: "npx", args: ["-y", "s"], env: { GH_TOKEN: SECRET } };
+    const entry: LibraryMcpEntry = { transport: "stdio", command: "npx", args: ["-y", "s"], env: { MCP_GH_TOKEN: SECRET } };
     new ClaudeCodeBackend(instance).writeConfig(base({ libraryMcp: { [libraryMcpName("gh")]: entry, [libraryMcpName("ex")]: { transport: "http", url: "https://a.example/", headers: { Authorization: SECRET } } } }) as never);
     const written = JSON.parse(readFileSync(join(instance, "mcp-config.json"), "utf8"));
     expect(written.mcpServers.agend).toEqual(servers.agend);
-    expect(written.mcpServers["agend-lib-gh"]).toEqual({ command: "npx", args: ["-y", "s"], env: { GH_TOKEN: SECRET } });
+    expect(written.mcpServers["agend-lib-gh"]).toEqual({ command: "npx", args: ["-y", "s"], env: { MCP_GH_TOKEN: SECRET } });
     expect(written.mcpServers["agend-lib-ex"]).toEqual({ type: "http", url: "https://a.example/", headers: { Authorization: SECRET } });
     expect(Object.keys(written.mcpServers).sort()).toEqual(["agend", "agend-lib-ex", "agend-lib-gh"]);
     expect(statSync(join(instance, "mcp-config.json")).mode & 0o077).toBe(0);
   });
 
   it("Claude Code: the file with values is 0600 whatever the umask, also when an old world-readable one was there (and it is never rewritten before it is tightened)", () => {
-    const entry: LibraryMcpEntry = { transport: "stdio", command: "npx", args: [], env: { GH_TOKEN: SECRET } };
+    const entry: LibraryMcpEntry = { transport: "stdio", command: "npx", args: [], env: { MCP_GH_TOKEN: SECRET } };
     const file = join(instance, "mcp-config.json");
     const old = process.umask(0o000);                                    // the worst case: a file created under this umask would be 0666
     try {
@@ -299,7 +390,7 @@ describe("GOLDEN: an agent with nothing mounted gets the same files as before", 
       expect(statSync(file).mode & 0o777).toBe(0o644);
       new ClaudeCodeBackend(instance).writeConfig(base({ libraryMcp: { [libraryMcpName("gh")]: entry } }) as never);
       expect(statSync(file).mode & 0o777).toBe(0o600);
-      expect(JSON.parse(readFileSync(file, "utf8")).mcpServers["agend-lib-gh"].env.GH_TOKEN).toBe(SECRET);
+      expect(JSON.parse(readFileSync(file, "utf8")).mcpServers["agend-lib-gh"].env.MCP_GH_TOKEN).toBe(SECRET);
       // unmounting rewrites the plain content (no values left in it); nothing else about the no-mount path changed
       new ClaudeCodeBackend(instance).writeConfig(base() as never);
       expect(readFileSync(file, "utf8")).toBe(JSON.stringify({ mcpServers: servers }, null, 2));
@@ -331,13 +422,13 @@ describe("GOLDEN: an agent with nothing mounted gets the same files as before", 
 
   it("Codex: a mounted server is added as its own tables; the next start without it removes it; the user's tables stay", () => {
     writeFileSync(join(shared, "config.toml"), 'model = "gpt-x"\n\n[mcp_servers.mine]\ncommand = "mine"\n');
-    const entry: LibraryMcpEntry = { transport: "stdio", command: "npx", args: ["-y", "s\"q"], env: { GH_TOKEN: `${SECRET}"\n[evil]` } };
+    const entry: LibraryMcpEntry = { transport: "stdio", command: "npx", args: ["-y", "s\"q"], env: { MCP_GH_TOKEN: `${SECRET}"\n[evil]` } };
     const file = join(CodexBackend.shortHomeFor(instance), "config.toml");
     new CodexBackend(instance).writeConfig(base() as never);
     const before = readFileSync(file, "utf8");
     new CodexBackend(instance).writeConfig(base({ libraryMcp: { [libraryMcpName("gh")]: entry } }) as never);
     const withLib = parseToml(readFileSync(file, "utf8")) as any;
-    expect(withLib.mcp_servers["agend-lib-gh"]).toEqual({ command: "npx", args: ["-y", "s\"q"], env: { GH_TOKEN: `${SECRET}"\n[evil]` } });
+    expect(withLib.mcp_servers["agend-lib-gh"]).toEqual({ command: "npx", args: ["-y", "s\"q"], env: { MCP_GH_TOKEN: `${SECRET}"\n[evil]` } });
     expect(withLib.mcp_servers.mine).toEqual({ command: "mine" });
     expect(withLib.mcp_servers.evil).toBeUndefined();
     expect(Object.keys(withLib.mcp_servers).sort()).toEqual(["agend-w1", "agend-lib-gh", "mine"].sort());
@@ -406,8 +497,8 @@ describe("FleetManager.libraryMcpFor: the whole path from fleet files to the ent
   it("resolves a confirmed item with its values from .env; a log line carries names only", () => {
     const f = fleet();
     f.mount();
-    writeFileSync(f.env, `GH_TOKEN=${SECRET}\nGH_HOST=h.example\n`);
-    expect(f.fm.libraryMcpFor("a", ["gh"], "claude-code")).toEqual({ "agend-lib-gh": { transport: "stdio", command: "npx", args: ["-y", "some-server"], env: { GH_TOKEN: SECRET, GH_HOST: "h.example" } } });
+    writeFileSync(f.env, `MCP_GH_TOKEN=${SECRET}\nMCP_GH_HOST=h.example\n`);
+    expect(f.fm.libraryMcpFor("a", ["gh"], "claude-code")).toEqual({ "agend-lib-gh": { transport: "stdio", command: "npx", args: ["-y", "some-server"], env: { MCP_GH_TOKEN: SECRET, MCP_GH_HOST: "h.example" } } });
     expect(f.fm.libraryMcpFor("a", ["gh"], "codex")).toBeDefined();
     expect(JSON.stringify(f.warns)).not.toContain(SECRET);
   });
@@ -415,9 +506,9 @@ describe("FleetManager.libraryMcpFor: the whole path from fleet files to the ent
   it("a variable that is not in .env: not started, and the warning names it", () => {
     const f = fleet();
     f.mount();
-    writeFileSync(f.env, `GH_HOST=h.example\n`);
+    writeFileSync(f.env, `MCP_GH_HOST=h.example\n`);
     expect(f.fm.libraryMcpFor("a", ["gh"], "claude-code")).toBeUndefined();
-    expect(JSON.stringify(f.warns)).toContain("GH_TOKEN");
+    expect(JSON.stringify(f.warns)).toContain("MCP_GH_TOKEN");
     expect(JSON.stringify(f.warns)).not.toContain("h.example");
     // the same state at the next launch says nothing new
     const n = f.warns.length;
@@ -428,14 +519,27 @@ describe("FleetManager.libraryMcpFor: the whole path from fleet files to the ent
   it("not confirmed, or confirmed for another agent: not written", () => {
     const f = fleet();
     f.mount("other");
-    writeFileSync(f.env, `GH_TOKEN=x\nGH_HOST=y\n`);
+    writeFileSync(f.env, `MCP_GH_TOKEN=x\nGH_HOST=y\n`);
     expect(f.fm.libraryMcpFor("a", ["gh"], "claude-code")).toBeUndefined();
+  });
+
+  it("AGEND-261 rule A at start: an item with a name that breaks the MCP_ rule is not written, the warning names the variable (never the value), and the rest still mounts", () => {
+    const f = fleet();
+    f.mount();
+    writeFileSync(join(f.root, "library", "mcp", "legacy.yaml"), STDIO("legacy", "command: npx\nenv:\n  - TELEGRAM_BOT_TOKEN\n"));
+    writeFileSync(f.env, `MCP_GH_TOKEN=${SECRET}\nMCP_GH_HOST=h\nTELEGRAM_BOT_TOKEN=${SECRET}-bot\n`);
+    const got = f.fm.libraryMcpFor("a", ["legacy", "gh"], "claude-code");
+    expect(Object.keys(got)).toEqual(["agend-lib-gh"]);
+    const logged = JSON.stringify(f.warns);
+    expect(logged).toContain("TELEGRAM_BOT_TOKEN");
+    expect(logged).toContain("bad_vars");
+    expect(logged).not.toContain(SECRET);
   });
 
   it("a backend that cannot take them gets nothing, even when everything else is in order", () => {
     const f = fleet();
     f.mount();
-    writeFileSync(f.env, `GH_TOKEN=x\nGH_HOST=y\n`);
+    writeFileSync(f.env, `MCP_GH_TOKEN=x\nGH_HOST=y\n`);
     for (const b of ["opencode", "kiro-cli", "grok", "muse", "antigravity"]) expect(f.fm.libraryMcpFor("a", ["gh"], b)).toBeUndefined();
     expect(JSON.stringify(f.warns)).toContain("does not support");
   });

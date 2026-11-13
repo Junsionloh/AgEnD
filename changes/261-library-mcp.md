@@ -7,4 +7,5 @@ section: Added
   config at its next start, with the variable values taken from `.env` — and it is not started if one has no value. An
   agent with nothing mounted is unchanged, byte for byte. Also: replacing a library item through the API now needs the
   hash it was read at, a Library skill can no longer take a built-in skill's name, and zip file names that differ only in
-  Unicode form count as the same name.
+  Unicode form count as the same name. An MCP item can only take variables named `MCP_…` from `.env` (and can hand one
+  to the server under another name), so it can no longer ask for AgEnD's own credentials.

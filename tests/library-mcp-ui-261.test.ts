@@ -26,12 +26,12 @@ afterEach(async () => { await p.unmount(); vi.unstubAllGlobals(); (globalThis as
 const SHA = "a".repeat(64), SHA2 = "b".repeat(64);
 const stdio = (id: string, over: Record<string, unknown> = {}) => ({
   id, description: `${id} server`, status: "ok", sha256: SHA, confirmed: false, mounted: false,
-  summary: { transport: "stdio", command: "npx", args: ["-y", "pkg with space", "--flag=\"q\""], variables: ["GH_TOKEN", "GH_HOST"] },
-  variables: [{ name: "GH_TOKEN", set: true }, { name: "GH_HOST", set: false }], ...over,
+  summary: { transport: "stdio", command: "npx", args: ["-y", "pkg with space", "--flag=\"q\""], variables: ["MCP_GH_TOKEN", "MCP_GH_HOST"] },
+  variables: [{ name: "MCP_GH_TOKEN", set: true }, { name: "MCP_GH_HOST", set: false }], ...over,
 });
 const http = (id: string) => ({
   id, description: "remote", status: "ok", sha256: SHA2, confirmed: true, mounted: false,
-  summary: { transport: "http", url: "https://mcp.example.com/v1", host: "mcp.example.com", variables: ["EX_AUTH"] }, variables: [{ name: "EX_AUTH", set: true }],
+  summary: { transport: "http", url: "https://mcp.example.com/v1", host: "mcp.example.com", variables: ["MCP_EX_AUTH"] }, variables: [{ name: "MCP_EX_AUTH", set: true }],
 });
 const STATUS = { agent: "coder", backend: "claude-code", supported: true, backends: ["claude-code", "codex"], windows: false, items: [stdio("gh"), http("ex"), { id: "broken", description: "", status: "modified", confirmed: false, mounted: false }] };
 
@@ -118,8 +118,8 @@ describe("the MCP servers card", () => {
     await w.read("gh");
     // the whole command, argument by argument (one with a space and one with quotes are quoted so none can be misread), and the variable names
     expect(q("[data-library-mcp-command]").textContent).toBe('npx -y "pkg with space" "--flag=\\"q\\""');
-    expect(qa("[data-library-mcp-var]").map((e) => e.getAttribute("data-library-mcp-var"))).toEqual(["GH_TOKEN", "GH_HOST"]);
-    expect(q('[data-library-mcp-var="GH_HOST"]').textContent).toContain("missing");
+    expect(qa("[data-library-mcp-var]").map((e) => e.getAttribute("data-library-mcp-var"))).toEqual(["MCP_GH_TOKEN", "MCP_GH_HOST"]);
+    expect(q('[data-library-mcp-var="MCP_GH_HOST"]').textContent).toContain("missing");
     expect(q("[data-library-picker-preview]").textContent).toContain("same as today’s .env approach");
     expect(q("[data-library-picker-preview]").textContent).toContain("Enabling it confirms this version");
     // nothing is recorded or written until Enable
@@ -178,8 +178,8 @@ describe("the MCP servers card", () => {
     answer({ ...withStatus(items), "/ui/library/mcp-confirm": { status: 200, body: { ok: true } } }, calls);
     const w = await work({ working_directory: "/w", library: { mcp: ["gh", "ex2"] } });
     expect(w.rows()).toEqual(["ex2", "gh"]);
-    expect(q('[data-library-mcp="gh"] [data-library-mcp-missing]').getAttribute("data-library-mcp-missing")).toBe("GH_HOST");
-    expect(q('[data-library-mcp="gh"]').textContent).toContain("no value for GH_HOST");
+    expect(q('[data-library-mcp="gh"] [data-library-mcp-missing]').getAttribute("data-library-mcp-missing")).toBe("MCP_GH_HOST");
+    expect(q('[data-library-mcp="gh"]').textContent).toContain("no value for MCP_GH_HOST");
     expect(q('[data-library-mcp="ex2"] [data-library-mcp-changed]').textContent).toContain("Changed — confirm again");
     q('[data-library-mcp="ex2"] [data-library-mcp-review-open]').click(); await settle(6);
     q("[data-library-mcp-confirm]").click(); await settle(10);
@@ -244,6 +244,41 @@ describe("the MCP servers card", () => {
     w = await work({ working_directory: "/w" });
     expect(w.text()).toContain("Could not read the Library");
     expect(w.patch()).not.toHaveProperty("library");
+  });
+
+  it("AGEND-261 rule A: an item whose variable names break the MCP_ rule is shown on the card as one line of small text (like a missing variable) and is not offered in the picker", async () => {
+    const legacy = { id: "legacy", description: "from an older AgEnD", status: "invalid", confirmed: false, mounted: true, badVars: ["LEGACY_TOKEN"] };
+    answer(withStatus([legacy, stdio("gh")]));
+    const w = await work({ working_directory: "/w", library: { mcp: ["legacy"] } });
+    expect(w.rows()).toEqual(["legacy"]);
+    const line = q('[data-library-mcp="legacy"] [data-library-mcp-badvars]');
+    expect(line.getAttribute("data-library-mcp-badvars")).toBe("LEGACY_TOKEN");
+    expect(line.textContent).toBe("Not given: variable LEGACY_TOKEN does not follow the MCP_ rule (names must start with MCP_).");
+    expect(q('[data-library-mcp="legacy"]').querySelector("[data-library-mcp-changed]")).toBeNull();
+    await w.openPicker();
+    expect(w.pickable()).toEqual(["gh"]);
+    // a bad item that is not assigned: listed, disabled, with the same words
+    await p.unmount();
+    answer(withStatus([legacy]));
+    const w2 = await work({ working_directory: "/w" });
+    await w2.openPicker();
+    expect(q('[data-library-pick-item="legacy"]').disabled).toBe(true);
+    expect(q('[data-library-pick-item="legacy"]').textContent).toContain("variable LEGACY_TOKEN does not follow the MCP_ rule");
+  });
+
+  it("the preview shows what the server sees each variable as (a renamed one, a header), and the words exist in both languages", async () => {
+    const renamed = stdio("gh", { variables: [{ name: "MCP_GH_TOKEN", set: true, as: [{ name: "GITHUB_PERSONAL_ACCESS_TOKEN", kind: "env" }] }, { name: "MCP_GH_HOST", set: false, as: [{ name: "MCP_GH_HOST", kind: "env" }] }] });
+    await p.mount(h(LM.McpDetails, { item: renamed })); await settle(4);
+    expect(q('[data-library-mcp-var="MCP_GH_TOKEN"] [data-library-mcp-as]').textContent).toContain("the server sees it as GITHUB_PERSONAL_ACCESS_TOKEN");
+    expect(q('[data-library-mcp-var="MCP_GH_HOST"] [data-library-mcp-as]')).toBeNull();          // the same name on both sides: nothing to add
+    await p.unmount();
+    await p.mount(h(LM.McpDetails, { item: { ...http("ex"), variables: [{ name: "MCP_EX_AUTH", set: true, as: [{ name: "Authorization", kind: "header" }] }] } })); await settle(4);
+    expect(q('[data-library-mcp-var="MCP_EX_AUTH"] [data-library-mcp-as]').textContent).toContain("sent as the Authorization header");
+    expect(I.t("libraryMcp.badVars", "X")).toContain("does not follow the MCP_ rule");
+    expect(I.t("library.e_mcp_var_prefix", "env")).toContain("need to start with MCP_");
+    expect(readFileSync("src/ui/library-mcp-field.js", "utf8")).toContain("不符合 MCP_ 規則（名稱需以 MCP_ 開頭）");
+    expect(readFileSync("src/ui/panel-library.js", "utf8")).toContain("變數名稱需以 MCP_ 開頭");
+    expect(readFileSync("src/ui/panel-library.js", "utf8")).toMatch(/mcpTemplate: "[^"]*MCP_EXAMPLE_API_TOKEN/);
   });
 
   it("a Windows native agent has no such card", async () => {

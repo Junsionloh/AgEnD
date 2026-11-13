@@ -30,6 +30,7 @@ register("libraryMcp", {
     needsConfirm: "Changed — confirm again", review: "Review and confirm",
     missing: "Not started: no value for {0}. Set it in the .env file next to fleet.yaml and restart the agent.",
     missingOne: "Not started: no value for {0}.", varsSet: "set", varsMissing: "missing",
+    badVars: "Not given: variable {0} does not follow the MCP_ rule (names must start with MCP_).", seenAs: "the server sees it as {0}", sentAs: "sent as the {0} header",
     honest: "A variable’s value is handed to its MCP server when the agent starts, the same as today’s .env approach. Keeping the keys away from the agent altogether is later gateway work.",
     confirmTitle: "Give “{0}” to {1}?", confirmLead: "This is exactly what will run when {0} starts. Check it before you confirm.",
     enableLead: "This is exactly what will run when {0} starts. Enabling it confirms this version for {0}.",
@@ -51,6 +52,7 @@ register("libraryMcp", {
     needsConfirm: "內容已變更，需重新確認", review: "檢視並確認",
     missing: "未啟動：缺少 {0} 的值。請在 fleet.yaml 旁的 .env 檔設定後重啟 Agent。",
     missingOne: "未啟動：缺少 {0} 的值。", varsSet: "已設定", varsMissing: "缺少",
+    badVars: "不會交給 Agent：變數 {0} 不符合 MCP_ 規則（名稱需以 MCP_ 開頭）。", seenAs: "MCP 那邊的名稱：{0}", sentAs: "以 {0} 標頭送出",
     honest: "變數值會在 Agent 啟動時交給該 MCP server，和現在 .env 的做法相同；讓 Agent 完全拿不到密鑰是之後的閘道工作。",
     confirmTitle: "要把「{0}」交給 {1} 嗎？", confirmLead: "這就是 {0} 啟動時會執行的內容。請確認後再同意。",
     enableLead: "這就是 {0} 啟動時會執行的內容。啟用即表示替 {0} 確認這個版本。",
@@ -77,7 +79,7 @@ export function McpDetails({ item }) {
     ${s && s.transport === "http" ? html`<div class="field"><label>${lw("address")}</label><pre class="lib-mcp-cmd" data-library-mcp-url>${s.url}</pre>
       <p class="note">${lw("domain")}: <strong data-library-mcp-domain>${s.host}</strong></p></div>` : null}
     <div class="field"><label>${lw("vars")}</label>
-      ${vars.length ? html`<ul class="lib-mcp-vars">${vars.map((v) => html`<li key=${v.name} data-library-mcp-var=${v.name}><code>${v.name}</code> <span class=${`pill${v.set ? "" : " off"}`}>${v.set ? lw("varsSet") : lw("varsMissing")}</span></li>`)}</ul>` : html`<p class="note">${lw("noVars")}</p>`}</div>
+      ${vars.length ? html`<ul class="lib-mcp-vars">${vars.map((v) => html`<li key=${v.name} data-library-mcp-var=${v.name}><code>${v.name}</code> <span class=${`pill${v.set ? "" : " off"}`}>${v.set ? lw("varsSet") : lw("varsMissing")}</span>${(v.as || []).filter((a) => a.kind === "header" || a.name !== v.name).map((a) => html` <span class="note" key=${a.name} data-library-mcp-as=${a.name}>→ ${a.kind === "header" ? lw("sentAs", a.name) : lw("seenAs", a.name)}</span>`)}</li>`)}</ul>` : html`<p class="note">${lw("noVars")}</p>`}</div>
     <p class="note">${lw("honest")}</p>
   </div>`;
 }
@@ -152,7 +154,7 @@ export function LibraryMcpCard({ m, title }) {
   // The server says which CLIs take library MCP (the table in src/library/mcp-support.ts); until it has, nothing is claimed.
   const unsupported = !!state.backends && !!f.backend && !state.backends.includes(f.backend);
   const missingOf = (s) => (s.variables || []).filter((v) => !v.set).map((v) => v.name);
-  const candidates = listed.filter((s) => !assigned.includes(s.id)).map((s) => ({ ...s, disabled: !(s.status === "ok" && s.summary), note: lw("notReady") }));
+  const candidates = listed.filter((s) => !assigned.includes(s.id)).map((s) => ({ ...s, disabled: !(s.status === "ok" && s.summary), note: s.badVars && s.badVars.length ? lw("badVars", s.badVars.join(", ")) : lw("notReady") }));
   const emptyPicker = state.error ? lw("loadFailed") : listed.length ? lw("allOn") : lw("none");
   // "Enable" is the confirmation: this exact version is recorded for this agent, then the id joins the form (a 409 means it changed meanwhile).
   const enable = async (item) => {
@@ -177,7 +179,7 @@ export function LibraryMcpCard({ m, title }) {
         const miss = on ? missingOf(s) : [];
         const changed = on && s.status === "ok" && s.summary && !s.confirmed;
         const status = [
-          s.status === "missing" ? html`<span class="note" key="g">${lw("gone")}</span>` : s.status !== "ok" ? html`<span class="note" key="n">${lw("notReady")}</span>` : null,
+          s.status === "missing" ? html`<span class="note" key="g">${lw("gone")}</span>` : s.badVars && s.badVars.length ? html`<span class="feedback warning lib-mcp-sub" role="note" key="b" data-library-mcp-badvars=${s.badVars.join(",")}>${lw("badVars", s.badVars.join(", "))}</span>` : s.status !== "ok" ? html`<span class="note" key="n">${lw("notReady")}</span>` : null,
           !on ? html`<span class="note" key="p">${cardWords.paused()}</span>` : null,
           miss.length ? html`<span class="feedback warning lib-mcp-sub" role="note" key="m" data-library-mcp-missing=${miss.join(",")}>${miss.length === 1 ? lw("missingOne", miss[0]) : lw("missing", miss.join(", "))}</span>` : null,
           changed ? html`<span class="lib-mcp-sub" key="c"><span class="pill off" data-library-mcp-changed>${lw("needsConfirm")}</span> <button type="button" class="btn btn-sm" onClick=${() => setReview(s)} data-library-mcp-review-open>${lw("review")}</button></span>` : null,

@@ -57,7 +57,7 @@ export interface LibraryWebHost {
 const STATUS: Record<LibraryError["error"], number> = {
   invalid_request: 400, invalid_id: 400, invalid_path: 400, duplicate_path: 400, missing_skill_md: 400, bad_frontmatter: 400, name_mismatch: 400,
   missing_description: 400, too_large: 413, too_many_files: 413, not_text: 400, secret_found: 400, exists: 409, not_found: 404, too_many_items: 409,
-  invalid_yaml: 400, bad_mcp: 400, unsafe_item: 422, bad_archive: 400, no_skill: 400, changed: 409, expect_required: 400,
+  invalid_yaml: 400, bad_mcp: 400, unsafe_item: 422, bad_archive: 400, no_skill: 400, changed: 409, expect_required: 400, mcp_var_prefix: 400,
 };
 /** The `decisions` parameter: `{ "<name in the upload>": { action, as? } }`, kept as a Map so a name like `constructor` is just a name. Null when it is not that shape. */
 function readDecisions(raw: string | null): Map<string, ImportDecision> | null {
@@ -87,7 +87,7 @@ function agentOf(h: LibraryWebHost, name: string): { backend: string; runtime?: 
 const mcpMountedOn = (def: { library?: { mcp?: unknown } }, id: string): boolean => Array.isArray(def.library?.mcp) && (def.library!.mcp as unknown[]).includes(id);
 interface McpMountItem {
   id: string; description: string; status: string; sha256?: string; confirmed: boolean; mounted: boolean;
-  summary?: McpSummary; variables?: Array<{ name: string; set: boolean }>;
+  summary?: McpSummary; variables?: Array<{ name: string; set: boolean; as: Array<{ name: string; kind: "env" | "header" }> }>; badVars?: string[];
 }
 const kindOf = (v: unknown): LibraryKind | null => (v === "skill" || v === "mcp" ? v : null);
 
@@ -104,7 +104,7 @@ export function handleLibraryRequest(h: LibraryWebHost): boolean {
   const send = (r: { ok: boolean }): void => {
     if (r.ok) { h.json(res, 200, r); return; }
     const e = r as LibraryError;
-    h.json(res, STATUS[e.error] ?? 400, { error: e.error, ...(e.path ? { path: e.path } : {}), ...(e.detail ? { detail: e.detail } : {}), ...(e.findings ? { findings: e.findings } : {}) });
+    h.json(res, STATUS[e.error] ?? 400, { error: e.error, ...(e.path ? { path: e.path } : {}), ...(e.detail ? { detail: e.detail } : {}), ...(e.names ? { names: e.names } : {}), ...(e.findings ? { findings: e.findings } : {}) });
   };
   try {
     if (method === "GET") {
@@ -124,9 +124,10 @@ export function handleLibraryRequest(h: LibraryWebHost): boolean {
             const summary = mcpSummary(got.item);
             const set = envNamesSet(envPath, summary.variables);
             row.summary = summary;
-            row.variables = summary.variables.map((name) => ({ name, set: set.has(name) }));
+            // Each variable with whether it has a value in `.env` (never the value) and the name(s) the server sees it as.
+            row.variables = summary.variables.map((name) => ({ name, set: set.has(name), as: summary.uses.filter((u) => u.variable === name).map((u) => ({ name: u.as, kind: u.kind })) }));
             row.confirmed = Object.hasOwn(confirmed, it.id) && confirmed[it.id] === got.sha256;
-          }
+          } else if (got.reason === "bad_vars") row.badVars = got.names;      // a hand-placed / older item whose variable names break the MCP_ rule
           items.push(row);
         }
         h.json(res, 200, { agent, backend: def.backend, supported: supportsLibraryMcp(def.backend), backends: Object.keys(LIBRARY_MCP_BACKENDS), windows: def.runtime === "windows", items });

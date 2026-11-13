@@ -29,7 +29,7 @@ async function rig() {
   return { dataDir, base, admin: { post: post(admin.sessionId), get: get(admin.sessionId) }, viewer: { post: post(viewer.sessionId), get: get(viewer.sessionId) } };
 }
 const SKILL = `---\nname: demo\ndescription: A demo\n---\nBody\n`;
-const MCP = "agend_library: 1\nkind: mcp\nname: m\ntransport: stdio\ncommand: node\nenv:\n  - TOKEN_VAR\n";
+const MCP = "agend_library: 1\nkind: mcp\nname: m\ntransport: stdio\ncommand: node\nenv:\n  - MCP_TOKEN_VAR\n";
 
 it("an admin saves, lists, reads and deletes a skill and an MCP item", async () => {
   const r = await rig();

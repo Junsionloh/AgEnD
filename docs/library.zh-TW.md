@@ -57,10 +57,17 @@ description: GitHub issues and pull requests
 transport: stdio            # 或 http
 command: npx
 args: [-y, "@modelcontextprotocol/server-github"]
-env: [GITHUB_TOKEN]         # 只寫名稱；`KEY: value` 這種寫法會被拒絕
+env: [MCP_GITHUB_TOKEN]     # 只寫名稱，每個都要以 MCP_ 開頭；寫成帶字面值的 `KEY: value` 會被拒絕
 ```
 
-`http` 類型有 `url`（不能含帳密或查詢字串）和 `headers`（標頭名稱對應到存放其值的變數，例如 `Authorization: GITHUB_TOKEN`）。
+server 需要用另一個名稱拿到這個值時，用對應寫法（map）——右邊是對 `.env` 變數的**引用**，不是值：
+
+```yaml
+env:
+  GITHUB_PERSONAL_ACCESS_TOKEN: ${MCP_GITHUB_TOKEN}   # server 看到的名稱是 GITHUB_PERSONAL_ACCESS_TOKEN；值是 .env 裡的 MCP_GITHUB_TOKEN
+```
+
+一個檔案用清單寫法或對應寫法其中一種，不能混用；先前（只有清單寫法時）寫好的項目不變。`http` 類型有 `url`（不能含帳密或查詢字串）和 `headers`（標頭名稱對應到存放其值的變數，例如 `Authorization: MCP_GITHUB_TOKEN`；標頭名稱就是 server 看到的名稱，不需要另外改名）。
 
 ## 把 Skill 掛載到 Agent
 
@@ -108,9 +115,9 @@ instances:
 設定卡和資源庫標籤都會標示，來源是 `src/library/mcp-support.ts` 的對照表（只有這一張表，頁面裡沒有清單）；掛在這些 CLI 上的 Agent 啟動時不寫任何東西，並記一次日誌。
 
 **變數。** 項目只寫變數名稱（stdio 用 `env`、http 用 `headers`），不寫值。值在寫設定的當下從資料夾的 `.env` 取。缺值或值是空的，該 MCP **不啟動**（什麼都不寫）——
-Agent 設定卡會顯示缺哪個變數，日誌也會寫出名稱。值不會出現在任何畫面、日誌、API 回應或導出裡。會改變程式尋找或載入方式、或工具行為的變數（`PATH`、`HOME`、`IFS`、`NODE_OPTIONS`、`NODE_PATH`、`PYTHONPATH`、`PERL5OPT`、`RUBYOPT`、`JAVA_TOOL_OPTIONS`、`GIT_SSH_COMMAND`、`CODEX_HOME`，以及整個 `LD_*`、`DYLD_*` 系列等；不分大小寫）項目不能指名。
+Agent 設定卡會顯示缺哪個變數，日誌也會寫出名稱。值不會出現在任何畫面、日誌、API 回應或導出裡。交給 server 的名稱（對應寫法左邊的名稱，或清單裡的那個名稱）另外不能是會改變程式尋找或載入方式、工具行為或流量去向的變數（`PATH`、`HOME`、`IFS`、`NODE_OPTIONS`、`NODE_PATH`、`PYTHONPATH`、`PERL5OPT`、`RUBYOPT`、`JAVA_TOOL_OPTIONS`、`GIT_SSH_COMMAND`、`CODEX_HOME`、`HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`、`SSL_CERT_FILE`、`NODE_EXTRA_CA_CERTS`、`GIT_ASKPASS`，以及整個 `LD_*`、`DYLD_*` 系列等；不分大小寫），兩條規則同時適用。
 
-**這不是白名單。**項目可以指名 `.env` 裡的任何其他變數——包括 AgEnD 自己的憑證（例如聊天 bot token），`http` 類型的 server 還會把值送到它的網址。把關靠確認畫面：掛載前會列出每個變數名稱，以及指令（或網址的 host），管理員應當讀過再確認。變數白名單是之後可能做的一步。
+**`MCP_` 規則在哪裡檢查。**項目**存檔**時（在資源庫新增或編輯，`POST /ui/library/save`）：名稱不符就在寫入之前被擋下，訊息寫明「變數名稱需以 MCP_ 開頭」和出錯的欄位。**每次寫 Agent 設定時再檢查一次**：不合格的項目——手動放進資源庫資料夾，或舊版 AgEnD 留下的——一律不會掛載，不論先前確認過什麼；Agent 本身照常啟動，設定卡在原本顯示缺變數的位置多一行小字（「變數 X 不符合 MCP_ 規則」），日誌寫出變數名稱（不寫值）。確認畫面仍然重要：它列出每個變數名稱和指令（或網址的 host），`http` 類型的 server 也會把值送到它的網址——但項目能拿到的值，只有有人刻意在 `.env` 裡替 MCP server 寫成 `MCP_…` 的那些。
 
 **確認。** 把 server 交給 Agent 之前，頁面會顯示它實際會執行什麼——完整的 `command` 和 `args`，或網址與網域——以及變數名稱和「已設定／缺少」。按確認會替該 Agent 記下項目的雜湊
 （`library/mcp-confirmed.json`，僅擁有者可讀寫，只有管理員的 `POST /ui/library/mcp-confirm` 會寫）。之後項目被編輯，或在資源庫外被改動，要再確認一次才會重新寫入；設定卡會顯示「內容已變更，需重新確認」。

@@ -20,16 +20,18 @@ const mcp = (id: string, description: string, body: string, overwrite = false) =
 };
 const sha = (id: string): string => store.mcpForMount(id).sha256;
 const seed = async () => {
-  mcp("github", "GitHub issues and pull requests", "transport: stdio\ncommand: npx\nargs:\n  - -y\n  - \"@modelcontextprotocol/server-github\"\nenv:\n  - GITHUB_TOKEN\n  - GITHUB_HOST\n");
-  mcp("linear", "Linear issues, over HTTPS", "transport: http\nurl: https://mcp.linear.example.com/v1\nheaders:\n  Authorization: LINEAR_AUTH\n");
+  mcp("github", "GitHub issues and pull requests", "transport: stdio\ncommand: npx\nargs:\n  - -y\n  - \"@modelcontextprotocol/server-github\"\nenv:\n  GITHUB_PERSONAL_ACCESS_TOKEN: ${MCP_GITHUB_TOKEN}\n  GITHUB_HOST: ${MCP_GITHUB_HOST}\n");
+  mcp("linear", "Linear issues, over HTTPS", "transport: http\nurl: https://mcp.linear.example.com/v1\nheaders:\n  Authorization: MCP_LINEAR_AUTH\n");
   mcp("notes", "Local notes server, no secrets", "transport: stdio\ncommand: node\nargs:\n  - ./tools/notes-mcp.js\n");
+  // an item left by an older AgEnD (or placed by hand) whose variable name does not follow the MCP_ rule: never mounted, the card says so
+  writeFileSync(join(store.root, "mcp", "legacy.yaml"), "agend_library: 1\nkind: mcp\nname: legacy\ndescription: Saved by an older AgEnD\ntransport: stdio\ncommand: npx\nenv:\n  - LEGACY_TOKEN\n");
   // .env: the token has a value, the host and the linear header do not (a missing variable). The value must never reach a page.
-  writeFileSync(join(fx.dir, ".env"), `GITHUB_TOKEN=${SECRET}\n`, { mode: 0o600 });
+  writeFileSync(join(fx.dir, ".env"), `MCP_GITHUB_TOKEN=${SECRET}\n`, { mode: 0o600 });
   const [a, b, c] = names;
-  // a: github mounted and confirmed (GITHUB_HOST has no value); linear mounted and confirmed, then edited afterwards (needs confirming again)
+  // a: github mounted and confirmed (MCP_GITHUB_HOST has no value); linear mounted and confirmed, then edited afterwards (needs confirming again)
   confirmations.confirm(a, "github", sha("github"));
   confirmations.confirm(a, "linear", sha("linear"));
-  mcp("linear", "Linear issues, over HTTPS (now with a second header)", "transport: http\nurl: https://mcp.linear.example.com/v1\nheaders:\n  Authorization: LINEAR_AUTH\n  X-Workspace: LINEAR_WORKSPACE\n", true);
+  mcp("linear", "Linear issues, over HTTPS (now with a second header)", "transport: http\nurl: https://mcp.linear.example.com/v1\nheaders:\n  Authorization: MCP_LINEAR_AUTH\n  X-Workspace: MCP_LINEAR_WORKSPACE\n", true);
   for (const [id, d] of [["code-review", "Reviews a diff against the team's checklist."], ["release-notes", "Drafts release notes from merged pull requests."], ["incident-triage", "Sorts an incident report into severity and owner."]] as const) {
     const k = store.addSkill(id, [{ path: "SKILL.md", content: `---\nname: ${id}\ndescription: ${d}\nroles: [general, worker]\n---\n\n# ${id}\n\n1. Read the input.\n2. Apply the checklist.\n3. Report what you found.\n` }, { path: "checklist.md", content: "- one\n- two\n" }]);
     if (!k.ok) throw new Error(`seed skill ${id}: ${JSON.stringify(k)}`);
@@ -37,7 +39,7 @@ const seed = async () => {
   const inst = fx.fm.fleetConfig.instances, raw = fx.fm.rawFleetConfig.instances;
   for (const o of [inst, raw]) {
     // a: a skill on and one paused; github (a variable has no value) and linear (changed since confirmed) on, notes paused
-    o[a].backend = "claude-code"; o[a].library = { skills: ["code-review"], mcp: ["github", "linear"], paused: { skills: ["release-notes"], mcp: ["notes"] } };
+    o[a].backend = "claude-code"; o[a].library = { skills: ["code-review"], mcp: ["github", "linear", "legacy"], paused: { skills: ["release-notes"], mcp: ["notes"] } };
     o[b].backend = "claude-code";
     o[c].backend = "grok"; o[c].library = { mcp: ["notes"] };
   }

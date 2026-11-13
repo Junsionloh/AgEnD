@@ -89,11 +89,18 @@ description: GitHub issues and pull requests
 transport: stdio            # or http
 command: npx
 args: [-y, "@modelcontextprotocol/server-github"]
-env: [GITHUB_TOKEN]         # names only; a `KEY: value` map is refused
+env: [MCP_GITHUB_TOKEN]     # names only, each starting with MCP_; a `KEY: value` map with a literal value is refused
 ```
 
-An `http` server has `url` (no credentials, no query string) and `headers`, a map from header name to the variable holding its value
-(`Authorization: GITHUB_TOKEN`).
+A server that wants the value under another name says so in the map form, where the right side is a **reference** to the `.env` variable, never a value:
+
+```yaml
+env:
+  GITHUB_PERSONAL_ACCESS_TOKEN: ${MCP_GITHUB_TOKEN}   # the server sees GITHUB_PERSONAL_ACCESS_TOKEN; the value is MCP_GITHUB_TOKEN in .env
+```
+
+A file uses the list form or the map form, not both; an item written before the map form existed (a list) is unchanged. An `http` server has `url` (no credentials, no query string) and `headers`, a map from header name to the variable holding its value
+(`Authorization: MCP_GITHUB_TOKEN` — the header is the name the server sees, so no renaming is needed).
 
 ## Mounting skills on an agent
 
@@ -148,11 +155,11 @@ Your own MCP settings are never read or changed. An agent with nothing mounted g
 Antigravity…) are not supported yet: the settings card and the Library tags say so, taken from the table in `src/library/mcp-support.ts` (one table, no list in the page); a start with a mount on one of them
 writes nothing for it and logs it once.
 
-**Variables.** An item names variables (`env` for stdio, `headers` for http), never values. The values come from the data folder's `.env` at the moment the config is written. A missing or empty value
+**Variables.** An item names variables (`env` for stdio, `headers` for http), never values, and **every variable name must start with `MCP_`** (upper case, exactly — `mcp_` and `Mcp_` do not count). The values come from the data folder's `.env` at the moment the config is written, so to give an MCP server a key you put it in `.env` under an `MCP_…` name on purpose (`MCP_GITHUB_TOKEN=…`); an item can no longer ask for AgEnD's own credentials (a chat bot token, a tunnel token) or any other variable that is not an `MCP_…` one. A missing or empty value
 means that server is **not started** (nothing is written for it) — the agent's settings card shows which variable is missing, and the log names it. Values never appear in any page, log line, API
-answer or export. Variables that change how a program is found or loaded or how a tool runs (`PATH`, `HOME`, `IFS`, `NODE_OPTIONS`, `NODE_PATH`, `PYTHONPATH`, `PERL5OPT`, `RUBYOPT`, `JAVA_TOOL_OPTIONS`, `GIT_SSH_COMMAND`, `CODEX_HOME`, the whole `LD_*` and `DYLD_*` families, …; compared without regard to case) cannot be named by an item.
+answer or export. The names a server is *given* — the right-hand name in the map form, or the list entry itself — are also kept away from the ones that change how a program is found or loaded, how a tool runs or where its traffic goes (`PATH`, `HOME`, `IFS`, `NODE_OPTIONS`, `NODE_PATH`, `PYTHONPATH`, `PERL5OPT`, `RUBYOPT`, `JAVA_TOOL_OPTIONS`, `GIT_SSH_COMMAND`, `CODEX_HOME`, `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `GIT_ASKPASS`, the whole `LD_*` and `DYLD_*` families, …; compared without regard to case); both rules apply.
 
-**This is not an allowlist.** An item may name any other variable in `.env` — AgEnD's own credentials (a chat bot token, say) included, and an `http` server sends the value to its URL. What guards that is the confirmation: it lists every variable name and the command (or the address's host) before anything is mounted, so an administrator is expected to read it. A variable allowlist is a possible later step.
+**Where the `MCP_` rule is checked.** When an item is **saved** (add or edit in the Library, `POST /ui/library/save`): a name that does not follow it is refused before anything is written, with *variable names must start with MCP_* and the field. And **again whenever the agent's config is written**: an item that breaks it — placed in the library folder by hand, or left by an older AgEnD — is never mounted, whatever was confirmed before; the agent itself starts as usual, its card shows one line of small text (*variable X does not follow the MCP_ rule*, the same place as a missing variable) and the log names the variable (never a value). It still matters what an administrator confirms: the confirmation lists every variable name and the command (or the address's host), and an `http` server sends the value to its URL — but the only values an item can reach are the ones someone put in `.env` as `MCP_…` for MCP servers.
 
 **Confirmation.** Before a server is given to an agent, the page shows exactly what it would run — the whole `command` and `args`, or the address and its domain — and the variable names with
 *set / missing*. Confirming records the item's hash for that agent (`library/mcp-confirmed.json`, owner-only, written only by an administrator's `POST /ui/library/mcp-confirm`). If the item is edited
@@ -176,7 +183,7 @@ changed by hand (*Changed by hand*), one added outside this page (*Not recorded*
 `GET /ui/library/list`, `GET /ui/library/item?kind=skill|mcp&id=<id>` (a skill also comes as `fields` + `body`, SKILL.md split for display), `GET /ui/library/overview` (built-in skills, tool sets, the `agend` MCP server and who uses what; read only),
 `POST /ui/library/save` (`expect`: the hash an editor read; `changed` if the item is another one now; **replacing** (`overwrite: true`) without `expect` is refused with `expect_required`, and a skill named like a built-in one with `exists`), `POST /ui/library/delete`.
 
-MCP mounting (AGEND-261): `GET /ui/library/mcp-status?agent=<name>` (every MCP item as that agent's settings need it: what it would run, its variables as *set / missing* — names only —, whether it is confirmed for that agent at its current version, and the CLIs that take library MCP) and `POST /ui/library/mcp-confirm` (`{ agent, id, sha256 }`: `changed` if the item is another version now). `GET /ui/library/list` also carries `mcpBackends`; `overview` carries `teamMcpUsage` and, per agent, `libraryMcp`.
+MCP mounting (AGEND-261): `GET /ui/library/mcp-status?agent=<name>` (every MCP item as that agent's settings need it: what it would run, its variables as *set / missing* — names only —, the name the server sees each as, the names that break the `MCP_` rule (`badVars`), whether it is confirmed for that agent at its current version, and the CLIs that take library MCP) and `POST /ui/library/mcp-confirm` (`{ agent, id, sha256 }`: `changed` if the item is another version now). `GET /ui/library/list` also carries `mcpBackends`; `overview` carries `teamMcpUsage` and, per agent, `libraryMcp`.
 
 Skills in and out (AGEND-257): `GET /ui/library/export?id=<id>[&builtin=1]` and `GET /ui/library/export-all` (zip downloads), `GET /ui/library/builtin?name=<name>` (a built-in skill for display),
 `POST /ui/library/import/preview?filename=` and `POST /ui/library/import?sha256=&decisions=` (the body is the uploaded file's bytes; `decisions` is URL-encoded JSON `{ "<name>": { "action": "overwrite"|"rename"|"skip", "as": "<new name>" } }`).

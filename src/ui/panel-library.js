@@ -63,7 +63,7 @@ register("library", {
     idLabel: "Name", idHint: "Lowercase letters, digits and dashes (up to 64). It is the folder or file name, and the `name` inside.",
     skillMdLabel: "SKILL.md", mcpLabel: "MCP server file (YAML)",
     skillTemplate: "---\nname: {0}\ndescription: Say what this skill does and when to use it.\n---\n\n# {0}\n\nSteps…\n",
-    mcpTemplate: "agend_library: 1\nkind: mcp\nname: {0}\ndescription: What this server does\ntransport: stdio\ncommand: npx\nargs:\n  - -y\n  - some-mcp-server\n# The variables the server reads — names only, never values.\nenv:\n  - EXAMPLE_API_TOKEN\n",
+    mcpTemplate: "agend_library: 1\nkind: mcp\nname: {0}\ndescription: What this server does\ntransport: stdio\ncommand: npx\nargs:\n  - -y\n  - some-mcp-server\n# The variables the server reads — names only, never values. Each starts with MCP_ and has its value in the .env file.\nenv:\n  - MCP_EXAMPLE_API_TOKEN\n# To give the server another name for one: env: { NAME_IT_SEES: ${MCP_EXAMPLE_API_TOKEN} }\n",
     replaceTitle: "Replace “{0}”?", replaceBody: "A {1} named “{0}” is already in the library. Saving replaces it completely.", replace: "Replace",
     deleteTitle: "Delete “{0}”?", deleteBody: "It is removed from the library. Nothing else changes.", deleteBodyUsed: "It is removed from the library. {0} still have it mounted and lose it the next time they start.", deleted: "Deleted “{0}”.", saved: "Saved “{0}”.",
     loadFailed: "Could not load the library.", saveFailed: "Could not save.", deleteFailed: "Could not delete.",
@@ -81,6 +81,7 @@ register("library", {
     e_bad_archive: "That file is not a ZIP, a .skill file or a SKILL.md, or it is damaged or uses something that is not supported.",
     e_no_skill: "No skill found. The archive needs a SKILL.md, in a folder named for the skill or at the top.",
     e_changed: "It was changed after you opened it. Close this and open it again.",
+    e_mcp_var_prefix: "Variable names need to start with MCP_ (in “{0}”). Put the value in the .env file under an MCP_… name; to give the server another name for it, write NAME: ${MCP_…} under env.",
     e_expect_required: "This item cannot be replaced from here. Delete it first, then add it again.",
   },
   "zh-TW": {
@@ -122,7 +123,7 @@ register("library", {
     idLabel: "名稱", idHint: "小寫英文、數字和連字號（最多 64 字）。它是資料夾或檔案名稱，也是檔案內的 `name`。",
     skillMdLabel: "SKILL.md", mcpLabel: "MCP server 檔案（YAML）",
     skillTemplate: "---\nname: {0}\ndescription: 說明這個 skill 做什麼、什麼時候用。\n---\n\n# {0}\n\n步驟…\n",
-    mcpTemplate: "agend_library: 1\nkind: mcp\nname: {0}\ndescription: 這個 server 做什麼\ntransport: stdio\ncommand: npx\nargs:\n  - -y\n  - some-mcp-server\n# server 會讀的變數——只寫名稱，不寫值。\nenv:\n  - EXAMPLE_API_TOKEN\n",
+    mcpTemplate: "agend_library: 1\nkind: mcp\nname: {0}\ndescription: 這個 server 做什麼\ntransport: stdio\ncommand: npx\nargs:\n  - -y\n  - some-mcp-server\n# server 會讀的變數——只寫名稱，不寫值。名稱要以 MCP_ 開頭，值寫在 .env 檔裡。\nenv:\n  - MCP_EXAMPLE_API_TOKEN\n# 要給 server 另一個名稱：env: { 它看到的名稱: ${MCP_EXAMPLE_API_TOKEN} }\n",
     replaceTitle: "要取代「{0}」嗎？", replaceBody: "資源庫裡已經有一個叫「{0}」的 {1}。儲存會整個取代它。", replace: "取代",
     deleteTitle: "要刪除「{0}」嗎？", deleteBody: "它會從資源庫移除，其他都不變。", deleteBodyUsed: "它會從資源庫移除。{0} 還掛著它，下次啟動時會失去這個 Skill。", deleted: "已刪除「{0}」。", saved: "已儲存「{0}」。",
     loadFailed: "無法載入資源庫。", saveFailed: "無法儲存。", deleteFailed: "無法刪除。",
@@ -140,6 +141,7 @@ register("library", {
     e_bad_archive: "這個檔案不是 ZIP、.skill 或 SKILL.md，或是已經損壞，或使用了不支援的功能。",
     e_no_skill: "找不到 Skill。壓縮檔裡需要有 SKILL.md，放在以 Skill 名稱命名的資料夾裡，或放在最上層。",
     e_changed: "它在你打開之後被改過了。請關掉再重新打開。",
+    e_mcp_var_prefix: "變數名稱需以 MCP_ 開頭（出錯的欄位：{0}）。請把值寫在 .env 裡、名稱用 MCP_… 開頭；要給 MCP 另一個名稱，在 env 下寫 名稱: ${MCP_…}。",
     e_expect_required: "這一項無法從這裡取代。請先刪除，再重新新增。",
   },
 });

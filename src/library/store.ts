@@ -266,7 +266,7 @@ export class LibraryStore {
     if (!buf) return existsSync(this.mcpPath(id)) ? fail("unsafe_item") : fail("not_found");
     const text = buf.toString("utf8");
     const v = validateMcpText(id, text);
-    if (!v.ok) return fail("unsafe_item", { detail: v.error });
+    if (!v.ok) return fail("unsafe_item", { detail: v.error, ...(v.names ? { names: v.names } : {}) });
     return { ok: true, detail: { kind: "mcp", id, sha256: sha(buf), text, item: v.item } };
   }
 
@@ -293,8 +293,10 @@ export class LibraryStore {
    * recorded (`ok`). A hand-edited (`modified`) or hand-placed (`untracked`) item is not handed on until someone saves it in the
    * Library: the same rule as `skillForMount`.
    */
-  mcpForMount(id: string): Ok<{ sha256: string; item: McpItem }> | { ok: false; reason: "not_found" | "invalid" | "untracked" | "modified" } {
+  mcpForMount(id: string): Ok<{ sha256: string; item: McpItem }> | { ok: false; reason: "not_found" | "invalid" | "untracked" | "modified" } | { ok: false; reason: "bad_vars"; names: string[] } {
     const d = this.get("mcp", id);
+    // AGEND-261: an item whose variable names break the MCP_ rule (placed by hand, or left by an older AgEnD) is never mounted — and says which names.
+    if (!d.ok && d.error === "unsafe_item" && d.detail === "mcp_var_prefix") return { ok: false, reason: "bad_vars", names: d.names ?? [] };
     if (!d.ok) return { ok: false, reason: d.error === "not_found" ? "not_found" : "invalid" };
     const detail = d.detail;
     if (detail.kind !== "mcp") return { ok: false, reason: "invalid" };
