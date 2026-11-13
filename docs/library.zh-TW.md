@@ -10,11 +10,13 @@
 
 這一頁是總覽：這個 AgEnD 有哪些 **Skill**、**工具**和 **MCP server**，以及哪些 Agent 在使用。版面和設定頁一樣：左邊是分類列表（設定頁自己的 `.s-nav`），
 右邊只顯示選到的分類，上面有篩選框；手機上 `/ui/library` 是分類列表，點一個分類才進到它自己的頁面（`/ui/library/skills`、`/tools`、`/mcp`），有返回連結。
-每個項目是精簡的一列，說明截斷成一行，完整內容點「詳細內容」（內建）或「檢視」（團隊）。每個分類有兩組：
+每個項目是**兩行**的一列，三個分類一模一樣：第一行是名稱和說明（截斷成一行），第二行是使用中的 Agent、適用角色或大小、以及內建／團隊標記。
+「詳細內容」固定在列的右側、對列垂直置中，不會跟著內容移位（旁邊還有導出和刪除；寬度小於 600 px 時，列裡只留「詳細內容」，導出和刪除在它打開的對話框裡）。
+一列最多顯示三個 Agent 標籤（手機一個），其餘收成 **+N**，點它會打開該項目，不會讓列變高。每個分類有兩組：
 
 - **內建・唯讀**：隨 AgEnD 附帶，從套件與程式碼列出，不能在這裡修改：內建 Skill（`src/general-knowledge/skills`，並標出適用角色：General、一般 Agent、Classic bot）、
   `tool_set` 各 profile（`TOOL_PROFILES`，含工具清單）、AgEnD 自己的 `agend` MCP server。
-- **團隊新增**：下面的資源庫項目，可新增、檢視、刪除。
+- **團隊新增**：下面的資源庫項目，可新增、導入、導出、檢視、編輯（Skill）、刪除。
 
 **使用中**是一排標籤，每個 Agent 一個：內建 Skill 依 Agent 的角色（General 拿到全部，其他 Agent 拿到標給一般 Agent 的，且只算 CLI 有 skill 資料夾的）、
 工具組依 Agent 的 `tool_set`（和 daemon 用同一條規則）、`agend` MCP server 是所有 Agent、團隊 Skill 依掛載到哪些 Agent。點標籤會開啟該 Agent：
@@ -97,4 +99,7 @@ instances:
 
 ## Web 路由（僅管理員）
 
-`GET /ui/library/list`、`GET /ui/library/item?kind=skill|mcp&id=<id>`、`GET /ui/library/overview`（內建 Skill、工具組、`agend` MCP server 與使用情形；唯讀）、`POST /ui/library/save`、`POST /ui/library/delete`。
+`GET /ui/library/list`、`GET /ui/library/item?kind=skill|mcp&id=<id>`、`GET /ui/library/overview`（內建 Skill、工具組、`agend` MCP server 與使用情形；唯讀）、`POST /ui/library/save`（`expect`：編輯器讀到的雜湊；Skill 已被改過則回 `changed`）、`POST /ui/library/delete`。Skill 的 `item` 另外附 `fields` 和 `body`（把 SKILL.md 拆開給畫面用）。
+
+Skill 的導入與導出（AGEND-257）：`GET /ui/library/export?id=<id>[&builtin=1]`、`GET /ui/library/export-all`（zip 下載）、`GET /ui/library/builtin?name=<name>`（顯示用的內建 Skill）、
+`POST /ui/library/import/preview?filename=` 和 `POST /ui/library/import?sha256=&decisions=`（body 是上傳檔案的 bytes；`decisions` 是 URL 編碼的 JSON：`{ "<名稱>": { "action": "overwrite"|"rename"|"skip", "as": "<新名稱>" } }`）。
