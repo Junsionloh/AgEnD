@@ -34,6 +34,7 @@ export function parseRoute(pathname) {
   if (pathname === "/ui/fleet") return { panel: "fleet", tab: "tasks" };
   if (pathname === "/ui/needs") return { panel: "needs" };
   if (pathname === NOTICES_PATH) return { panel: "notices" };              // #2910 D2: a web-only fleet's Notices
+  if (pathname === LIBRARY_PATH) return { panel: "library" };              // AGEND-243: the Skill / MCP library
   // AgEnD Hub P1: a Hub workspace's pages (served only by a Hub's own listener; this fleet's answers not found).
   if (pathname === "/ui/hub") return { panel: "hub", tab: "ask" };
   if (pathname === "/ui/hub/exposures") return { panel: "hub", tab: "exposures" };
@@ -91,6 +92,7 @@ export function rememberFleetTab(tab) {
 }
 export const NEEDS_PATH = "/ui/needs";
 export const NOTICES_PATH = "/ui/notices";
+export const LIBRARY_PATH = "/ui/library";
 /** A section's address; an old name gives its new one (and the place in it: `chat#classicbot`). */
 export function settingsPath(name) {
   const section = (name && legacySection(name)) || name;
@@ -120,6 +122,7 @@ export function routePath(route) {
   if (route.panel === "settings") return settingsPath(route.section);
   if (route.panel === "needs") return NEEDS_PATH;
   if (route.panel === "notices") return NOTICES_PATH;
+  if (route.panel === "library") return LIBRARY_PATH;
   if (route.panel === "hub") return route.tab === "exposures" ? "/ui/hub/exposures" : route.tab === "admin" ? "/ui/hub/admin" : "/ui/hub";
   if (route.panel === "view") return viewPath(route.instance);
   if (route.panel === "details") return detailsPath(route.instance);
