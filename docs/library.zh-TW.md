@@ -104,7 +104,9 @@ instances:
 設定卡和資源庫標籤都會標示，來源是 `src/library/mcp-support.ts` 的對照表（只有這一張表，頁面裡沒有清單）；掛在這些 CLI 上的 Agent 啟動時不寫任何東西，並記一次日誌。
 
 **變數。** 項目只寫變數名稱（stdio 用 `env`、http 用 `headers`），不寫值。值在寫設定的當下從資料夾的 `.env` 取。缺值或值是空的，該 MCP **不啟動**（什麼都不寫）——
-Agent 設定卡會顯示缺哪個變數，日誌也會寫出名稱。值不會出現在任何畫面、日誌、API 回應或導出裡。少數會改變程式尋找或載入方式的變數（`PATH`、`HOME`、`NODE_OPTIONS`、`LD_PRELOAD` 等）項目不能指名。
+Agent 設定卡會顯示缺哪個變數，日誌也會寫出名稱。值不會出現在任何畫面、日誌、API 回應或導出裡。會改變程式尋找或載入方式、或工具行為的變數（`PATH`、`HOME`、`IFS`、`NODE_OPTIONS`、`NODE_PATH`、`PYTHONPATH`、`PERL5OPT`、`RUBYOPT`、`JAVA_TOOL_OPTIONS`、`GIT_SSH_COMMAND`、`CODEX_HOME`，以及整個 `LD_*`、`DYLD_*` 系列等；不分大小寫）項目不能指名。
+
+**這不是白名單。**項目可以指名 `.env` 裡的任何其他變數——包括 AgEnD 自己的憑證（例如聊天 bot token），`http` 類型的 server 還會把值送到它的網址。把關靠確認畫面：掛載前會列出每個變數名稱，以及指令（或網址的 host），管理員應當讀過再確認。變數白名單是之後可能做的一步。
 
 **確認。** 把 server 交給 Agent 之前，頁面會顯示它實際會執行什麼——完整的 `command` 和 `args`，或網址與網域——以及變數名稱和「已設定／缺少」。按確認會替該 Agent 記下項目的雜湊
 （`library/mcp-confirmed.json`，僅擁有者可讀寫，只有管理員的 `POST /ui/library/mcp-confirm` 會寫）。之後項目被編輯，或在資源庫外被改動，要再確認一次才會重新寫入；設定卡會顯示「內容已變更，需重新確認」。

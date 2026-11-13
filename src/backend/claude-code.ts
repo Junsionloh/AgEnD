@@ -1635,9 +1635,19 @@ export class ClaudeCodeBackend extends ClaudePaneDetectors implements CliBackend
     const mcpConfig = { mcpServers: libraryEntries.length
       ? { ...config.mcpServers, ...Object.fromEntries(libraryEntries.map(([name, entry]) => [name, claudeMcpEntry(entry)])) }
       : config.mcpServers };
-    writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
-    // It now holds the values of the variables those servers need: owner only (written under the user's umask before).
-    if (libraryEntries.length) { try { chmodSync(mcpConfigPath, 0o600); } catch { /* best effort: the instance folder is private too */ } }
+    const mcpConfigText = JSON.stringify(mcpConfig, null, 2);
+    if (libraryEntries.length) {
+      // It now holds the values of the variables those servers need: owner only from the first byte. An old file keeps its mode when it is
+      // rewritten, so it is tightened BEFORE the values go in (or removed if that is not possible); a new one is created 0600 (not
+      // created under the umask and tightened afterwards, which leaves a window where it can be read).
+      try { chmodSync(mcpConfigPath, 0o600); } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") { try { unlinkSync(mcpConfigPath); } catch { /* the write below fails or replaces it */ } }
+      }
+      writeFileSync(mcpConfigPath, mcpConfigText, { mode: 0o600 });
+      try { chmodSync(mcpConfigPath, 0o600); } catch { /* already 0600 from the open above */ }
+    } else {
+      writeFileSync(mcpConfigPath, mcpConfigText);
+    }
 
     // 2. Write statusline script
     const statusLineCommand = this.writeStatusLineScript();

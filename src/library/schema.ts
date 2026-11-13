@@ -167,9 +167,22 @@ export function validateSkill(id: unknown, files: unknown): { ok: true; id: stri
 /** The file's own marker, as `agend_export: 1` marks an export file. */
 export const MCP_FILE_VERSION = 1;
 const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
-/** Variables an MCP server may not be given from `.env`: the ones that change how a program is found or loaded (the secret store refuses them too). */
-const RESERVED_ENV_NAMES = new Set(["PATH", "HOME", "PWD", "SHELL", "ENV", "BASH_ENV", "NODE_OPTIONS", "LD_PRELOAD"]);
-const isVariableName = (n: unknown): n is string => typeof n === "string" && ENV_NAME_RE.test(n) && !RESERVED_ENV_NAMES.has(n);
+/**
+ * Variables an MCP server may not be given from `.env`: the ones that change how a program is found or loaded or how a tool runs (the
+ * secret store refuses a few of them too). Compared without regard to case, and a whole family by prefix (`LD_*`, `DYLD_*`).
+ * This is NOT an allowlist: an item may still name any other `.env` variable, AgEnD's own credentials included — what guards that
+ * is the confirmation, which lists the variable names and the command (or the address's host) before anything is mounted.
+ */
+const RESERVED_ENV_NAMES = new Set([
+  "PATH", "HOME", "PWD", "SHELL", "ENV", "BASH_ENV", "IFS", "NODE_OPTIONS", "NODE_PATH", "PYTHONPATH", "PYTHONSTARTUP", "PYTHONHOME",
+  "PERL5OPT", "PERL5LIB", "RUBYOPT", "RUBYLIB", "JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS", "GIT_SSH_COMMAND", "CODEX_HOME",
+]);
+const RESERVED_ENV_PREFIXES = ["LD_", "DYLD_"];
+export const isReservedMcpEnvName = (n: string): boolean => {
+  const u = n.toUpperCase();
+  return RESERVED_ENV_NAMES.has(u) || RESERVED_ENV_PREFIXES.some((p) => u.startsWith(p));
+};
+const isVariableName = (n: unknown): n is string => typeof n === "string" && ENV_NAME_RE.test(n) && !isReservedMcpEnvName(n);
 const HEADER_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
 
 /** What an MCP library file holds. `env` and `headers` name VARIABLES: the values live where the agent runs, never here. */

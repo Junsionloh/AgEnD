@@ -13,7 +13,7 @@ import { Daemon } from "../src/daemon.js";
 import { FleetManager } from "../src/fleet-manager.js";
 import { validateFleetConfig } from "../src/config-validator.js";
 import {
-  LIBRARY_MCP_BACKENDS, LibraryStore, McpConfirmations, envNamesSet, libraryMcpName, libraryMcpUsage, libraryMountProblem, mcpSummary, readEnvValues,
+  LIBRARY_MCP_BACKENDS, LibraryStore, isReservedMcpEnvName, McpConfirmations, envNamesSet, libraryMcpName, libraryMcpUsage, libraryMountProblem, mcpSummary, readEnvValues,
   resolveMcpMount, supportsLibraryMcp, validateMcpText, type LibraryMcpEntry,
 } from "../src/library/index.js";
 import { claudeMcpEntry, codexMcpBlock, codexMcpToml, tomlBasic } from "../src/library/mcp-render.js";
@@ -127,6 +127,18 @@ describe("what an administrator is shown", () => {
     for (const name of ["PATH", "NODE_OPTIONS", "LD_PRELOAD", "HOME"]) {
       expect(validateMcpText("x", STDIO("x", `command: npx\nenv:\n  - ${name}\n`))).toMatchObject({ ok: false, error: "bad_mcp", detail: "env" });
     }
+    // not case sensitive, whole families by prefix, and the other loader / interpreter / tool switches
+    for (const name of ["path", "Path", "node_options", "Ld_Preload", "LD_LIBRARY_PATH", "LD_AUDIT", "ld_debug", "DYLD_INSERT_LIBRARIES", "dyld_library_path",
+      "PYTHONPATH", "pythonstartup", "PYTHONHOME", "NODE_PATH", "PERL5OPT", "RUBYOPT", "JAVA_TOOL_OPTIONS", "GIT_SSH_COMMAND", "IFS", "ifs", "CODEX_HOME", "codex_home"]) {
+      expect(validateMcpText("x", STDIO("x", `command: npx\nenv:\n  - ${name}\n`)), name).toMatchObject({ ok: false, error: "bad_mcp", detail: "env" });
+      expect(isReservedMcpEnvName(name), name).toBe(true);
+    }
+    // an ordinary name, and one that only looks like a family, is fine (this is not an allowlist: AgEnD's own variables are not blocked here)
+    for (const name of ["GH_TOKEN", "LDAP_PASSWORD", "OLD_PATH_TOKEN", "TELEGRAM_BOT_TOKEN", "DYLDX", "PATHS"]) {
+      expect(isReservedMcpEnvName(name), name).toBe(false);
+      expect(validateMcpText("x", STDIO("x", `command: npx\nenv:\n  - ${name}\n`)), name).toMatchObject({ ok: true });
+    }
+    expect(validateMcpText("x", `agend_library: 1\nkind: mcp\nname: x\ntransport: http\nurl: https://a.example/\nheaders:\n  X-A: ld_preload\n`)).toMatchObject({ ok: false, detail: "headers" });
     expect(validateMcpText("x", `agend_library: 1\nkind: mcp\nname: x\ntransport: http\nurl: https://a.example/\nheaders:\n  X-A: PATH\n`)).toMatchObject({ ok: false, detail: "headers" });
   });
 });
@@ -270,6 +282,38 @@ describe("GOLDEN: an agent with nothing mounted gets the same files as before", 
     expect(written.mcpServers["agend-lib-ex"]).toEqual({ type: "http", url: "https://a.example/", headers: { Authorization: SECRET } });
     expect(Object.keys(written.mcpServers).sort()).toEqual(["agend", "agend-lib-ex", "agend-lib-gh"]);
     expect(statSync(join(instance, "mcp-config.json")).mode & 0o077).toBe(0);
+  });
+
+  it("Claude Code: the file with values is 0600 whatever the umask, also when an old world-readable one was there (and it is never rewritten before it is tightened)", () => {
+    const entry: LibraryMcpEntry = { transport: "stdio", command: "npx", args: [], env: { GH_TOKEN: SECRET } };
+    const file = join(instance, "mcp-config.json");
+    const old = process.umask(0o000);                                    // the worst case: a file created under this umask would be 0666
+    try {
+      // new file
+      new ClaudeCodeBackend(instance).writeConfig(base({ libraryMcp: { [libraryMcpName("gh")]: entry } }) as never);
+      expect(statSync(file).mode & 0o777).toBe(0o600);
+      // an old file from before there was anything mounted: 0644, the stale content
+      rmSync(file); writeFileSync(file, "stale", { mode: 0o644 }); chmodSync(file, 0o644);
+      expect(statSync(file).mode & 0o777).toBe(0o644);
+      new ClaudeCodeBackend(instance).writeConfig(base({ libraryMcp: { [libraryMcpName("gh")]: entry } }) as never);
+      expect(statSync(file).mode & 0o777).toBe(0o600);
+      expect(JSON.parse(readFileSync(file, "utf8")).mcpServers["agend-lib-gh"].env.GH_TOKEN).toBe(SECRET);
+      // unmounting rewrites the plain content (no values left in it); nothing else about the no-mount path changed
+      new ClaudeCodeBackend(instance).writeConfig(base() as never);
+      expect(readFileSync(file, "utf8")).toBe(JSON.stringify({ mcpServers: servers }, null, 2));
+      expect(readFileSync(file, "utf8")).not.toContain(SECRET);
+    } finally { process.umask(old); }
+  });
+
+  it("Claude Code: a first write is created 0600 by the open itself (the tightening after it is only for an old file)", () => {
+    const src = readFileSync(join(__dirname, "..", "src", "backend", "claude-code.ts"), "utf8");
+    const at = src.indexOf("if (libraryEntries.length) {\n      // It now holds");
+    expect(at).toBeGreaterThan(-1);
+    const block = src.slice(at, src.indexOf("// 2. Write statusline script"));
+    // the order in the source: tighten an old file, then write with { mode: 0o600 }, never a plain write of the values
+    expect(block.indexOf("chmodSync(mcpConfigPath, 0o600)")).toBeLessThan(block.indexOf("writeFileSync(mcpConfigPath, mcpConfigText, { mode: 0o600 })"));
+    expect(block.match(/writeFileSync\(mcpConfigPath, mcpConfigText\)/g) ?? []).toHaveLength(1);       // the plain one is the else (nothing mounted) only
+    expect(block.indexOf("} else {")).toBeGreaterThan(block.indexOf("{ mode: 0o600 }"));
   });
 
   it("Codex: config.toml is byte-identical with no libraryMcp (absent or empty), and the user's own settings and servers are kept", () => {

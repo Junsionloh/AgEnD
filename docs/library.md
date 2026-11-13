@@ -146,7 +146,9 @@ writes nothing for it and logs it once.
 
 **Variables.** An item names variables (`env` for stdio, `headers` for http), never values. The values come from the data folder's `.env` at the moment the config is written. A missing or empty value
 means that server is **not started** (nothing is written for it) — the agent's settings card shows which variable is missing, and the log names it. Values never appear in any page, log line, API
-answer or export. A few variables that change how a program is found or loaded (`PATH`, `HOME`, `NODE_OPTIONS`, `LD_PRELOAD`, …) cannot be named by an item.
+answer or export. Variables that change how a program is found or loaded or how a tool runs (`PATH`, `HOME`, `IFS`, `NODE_OPTIONS`, `NODE_PATH`, `PYTHONPATH`, `PERL5OPT`, `RUBYOPT`, `JAVA_TOOL_OPTIONS`, `GIT_SSH_COMMAND`, `CODEX_HOME`, the whole `LD_*` and `DYLD_*` families, …; compared without regard to case) cannot be named by an item.
+
+**This is not an allowlist.** An item may name any other variable in `.env` — AgEnD's own credentials (a chat bot token, say) included, and an `http` server sends the value to its URL. What guards that is the confirmation: it lists every variable name and the command (or the address's host) before anything is mounted, so an administrator is expected to read it. A variable allowlist is a possible later step.
 
 **Confirmation.** Before a server is given to an agent, the page shows exactly what it would run — the whole `command` and `args`, or the address and its domain — and the variable names with
 *set / missing*. Confirming records the item's hash for that agent (`library/mcp-confirmed.json`, owner-only, written only by an administrator's `POST /ui/library/mcp-confirm`). If the item is edited
