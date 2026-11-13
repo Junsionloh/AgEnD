@@ -6,8 +6,13 @@
 
 ## [未發佈] (Unreleased)
 
+### 新增 (Added)
+- **Agent 導出與導入會帶上資源庫的 Skill 與 MCP server（AGEND-245）。** 導出多了資源庫 Skill／MCP server 的勾選與「把定義一併打包」（預設關閉：檔案只用 id 與雜湊值列出項目；MCP server 另列出它需要的 `MCP_…` 變數名稱，絕不帶值）。載入檔案時，每個項目會和這台電腦的資源庫比對，分成 present／differs／missing-embedded／missing；本機版本不同時絕不覆蓋，附帶的定義用資源庫自己的規則檢查、勾選後才加入（MCP server 要確認它完整的指令與變數名稱後才加入），填入的是表單而不是 `fleet.yaml`。`library` 區塊的元素是暫定格式（上游 #3638 只預留了區塊、沒有定義內容）；版本仍是 `agend_export: 1`。
+
 ### 變更 (Changed)
 - **Beta 先是候選版：發布到 npm `@rc`，只有升級後才會進入 `@beta`。** 以前 `vX.Y.Z-beta.N` tag 直接發布到 `@beta`，所有 beta 安裝的 `agend update` 和更新通知都會在它還沒在任何地方跑過時就拿到它。現在它發布到新的 `@rc` dist-tag。在測試主機上跑過之後（`agend update --rc`），新的 **Promote beta** workflow 會把 `@beta` 指向那個版本：不重新建置、beta 永遠不會倒退，並會驗證結果。在那之前 beta 使用者看不到任何變化。從 `@rc` 安裝的主機之後會重新跟著 `@beta`。穩定版（`@latest`）與 alpha（`@alpha`）的發布方式不變。(#2987)
+- **資源庫：降版時的 `library.paused`（AGEND-261）。** 設定裡有 `paused` 清單的 Agent，會被早於它出現的 AgEnD 拒絕（「`library` 有不認得的鍵 `paused`」），所以降版後設定檢查會失敗。降版前請移除 `paused` 鍵（要交給 Agent 的 id 請放回 `skills`／`mcp`）；`library` 設定的其他部分沒有改變。
+- 資源庫 MCP server：Claude Code 的 `mcp-config.json` 若既不能改成僅擁有者可讀、也不能刪除，就完全不寫入（變數的值絕不會寫進別人可能讀得到的檔案）。違反 `MCP_` 規則的變數，錯誤回應只回顯符合 `[A-Z][A-Z0-9_]*` 的名稱，其他一律顯示 `?`。
 
 ## [2.3.3] - 2026-11-02
 

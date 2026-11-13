@@ -245,6 +245,7 @@ describe("nothing else uses the library yet", () => {
     // AGEND-244: the mount (fleet-manager.ts) and the shape check of an agent's `library` setting (config-validator.ts).
     // AGEND-261: library MCP mounting — the two backends that render it (claude-code.ts, codex.ts), the type they receive (backend/types.ts)
     // and the daemon that passes it on (daemon.ts, a type). Every other backend and path still does not reach the library.
-    expect(importers.sort()).toEqual(["backend/claude-code.ts", "backend/codex.ts", "backend/types.ts", "config-validator.ts", "daemon.ts", "fleet-manager.ts", "web-api.ts"]);
+    // AGEND-245: the agent export file's `library` block (agent-export.ts: the pure format of src/library/export-format.ts, and a type) — only the web route uses that file.
+    expect(importers.sort()).toEqual(["agent-export.ts", "backend/claude-code.ts", "backend/codex.ts", "backend/types.ts", "config-validator.ts", "daemon.ts", "fleet-manager.ts", "web-api.ts"]);
   });
 });

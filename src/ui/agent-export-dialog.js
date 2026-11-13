@@ -8,9 +8,12 @@ import { Icon } from "/assets/ui-icons.js";
 import { toast } from "/assets/ui-toast.js";
 import "./agent-export-strings.js";
 import { xt } from "./agent-export-strings.js";
+import { ApplyFailures, LibraryExportPick, LibraryImportSection, LibraryOmittedNotes, applyMounts, blocked, choicesOf, chosenCount, libraryWords, startSelection } from "./agent-export-library.js";
 
-const GROUPS = ["identity", "systemPrompt", "runtime", "behavior"];
-const DEFAULT_GROUPS = ["identity", "systemPrompt", "runtime", "behavior"];
+/** The settings groups (checkboxes of the first fieldset) and the Library's (AGEND-245: their own fieldset, agent-export-library.js). */
+const MAIN_GROUPS = ["identity", "systemPrompt", "runtime", "behavior"];
+const GROUPS = [...MAIN_GROUPS, "librarySkills", "libraryMcp"];
+const DEFAULT_GROUPS = GROUPS;
 /** The largest file the loader reads (agent-export.ts AGENT_EXPORT_MAX_CHARS). */
 const MAX_FILE_CHARS = 200000;
 /** The server reads a request body of at most 512 KiB (web-api.ts parseBody): a bigger file is refused here, with the same words. */
@@ -57,6 +60,9 @@ export function ExportDialog({ name, pending, onClose, idPrefix = "" }) {
   const [groups, setGroups] = useState(() => new Set(DEFAULT_GROUPS));
   const [result, setResult] = useState(null);
   const [failed, setFailed] = useState(false);
+  // AGEND-245: bundle the Library items' definitions in the file (off: the file only names them); how many the agent has (from the server).
+  const [embed, setEmbed] = useState(false);
+  const [assigned, setAssigned] = useState(null);
   const seq = useRef(0);
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
@@ -64,10 +70,10 @@ export function ExportDialog({ name, pending, onClose, idPrefix = "" }) {
     const mine = ++seq.current;
     setFailed(false);
     setResult(null);          // the old preview is gone the moment the choice changes: nothing stale can be copied
-    post("/ui/agent-export/build", { instance: name, include: GROUPS.filter((g) => groups.has(g)) })
-      .then((r) => { if (alive.current && mine === seq.current) setResult(r); })
+    post("/ui/agent-export/build", { instance: name, include: GROUPS.filter((g) => groups.has(g)), embed })
+      .then((r) => { if (alive.current && mine === seq.current) { setResult(r); if (r && r.libraryAssigned) setAssigned(r.libraryAssigned); } })
       .catch(() => { if (alive.current && mine === seq.current) { setResult(null); setFailed(true); } });
-  }, [[...groups].sort().join(",")]);
+  }, [[...groups].sort().join(","), embed]);
   const toggle = (g) => setGroups((s) => { const n = new Set(s); if (n.has(g)) n.delete(g); else n.add(g); return n; });
   const text = result && typeof result.text === "string" ? result.text : null;
   const findings = (result && result.findings) || [];
@@ -90,11 +96,13 @@ export function ExportDialog({ name, pending, onClose, idPrefix = "" }) {
       <p class="note">${xt("exportLead")}</p>
       ${pending ? html`<p class="feedback warning" role="status">${xt("pending")}</p>` : null}
       <fieldset class="field"><legend>${xt("pick")}</legend>
-        ${GROUPS.map((g) => html`<label class="check" key=${g}><input type="checkbox" checked=${groups.has(g)} data-export-group=${g} onChange=${() => toggle(g)} /><span>${xt(`g_${g}`)}</span></label>`)}</fieldset>
+        ${MAIN_GROUPS.map((g) => html`<label class="check" key=${g}><input type="checkbox" checked=${groups.has(g)} data-export-group=${g} onChange=${() => toggle(g)} /><span>${xt(`g_${g}`)}</span></label>`)}</fieldset>
+      <${LibraryExportPick} groups=${groups} toggle=${toggle} embed=${embed} setEmbed=${setEmbed} assigned=${assigned} />
       ${findings.length ? html`<div class="feedback error" role="alert" data-export-secret><strong>${xt("secretTitle")}</strong>
         <p>${xt("secretBody", fields.join(", "))}</p>
         <ul>${findings.map((f, i) => html`<li key=${i}>${xt("secretAt", f.field, f.line)} — ${xt(`kind_${f.kind}`)}</li>`)}</ul></div>` : null}
       ${failed ? html`<p class="feedback error" role="alert">${xt("exportFailed")}</p>` : null}
+      <${LibraryOmittedNotes} items=${result && result.libraryOmitted} />
       ${(result && result.omitted || []).map((o) => html`<p class="feedback warning" role="status" key=${o.field + o.reason} data-export-omitted=${o.reason}>${xt(`o_${o.reason}`)}</p>`)}
       ${result && result.empty && !findings.length ? html`<p class="note">${xt("nothing")}</p>` : null}
       <div class="field"><label for=${`${idPrefix}ag-export-preview`}>${xt("previewLabel")}</label>
@@ -104,15 +112,20 @@ export function ExportDialog({ name, pending, onClose, idPrefix = "" }) {
 }
 
 /** Load template: choose or paste, see what would be filled and what skipped (with why), then fill the form. */
-export function LoadDialog({ current, onFill, onClose, idPrefix = "" }) {
+export function LoadDialog({ current, name, onFill, onClose, idPrefix = "" }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState(null);       // the server's reading of `text`, or { error }
   const [note, setNote] = useState("");
+  // AGEND-245: the file's Library entries against this computer's Library (`lib`: { loading } | { error } | { view }), the person's choices, and what a failed add says.
+  const [lib, setLib] = useState(null);
+  const [sel, setSel] = useState({});
+  const [applyRes, setApplyRes] = useState(null);
+  const [applyError, setApplyError] = useState(false);
   const alive = useRef(true);
   const seq = useRef(0);
   useEffect(() => () => { alive.current = false; }, []);
-  const edit = (value) => { seq.current++; setText(value); setRes(null); setNote(""); setBusy(false); };
+  const edit = (value) => { seq.current++; setText(value); setRes(null); setNote(""); setBusy(false); setLib(null); setSel({}); setApplyRes(null); setApplyError(false); };
   const onFile = async (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = "";
@@ -120,22 +133,55 @@ export function LoadDialog({ current, onFill, onClose, idPrefix = "" }) {
     if (file.size > MAX_FILE_BYTES) { setRes({ error: "too_large" }); setNote(xt("fileTooLarge")); return; }
     try { edit(await file.text()); } catch { setRes({ error: "read" }); setNote(xt("readFailed")); }
   };
+  /** The file's Library entries against this computer's Library (reads only); the choices start from what each row's state suggests. */
+  const compare = async (mine) => {
+    setLib({ loading: true });
+    try {
+      const v = await post("/ui/agent-export/library-status", { text });
+      if (!alive.current || mine !== seq.current) return;
+      if (v.ok && Array.isArray(v.skills) && Array.isArray(v.mcp)) { setLib({ view: v }); setSel(startSelection(v)); } else setLib({ error: true });
+    } catch { if (alive.current && mine === seq.current) setLib({ error: true }); }
+  };
   const check = async () => {
     const mine = ++seq.current;
-    setBusy(true);
+    setBusy(true); setLib(null); setSel({}); setApplyRes(null); setApplyError(false);
     try {
       const r = await post("/ui/agent-export/parse", { text });
       if (alive.current && mine === seq.current) setRes(r.ok ? r : { error: r.error });
+      if (r.ok && r.library && r.library.skills.length + r.library.mcp.length > 0) await compare(mine);
     } catch { if (alive.current && mine === seq.current) setRes({ error: "failed" }); }
     finally { if (alive.current && mine === seq.current) setBusy(false); }
   };
   const ok = res && res.ok;
   const fillKeys = ok ? FILL_KEYS.filter((k) => Object.prototype.hasOwnProperty.call(res.fill, k)) : [];
   const replaces = (k) => (k === "description" || k === "systemPrompt") && current && String(current[k] || "").trim() !== "" && current[k] !== res.fill[k];
-  const doFill = () => { onFill(res.fill); toast(xt("filled", fillKeys.length)); onClose(); };
+  const view = lib && lib.view ? lib.view : null;
+  const chosen = view ? chosenCount(view, sel) : 0;
+  const stuck = !!view && blocked(view, sel);
+  const doFill = async () => {
+    // AGEND-245: what was ticked is added to the Library (and an MCP server confirmed for this agent at the version that was read) now; the form gets the ids.
+    // Nothing is filled if any of it failed — the rows are read again so the person sees what is there now.
+    if (view && chosen) {
+      const mine = ++seq.current;
+      setBusy(true); setApplyError(false); setApplyRes(null);
+      try {
+        const r = await post("/ui/agent-export/library-apply", { text, instance: name, choices: choicesOf(view, sel) });
+        if (!alive.current || mine !== seq.current) return;
+        if (!r.ok) { setApplyError(true); return; }
+        if ([...r.skills, ...r.mcp].some((o) => o.outcome === "failed")) { setApplyRes(r); await compare(mine); return; }
+        onFill(res.fill, r.mounts);
+        toast(xt("filled", fillKeys.length));
+        toast(libraryWords("filledLibrary", [...r.skills, ...r.mcp].filter((o) => o.outcome !== "skipped").length));
+        onClose();
+      } catch { if (alive.current && mine === seq.current) setApplyError(true); }
+      finally { if (alive.current && mine === seq.current) setBusy(false); }
+      return;
+    }
+    onFill(res.fill); toast(xt("filled", fillKeys.length)); onClose();
+  };
   return html`<${Dialog} title=${xt("loadTitle")} onClose=${onClose} wide=${true} busy=${busy}
     actions=${html`<button type="button" class="btn" onClick=${check} disabled=${busy || !text.trim()} data-load-check>${busy ? xt("checking") : xt("check")}</button>
-      <button type="button" class="btn btn-primary" onClick=${doFill} disabled=${!ok || !fillKeys.length} data-load-fill>${xt("fill")}</button>`}>
+      <button type="button" class="btn btn-primary" onClick=${doFill} disabled=${busy || !ok || (!fillKeys.length && !chosen) || stuck} data-load-fill>${xt("fill")}</button>`}>
     <div class="form">
       <p class="note">${xt("loadLead")}</p>
       <div class="field"><label class="btn btn-sm"><${Icon} name="file" size=${15} /> ${xt("chooseFile")}<input type="file" accept=".yaml,.yml,.txt,text/yaml,text/plain" hidden data-load-file onChange=${onFile} /></label></div>
@@ -149,7 +195,11 @@ export function LoadDialog({ current, onFill, onClose, idPrefix = "" }) {
         <p><strong>${xt("willSkip", res.skipped.length)}</strong></p>
         ${res.skipped.length ? html`<ul>${res.skipped.map((s, i) => html`<li key=${i} data-skip=${s.path}><code>${s.path}</code> — ${xt(`r_${s.reason}`)}</li>`)}</ul>` : html`<p class="note">${xt("skipNone")}</p>`}
         ${res.role ? html`<p class="note">${xt("roleHint", res.role)}</p>` : null}
-        ${res.libraryUsed ? html`<p class="note" data-load-library>${xt("libraryNote")}</p>` : null}
+        ${lib && lib.loading ? html`<p class="note" role="status" data-load-library>${libraryWords("checking")}</p>` : null}
+        ${lib && lib.error ? html`<p class="feedback warning" role="status" data-load-library>${libraryWords("failed")}</p>` : null}
+        ${view ? html`<div data-load-library><${LibraryImportSection} view=${view} sel=${sel} setSel=${setSel} /></div>` : null}
+        ${applyRes ? html`<${ApplyFailures} results=${applyRes} />` : null}
+        ${applyError ? html`<p class="feedback error" role="alert" data-load-library-error>${libraryWords("applyFailed")}</p>` : null}
         ${res.extraFailover ? html`<p class="note">${xt("failoverNote")}</p>` : null}
         ${Object.prototype.hasOwnProperty.call(res.fill, "model") ? html`<p class="note">${xt("modelNote")}</p>` : null}
       </div>` : null}
@@ -165,6 +215,6 @@ export function AgentTemplateTools({ name, m, idPrefix = "" }) {
       <button type="button" class="btn btn-sm" data-template-load onClick=${() => setOpen("load")}><${Icon} name="file" size=${15} /> ${xt("loadTemplate")}</button>
       <button type="button" class="btn btn-sm" data-template-export onClick=${() => setOpen("export")}><${Icon} name="download" size=${15} /> ${xt("exportBtn")}</button></div>
     ${open === "export" ? html`<${ExportDialog} idPrefix=${idPrefix} name=${name} pending=${pending} onClose=${() => setOpen(null)} />` : null}
-    ${open === "load" ? html`<${LoadDialog} idPrefix=${idPrefix} current=${m.f} onFill=${(fill) => applyFill(m.setF, fill)} onClose=${() => setOpen(null)} />` : null}</div>`;
+    ${open === "load" ? html`<${LoadDialog} idPrefix=${idPrefix} current=${m.f} name=${name} onFill=${(fill, mounts) => { applyFill(m.setF, fill); if (mounts) applyMounts(m.setF, mounts); }} onClose=${() => setOpen(null)} />` : null}</div>`;
 }
 AgentTemplateTools.workspaceVersion = 1;

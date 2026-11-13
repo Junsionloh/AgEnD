@@ -12,7 +12,7 @@
  * Nothing here is mounted into an agent (that is a later step): the library only stores and checks.
  */
 import { parse, stringify } from "yaml";
-import { scanForSecrets, type SecretFinding } from "../agent-export.js";
+import { scanForSecrets, type SecretFinding } from "../secret-scan.js";
 
 export type LibraryKind = "skill" | "mcp";
 export const LIBRARY_KINDS: readonly LibraryKind[] = ["skill", "mcp"];
