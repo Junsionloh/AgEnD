@@ -326,7 +326,9 @@ import type { InstanceState, InstanceStateSnapshot, InteractionOwner, Interactio
 import type { RemoteCardAction, RemoteCardOutcome } from "./remote-card-answer.js";
 import { redactSecrets } from "./tool-progress.js";
 import { idleGateTimeoutLog } from "./idle-gate-log.js";
-import { DEFAULT_STUCK_TIMEOUT_MS, readLastInboundAt, type Daemon, type OwnSwitchOutcome } from "./daemon.js";
+import { DEFAULT_STUCK_TIMEOUT_MS, readLastInboundAt, type OwnSwitchOutcome } from "./daemon.js";
+import type { InstanceRunner } from "./adapters/types.js";
+import { cancelRunner, capabilitiesOf } from "./adapters/registry.js";
 import { clearPausedMarker, readPausedAt, readPauseReason, writePausedMarker } from "./pause-marker.js";
 import { readBackgroundWorkEndedMarker } from "./background-work-ended.js";
 import { DEFAULT_WARM_OVERFLOW, WakeCoordinator } from "./wake-coordinator.js";
@@ -2912,11 +2914,11 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     this.scheduleDeliveryOutboxPump();
   }
 
-  private workingStateListeners?: WeakSet<Daemon>;
+  private workingStateListeners?: WeakSet<InstanceRunner>;
   private workingStateErrors?: Set<string>;
 
   /** Attach only to the published owner. Nothing here sends or resumes work. */
-  private listenForWorkingState(name: string, daemon: Daemon): void {
+  private listenForWorkingState(name: string, daemon: InstanceRunner): void {
     if (typeof daemon.getWorkingStateObservation !== "function") return;
     this.workingStateListeners ??= new WeakSet();
     if (this.workingStateListeners.has(daemon)) return;
@@ -3639,7 +3641,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   /** Capture the current daemon and delivery owner for a background context read. */
   getPaneContextSource(name: string): import("./pane-context-cache.js").PaneContextSource | null {
     const daemon = this.daemons.get(name);
-    const source = daemon?.getPaneContextSource?.();
+    // Reading context off the screen needs a pane.
+    const source = capabilitiesOf(daemon).paneView ? daemon?.getPaneContextSource?.() : null;
     if (!daemon || !source || this.shuttingDown) return null;
     const epoch = this.getDeliveryEpoch(name);
     return { ...source, generation: `${source.generation}:${epoch}`, isCurrent: () => !this.shuttingDown
@@ -4510,7 +4513,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         try { return daemon ? launchIdentity(daemon.getInteractionSnapshot().owner) : null; } catch { return null; }
       },
       paneFollow: (name) => {
-        try { return this.lifecycle.daemons.get(name)?.compactPaneUi() != null; } catch { return false; }
+        try {
+          const daemon = this.lifecycle.daemons.get(name);
+          return capabilitiesOf(daemon).paneView && daemon?.compactPaneUi() != null;
+        } catch { return false; }
       },
       changed: () => this.emitSseEvent("status", this.getUiStatus()),
     });
@@ -5187,7 +5193,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     return this.daemons.get(instanceName)?.launchSupportsSteer();
   }
 
-  private humanReceiptDaemons = new WeakSet<Daemon>();
+  private humanReceiptDaemons = new WeakSet<InstanceRunner>();
 
   /** Cached FM + lifecycle + Daemon + tmux owner; unknown ownership grants nothing. */
   private humanReceiptOwner(instanceName: string, daemon = this.daemons.get(instanceName)): string | null {
@@ -5200,9 +5206,9 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     } catch { return null; }
   }
 
-  private listenForHumanReceipt(instanceName: string, daemon: Daemon): void {
+  private listenForHumanReceipt(instanceName: string, daemon: InstanceRunner): void {
     // Lazy initialization also supports narrow prototype-based integration fixtures.
-    this.humanReceiptDaemons ??= new WeakSet<Daemon>();
+    this.humanReceiptDaemons ??= new WeakSet<InstanceRunner>();
     if (this.humanReceiptDaemons.has(daemon)) return;
     this.humanReceiptDaemons.add(daemon);
     daemon.on("human_receipt_result", (result: { receipt_id: string; owner_key: string; proof: unknown }) => {
@@ -18137,7 +18143,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     if (!daemon) return false;
     const deliveryEpoch = this.cancelPendingDeliveries(instanceName);
     daemon.clearPendingDeliveries?.(deliveryEpoch);
-    daemon.sendEscape().catch(e => this.logger.warn({ err: e, instanceName }, "sendEscape failed"));
+    cancelRunner(daemon).catch(e => this.logger.warn({ err: e, instanceName }, "sendEscape failed"));
     this.lastInboundMsg.delete(instanceName);
     this.clearCancelButton(instanceName);
     // The queued web messages were just dropped with the rest: their ticks say so, on every page.
