@@ -6,6 +6,18 @@
 
 從側邊欄的 **資源庫**（`/ui/library`）開啟。只有管理員可以使用；沒用過的 fleet 不會產生 `library/` 資料夾。
 
+## 總覽
+
+這一頁是總覽：這個 AgEnD 有哪些 **Skill**、**工具**和 **MCP server**（各一張卡片），以及哪些 Agent 在使用。每張卡片有兩種項目：
+
+- **內建・唯讀**：隨 AgEnD 附帶，從套件與程式碼列出，不能在這裡修改：內建 Skill（`src/general-knowledge/skills`，並標出適用角色：General、一般 Agent、Classic bot）、
+  `tool_set` 各 profile（`TOOL_PROFILES`，含工具清單）、AgEnD 自己的 `agend` MCP server。
+- **團隊新增**：下面的資源庫項目，可新增、檢視、刪除。
+
+每個項目都標出「使用中」：內建 Skill 依 Agent 的角色（General 拿到全部，其他 Agent 拿到標給一般 Agent 的）、工具組依 Agent 的 `tool_set`（和 daemon 用同一條規則）、
+`agend` MCP server 是所有 Agent、團隊 Skill 依掛載到哪些 Agent。這一頁只讀現有設定，不會改變任何 Agent 的檔案、設定或啟動指令。
+團隊 Skill 掛在 CLI 沒有 skill 資料夾的 Agent 上（對照表在 `src/native-skills-dir.ts`）會被標出來：它在那裡不會生效。Agent 設定頁的「團隊 Skill」欄位也會顯示同樣的提醒。
+
 ## 位置
 
 ```
@@ -77,4 +89,4 @@ instances:
 
 ## Web 路由（僅管理員）
 
-`GET /ui/library/list`、`GET /ui/library/item?kind=skill|mcp&id=<id>`、`POST /ui/library/save`、`POST /ui/library/delete`。
+`GET /ui/library/list`、`GET /ui/library/item?kind=skill|mcp&id=<id>`、`GET /ui/library/overview`（內建 Skill、工具組、`agend` MCP server 與使用情形；唯讀）、`POST /ui/library/save`、`POST /ui/library/delete`。

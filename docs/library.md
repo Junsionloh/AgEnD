@@ -8,6 +8,22 @@ section for it).
 
 Open it from the sidebar (**Library**, `/ui/library`). It is for an administrator; a fleet that never opens it gets no `library/` folder.
 
+## The overview
+
+The page is an overview of what this AgEnD has — **Skills**, **Tools** and **MCP servers**, one card each — and of which agents use them.
+Each card has two kinds of rows:
+
+- **Built in · read only** — what ships with AgEnD, listed from the package and the code, never editable here: the bundled skills
+  (`src/general-knowledge/skills`, with the roles they are published to: General, workers, classic bots), the `tool_set` profiles
+  (`TOOL_PROFILES`, with each tool list) and AgEnD's own `agend` MCP server.
+- **Added by your team** — the library items below: add, view, delete.
+
+Each row shows **Used by**: bundled skills by the agent's role (General gets every one; any other agent those marked for workers), tool sets by the
+agent's `tool_set` (the rule the daemon itself uses), the `agend` MCP server by every agent, and team skills by the agents they are mounted on.
+It only reads the existing settings; the page changes no agent file, setting or launch command. A team skill mounted on an agent whose CLI
+has no skills folder (the backend table in `src/native-skills-dir.ts`) is flagged: it cannot take effect there. The same warning shows on the
+agent's *Team skills* field.
+
 ## Where it lives
 
 ```
@@ -88,4 +104,4 @@ changed by hand (*Changed by hand*), one added outside this page (*Not recorded*
 
 ## Web routes (admin only)
 
-`GET /ui/library/list`, `GET /ui/library/item?kind=skill|mcp&id=<id>`, `POST /ui/library/save`, `POST /ui/library/delete`.
+`GET /ui/library/list`, `GET /ui/library/item?kind=skill|mcp&id=<id>`, `GET /ui/library/overview` (built-in skills, tool sets, the `agend` MCP server and who uses what; read only), `POST /ui/library/save`, `POST /ui/library/delete`.

@@ -34,14 +34,15 @@ describe("the page", () => {
     expect(p.document.querySelector('[data-library-add="mcp"]')).not.toBeNull();
   });
 
-  it("an empty library says so and offers both adds; no list request carries a body", async () => {
+  it("an empty library says so and offers both adds; no read carries a body", async () => {
     answer(200, { items: [] });
     await p.mount(h(L.LibraryPanel, { navKey: "library:|1|en" })); await settle();
     expect(p.document.querySelector(".p-library .empty")).not.toBeNull();
     expect(p.document.querySelectorAll("[data-library-add]").length).toBe(2);
     const calls = (globalThis as any).fetch.mock.calls;
-    expect(calls.length).toBe(1);
-    expect(calls[0][0]).toBe("/ui/library/list"); expect(calls[0][1].method).toBeUndefined();
+    // AGEND-248: the page also reads the overview (built-in skills and tools, who uses what); both are plain reads, neither carries a body.
+    expect(calls.map((c: any) => c[0]).sort()).toEqual(["/ui/library/list", "/ui/library/overview"]);
+    for (const c of calls) expect(c[1].method).toBeUndefined();
   });
 
   it("a session that is not an administrator is told so (not a retry)", async () => {
