@@ -16,6 +16,9 @@
  *   POST /ui/library/import?sha256=&decisions=     the same bytes again, with the preview's hash and the admin's per-skill choices (URL-encoded JSON): stores
  *   Importing only puts a skill in the library; no agent is given it.
  *
+ * AGEND-260: the list also gives each MCP item `mcp: { transport, vars, missing }` (variable NAMES; `missing`: the ones the daemon's environment lacks) and
+ * `mcpBackends`; `/save` needs `expect` to replace an item (skills and MCP), and refuses a built-in skill's name.
+ *
  * Nothing here reaches an agent: the library is only a place to keep and look at items, and the overview only reads settings.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";

@@ -1,9 +1,9 @@
 # Library (Skills and MCP servers)
 
 The library is a place inside the AgEnD data folder to keep **skills** and **MCP server definitions**. An agent gets a library
-**skill** only when an administrator mounts it on that agent (see [Mounting skills](#mounting-skills-on-an-agent)); an agent with
-nothing mounted is exactly as it was, whether the library is empty or full. MCP servers are stored but cannot be mounted yet, and
-sharing library items inside an exported agent file is a separate later step (the export file already reserves an empty `library:`
+**skill** or **MCP server** only when an administrator mounts it on that agent (see [Mounting skills](#mounting-skills-on-an-agent) and
+[Mounting MCP servers](#mounting-mcp-servers-on-an-agent-claude-code-only)); an agent with nothing mounted is exactly as it was, whether
+the library is empty or full. MCP servers can be mounted on **Claude Code** agents only for now, and sharing library items inside an exported agent file is a separate later step (the export file already reserves an empty `library:`
 section for it).
 
 Open it from the sidebar (**Library**, `/ui/library`). It is for an administrator; a fleet that never opens it gets no `library/` folder.
@@ -32,8 +32,8 @@ of that write). It takes effect the next time the agent starts. Built-in tags on
 
 The page reads the existing settings and changes nothing by itself: no agent file, setting or launch command moves unless you use **+**
 (or the agent's own Settings). A team skill mounted on an agent whose CLI has no skills folder (the backend table in
-`src/native-skills-dir.ts`) is flagged on its tag and on the agent's *Team skills* field: it cannot take effect there. MCP servers are stored
-here but cannot be given to agents yet.
+`src/native-skills-dir.ts`) is flagged on its tag and on the agent's *Team skills* field: it cannot take effect there. A team MCP server's tags count the agents that mount it (flagged the same way on a backend that cannot take
+one), and a server that needs a variable AgEnD's environment does not have shows **Missing X**.
 
 ## Preview and Edit (skills)
 
@@ -95,6 +95,30 @@ env: [GITHUB_TOKEN]         # names only; a `KEY: value` map is refused
 An `http` server has `url` (no credentials, no query string) and `headers`, a map from header name to the variable holding its value
 (`Authorization: GITHUB_TOKEN`).
 
+## Mounting MCP servers on an agent (Claude Code only)
+
+AGEND-260, a first trial on one backend. An administrator ticks MCP servers in **Settings → the agent → Workspace → Team MCP servers (from
+the Library)**, or lists their ids in `fleet.yaml` (`instances.<name>.library.mcp`). No agent tool can write it. It is a cold key: an agent
+restart applies it.
+
+- **Where it goes.** At each start the daemon adds the mounted servers to the agent's own `mcp-config.json` (in its instance folder, loaded
+  with `--mcp-config`) as `agend-lib-<id>`. Nothing else is derived from the library, and an agent with no mount gets exactly the file
+  and launch command it always had (a golden test holds that). Un-mounting writes the file without them. The person's own MCP servers
+  (Claude's user, project and local config) are never touched. Other backends and native Windows agents show *Not supported yet*, and
+  `fleet.yaml` warns that `library.mcp` is ignored there.
+- **Only a saved item runs.** An item that was edited outside the Library, placed there by hand, or breaks a rule is not enabled (it
+  runs a command), and neither is one that is gone. Save it on the Library page to record its hash and it can be mounted.
+- **Secrets.** The library holds variable *names* only. The value comes from the environment AgEnD runs in when the agent starts. It is
+  never written to a file, a log or an API answer: the config entry holds `${AGEND_LIBMCP_<n>_<NAME>}` and the launch command gives
+  Claude Code that alias (the way the fleet's own `ANTHROPIC_API_KEY` is given), so the real name (`GITHUB_TOKEN`) is set only in the MCP
+  server's own environment. A server whose variable is not set (or empty) is **not enabled**: Settings and the Library page say *Missing X*,
+  and the daemon log names it (names only). The agent still starts.
+- **`env_isolation` (AGEND-242).** The alias reaches Claude Code through the launch command, not through what the process inherits, so
+  the dry run changes nothing and an enforcing allowlist later could not take it away.
+- **Known limits.** The alias is in the Claude Code process's environment, and the value is in the launch command tmux keeps (`pane_start_command`) —
+  the same exposure as the fleet's `ANTHROPIC_API_KEY` today (AGEND-229 §5; handing it over with tmux's `-e` instead is a follow-up); and
+  the server's tools are not restricted (`--allowedTools` is a follow-up). A Claude Code agent with permissions skipped can call them.
+
 ## Mounting skills on an agent
 
 An administrator gives an agent library skills in **Settings → the agent → Workspace → Team skills (from the Library)** (tick them), with the **+** tag on the Library page, or in
@@ -140,7 +164,8 @@ changed by hand (*Changed by hand*), one added outside this page (*Not recorded*
 ## Web routes (admin only)
 
 `GET /ui/library/list`, `GET /ui/library/item?kind=skill|mcp&id=<id>` (a skill also comes as `fields` + `body`, SKILL.md split for display), `GET /ui/library/overview` (built-in skills, tool sets, the `agend` MCP server and who uses what; read only),
-`POST /ui/library/save` (`expect`: the hash an editor read; `changed` if the skill is another one now), `POST /ui/library/delete`.
+`POST /ui/library/save` (`expect`: the hash an editor read — **required** when `overwrite` is true, `changed` if the item is another one now; a built-in skill's name is refused), `POST /ui/library/delete`.
+`GET /ui/library/list` also gives each MCP item `mcp: { transport, vars, missing }` (names only) and `mcpBackends`; the overview gives `teamMcpUsage` and, per agent, `libraryMcp`.
 
 Skills in and out (AGEND-257): `GET /ui/library/export?id=<id>[&builtin=1]` and `GET /ui/library/export-all` (zip downloads), `GET /ui/library/builtin?name=<name>` (a built-in skill for display),
 `POST /ui/library/import/preview?filename=` and `POST /ui/library/import?sha256=&decisions=` (the body is the uploaded file's bytes; `decisions` is URL-encoded JSON `{ "<name>": { "action": "overwrite"|"rename"|"skip", "as": "<new name>" } }`).

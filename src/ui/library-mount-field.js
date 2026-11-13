@@ -126,11 +126,12 @@ export function LibraryMcpField({ m, L }) {
     ${state.loading ? html`<p class="note">${lw("loading")}</p>` : null}
     ${state.error && !rows.length ? html`<p class="note">${lw("loadFailed")}</p>` : null}
     ${!state.loading && !state.error && !rows.length ? html`<p class="note">${lw("mcpNone")}</p>` : null}
-    ${rows.map((s) => html`<label key=${s.id} class="check" data-library-mcp-item=${s.id}>
-      <input type="checkbox" disabled=${!pickable(s)} checked=${chosen.includes(s.id)} onChange=${(e) => toggle(s.id, e.target.checked)} />
-      <span><span class="strong">${s.id}</span>${s.description ? html` — ${s.description}` : null}
-        ${s.status === "missing" ? html` <span class="note">(${lw("gone")})</span>` : s.status !== "ok" ? html` <span class="note">(${lw("notReady")})</span>` : null}
-        ${s.status === "ok" ? html`<span class="note"> · ${s.transport === "http" ? lw("mcpHttp") : lw("mcpStdio")} · ${s.vars.length ? lw("mcpUses", s.vars.join(", ")) : lw("mcpNoVars")}</span>` : null}
-        ${s.missing.length ? html`<span class="pill off" data-library-mcp-missing=${s.missing.join(",")}>${lw("mcpMissing", s.missing.join(", "))}</span>` : null}</span></label>`)}
+    ${rows.map((s) => html`<div key=${s.id} class="lib-mcp-item" data-library-mcp-item=${s.id}>
+      <label class="check">
+        <input type="checkbox" disabled=${!pickable(s)} checked=${chosen.includes(s.id)} onChange=${(e) => toggle(s.id, e.target.checked)} />
+        <span><span class="strong">${s.id}</span>${s.description ? html` — ${s.description}` : null}
+          ${s.status === "missing" ? html` <span class="note">(${lw("gone")})</span>` : s.status !== "ok" ? html` <span class="note">(${lw("notReady")})</span>` : null}
+          ${s.status === "ok" ? html`<span class="note lib-sub">${s.transport === "http" ? lw("mcpHttp") : lw("mcpStdio")} · ${s.vars.length ? lw("mcpUses", s.vars.join(", ")) : lw("mcpNoVars")}</span>` : null}</span></label>
+      ${s.missing.length ? html`<p class="feedback warning" role="note" data-library-mcp-missing=${s.missing.join(",")}>${lw("mcpMissing", s.missing.join(", "))}</p>` : null}</div>`)}
     ${rows.length ? html`<p class="note">${lw("mcpNote")}</p>` : null}</div>`;
 }

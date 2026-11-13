@@ -28,11 +28,11 @@ register("library", {
     skills: "Skills", tools: "Tools", mcp: "MCP servers", groupResources: "Resources",
     lead_skills: "Skills agents can load. Built-in ones are given by an agent’s role; team skills are given to the agents you pick.",
     lead_tools: "A tool set is the list of AgEnD tools an agent may use; an agent’s `tool_set` setting picks one.",
-    lead_mcp: "MCP servers. AgEnD’s own comes with it; the ones you add are kept here and are not given to agents yet.",
+    lead_mcp: "MCP servers. AgEnD’s own comes with it; the ones you add are given to Claude Code agents you mount them on.",
     counts: "{0} built in · {1} team",
     filterSkills: "Filter skills", filterTools: "Filter tool sets", filterMcp: "Filter MCP servers", noMatch: "Nothing matches “{0}”.",
     teamGroup: "Added by your team", builtinGroup: "Built in · read only",
-    teamSkillsLead: "Skills you added. Give one to an agent with the “+” tag, or in Settings → the agent → Workspace.", teamMcpLead: "MCP server definitions you added. They are kept here and are not given to agents yet.",
+    teamSkillsLead: "Skills you added. Give one to an agent with the “+” tag, or in Settings → the agent → Workspace.", teamMcpLead: "MCP server definitions you added. Mount one on an agent in Settings → the agent → Workspace (Claude Code only for now). A secret is never kept here: a server names the variables it reads.",
     builtinSkillsLead: "Skills that come with AgEnD. Each is given to agents by their role.", builtinToolsLead: "Tool sets that come with AgEnD.", builtinMcpLead: "AgEnD’s own MCP server.",
     builtin: "Built in", team: "Team",
     role_general: "General", role_worker: "Workers", role_classic: "Classic bots", givenTo: "Given to", roles: "Roles",
@@ -86,11 +86,11 @@ register("library", {
     skills: "Skills", tools: "工具", mcp: "MCP server", groupResources: "資源",
     lead_skills: "Agent 可以載入的 Skill。內建的依 Agent 的角色自動帶入；團隊 Skill 交給你挑的 Agent。",
     lead_tools: "工具組是 Agent 可以使用的 AgEnD 工具清單，由 Agent 的 `tool_set` 設定選擇。",
-    lead_mcp: "MCP server。AgEnD 自己的隨附；你新增的只存放在這裡，還不會交給 Agent。",
+    lead_mcp: "MCP server。AgEnD 自己的隨附；你新增的會交給你掛載它的 Claude Code Agent。",
     counts: "內建 {0}・團隊 {1}",
     filterSkills: "篩選 Skill", filterTools: "篩選工具組", filterMcp: "篩選 MCP server", noMatch: "沒有符合「{0}」的項目。",
     teamGroup: "團隊新增", builtinGroup: "內建・唯讀",
-    teamSkillsLead: "你新增的 Skill。用「＋」標籤交給 Agent，或到「設定 → 該 Agent → 工作目錄」。", teamMcpLead: "你新增的 MCP server 定義。目前只存放在這裡，還不會交給 Agent。",
+    teamSkillsLead: "你新增的 Skill。用「＋」標籤交給 Agent，或到「設定 → 該 Agent → 工作目錄」。", teamMcpLead: "你新增的 MCP server 定義。到「設定 → 該 Agent → 工作區」掛載（目前只有 Claude Code）。密鑰不存在這裡：MCP 只寫它要讀的變數名稱。",
     builtinSkillsLead: "隨 AgEnD 附帶的 Skill，依 Agent 的角色自動帶入。", builtinToolsLead: "隨 AgEnD 附帶的工具組。", builtinMcpLead: "AgEnD 自己的 MCP server。",
     builtin: "內建", team: "團隊",
     role_general: "General", role_worker: "一般 Agent", role_classic: "Classic bot", givenTo: "適用", roles: "角色",
@@ -277,10 +277,10 @@ function UsedBy({ names, to, agents, limit, onMore, onAdd }) {
  * line 2 is who uses it, what it is for / how big it is, and whether it is built in or the team's. The actions are one column at the right,
  * centered on the row: Export and Delete (on a screen wide enough) and, always last — so always in the same place — "Details". A row with no agent tags has the same two lines.
  */
-function ItemRow({ icon, name, description, tags, extra, warn, rowAttrs, children }) {
+function ItemRow({ icon, name, description, tags, extra, warn, warnText, warnTip, warnAttrs, rowAttrs, children }) {
   return html`<div class=${`row-item lib-row${warn ? " is-warn" : ""}`} ...${rowAttrs}>
     <span class="lib-ico"><${Icon} name=${icon} size=${18} /></span>
-    <div class="lib-main"><span class="strong">${name}</span><span class="note lib-desc" title=${description || undefined}>${description || ""}</span></div>
+    <div class="lib-main"><span class="strong">${name}</span><span class="note lib-desc" title=${warnText ? `${warnText} — ${description || ""}` : (description || undefined)}>${warnText ? html`<span class="lib-missing" title=${warnTip || undefined} ...${warnAttrs}>${warnText}</span> ` : null}${description || ""}</span></div>
     <div class="lib-meta">${tags}${extra}</div>
     <div class="lib-actions">${children}</div>
   </div>`;
@@ -300,11 +300,11 @@ function Row({ item, used, agents, limit, onView, onDelete, onAdd }) {
   const tags = used ? html`<${UsedBy} names=${used} to=${item.kind === "skill" ? "skill" : "mcp-team"} agents=${agents} limit=${limit} onMore=${() => onView(item)} onAdd=${item.kind === "skill" ? add : null} />` : null;
   const missing = item.kind === "mcp" && item.mcp && item.mcp.missing && item.mcp.missing.length ? item.mcp.missing : null;
   const extra = html`${warn ? html`<span class="pill off" title=${hasHint ? hint : undefined}>${tn(`st_${item.status}`)}</span>` : null}
-    ${missing ? html`<span class="pill off" title=${tn("mcpMissingTip")} data-library-mcp-missing=${missing.join(",")}>${tn("mcpMissing", missing.join(", "))}</span>` : null}
+
     ${meta ? html`<span class="note lib-size">${meta}</span>` : null}<span class="pill lib-kind">${tn("team")}</span>`;
   return html`<${ItemRow} icon=${item.kind === "skill" ? "book" : "plug"} name=${item.id}
     description=${`${item.description || ""}${item.status === "invalid" && item.reason ? ` ${item.reason}` : ""}`.trim()}
-    tags=${tags} extra=${extra} warn=${warn} rowAttrs=${{ "data-library-item": `${item.kind}:${item.id}` }}>
+    tags=${tags} extra=${extra} warn=${warn} warnText=${missing ? tn("mcpMissing", missing.join(", ")) : null} warnTip=${tn("mcpMissingTip")} warnAttrs=${missing ? { "data-library-mcp-missing": missing.join(",") } : null} rowAttrs=${{ "data-library-item": `${item.kind}:${item.id}` }}>
     ${item.kind === "skill" ? (openable ? exportLink(item) : html`<button type="button" class="icon-btn lib-act-extra" disabled aria-label=${tn("exportOne", item.id)}><${Icon} name="download" size=${16} /></button>`) : null}
     <button type="button" class="icon-btn lib-act-extra" onClick=${() => onDelete(item)} data-library-delete aria-label=${`${tn("delete")} ${item.id}`} title=${`${tn("delete")} ${item.id}`}><${Icon} name="trash" size=${16} /></button>
     <button type="button" class="btn btn-sm" onClick=${() => onView(item)} disabled=${!openable} data-library-view>${tn("details")}</button>

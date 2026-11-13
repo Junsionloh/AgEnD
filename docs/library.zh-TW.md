@@ -1,7 +1,7 @@
 # 資源庫（Skill 與 MCP server）
 
-資源庫是 AgEnD 資料夾裡的一個地方，用來存放 **Skill** 和 **MCP server 定義**。Agent 只有在管理員把某個 **Skill** 掛載到它身上時才會拿到
-（見下方「把 Skill 掛載到 Agent」）；沒掛載任何東西的 Agent 完全不變，不論資源庫是空的還是滿的。MCP server 目前只能存放、還不能掛載；
+資源庫是 AgEnD 資料夾裡的一個地方，用來存放 **Skill** 和 **MCP server 定義**。Agent 只有在管理員把某個 **Skill** 或 **MCP server** 掛載到它身上時才會拿到
+（見下方「把 Skill 掛載到 Agent」「把 MCP 掛載到 Agent」）；沒掛載任何東西的 Agent 完全不變，不論資源庫是空的還是滿的。MCP 目前只有 **Claude Code** 的 Agent 能掛載；
 在匯出的 Agent 檔案裡引用資源庫項目是之後另外的步驟（匯出檔已經預留一個空的 `library:` 欄位）。
 
 從側邊欄的 **資源庫**（`/ui/library`）開啟。只有管理員可以使用；沒用過的 fleet 不會產生 `library/` 資料夾。
@@ -26,7 +26,7 @@
 
 這一頁只讀現有設定，自己不改任何東西：除非你用 **＋**（或 Agent 自己的設定），否則不會改變任何 Agent 的檔案、設定或啟動指令。
 團隊 Skill 掛在 CLI 沒有 skill 資料夾的 Agent 上（對照表在 `src/native-skills-dir.ts`），標籤和 Agent 設定頁的「團隊 Skill」欄位都會標出：它在那裡不會生效。
-MCP server 目前只能存放，還不能交給 Agent。
+團隊 MCP 的標籤會算進掛載它的 Agent（CLI 還不支援的 backend 同樣標示警告）；需要的變數在 AgEnD 執行環境裡沒有時，會顯示 **缺少 X**。
 
 ## 位置
 
@@ -61,6 +61,26 @@ env: [GITHUB_TOKEN]         # 只寫名稱；`KEY: value` 這種寫法會被拒�
 ```
 
 `http` 類型有 `url`（不能含帳密或查詢字串）和 `headers`（標頭名稱對應到存放其值的變數，例如 `Authorization: GITHUB_TOKEN`）。
+
+## 把 MCP 掛載到 Agent（目前只有 Claude Code）
+
+AGEND-260，先在單一 backend 試做。管理員在 **設定 → 該 Agent → 工作區 → 團隊 MCP（來自資源庫）** 勾選，或在 `fleet.yaml` 的
+`instances.<name>.library.mcp` 填 id。沒有任何 Agent 工具能改它。屬於冷設定：重啟 Agent 後生效。
+
+- **寫到哪裡。** 每次啟動時，daemon 把掛載的 MCP 加進該 Agent 自己的 `mcp-config.json`（在它的 instance 資料夾，用 `--mcp-config` 載入），
+  名稱是 `agend-lib-<id>`。資源庫不會影響這個檔案的其他任何部分；沒掛載的 Agent，檔案與啟動指令和以前逐 byte 相同（有 golden 測試）。
+  取消掛載就是寫出不含它們的檔案。使用者自己的 MCP（Claude 的 user／project／local 設定）完全不碰。其他 backend 與 Windows 原生 Agent
+  顯示「尚未支援」，`fleet.yaml` 也會警告 `library.mcp` 在那裡被忽略。
+- **只有存過的項目會執行。** 在資源庫外被改過、手動放進去、或不符規則的項目不會啟用（它會執行指令），已經不在資源庫的也一樣。
+  到資源庫頁儲存一次，記下雜湊後才能掛載。
+- **密鑰。** 資源庫只存變數**名稱**。值在 Agent 啟動時取自 AgEnD 執行環境，絕不寫進檔案、log 或 API 回應：設定檔裡是
+  `${AGEND_LIBMCP_<n>_<NAME>}`，啟動指令只把這個別名交給 Claude Code（和 fleet 自己的 `ANTHROPIC_API_KEY` 做法相同），
+  所以真正的名稱（`GITHUB_TOKEN`）只會出現在該 MCP 自己的環境裡。變數沒設定（或是空的）的項目**不會啟用**：設定頁和資源庫頁顯示
+  「缺少 X」，daemon log 只寫名稱；Agent 仍會正常啟動。
+- **`env_isolation`（AGEND-242）。** 別名是經由啟動指令交給 Claude Code，不是靠行程繼承，所以 dry-run 不受影響，之後的強制 allowlist 也拿不掉它。
+- **已知限制。** 別名會在 Claude Code 行程的環境裡，值也在 tmux 保存的啟動指令裡（`pane_start_command`）——和目前 fleet 的 `ANTHROPIC_API_KEY`
+  同樣的暴露面（AGEND-229 §5；改用 tmux 的 `-e` 交付是後續項目）；MCP 的工具沒有限制
+  （`--allowedTools` 之後再做）。略過權限的 Claude Code Agent 可以直接呼叫它們。
 
 ## 把 Skill 掛載到 Agent
 
@@ -99,7 +119,7 @@ instances:
 
 ## Web 路由（僅管理員）
 
-`GET /ui/library/list`、`GET /ui/library/item?kind=skill|mcp&id=<id>`、`GET /ui/library/overview`（內建 Skill、工具組、`agend` MCP server 與使用情形；唯讀）、`POST /ui/library/save`（`expect`：編輯器讀到的雜湊；Skill 已被改過則回 `changed`）、`POST /ui/library/delete`。Skill 的 `item` 另外附 `fields` 和 `body`（把 SKILL.md 拆開給畫面用）。
+`GET /ui/library/list`、`GET /ui/library/item?kind=skill|mcp&id=<id>`、`GET /ui/library/overview`（內建 Skill、工具組、`agend` MCP server 與使用情形；唯讀）、`POST /ui/library/save`（`expect`：編輯器讀到的雜湊，`overwrite` 為 true 時**必填**；項目已被改過則回 `changed`；內建 Skill 的名稱會被拒絕）、`POST /ui/library/delete`。Skill 的 `item` 另外附 `fields` 和 `body`（把 SKILL.md 拆開給畫面用）。
 
 Skill 的導入與導出（AGEND-257）：`GET /ui/library/export?id=<id>[&builtin=1]`、`GET /ui/library/export-all`（zip 下載）、`GET /ui/library/builtin?name=<name>`（顯示用的內建 Skill）、
 `POST /ui/library/import/preview?filename=` 和 `POST /ui/library/import?sha256=&decisions=`（body 是上傳檔案的 bytes；`decisions` 是 URL 編碼的 JSON：`{ "<名稱>": { "action": "overwrite"|"rename"|"skip", "as": "<新名稱>" } }`）。

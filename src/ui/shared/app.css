@@ -870,6 +870,9 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .p-library .lib-main { grid-area: main; display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
 .p-library .lib-main > .strong { flex: 0 1 auto; min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p-library .lib-desc { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-mcp-item .lib-sub { display: block; }   /* AGEND-260: how a team MCP server runs and what it reads, under its name in the agent's Settings */
+.lib-mcp-item > .feedback { margin: 2px 0 var(--s-2) 28px; }
+.p-library .lib-missing { color: var(--warn); font-weight: 600; }   /* AGEND-260: "Missing X" leads the description line, where it is never pushed out of the row */
 .p-library .lib-meta { grid-area: meta; display: flex; align-items: center; flex-wrap: nowrap; gap: var(--s-2); min-width: 0; overflow: hidden; }
 .p-library .lib-meta > * { flex: none; }
 .p-library .lib-meta > .lib-tags { flex: 0 1 auto; min-width: 0; }
