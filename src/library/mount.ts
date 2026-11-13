@@ -9,7 +9,8 @@
  *  - the record is `.agend-library-skills.json` beside the bundled one (`.agend-managed-skills.json`, never read or written here);
  *  - who wins a name: the person's own folder > a bundled skill > a library skill. A folder that exists and is not in the record
  *    is the person's and is left alone; a bundled skill's name is reserved (the library skill is skipped, not published);
- *  - un-mounting removes only the folders listed in the record;
+ *  - un-mounting removes only the folders listed in the record, and only one that is still exactly what was written (the record
+ *    keeps its hash): a folder the person edited or replaced is theirs — not overwritten, not removed;
  *  - a folder that never had a mount gets nothing: no mount and no record → no file, no folder is touched.
  *
  * A skill is published only when it passes every library rule AND matches the hash the library's lock recorded (LibraryStore.
@@ -33,6 +34,8 @@ export interface LibrarySkillsResult {
   skipped: Array<{ id: string; reason: SkippedReason }>;
   /** Ids whose folder was removed because they are no longer mounted (or the library item is gone). */
   removed: string[];
+  /** Ids that left the record but whose folder stays: the person changed it, so it is theirs. */
+  kept: string[];
 }
 
 const sha = (b: Buffer | string): string => createHash("sha256").update(b).digest("hex");
@@ -114,7 +117,7 @@ export interface SyncLibrarySkillsInput {
 export function syncLibrarySkills(input: SyncLibrarySkillsInput): LibrarySkillsResult {
   const { destSkills, store, reserved } = input;
   const mount = normalizeMount([...input.mount]);
-  const result: LibrarySkillsResult = { published: [], skipped: [], removed: [] };
+  const result: LibrarySkillsResult = { published: [], skipped: [], removed: [], kept: [] };
   const manifestPath = join(destSkills, LIBRARY_SKILLS_MANIFEST);
   // Nothing mounted and nothing ever published here: not one file or folder is created, read or changed.
   if (mount.length === 0 && !exists(manifestPath)) return result;
@@ -124,20 +127,26 @@ export function syncLibrarySkills(input: SyncLibrarySkillsInput): LibrarySkillsR
 
   for (const id of mount) {
     const folder = join(destSkills, id);
-    const ours = owned.has(id);
+    const rec = owned.get(id);
     // A bundled skill's name is reserved. If a copy of ours is there from before the name was taken, it goes below.
     if (reserved.has(id)) { result.skipped.push({ id, reason: "bundled" }); continue; }
     // The person's own folder (anything there that is not in our record) always wins, untouched.
-    if (!ours && exists(folder)) { result.skipped.push({ id, reason: "user-owned" }); continue; }
+    const present = exists(folder);
+    if (!rec && present) { result.skipped.push({ id, reason: "user-owned" }); continue; }
+    // A copy of ours is only ours while it is still what we wrote (the record's hash). One the person edited, or replaced with a
+    // folder of their own under the same name, is theirs now: not overwritten, not removed. It stays listed while the skill is
+    // mounted, so it is managed again if it is put back exactly as it was.
+    const current = present ? hashFolder(folder) : null;
+    if (rec && present && current !== rec.sha256) { result.skipped.push({ id, reason: "modified" }); next.set(id, rec); continue; }
     const item = store.skillForMount(id);
     if (!item.ok) {
       result.skipped.push({ id, reason: item.reason });
-      // The library lost the item: the published copy goes with it. An item that cannot be trusted right now (hand-edited, breaks
-      // a rule) leaves the copy already published as it is — not updated, not removed.
-      if (ours && item.reason !== "not_found") next.set(id, owned.get(id)!);
+      // The library lost the item: the published copy goes with it (below). An item that cannot be trusted right now (hand-edited,
+      // breaks a rule) leaves the copy already published as it is — not updated, not removed.
+      if (rec && item.reason !== "not_found") next.set(id, rec);
       continue;
     }
-    if (!(ours && hashFolder(folder) === item.sha256)) {
+    if (!(present && current === item.sha256)) {
       mkdirSync(destSkills, { recursive: true });
       writeSkillFolder(destSkills, id, item.files);
     }
@@ -145,14 +154,18 @@ export function syncLibrarySkills(input: SyncLibrarySkillsInput): LibrarySkillsR
     result.published.push(id);
   }
 
-  // Only what the record lists is ever removed: no longer mounted, now reserved by a bundled skill, or gone from the library.
-  for (const id of owned.keys()) {
+  // Only what the record lists is ever removed — and only a folder that is still exactly what was written. No longer mounted, now
+  // reserved by a bundled skill, or gone from the library: an untouched copy is removed; one the person changed is left where it
+  // is (and leaves the record).
+  for (const [id, rec] of owned) {
     if (next.has(id)) continue;
+    const folder = join(destSkills, id);
+    if (exists(folder) && hashFolder(folder) !== rec.sha256) { result.kept.push(id); continue; }
     try {
-      rmSync(join(destSkills, id), { recursive: true, force: true });
+      rmSync(folder, { recursive: true, force: true });
       result.removed.push(id);
     } catch {
-      next.set(id, owned.get(id)!);   // still there: stays listed, tried again at the next start
+      next.set(id, rec);   // still there: stays listed, tried again at the next start
     }
   }
 

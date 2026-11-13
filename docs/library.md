@@ -65,12 +65,16 @@ the built-in record (`.agend-managed-skills.json`), which it never touches.
 
 - **Who wins a name:** a folder you made yourself > a built-in skill > a library skill. A folder that is not in the record is yours and is
   never changed or removed; a library skill named like a built-in one is skipped (and said once in the log).
-- **Un-mounting** removes only the folders listed in the record. An agent with nothing mounted and no record gets no new file.
+- **Un-mounting** removes only the folders listed in the record, and only one that is still exactly what AgEnD wrote (the record keeps its hash). An agent with nothing mounted and no record gets no new file.
 - **Only a skill that passes every rule and is still the saved one is given.** A skill edited by hand in the library folder, or put there
   without saving it on the Library page, is not given until it is saved again; one that was already given is left as it is.
 - **Agents that share one working directory** share its skills folder, so the folder gets the union of their mounts (otherwise each start
   would remove what the other was given).
-- A published skill folder belongs to AgEnD: edits made in it are put back at the next start. To change a skill, change it in the library.
+- **A change you make in a published folder is yours.** If a published folder no longer matches what AgEnD wrote — you edited it, or replaced it with a
+  folder of your own of the same name — AgEnD does not overwrite it with library updates and never deletes it, not even when you un-mount
+  the skill (it just leaves its record, and the log says so). To get the library version back, delete the folder and restart the agent.
+- **When it runs:** skills are published only when a fleet agent or the General starts (not for a ClassicBot room or a Windows native agent). An agent that was
+  deleted leaves its skills in a shared folder until another agent that shares the folder restarts, which then cleans up what is no longer mounted.
 
 ## Secrets
 

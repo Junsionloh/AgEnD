@@ -23331,11 +23331,12 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       const reserved = new Set<string>();
       try { for (const n of readdirSync(knowledge)) if (existsSync(join(knowledge, n, "SKILL.md"))) reserved.add(n); } catch { /* no bundle here */ }
       const result = syncLibrarySkills({ destSkills, mount: [...mount], store: new LibraryStore(this.dataDir), reserved });
-      const said = JSON.stringify([result.skipped, result.removed]);
-      if ((result.skipped.length || result.removed.length) && this.librarySkillsSaid.get(destSkills) !== said) {
+      const said = JSON.stringify([result.skipped, result.removed, result.kept]);
+      if ((result.skipped.length || result.removed.length || result.kept.length) && this.librarySkillsSaid.get(destSkills) !== said) {
         this.librarySkillsSaid.set(destSkills, said);
         if (result.skipped.length) this.logger.warn({ skipped: result.skipped, destSkills, name }, "Library skills not published (see reason per skill)");
         if (result.removed.length) this.logger.info({ removed: result.removed, destSkills, name }, "Removed library skills that are no longer mounted");
+        if (result.kept.length) this.logger.info({ kept: result.kept, destSkills, name }, "Library skill folders left in place: they were changed after AgEnD published them");
       }
     } catch (err) {
       this.logger.warn({ err, name, backend }, "Failed to sync library skills — continuing startup");

@@ -45,7 +45,7 @@ describe("syncLibrarySkills", () => {
 
   it("no mount and no record: not one file or folder is created, even when the library has skills", () => {
     add(store, "review");
-    expect(sync([])).toEqual({ published: [], skipped: [], removed: [] });
+    expect(sync([])).toEqual({ published: [], skipped: [], removed: [], kept: [] });
     expect(existsSync(join(dest, ".."))).toBe(false);
   });
 
@@ -74,16 +74,83 @@ describe("syncLibrarySkills", () => {
     expect(statSync(manifestFile).mtimeMs).toBe(past.getTime());
   });
 
-  it("a library update reaches the agent; an edit made in the published copy is put back", () => {
+  it("a library update reaches the agent while the published copy is untouched", () => {
     add(store, "review", "v1");
     sync(["review"]);
     add(store, "review", "v2", [{ path: "extra.md", content: "x" }]);
-    sync(["review"]);
+    expect(sync(["review"]).published).toEqual(["review"]);
     expect(readFileSync(join(dest, "review", "SKILL.md"), "utf8")).toBe(md("review", "v2"));
     expect(existsSync(join(dest, "review", "extra.md"))).toBe(true);
-    writeFileSync(join(dest, "review", "SKILL.md"), "scribbled");
+    expect(manifest(dest).skills.review.sha256).toBe(store.list().find((i) => i.id === "review")!.sha256);
+  });
+
+  it("an edit made in the published copy is the person's: not overwritten by a library update, not put back", () => {
+    add(store, "review", "v1");
     sync(["review"]);
+    const record = readFileSync(join(dest, LIBRARY_SKILLS_MANIFEST), "utf8");
+    writeFileSync(join(dest, "review", "SKILL.md"), "my own version\n");
+    writeFileSync(join(dest, "review", "notes.md"), "mine\n");
+    add(store, "review", "v2");                                               // the library moved on
+    const r = sync(["review"]);
+    expect(r).toMatchObject({ published: [], skipped: [{ id: "review", reason: "modified" }], removed: [] });
+    expect(readFileSync(join(dest, "review", "SKILL.md"), "utf8")).toBe("my own version\n");
+    expect(readFileSync(join(dest, "review", "notes.md"), "utf8")).toBe("mine\n");
+    expect(readFileSync(join(dest, LIBRARY_SKILLS_MANIFEST), "utf8")).toBe(record);   // still listed while mounted
+  });
+
+  it("a copy put back exactly as published is managed again", () => {
+    add(store, "review", "v1");
+    sync(["review"]);
+    const original = readFileSync(join(dest, "review", "SKILL.md"), "utf8");
+    writeFileSync(join(dest, "review", "SKILL.md"), "edited\n");
+    sync(["review"]);
+    writeFileSync(join(dest, "review", "SKILL.md"), original);
+    add(store, "review", "v2");
+    expect(sync(["review"]).published).toEqual(["review"]);
     expect(readFileSync(join(dest, "review", "SKILL.md"), "utf8")).toBe(md("review", "v2"));
+  });
+
+  it("a person who replaces our folder with their own of the same name keeps it", () => {
+    add(store, "review");
+    sync(["review"]);
+    rmSync(join(dest, "review"), { recursive: true });
+    mkdirSync(join(dest, "review"));
+    writeFileSync(join(dest, "review", "SKILL.md"), "theirs\n");
+    expect(sync(["review"]).skipped).toEqual([{ id: "review", reason: "modified" }]);
+    expect(readFileSync(join(dest, "review", "SKILL.md"), "utf8")).toBe("theirs\n");
+    const r = sync([]);                                                        // un-mounted: still theirs, and it leaves the record
+    expect(r).toMatchObject({ removed: [], kept: ["review"] });
+    expect(readFileSync(join(dest, "review", "SKILL.md"), "utf8")).toBe("theirs\n");
+    expect(existsSync(join(dest, LIBRARY_SKILLS_MANIFEST))).toBe(false);
+  });
+
+  it("un-mounting never deletes a copy the person changed (an untouched one next to it is removed)", () => {
+    add(store, "review"); add(store, "triage");
+    sync(["review", "triage"]);
+    writeFileSync(join(dest, "review", "SKILL.md"), "edited\n");
+    const r = sync([]);
+    expect(r).toMatchObject({ removed: ["triage"], kept: ["review"] });
+    expect(readFileSync(join(dest, "review", "SKILL.md"), "utf8")).toBe("edited\n");
+    expect(existsSync(join(dest, "triage"))).toBe(false);
+    expect(existsSync(join(dest, LIBRARY_SKILLS_MANIFEST))).toBe(false);
+    // and it is the person's now: mounting the same name again finds a folder that is not in the record
+    expect(sync(["review"]).skipped).toEqual([{ id: "review", reason: "user-owned" }]);
+  });
+
+  it("an item deleted from the library, or a name a bundled skill has taken, leaves a changed copy alone too", () => {
+    add(store, "review"); add(store, "concepts");
+    sync(["review", "concepts"]);
+    writeFileSync(join(dest, "review", "SKILL.md"), "edited\n");
+    writeFileSync(join(dest, "concepts", "SKILL.md"), "edited too\n");
+    store.remove("skill", "review");
+    const r = sync(["review", "concepts"], new Set(["concepts"]));
+    expect(r.removed).toEqual([]);
+    expect(r.kept).toEqual(["concepts"]);                                      // reserved by a bundled skill: leaves the record
+    expect(r.skipped).toEqual(expect.arrayContaining([{ id: "review", reason: "modified" }]));   // still mounted: stays listed, untouched
+    sync([]);
+    expect(readFileSync(join(dest, "review", "SKILL.md"), "utf8")).toBe("edited\n");   // …and un-mounted later, still not deleted
+    expect(readFileSync(join(dest, "review", "SKILL.md"), "utf8")).toBe("edited\n");
+    expect(readFileSync(join(dest, "concepts", "SKILL.md"), "utf8")).toBe("edited too\n");
   });
 
   it("the person's own folder of the same name wins and is never touched, also after un-mounting", () => {
@@ -177,7 +244,7 @@ describe("syncLibrarySkills", () => {
   });
 
   it("ids that are not valid library ids are ignored (nothing is written for them)", () => {
-    expect(sync(["../escape", "CON", "con", ""])).toEqual({ published: [], skipped: [], removed: [] });
+    expect(sync(["../escape", "CON", "con", ""])).toEqual({ published: [], skipped: [], removed: [], kept: [] });
     expect(existsSync(join(dest, ".."))).toBe(false);
   });
 });
