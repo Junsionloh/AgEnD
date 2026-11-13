@@ -131,8 +131,13 @@ for (const c of matrix()) {
   await x.page.waitForSelector("[data-library-import-found]"); await x.page.waitForTimeout(400);
   R.importFound = await x.page.locator("[data-library-import-found]").textContent();
   R.storedByPreview = JSON.stringify(store.list().map((i: any) => i.id)) !== before;
-  await x.page.locator('[data-library-import-skill="incoming-skill"] [data-library-import-text-toggle]').click(); await x.page.waitForTimeout(200);
+  await x.page.locator("[data-library-import-found]").scrollIntoViewIfNeeded(); await x.page.waitForTimeout(200);
   await shot("import-preview"); R.importDialog = await x.page.evaluate(dlgMeasure);
+  await x.page.locator('[data-library-import-skill="incoming-skill"] [data-library-import-text-toggle]').click(); await x.page.waitForTimeout(200);
+  await x.page.locator('[data-library-import-skill="incoming-skill"] [data-library-import-text]').scrollIntoViewIfNeeded(); await x.page.waitForTimeout(200);
+  await shot("import-text");
+  await x.page.locator('[data-library-import-skill="leaky"]').scrollIntoViewIfNeeded(); await x.page.waitForTimeout(200);
+  await shot("import-refused");
   R.clash = { team: await x.page.locator('[data-library-clash="team"] [data-library-choice]').evaluateAll((e: any[]) => e.map((i) => i.getAttribute("data-library-choice") + (i.checked ? "*" : ""))),
     builtin: await x.page.locator('[data-library-clash="builtin"] [data-library-choice]').evaluateAll((e: any[]) => e.map((i) => i.getAttribute("data-library-choice") + (i.checked ? "*" : ""))),
     refused: await x.page.locator('[data-library-import-skill="leaky"] [data-library-import-error]').textContent(),
