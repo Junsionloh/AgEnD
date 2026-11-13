@@ -1,0 +1,73 @@
+/**
+ * AGEND-243: the library's web routes, admin only (as Settings is). web-api.ts hands over the few helpers it owns, so this file
+ * stays outside the big router:
+ *
+ *   GET  /ui/library/list                          every item and its status (see LibraryStatus)
+ *   GET  /ui/library/item?kind=skill|mcp&id=<id>   one item, whole
+ *   POST /ui/library/save   {kind, id, files | text, overwrite?}   a skill's files, or an MCP file's YAML text
+ *   POST /ui/library/delete {kind, id}
+ *
+ * Nothing here reaches an agent: the library is only a place to keep and look at items.
+ */
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { LibraryStore } from "./store.js";
+import { LIBRARY_LIMITS, isLibraryId, type LibraryError, type LibraryKind } from "./schema.js";
+
+export interface LibraryWebHost {
+  method: string;
+  path: string;
+  url: URL;
+  req: IncomingMessage;
+  res: ServerResponse;
+  /** The fleet's data folder (`AGEND_HOME`); the library is its `library/` folder. */
+  home: string;
+  json(res: ServerResponse, status: number, data: unknown): void;
+  readJson(req: IncomingMessage): Promise<Record<string, unknown>>;
+  /** The admin's admission, or null when the request is not an administrator's. */
+  admission(): string | null;
+  /** False (and the answer already sent) when the connection was closed or the session changed while the body was read. */
+  stillOpen(): boolean;
+}
+
+const STATUS: Record<LibraryError["error"], number> = {
+  invalid_request: 400, invalid_id: 400, invalid_path: 400, duplicate_path: 400, missing_skill_md: 400, bad_frontmatter: 400, name_mismatch: 400,
+  missing_description: 400, too_large: 413, too_many_files: 413, not_text: 400, secret_found: 400, exists: 409, not_found: 404, too_many_items: 409,
+  invalid_yaml: 400, bad_mcp: 400, unsafe_item: 422,
+};
+const kindOf = (v: unknown): LibraryKind | null => (v === "skill" || v === "mcp" ? v : null);
+
+/** True when the request was a library route (answered here, whatever the outcome). */
+export function handleLibraryRequest(h: LibraryWebHost): boolean {
+  const { method, path, res } = h;
+  const route = method === "GET" ? (path === "/ui/library/list" || path === "/ui/library/item") : method === "POST" && (path === "/ui/library/save" || path === "/ui/library/delete");
+  if (!route) return false;
+  const admission = h.admission();
+  if (!admission) { h.json(res, 403, { error: "admin_required" }); return true; }
+  const store = new LibraryStore(h.home);
+  const send = (r: { ok: boolean }): void => {
+    if (r.ok) { h.json(res, 200, r); return; }
+    const e = r as LibraryError;
+    h.json(res, STATUS[e.error] ?? 400, { error: e.error, ...(e.path ? { path: e.path } : {}), ...(e.detail ? { detail: e.detail } : {}), ...(e.findings ? { findings: e.findings } : {}) });
+  };
+  try {
+    if (method === "GET") {
+      if (path === "/ui/library/list") { h.json(res, 200, { items: store.list(), limits: LIBRARY_LIMITS }); return true; }
+      const kind = kindOf(h.url.searchParams.get("kind")), id = h.url.searchParams.get("id") ?? "";
+      if (!kind || !isLibraryId(id)) { h.json(res, 400, { error: "invalid_request" }); return true; }
+      send(store.get(kind, id));
+      return true;
+    }
+  } catch { h.json(res, 500, { error: "library_failed" }); return true; }
+  void (async () => {
+    let body: Record<string, unknown>;
+    try { body = await h.readJson(h.req); } catch { h.json(res, 400, { error: "Invalid JSON" }); return; }
+    if (!h.stillOpen()) return;
+    if (h.admission() !== admission) { h.json(res, 403, { error: "admin_required" }); return; }
+    const kind = kindOf(body?.kind);
+    if (!body || Array.isArray(body) || typeof body !== "object" || !kind) { h.json(res, 400, { error: "invalid_request" }); return; }
+    if (path === "/ui/library/delete") { send(store.remove(kind, body.id)); return; }
+    const overwrite = body.overwrite === true;
+    send(kind === "skill" ? store.addSkill(body.id, body.files, { overwrite }) : store.addMcp(body.id, body.text, { overwrite }));
+  })().catch(() => { if (!res.headersSent) h.json(res, 500, { error: "library_failed" }); });
+  return true;
+}
