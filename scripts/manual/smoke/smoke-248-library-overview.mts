@@ -33,51 +33,83 @@ const seed = () => {
   raw[names[3]].tool_set = "minimal";
 };
 const r: any = {};
+// The layout, measured: the category list is beside the category on a desk (the Settings grid), every row is one compact line, nothing overflows.
 const measure = `(() => {
-  const col = document.querySelector(".p-library .col"); const cr = col.getBoundingClientRect();
-  const cards = [...document.querySelectorAll("[data-library-card]")].map((c) => ({ id: c.getAttribute("data-library-card"), title: c.querySelector("h3")?.textContent, rows: c.querySelectorAll(".row-item").length,
-    titleInside: !!c.querySelector(":scope > .lib-head h3"), onlyChildren: [...c.children].map((e) => e.className.split(" ")[0]) }));
-  const over = [...document.querySelectorAll(".p-library .lib-card *")].filter((e) => e.getBoundingClientRect().right > cr.right + 1).slice(0, 5).map((e) => e.tagName + "." + e.className);
-  return { cards, over, hscroll: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1, strayRows: document.querySelectorAll(".p-library .col > .row-item").length };
+  const nav = document.querySelector(".p-library > .s-nav"), body = document.querySelector(".p-library > .panel-body");
+  const nr = nav && nav.getBoundingClientRect(), br = body && body.getBoundingClientRect(), col = document.querySelector(".p-library .col"), cr = col && col.getBoundingClientRect();
+  const rows = [...document.querySelectorAll(".p-library .lib-row")];
+  const desc = rows.map((e) => e.querySelector(".lib-desc")).filter(Boolean);
+  const over = [...document.querySelectorAll(".p-library .lib-card *")].filter((e) => cr && e.getBoundingClientRect().right > cr.right + 1).slice(0, 5).map((e) => e.tagName + "." + e.className);
+  return { view: document.querySelector(".p-library")?.getAttribute("data-view"), navVisible: !!nr && nr.width > 0, bodyVisible: !!br && br.width > 0, navBesideBody: !!nr && !!br && nr.width > 0 && nr.right <= br.left + 1,
+    navWidth: nr && Math.round(nr.width), bodyWidth: br && Math.round(br.width), colWidth: cr && Math.round(cr.width), rows: rows.length, tags: document.querySelectorAll(".p-library .lib-tag").length,
+    descOneLine: desc.every((e) => e.scrollHeight <= e.clientHeight + 2), over, hscroll: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1 };
 })()`;
+const manyTeam = () => { for (let i = 1; i <= 12; i++) { const x = skill(`team-skill-${String(i).padStart(2, "0")}`, `Team skill number ${i} - a description that is long enough to be cut to one line on a narrow screen, with detail that belongs in View.`); if (!x.ok) throw new Error(JSON.stringify(x)); } };
+const view = (c: any) => ({ width: c.device === "desk" ? 1366 : 390, height: c.device === "desk" ? 900 : 844 });
 for (const c of matrix()) {
   const tag = caseName(c);
-  // empty team library first (built-in only), then seeded
+  if (!store.list().length) { seed(); manyTeam(); }
+  const open = async (path: string, wait: string) => {
+    const x = await fx.page(c, { path });
+    const errs: string[] = []; x.page.on("pageerror", (e: any) => errs.push(String(e).slice(0, 160)));
+    await x.page.waitForSelector(wait); await x.page.waitForTimeout(700);
+    return { ...x, errs };
+  };
+  // 1. skills: team (many) and built-in (22), the list of categories beside it (a phone: the list is /ui/library, the category its own page)
   {
-    const { ctx, page, csp } = await fx.page(c, { path: "/ui/library" });
-    const errs: string[] = []; page.on("pageerror", (e: any) => errs.push(String(e).slice(0, 160)));
-    await page.waitForSelector("[data-library-card]"); await page.waitForTimeout(600);
-    await page.setViewportSize({ width: c.device === "desk" ? 1366 : 390, height: c.device === "desk" ? 2300 : 4200 }); await page.waitForTimeout(300);
-    await page.screenshot({ path: shotPath("248", c, "empty") });
-    r[`${tag}-empty`] = { ...(await page.evaluate(measure)), errs, csp: await csp() };
-    await ctx.close();
-  }
-  if (!store.list().length) seed();
-  {
-    const { ctx, page, csp } = await fx.page(c, { path: "/ui/library" });
-    const errs: string[] = []; page.on("pageerror", (e: any) => errs.push(String(e).slice(0, 160)));
-    await page.waitForSelector('[data-library-item="skill:code-review"]'); await page.waitForTimeout(600);
-    await page.setViewportSize({ width: c.device === "desk" ? 1366 : 390, height: c.device === "desk" ? 2500 : 4600 }); await page.waitForTimeout(300);
-    await page.screenshot({ path: shotPath("248", c, "library") });
-    r[`${tag}-library`] = { ...(await page.evaluate(measure)), errs, csp: await csp() };
-    await ctx.close();
+    const x = await open(c.device === "desk" ? "/ui/library/skills" : "/ui/library/skills", "[data-library-builtin]");
+    await x.page.screenshot({ path: shotPath("248", c, "skills") });
+    r[`${tag}-skills`] = { ...(await x.page.evaluate(measure)), errs: x.errs, csp: await x.csp() };
+    // a filter narrows both groups
+    await x.page.fill("[data-library-filter]", "review"); await x.page.waitForTimeout(300);
+    await x.page.screenshot({ path: shotPath("248", c, "skills-filter") });
+    r[`${tag}-skills`].filtered = await x.page.evaluate(() => document.querySelectorAll(".p-library .lib-row").length);
+    await x.ctx.close();
   }
   {
-    const { ctx, page, csp } = await fx.page(c, { path: "/ui/fleet" });
-    const errs: string[] = []; page.on("pageerror", (e: any) => errs.push(String(e).slice(0, 160)));
-    await page.waitForTimeout(1200);
-    // the agent's page, its Settings tab, then the Workspace category
-    await page.goto(`${fx.base}/ui/fleet/agent/${encodeURIComponent(names[2])}`); await page.waitForTimeout(1200);
-    for (const label of ["Settings", "設定"]) { const b = page.locator(".hd-tabs, header, .panel-header").getByText(label, { exact: true }).first(); if (await b.count()) { await b.click().catch(() => {}); await page.waitForTimeout(1200); break; } }
-    const tab = page.locator("[data-library-skills]");
-    for (const label of ["Workspace", "工作區", "工作目錄"]) { if (await tab.count()) break; const b = page.getByText(label, { exact: true }).first(); if (await b.count()) { await b.click().catch(() => {}); await page.waitForTimeout(900); } }
-    const found = await tab.count();
-    r[`${tag}-agent`] = { found, noFolder: await page.locator("[data-library-no-folder]").count(), errs, csp: await csp() };
-    if (found) { await tab.first().scrollIntoViewIfNeeded(); const box = await tab.first().evaluate((e: any) => { const card = e.closest(".card") || e; const b = card.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height }; }); await page.screenshot({ path: shotPath("248", c, "agent"), clip: { x: Math.max(0, box.x - 8), y: Math.max(0, box.y - 8), width: box.width + 16, height: Math.min(box.height + 16, 700) } }); }
-    else await page.screenshot({ path: shotPath("248", c, "agent-miss") });
-    await ctx.close();
+    const x = await open("/ui/library/tools", '[data-library-builtin^="tools:"]');
+    await x.page.screenshot({ path: shotPath("248", c, "tools") });
+    r[`${tag}-tools`] = { ...(await x.page.evaluate(measure)), errs: x.errs, csp: await x.csp() };
+    await x.ctx.close();
+  }
+  if (c.device === "phone") {
+    const x = await open("/ui/library", ".p-library .s-nav");
+    await x.page.screenshot({ path: shotPath("248", c, "index") });
+    r[`${tag}-index`] = { ...(await x.page.evaluate(measure)), errs: x.errs, csp: await x.csp() };
+    await x.ctx.close();
+  }
+  // 2. an agent tag opens that agent's Team skills field; the "+" lists the agents that do not have the skill
+  {
+    const x = await open("/ui/library/skills", '[data-library-item="skill:code-review"] [data-library-tag]');
+    const link = x.page.locator('[data-library-item="skill:code-review"] [data-library-tag]').first();
+    const name = await link.getAttribute("data-library-tag");
+    await link.click(); await x.page.waitForSelector("[data-library-skills]", { timeout: 15000 }).catch(() => {}); await x.page.waitForTimeout(700);
+    const field = x.page.locator("[data-library-skills]");
+    r[`${tag}-tag-jump`] = { agent: name, url: new URL(x.page.url()).pathname + new URL(x.page.url()).search + new URL(x.page.url()).hash, field: await field.count(), errs: x.errs };
+    if (await field.count()) { const box = await field.first().evaluate((e: any) => { const b = (e.closest(".card") || e).getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height, inView: b.top >= 0 && b.top < innerHeight - 100 }; });
+      r[`${tag}-tag-jump`].inView = box.inView;
+      await x.page.screenshot({ path: shotPath("248", c, "tag-jump") }); }
+    await x.ctx.close();
+  }
+  {
+    const x = await open("/ui/library/skills", '[data-library-item="skill:incident-triage"] [data-library-add-agent]');
+    await x.page.locator('[data-library-item="skill:incident-triage"] [data-library-add-agent]').click(); await x.page.waitForSelector("[data-library-add-dialog]"); await x.page.waitForTimeout(400);
+    r[`${tag}-add`] = { picks: await x.page.locator("[data-library-pick]").count(), noWrite: true, errs: x.errs };
+    await x.page.screenshot({ path: shotPath("248", c, "add") });
+    await x.ctx.close();
+  }
+  // 3. the agent's own page: the Team skills field, titled and placed where it is seen
+  {
+    const x = await open("/ui/fleet", "body");
+    await x.page.goto(`${fx.base}/ui/fleet/agent/${encodeURIComponent(names[2])}`); await x.page.waitForTimeout(1200);
+    for (const label of ["Settings", "設定"]) { const b = x.page.locator(".hd-tabs, header, .panel-header").getByText(label, { exact: true }).first(); if (await b.count()) { await b.click().catch(() => {}); await x.page.waitForTimeout(1200); break; } }
+    const field = x.page.locator("[data-library-skills]");
+    for (const label of ["Workspace", "工作區", "工作目錄"]) { if (await field.count()) break; const b = x.page.getByText(label, { exact: true }).first(); if (await b.count()) { await b.click().catch(() => {}); await x.page.waitForTimeout(900); } }
+    r[`${tag}-agent`] = { found: await field.count(), noFolder: await x.page.locator("[data-library-no-folder]").count(), cardTitle: await x.page.locator("[data-library-skills]").evaluate((e: any) => (e.closest(".card")?.querySelector("h3")?.textContent) || null).catch(() => null), errs: x.errs, csp: await x.csp() };
+    if (await field.count()) await x.page.screenshot({ path: shotPath("248", c, "agent") }); else await x.page.screenshot({ path: shotPath("248", c, "agent-miss") });
+    await x.ctx.close();
   }
 }
 writeFileSync(shotPath("248", "result", "x").replace(/-x\.png$/, ".json"), JSON.stringify(r, null, 1));
-console.log(JSON.stringify(r, null, 1).slice(0, 9000));
+console.log(JSON.stringify(r, null, 1).slice(0, 12000));
 await fx.close(); process.exit(0);

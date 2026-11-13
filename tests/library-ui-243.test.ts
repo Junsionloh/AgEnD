@@ -17,28 +17,31 @@ afterEach(async () => { await p.unmount(); vi.unstubAllGlobals(); });
 const answer = (status: number, body: unknown) => vi.stubGlobal("fetch", vi.fn(async () => ({ ok: status < 400, status, json: async () => body })));
 
 describe("the page", () => {
-  it("lists skills and MCP servers, marks one that was changed by hand, and offers View / Delete / Add", async () => {
+  it("lists skills and MCP servers (a category each, like Settings), marks one that was changed by hand, and offers View / Delete / Add", async () => {
     answer(200, { items: [
       { kind: "skill", id: "review", description: "Reviews code", status: "ok", files: 2, size: 2048, sha256: "a".repeat(64) },
       { kind: "skill", id: "old", description: "", status: "modified", files: 1, size: 10 },
       { kind: "mcp", id: "github", description: "GitHub", status: "ok", size: 300 },
     ] });
-    await p.mount(h(L.LibraryPanel, { navKey: "library:|1|en" })); await settle();
+    await p.mount(h(L.LibraryPanel, { route: { panel: "library", section: "skills" }, navKey: "library:skills|1|en" })); await settle();
     const rows = p.document.querySelectorAll("[data-library-item]").map((e: any) => e.getAttribute("data-library-item"));
-    expect(rows).toEqual(["skill:review", "skill:old", "mcp:github"]);
+    expect(rows).toEqual(["skill:review", "skill:old"]);
     const text = p.document.querySelector(".p-library")!.textContent;
     expect(text).toContain("Reviews code"); expect(text).toContain("Changed by hand"); expect(text).toContain("2 files");
-    expect(p.document.querySelectorAll("[data-library-view]").length).toBe(3);
-    expect(p.document.querySelectorAll("[data-library-delete]").length).toBe(3);
+    expect(p.document.querySelectorAll("[data-library-view]").length).toBe(2);
+    expect(p.document.querySelectorAll("[data-library-delete]").length).toBe(2);
     expect(p.document.querySelector('[data-library-add="skill"]')).not.toBeNull();
+    await p.unmount();
+    await p.mount(h(L.LibraryPanel, { route: { panel: "library", section: "mcp" }, navKey: "library:mcp|1|en" })); await settle();
+    expect(p.document.querySelectorAll("[data-library-item]").map((e: any) => e.getAttribute("data-library-item"))).toEqual(["mcp:github"]);
     expect(p.document.querySelector('[data-library-add="mcp"]')).not.toBeNull();
   });
 
-  it("an empty library says so and offers both adds; no read carries a body", async () => {
+  it("an empty library says so in each category and offers its add; no read carries a body", async () => {
     answer(200, { items: [] });
     await p.mount(h(L.LibraryPanel, { navKey: "library:|1|en" })); await settle();
     expect(p.document.querySelector(".p-library .empty")).not.toBeNull();
-    expect(p.document.querySelectorAll("[data-library-add]").length).toBe(2);
+    expect(p.document.querySelectorAll("[data-library-add]").length).toBe(1);
     const calls = (globalThis as any).fetch.mock.calls;
     // AGEND-248: the page also reads the overview (built-in skills and tools, who uses what); both are plain reads, neither carries a body.
     expect(calls.map((c: any) => c[0]).sort()).toEqual(["/ui/library/list", "/ui/library/overview"]);

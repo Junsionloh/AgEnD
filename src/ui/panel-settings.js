@@ -35,7 +35,7 @@ import { UpdatePillMark, UpdateSection } from "./settings-update.js";
 import { api, attach, confirmedWrite, newKey } from "./settings-confirm.js";
 import { dismissOperation, operationActive, restartFleet, startOperation, takeLeftover } from "./settings-apply.js";
 import {
-  ACCESS_MODES, DASHBOARD_FEATURES, SEPARATE_FEATURE_KEYS, DEFAULT_SCHEMA, ownChoiceImpact, HANG_TIMEOUT_DEFAULT_MINUTES, TOOL_PROGRESS, TOOL_SETS, VISIBILITY_MODES, batchImpact,
+  ACCESS_MODES, DASHBOARD_FEATURES, SEPARATE_FEATURE_KEYS, DEFAULT_SCHEMA, ownChoiceImpact, HANG_TIMEOUT_DEFAULT_MINUTES, TOOL_PROGRESS, TOOL_SETS, VISIBILITY_MODES, batchImpact, agentPatchRequest,
   changedFields, channelId, channelsOf, chLabel, connectionState, dashboardDefault, effectiveSummary, fleetModel, fromYaml, fullModelRequests, groupAgents,
   hasOwn, impactOf, defaultsImpact, requestImpact, nonNegative, positive, replyGuardSupported, sameValue, shortName, STATUS_ORDER, toYaml,
   visibilityDefault, worstImpact,
@@ -785,7 +785,7 @@ export function makeCtx(data, setData, stage, unstage, reload, reloadLive, alive
         // turning the MCP proxy reply on is asked about first (agent-page-strings.js).
         ...(patch.mcp_proxy_reply === true ? { confirms: ["agentPage.confirmMcpProxy"] } : {}),
         impact: inst.runtime === "windows" ? "now" : batchImpact(schema, Object.keys(patch), (k) => impactOf(schema, `instance.${k}`)),
-        request: { method: "PATCH", url: inst.runtime === "windows" ? `/ui/instances/${encodeURIComponent(name)}` : `/api/settings/fleet/instances/${encodeURIComponent(name)}`, body: patch },
+        request: agentPatchRequest(name, inst, patch),
       });
     },
     async deleteAgent(name) {

@@ -1,10 +1,12 @@
 // AGEND-243 / AGEND-248: the Library (/ui/library) — an OVERVIEW of what this AgEnD has: skills, tools and MCP servers, and which agents use
-// them. Three cards (Skills, Tools, MCP servers), each one box holding its title and its rows. What AgEnD ships (the built-in skills, the
-// tool sets and its own `agend` MCP server) is read only and comes from GET /ui/library/overview (src/library/overview.ts, which only
-// reads); what the team adds is the AGEND-243 library: GET /ui/library/list, POST /ui/library/save and /delete (src/library/web.ts, which
-// hold all the rules — this page only shows what they answer). "Used by" is read from the existing settings, so the page changes no agent.
-// Admin only: a session without that is told so.
-import { html, useCallback, useEffect, useState } from "/assets/app-html.js";
+// them. Laid out like Settings: a list of categories on the left (the same `.p-settings` page, `.s-nav`, `.s-back`, PageHead and search box;
+// on a phone the list is the page and a category opens with "‹ Library"), the chosen category on the right, one compact row per item with a
+// filter. What AgEnD ships (built-in skills, tool sets, its own `agend` MCP server) is read only and comes from GET /ui/library/overview
+// (src/library/overview.ts, which only reads); what the team adds is the AGEND-243 library: GET /ui/library/list, POST /ui/library/save
+// and /delete (src/library/web.ts, which hold all the rules). "Used by" is read from the existing settings; an agent tag opens that agent's
+// settings, and the "+" on a team skill writes the same `library` value, through the same PATCH and the same Apply, as the agent's own
+// Settings page does (settings-model.js agentPatchRequest / libraryMountPatch). Admin only: a session without that is told so.
+import { html, useCallback, useEffect, useRef, useState } from "/assets/app-html.js";
 import { t, register } from "/assets/app-i18n.js";
 import { useLease } from "/assets/app-ctx.js";
 import { PanelHeader, setTitle } from "/assets/app-shell.js";
@@ -13,23 +15,37 @@ import { Dialog } from "/assets/ui-dialog.js";
 import { confirmDialog } from "/assets/ui-confirm.js";
 import { toast } from "/assets/ui-toast.js";
 import { Icon } from "/assets/ui-icons.js";
+import { PageHead } from "/assets/page-head.js";
+import { appStore } from "/assets/app-store.js";
+import { LIBRARY_SECTIONS, detailsPath, librarySectionPath } from "/assets/app-route.js";
+import { DEFAULT_SCHEMA, agentPatchRequest, libraryMountPatch, requestImpact } from "./settings-model.js";
+import { operationActive, startOperation } from "./settings-apply.js";
 
 register("library", {
   en: {
-    title: "Library", sub: "An overview of what this AgEnD has: skills, tools and MCP servers, and which agents use them. Built-in items come with AgEnD and are read only. Team items are the ones you add here; give a team skill to an agent in Settings → the agent → Workspace. This page changes no agent.",
-    skills: "Skills", tools: "Tools", mcp: "MCP servers",
-    teamGroup: "Added by your team", teamSkillsLead: "Skills you added. Give one to an agent in Settings → the agent → Workspace.", teamMcpLead: "MCP server definitions you added. They are kept here and are not given to agents yet.",
-    builtinSkillsGroup: "Built in · read only", builtinSkillsLead: "Skills that come with AgEnD. Each is given to agents by their role.",
-    builtinToolsGroup: "Built in · read only", builtinToolsLead: "A tool set is the list of AgEnD tools an agent may use. An agent’s `tool_set` setting picks one.",
-    builtinMcpGroup: "Built in · read only", builtinMcpLead: "AgEnD’s own MCP server.",
+    title: "Library", sub: "An overview of what this AgEnD has: skills, tools and MCP servers, and which agents use them. Built-in items come with AgEnD and are read only; team items are the ones you add here. This page changes no agent except through the “+” tag, which does what ticking the skill in the agent’s Settings does.",
+    skills: "Skills", tools: "Tools", mcp: "MCP servers", groupResources: "Resources",
+    lead_skills: "Skills agents can load. Built-in ones are given by an agent’s role; team skills are given to the agents you pick.",
+    lead_tools: "A tool set is the list of AgEnD tools an agent may use; an agent’s `tool_set` setting picks one.",
+    lead_mcp: "MCP servers. AgEnD’s own comes with it; the ones you add are kept here and are not given to agents yet.",
+    counts: "{0} built in · {1} team",
+    filterSkills: "Filter skills", filterTools: "Filter tool sets", filterMcp: "Filter MCP servers", noMatch: "Nothing matches “{0}”.",
+    teamGroup: "Added by your team", builtinGroup: "Built in · read only",
+    teamSkillsLead: "Skills you added. Give one to an agent with the “+” tag, or in Settings → the agent → Workspace.", teamMcpLead: "MCP server definitions you added. They are kept here and are not given to agents yet.",
+    builtinSkillsLead: "Skills that come with AgEnD. Each is given to agents by their role.", builtinToolsLead: "Tool sets that come with AgEnD.", builtinMcpLead: "AgEnD’s own MCP server.",
     builtin: "Built in", team: "Team",
-    role_general: "General", role_worker: "Workers", role_classic: "Classic bots", givenTo: "Given to",
-    usedBy: "Used by", noUse: "No agent uses it", usedByAll: "Every agent",
-    toolsCount: "{0} tools", toolsShow: "Show the tools", noTools: "No tools",
+    role_general: "General", role_worker: "Workers", role_classic: "Classic bots", givenTo: "Given to", roles: "Roles",
+    usedBy: "Used by", noUse: "No agent", classicNote: "Classic bots (not listed here)",
+    toolsCount: "{0} tools", toolsOf: "Tools in “{0}”", noTools: "No tools", details: "Details", more: "{0} more", less: "Fewer",
     ts_full: "Every tool.", ts_worker: "Everything an agent needs to do the work; nothing that runs the fleet.", ts_coordinator: "The worker tools plus the tools that run the fleet.",
     ts_general: "For the General, the fleet’s administrator.", ts_standard: "A smaller everyday set.", ts_minimal: "Reply and message only.",
     agendMcp: "agend", agendMcpHint: "Gives each agent the tools of its tool set.",
-    noFolder: "{0}: its CLI ({1}) has no skills folder, so this skill does not take effect there.",
+    tagOpen: "Open the settings of {0}", tagOpenSkill: "Open {0} — Team skills", tagNoFolder: "{0}: its CLI ({1}) has no skills folder, so this skill does not take effect there.",
+    addTag: "Add to an agent", addTagLabel: "Add “{0}” to an agent",
+    addToTitle: "Add “{0}” to agents", addToBody: "Pick the agents that should get this skill. It is written into each agent’s settings, exactly as ticking it in Settings → the agent → Team skills would. Takes effect the next time the agent starts.",
+    addToNone: "Every agent already has it.", addToNoFolder: "no skills folder", addToConfirm: "Add", addingLabel: "Add “{0}” to {1}", addBusy: "Another change is being saved. Try again in a moment.",
+    addStarted: "Adding “{0}”. It takes effect when the agent next starts.", addLoadFailed: "Could not read the agents’ settings.",
+    nextStart: "Takes effect at the agent’s next start",
     overviewFailed: "Could not read the built-in skills and tools.", overviewRetry: "Try again",
     addSkill: "Add skill", addMcp: "Add MCP server", add: "Add", view: "View", delete: "Delete", close: "Close", cancel: "Cancel", save: "Save", saving: "Saving…",
     emptyHint: "Add a skill (a SKILL.md with a name and a description) or an MCP server definition. Passwords and keys never go in: an MCP item only names the variables it needs.",
@@ -58,20 +74,29 @@ register("library", {
     secretAt: "{0}, line {1}",
   },
   "zh-TW": {
-    title: "資源庫", sub: "這一頁是總覽：這個 AgEnD 有哪些 Skill、工具和 MCP server，以及哪些 Agent 正在使用。內建項目隨 AgEnD 附帶，唯讀；團隊項目是你在這裡新增的，要給某個 Agent 請到「設定 → 該 Agent → 工作區」。這一頁不會改變任何 Agent。",
-    skills: "Skills", tools: "工具", mcp: "MCP server",
-    teamGroup: "團隊新增", teamSkillsLead: "你新增的 Skill。要給 Agent 請到「設定 → 該 Agent → 工作區」。", teamMcpLead: "你新增的 MCP server 定義。目前只存放在這裡，還不會交給 Agent。",
-    builtinSkillsGroup: "內建・唯讀", builtinSkillsLead: "隨 AgEnD 附帶的 Skill，依 Agent 的角色自動帶入。",
-    builtinToolsGroup: "內建・唯讀", builtinToolsLead: "工具組是 Agent 可以使用的 AgEnD 工具清單，由 Agent 的 `tool_set` 設定選擇。",
-    builtinMcpGroup: "內建・唯讀", builtinMcpLead: "AgEnD 自己的 MCP server。",
+    title: "資源庫", sub: "這一頁是總覽：這個 AgEnD 有哪些 Skill、工具和 MCP server，以及哪些 Agent 正在使用。內建項目隨 AgEnD 附帶，唯讀；團隊項目是你在這裡新增的。除了「＋」標籤（效果等同在該 Agent 的設定裡勾選這個 Skill），這一頁不會改變任何 Agent。",
+    skills: "Skills", tools: "工具", mcp: "MCP server", groupResources: "資源",
+    lead_skills: "Agent 可以載入的 Skill。內建的依 Agent 的角色自動帶入；團隊 Skill 交給你挑的 Agent。",
+    lead_tools: "工具組是 Agent 可以使用的 AgEnD 工具清單，由 Agent 的 `tool_set` 設定選擇。",
+    lead_mcp: "MCP server。AgEnD 自己的隨附；你新增的只存放在這裡，還不會交給 Agent。",
+    counts: "內建 {0}・團隊 {1}",
+    filterSkills: "篩選 Skill", filterTools: "篩選工具組", filterMcp: "篩選 MCP server", noMatch: "沒有符合「{0}」的項目。",
+    teamGroup: "團隊新增", builtinGroup: "內建・唯讀",
+    teamSkillsLead: "你新增的 Skill。用「＋」標籤交給 Agent，或到「設定 → 該 Agent → 工作目錄」。", teamMcpLead: "你新增的 MCP server 定義。目前只存放在這裡，還不會交給 Agent。",
+    builtinSkillsLead: "隨 AgEnD 附帶的 Skill，依 Agent 的角色自動帶入。", builtinToolsLead: "隨 AgEnD 附帶的工具組。", builtinMcpLead: "AgEnD 自己的 MCP server。",
     builtin: "內建", team: "團隊",
-    role_general: "General", role_worker: "一般 Agent", role_classic: "Classic bot", givenTo: "適用",
-    usedBy: "使用中", noUse: "目前沒有 Agent 使用", usedByAll: "所有 Agent",
-    toolsCount: "{0} 個工具", toolsShow: "顯示工具清單", noTools: "沒有工具",
+    role_general: "General", role_worker: "一般 Agent", role_classic: "Classic bot", givenTo: "適用", roles: "角色",
+    usedBy: "使用中", noUse: "沒有 Agent", classicNote: "Classic bot（不在這裡列出）",
+    toolsCount: "{0} 個工具", toolsOf: "「{0}」的工具", noTools: "沒有工具", details: "詳細內容", more: "另外 {0} 個", less: "收合",
     ts_full: "所有工具。", ts_worker: "做事所需的一切，不含管理 fleet 的工具。", ts_coordinator: "一般工具，加上管理 fleet 的工具。",
     ts_general: "給 General（fleet 的管理員）。", ts_standard: "較精簡的日常組合。", ts_minimal: "只能回覆與傳訊息。",
     agendMcp: "agend", agendMcpHint: "把各 Agent 所屬工具組的工具交給它。",
-    noFolder: "{0}：它的 CLI（{1}）沒有 skill 資料夾，這個 Skill 在那裡不會生效。",
+    tagOpen: "開啟 {0} 的設定", tagOpenSkill: "開啟 {0}：團隊 Skill", tagNoFolder: "{0}：它的 CLI（{1}）沒有 skill 資料夾，這個 Skill 在那裡不會生效。",
+    addTag: "加給 Agent", addTagLabel: "把「{0}」加給 Agent",
+    addToTitle: "把「{0}」加給 Agent", addToBody: "選要拿到這個 Skill 的 Agent。它會寫進各 Agent 的設定，效果和在「設定 → 該 Agent → 團隊 Skill」勾選完全一樣，下次啟動時生效。",
+    addToNone: "每個 Agent 都已經有了。", addToNoFolder: "沒有 skill 資料夾", addToConfirm: "加入", addingLabel: "把「{0}」加給 {1}", addBusy: "還有另一項變更在儲存，請稍後再試。",
+    addStarted: "正在加入「{0}」，Agent 下次啟動時生效。", addLoadFailed: "無法讀取 Agent 的設定。",
+    nextStart: "下次啟動時生效",
     overviewFailed: "無法讀取內建的 Skill 和工具。", overviewRetry: "重試",
     addSkill: "新增 Skill", addMcp: "新增 MCP server", add: "新增", view: "檢視", delete: "刪除", close: "關閉", cancel: "取消", save: "儲存", saving: "儲存中…",
     emptyHint: "新增一個 Skill（含名稱與說明的 SKILL.md）或 MCP server 定義。密碼和金鑰不會存進來：MCP 項目只記它需要哪些變數的名稱。",
@@ -183,73 +208,126 @@ function ViewDialog({ item, onClose }) {
   </${Dialog}>`;
 }
 
-/** At most six names, then how many more: a fleet can have dozens of agents. */
-const MAX_NAMES = 6;
-const nameList = (names) => (names.length > MAX_NAMES ? `${names.slice(0, MAX_NAMES).join(", ")} +${names.length - MAX_NAMES}` : names.join(", "));
+/** An agent's tag: a link to that agent's settings. Team skills go straight to the Team skills field (`?cat=work#library-skills`). */
+const agentHref = (name, to) => (to === "skill" ? `${detailsPath(name)}?cat=work#library-skills` : to === "tools" ? `${detailsPath(name)}?cat=work` : detailsPath(name));
+const VISIBLE_TAGS = 3;
 
-/** The agents that use an item, or that none does. */
-function UsedBy({ names, extra }) {
-  return html`<div class="note" data-library-used-by>${names.length ? html`${tn("usedBy")}: ${nameList(names)}` : tn("noUse")}${extra ? html` · ${extra}` : null}</div>`;
+/** The agents that use an item, as tags that open them (and, for a team skill, a "+" that gives it to more). */
+function UsedBy({ names, to, agents, onAdd }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? names : names.slice(0, VISIBLE_TAGS);
+  const noFolder = (n) => { const a = agents.find((x) => x.name === n); return a && !a.nativeSkills ? a : null; };
+  return html`<span class="lib-tags" data-library-used-by>
+    ${names.length ? null : html`<span class="note">${tn("noUse")}</span>`}
+    ${shown.map((n) => {
+      const bad = to === "skill" ? noFolder(n) : null;
+      return html`<a key=${n} class=${`pill lib-tag${bad ? " warn" : ""}`} href=${agentHref(n, to)} data-library-tag=${n}
+        title=${bad ? tn("tagNoFolder", n, bad.backend) : to === "skill" ? tn("tagOpenSkill", n) : tn("tagOpen", n)}>${bad ? html`<${Icon} name="alert" size=${12} />` : null}${n}</a>`;
+    })}
+    ${names.length > VISIBLE_TAGS ? html`<button type="button" class="pill lib-tag lib-more" onClick=${() => setAll(!all)} data-library-more>${all ? tn("less") : `+${names.length - VISIBLE_TAGS}`}</button>` : null}
+    ${onAdd ? html`<button type="button" class="pill lib-tag lib-add" onClick=${onAdd} data-library-add-agent aria-label=${onAdd.label} title=${onAdd.label}><${Icon} name="plus" size=${12} /></button>` : null}
+  </span>`;
 }
 
-/** A team item's row: what it is, who uses it (skills), and View / Delete. */
-function Row({ item, used, unsupported, onView, onDelete }) {
+/** A team item's row: compact — name, one line of description, who uses it, View / Delete. */
+function Row({ item, used, agents, onView, onDelete, onAdd }) {
   const meta = item.kind === "skill" && item.files ? (item.files === 1 ? tn("file1") : tn("files", item.files)) : item.size ? tn("bytes", kb(item.size)) : "";
   const hint = tn(`hint_${item.status}`);
   const hasHint = hint !== "library.hint_" + item.status;
-  return html`<div class=${`row-item${item.status === "ok" && !unsupported.length ? "" : " is-warn"}`} data-library-item=${`${item.kind}:${item.id}`}>
+  const warn = item.status !== "ok";
+  const add = onAdd ? Object.assign(() => onAdd(item), { label: tn("addTagLabel", item.id) }) : null;
+  return html`<div class=${`row-item lib-row${warn ? " is-warn" : ""}`} data-library-item=${`${item.kind}:${item.id}`}>
     <${Icon} name=${item.kind === "skill" ? "book" : "plug"} size=${18} />
-    <div class="grow"><span class="strong">${item.id}</span>${item.description ? html`<div class="note">${item.description}</div>` : null}
-      ${item.status === "invalid" && item.reason ? html`<div class="note">${item.reason}</div>` : null}
-      ${hasHint ? html`<div class="note">${hint}</div>` : null}
-      ${used ? html`<${UsedBy} names=${used} />` : null}
-      ${unsupported.map((u) => html`<div class="note" key=${u.name} data-library-no-folder=${u.name}>${tn("noFolder", u.name, u.backend)}</div>`)}</div>
-    ${item.status !== "ok" ? html`<span class="pill off">${tn(`st_${item.status}`)}</span>` : null}
+    <div class="grow"><span class="strong">${item.id}</span><div class="note lib-desc" title=${item.description || undefined}>${item.description || ""}${item.status === "invalid" && item.reason ? ` ${item.reason}` : ""}${hasHint ? ` ${hint}` : ""}</div></div>
+    ${item.kind === "skill" && used ? html`<${UsedBy} names=${used} to="skill" agents=${agents} onAdd=${add} />` : null}
+    ${warn ? html`<span class="pill off">${tn(`st_${item.status}`)}</span>` : null}
     ${meta ? html`<span class="note">${meta}</span>` : null}
     ${item.status !== "missing" && item.status !== "invalid" ? html`<button type="button" class="btn btn-sm" onClick=${() => onView(item)} data-library-view>${tn("view")}</button>` : null}
     <button type="button" class="btn btn-sm btn-ghost" onClick=${() => onDelete(item)} data-library-delete aria-label=${`${tn("delete")} ${item.id}`}>${tn("delete")}</button>
   </div>`;
 }
 
-/** One category: a single card, its title (and Add) in the same box as its rows. */
-function LibCard({ id, title, add, children }) {
-  return html`<section class="card lib-card" aria-label=${title} data-library-card=${id}>
-    <div class="lib-head"><h3 class="grow">${title}</h3>${add || null}</div>${children}</section>`;
-}
-/** A group of rows inside a card: a heading, one line saying what they are, the rows. */
-function Group({ id, title, lead, children }) {
-  return html`<div class="lib-group" data-library-group=${id}><h4>${title}</h4><p class="note">${lead}</p><div class="rows">${children}</div></div>`;
-}
-const Builtin = () => html`<span class="pill">${tn("builtin")}</span>`;
-
-function BuiltinSkillRow({ s }) {
-  return html`<div class="row-item" data-library-builtin=${`skill:${s.name}`}>
-    <${Icon} name="book" size=${18} />
-    <div class="grow"><span class="strong">${s.name}</span>${s.description ? html`<div class="note">${s.description}</div>` : null}
-      <${UsedBy} names=${s.agents} extra=${`${tn("givenTo")}: ${s.roles.map((r) => (t(`library.role_${r}`) !== `library.role_${r}` ? tn(`role_${r}`) : r)).join(", ")}`} /></div>
-    <${Builtin} /></div>`;
-}
-function ToolSetRow({ ts }) {
-  const key = `ts_${ts.name}`, known = t(`library.${key}`) !== `library.${key}`;
-  return html`<div class="row-item" data-library-builtin=${`tools:${ts.name}`}>
-    <${Icon} name="sliders" size=${18} />
-    <div class="grow"><span class="strong">${ts.name}</span>${known ? html`<div class="note">${tn(key)}</div>` : null}
-      <${UsedBy} names=${ts.agents} />
-      <details class="lib-tools"><summary class="note">${tn("toolsShow")}</summary><p class="note">${ts.tools.length ? ts.tools.join(" · ") : tn("noTools")}</p></details></div>
-    <span class="note">${tn("toolsCount", ts.tools.length)}</span><${Builtin} /></div>`;
-}
-function McpBuiltinRow({ m }) {
-  return html`<div class="row-item" data-library-builtin=${`mcp:${m.name}`}>
-    <${Icon} name="plug" size=${18} />
-    <div class="grow"><span class="strong">${m.name}</span><div class="note">${tn("agendMcpHint")}</div><${UsedBy} names=${m.agents} /></div>
-    <${Builtin} /></div>`;
+/** A built-in row: read only — the same compact line, a Built in pill, tags that only open an agent, and Details. */
+function BuiltinRow({ kind, name, icon, description, agents, to, onDetails, extra }) {
+  return html`<div class="row-item lib-row" data-library-builtin=${`${kind}:${name}`}>
+    <${Icon} name=${icon} size=${18} />
+    <div class="grow"><span class="strong">${name}</span><div class="note lib-desc" title=${description || undefined}>${description || ""}</div></div>
+    <${UsedBy} names=${agents.names} to=${to} agents=${agents.all} onAdd=${null} />
+    ${extra ? html`<span class="note">${extra}</span>` : null}
+    <span class="pill">${tn("builtin")}</span>
+    <button type="button" class="btn btn-sm" onClick=${onDetails} data-library-details>${tn("details")}</button>
+  </div>`;
 }
 
-export function LibraryPanel({ navKey }) {
+/** What a built-in item is, whole: its full description, roles, tools and who uses it. Read only. */
+function DetailsDialog({ detail, onClose }) {
+  const { title, description, rows } = detail;
+  return html`<${Dialog} title=${title} onClose=${onClose} wide=${true} actions=${html`<button type="button" class="btn" onClick=${onClose}>${tn("close")}</button>`}>
+    <div class="form" data-library-details-dialog>
+      ${description ? html`<p>${description}</p>` : null}
+      ${rows.map(([label, value]) => html`<div class="field" key=${label}><label>${label}</label><p class="note">${value}</p></div>`)}
+    </div>
+  </${Dialog}>`;
+}
+
+/** "+" on a team skill: pick agents; the write is the agent Settings page's own (agentPatchRequest, libraryMountPatch, startOperation). */
+function AddToAgentsDialog({ item, agents, usedNames, onClose, onStarted }) {
+  const [picked, setPicked] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const eligible = agents.filter((a) => !a.windows && !usedNames.includes(a.name));
+  const toggle = (name, on) => setPicked(on ? [...picked.filter((n) => n !== name), name] : picked.filter((n) => n !== name));
+  const submit = async () => {
+    if (!picked.length) return;
+    if (operationActive()) { setError(tn("addBusy")); return; }
+    setBusy(true); setError("");
+    try {
+      // The agent's own saved settings (not the defaults merged in), as Settings reads them before it writes.
+      const [raw, schemaRes] = await Promise.all([call("/api/settings/fleet/raw"), call("/api/settings/schema")]);
+      if (!raw.ok || !raw.data || typeof raw.data.instances !== "object") { setError(tn("addLoadFailed")); return; }
+      const schema = schemaRes.ok && schemaRes.data ? schemaRes.data : DEFAULT_SCHEMA;
+      const changes = [];
+      for (const name of picked) {
+        const inst = raw.data.instances[name];
+        if (!inst) continue;
+        const patch = libraryMountPatch(inst, item.id);
+        if (!Object.keys(patch).length) continue;
+        const request = agentPatchRequest(name, inst, patch);
+        changes.push({ label: tn("addingLabel", item.id, name), impact: requestImpact(schema, request), request });
+      }
+      if (!changes.length) { onClose(); return; }
+      if (!startOperation(changes)) { setError(tn("addBusy")); return; }
+      toast(tn("addStarted", item.id));
+      onStarted(appStore.get().settingsOp && appStore.get().settingsOp.id);
+      onClose();
+    } catch { setError(tn("addLoadFailed")); } finally { setBusy(false); }
+  };
+  return html`<${Dialog} title=${tn("addToTitle", item.id)} onClose=${onClose} busy=${busy}
+    actions=${html`<button type="button" class="btn" onClick=${onClose} disabled=${busy}>${tn("cancel")}</button>
+      <button type="button" class="btn btn-primary" onClick=${submit} disabled=${busy || !picked.length} data-library-add-confirm>${tn("addToConfirm")}</button>`}>
+    <div class="form" data-library-add-dialog>
+      <p class="note">${tn("addToBody")}</p>
+      ${eligible.length ? html`<div class="checks">${eligible.map((a) => html`<label key=${a.name} class="check" data-library-pick=${a.name}>
+        <input type="checkbox" checked=${picked.includes(a.name)} disabled=${!a.nativeSkills} onChange=${(e) => toggle(a.name, e.target.checked)} />
+        <span><span class="strong">${a.name}</span>${!a.nativeSkills ? html` <span class="note">(${tn("addToNoFolder")}: ${a.backend})</span>` : null}</span></label>`)}</div>`
+        : html`<p class="note">${tn("addToNone")}</p>`}
+      <p class="note">${tn("nextStart")}.</p>
+      ${error ? html`<p class="feedback error" role="alert" data-library-error>${error}</p>` : null}
+    </div>
+  </${Dialog}>`;
+}
+
+const SECTION_ICON = { skills: "book", tools: "sliders", mcp: "plug" };
+const matches = (q, ...texts) => !q || texts.some((x) => typeof x === "string" && x.toLowerCase().includes(q));
+
+export function LibraryPanel({ route, navKey }) {
   useLease(navKey);
+  const section = route && LIBRARY_SECTIONS.includes(route.section) ? route.section : "skills";
   const [state, setState] = useState({ loading: true });
   const [ov, setOv] = useState({ loading: true });
   const [dialog, setDialog] = useState(null);
+  const [filter, setFilter] = useState("");
+  const watching = useRef(null);
   useEffect(() => { setTitle(tn("title")); }, [navKey]);
   const load = useCallback(async () => {
     try {
@@ -260,21 +338,26 @@ export function LibraryPanel({ navKey }) {
   }, []);
   // The overview is read apart from the team's list: if it cannot be read the team's items are still there to use.
   const loadOverview = useCallback(async () => {
-    setOv({ loading: true });
+    setOv((o) => (o.data ? o : { loading: true }));
     try {
       const r = await call("/ui/library/overview");
       setOv(r.ok && r.data && Array.isArray(r.data.builtinSkills) ? { data: r.data } : { error: true });
     } catch { setOv({ error: true }); }
   }, []);
   useEffect(() => { load(); loadOverview(); }, [load, loadOverview]);
+  // A "+" starts the app-level Apply (settings-apply.js); when that one settles the usage is read again.
+  useEffect(() => appStore.subscribe((s) => {
+    const o = s.settingsOp;
+    if (watching.current !== null && o && o.id === watching.current && !["writing", "posting", "watching"].includes(o.phase)) { watching.current = null; loadOverview(); }
+  }), [loadOverview]);
+
   const data = ov.data;
   const agents = (data && data.agents) || [];
   const teamUsage = (data && data.teamUsage) || {};
   const usedBy = (item) => (item.kind === "skill" && data ? (Object.hasOwn(teamUsage, item.id) ? teamUsage[item.id] : []) : null);
-  const noFolder = (item) => (usedBy(item) || []).map((n) => agents.find((a) => a.name === n)).filter((a) => a && !a.nativeSkills).map((a) => ({ name: a.name, backend: a.backend }));
   const remove = async (item) => {
     const used = usedBy(item) || [];
-    const message = used.length ? tn("deleteBodyUsed", nameList(used)) : tn("deleteBody");
+    const message = used.length ? tn("deleteBodyUsed", used.join(", ")) : tn("deleteBody");
     if (!(await confirmDialog({ title: tn("deleteTitle", item.id), message, confirmLabel: tn("delete"), danger: true }))) return;
     try {
       const r = await call("/ui/library/delete", { kind: item.kind, id: item.id });
@@ -285,34 +368,69 @@ export function LibraryPanel({ navKey }) {
   const items = state.items || [];
   const skills = items.filter((i) => i.kind === "skill"), mcp = items.filter((i) => i.kind === "mcp");
   const existing = (kind) => new Set(items.filter((i) => i.kind === kind).map((i) => i.id));
-  const add = (kind) => html`<button type="button" class="btn btn-sm" onClick=${() => setDialog({ type: "add", kind })} data-library-add=${kind}><${Icon} name="plus" size=${15} /> ${tn(kind === "skill" ? "addSkill" : "addMcp")}</button>`;
-  const teamRows = (list, none) => (list.length
-    ? list.map((i) => html`<${Row} key=${`${i.kind}:${i.id}`} item=${i} used=${usedBy(i)} unsupported=${noFolder(i)} onView=${(it) => setDialog({ type: "view", item: it })} onDelete=${remove} />`)
-    : html`<${Empty} icon="book" title=${none} hint=${tn("noneHint")} />`);
-  // What AgEnD ships: shown as soon as it is read; a failed read says so and the team's items stay usable.
+  const q = filter.trim().toLowerCase();
+  const names = (list, to) => ({ names: list, all: agents });
+  const roleText = (r) => (t(`library.role_${r}`) !== `library.role_${r}` ? tn(`role_${r}`) : r);
+  const detailsOf = (title, description, rows) => setDialog({ type: "details", detail: { title, description, rows } });
+
   const builtin = (rows) => (ov.loading ? html`<${Skeleton} variant="rows" lines=${3} />`
     : ov.error ? html`<div class="error-state" role="alert"><p>${tn("overviewFailed")}</p><button type="button" class="btn" onClick=${loadOverview}>${tn("overviewRetry")}</button></div>` : rows());
-  const body = () => html`
-    <${LibCard} id="skills" title=${tn("skills")} add=${add("skill")}>
-      <${Group} id="team-skills" title=${tn("teamGroup")} lead=${tn("teamSkillsLead")}>${teamRows(skills, tn("noneSkills"))}</${Group}>
-      <${Group} id="builtin-skills" title=${tn("builtinSkillsGroup")} lead=${tn("builtinSkillsLead")}>${builtin(() => data.builtinSkills.map((s) => html`<${BuiltinSkillRow} key=${s.name} s=${s} />`))}</${Group}>
-    </${LibCard}>
-    <${LibCard} id="tools" title=${tn("tools")}>
-      <${Group} id="builtin-tools" title=${tn("builtinToolsGroup")} lead=${tn("builtinToolsLead")}>${builtin(() => data.toolSets.map((ts) => html`<${ToolSetRow} key=${ts.name} ts=${ts} />`))}</${Group}>
-    </${LibCard}>
-    <${LibCard} id="mcp" title=${tn("mcp")} add=${add("mcp")}>
-      <${Group} id="team-mcp" title=${tn("teamGroup")} lead=${tn("teamMcpLead")}>${teamRows(mcp, tn("noneMcp"))}</${Group}>
-      <${Group} id="builtin-mcp" title=${tn("builtinMcpGroup")} lead=${tn("builtinMcpLead")}>${builtin(() => data.mcp.map((m) => html`<${McpBuiltinRow} key=${m.name} m=${m} />`))}</${Group}>
-    </${LibCard}>`;
-  return html`<div data-effect-panel="library" class="panel p-library">
+  const group = (id, title, lead, rows) => html`<div class="lib-group" data-library-group=${id}><h4>${title}</h4><p class="note">${lead}</p><div class="rows">${rows}</div></div>`;
+  const none = (list) => (list.length ? null : html`<${Empty} icon=${SECTION_ICON[section]} title=${tn("noMatch", filter.trim())} />`);
+
+  const teamRows = (list, kind) => {
+    const shown = list.filter((i) => matches(q, i.id, i.description));
+    return shown.length ? shown.map((i) => html`<${Row} key=${`${i.kind}:${i.id}`} item=${i} used=${usedBy(i)} agents=${agents}
+        onView=${(it) => setDialog({ type: "view", item: it })} onDelete=${remove} onAdd=${kind === "skill" && data ? (it) => setDialog({ type: "addto", item: it }) : null} />`)
+      : (list.length ? none([]) : html`<${Empty} icon=${kind === "skill" ? "book" : "plug"} title=${kind === "skill" ? tn("noneSkills") : tn("noneMcp")} hint=${tn("emptyHint")} />`);
+  };
+
+  const sectionBody = () => {
+    if (section === "skills") {
+      const b = data ? data.builtinSkills.filter((s) => matches(q, s.name, s.description)) : [];
+      return html`${group("team-skills", tn("teamGroup"), tn("teamSkillsLead"), teamRows(skills, "skill"))}
+        ${group("builtin-skills", tn("builtinGroup"), tn("builtinSkillsLead"), builtin(() => b.length ? b.map((s) => html`<${BuiltinRow} key=${s.name} kind="skill" name=${s.name} icon="book" description=${s.description}
+          agents=${names(s.agents)} to="skill-built" extra=${s.roles.map(roleText).join(", ")}
+          onDetails=${() => detailsOf(s.name, s.description, [[tn("givenTo"), s.roles.map(roleText).join(", ")], [tn("usedBy"), s.agents.length ? s.agents.join(", ") : tn("noUse")],
+            ...(s.roles.includes("classic") ? [[tn("roles"), tn("classicNote")]] : [])])} />`) : none(b)))}`;
+    }
+    if (section === "tools") {
+      const b = data ? data.toolSets.filter((ts) => matches(q, ts.name, tn(`ts_${ts.name}`), ...ts.tools)) : [];
+      return group("builtin-tools", tn("builtinGroup"), tn("builtinToolsLead"), builtin(() => b.length ? b.map((ts) => {
+        const key = `ts_${ts.name}`, known = t(`library.${key}`) !== `library.${key}`;
+        return html`<${BuiltinRow} key=${ts.name} kind="tools" name=${ts.name} icon="sliders" description=${known ? tn(key) : ""} agents=${names(ts.agents)} to="tools" extra=${tn("toolsCount", ts.tools.length)}
+          onDetails=${() => detailsOf(tn("toolsOf", ts.name), known ? tn(key) : "", [[tn("toolsCount", ts.tools.length), ts.tools.length ? ts.tools.join(" · ") : tn("noTools")], [tn("usedBy"), ts.agents.length ? ts.agents.join(", ") : tn("noUse")]])} />`;
+      }) : none(b)));
+    }
+    const m = data ? data.mcp.filter((x) => matches(q, x.name, tn("agendMcpHint"))) : [];
+    return html`${group("team-mcp", tn("teamGroup"), tn("teamMcpLead"), teamRows(mcp, "mcp"))}
+      ${group("builtin-mcp", tn("builtinGroup"), tn("builtinMcpLead"), builtin(() => m.length ? m.map((x) => html`<${BuiltinRow} key=${x.name} kind="mcp" name=${x.name} icon="plug" description=${tn("agendMcpHint")} agents=${names(x.agents)} to="mcp"
+        onDetails=${() => detailsOf(x.name, tn("agendMcpHint"), [[tn("usedBy"), x.agents.length ? x.agents.join(", ") : tn("noUse")]])} />`) : none(m)))}`;
+  };
+
+  const countOf = (name) => (!data ? null : name === "skills" ? tn("counts", data.builtinSkills.length, skills.length) : name === "tools" ? String(data.toolSets.length) : tn("counts", data.mcp.length, mcp.length));
+  const addKind = section === "skills" ? "skill" : section === "mcp" ? "mcp" : null;
+  // Settings' own rule (panel-settings.js): on a phone /ui/library is the list of categories, a category opens on its own with "‹ Library".
+  const atList = typeof location !== "undefined" && location.pathname === "/ui/library";
+  return html`<div data-effect-panel="library" class="panel p-library p-settings" data-view=${atList ? "index" : "section"}>
     <${PanelHeader} title=${tn("title")} />
-    <div data-trust="panel-content" class="panel-body"><div class="col form">
-      <p class="note">${tn("sub")}</p>
+    <nav data-trust="panel-navigation" class="seg s-nav" aria-label=${tn("title")}><div class="s-nav-groups"><div class="s-nav-group" role="group" aria-labelledby="lib-grp">
+      <span class="s-nav-head" id="lib-grp">${tn("groupResources")}</span>
+      ${LIBRARY_SECTIONS.map((k) => html`<a key=${k} href=${librarySectionPath(k)} class=${`seg-item${k === section ? " active" : ""}`} title=${tn(k)} data-library-nav=${k}
+        aria-current=${k === section ? "page" : undefined}><${Icon} name=${SECTION_ICON[k]} size=${16} /><span>${tn(k)}</span></a>`)}</div></div></nav>
+    <div data-trust="panel-content" class="panel-body"><div class="col" data-library-section=${section}>
+      <a class="s-back" href="/ui/library"><${Icon} name="back" size=${16} /><span>${tn("title")}</span><span class="s-back-here">${tn(section)}</span></a>
       ${state.loading ? html`<${Skeleton} variant="rows" lines=${3} />`
         : state.error ? (state.denied ? html`<${Empty} icon="key" title=${state.error} />` : html`<${ErrorState} onRetry=${load} />`)
-        : body()}
+        : html`<${PageHead} title=${tn(section)} scope=${countOf(section) || ""} lead=${tn(`lead_${section}`)}>${addKind ? html`<button type="button" class="btn btn-primary" onClick=${() => setDialog({ type: "add", kind: addKind })} data-library-add=${addKind}><${Icon} name="plus" size=${15} /> ${tn(addKind === "skill" ? "addSkill" : "addMcp")}</button>` : null}</${PageHead}>
+          <div class="s-toolbar"><label class="s-search"><${Icon} name="search" size=${14} /><span class="sr-only">${tn(section === "skills" ? "filterSkills" : section === "tools" ? "filterTools" : "filterMcp")}</span>
+            <input type="search" value=${filter} placeholder=${tn(section === "skills" ? "filterSkills" : section === "tools" ? "filterTools" : "filterMcp")} data-library-filter onInput=${(e) => setFilter(e.target.value)} /></label></div>
+          <section class="card lib-card" aria-label=${tn(section)} data-library-card=${section}>${sectionBody()}</section>
+          <p class="note lib-foot">${tn("sub")}</p>`}
     </div></div>
     ${dialog && dialog.type === "add" ? html`<${AddDialog} kind=${dialog.kind} existing=${existing(dialog.kind)} onClose=${() => setDialog(null)} onSaved=${() => { load(); loadOverview(); }} />` : null}
     ${dialog && dialog.type === "view" ? html`<${ViewDialog} item=${dialog.item} onClose=${() => setDialog(null)} />` : null}
+    ${dialog && dialog.type === "details" ? html`<${DetailsDialog} detail=${dialog.detail} onClose=${() => setDialog(null)} />` : null}
+    ${dialog && dialog.type === "addto" ? html`<${AddToAgentsDialog} item=${dialog.item} agents=${agents} usedNames=${usedBy(dialog.item) || []} onClose=${() => setDialog(null)} onStarted=${(id) => { watching.current = id; }} />` : null}
   </div>`;
 }

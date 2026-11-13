@@ -8,15 +8,23 @@
 
 ## 總覽
 
-這一頁是總覽：這個 AgEnD 有哪些 **Skill**、**工具**和 **MCP server**（各一張卡片），以及哪些 Agent 在使用。每張卡片有兩種項目：
+這一頁是總覽：這個 AgEnD 有哪些 **Skill**、**工具**和 **MCP server**，以及哪些 Agent 在使用。版面和設定頁一樣：左邊是分類列表（設定頁自己的 `.s-nav`），
+右邊只顯示選到的分類，上面有篩選框；手機上 `/ui/library` 是分類列表，點一個分類才進到它自己的頁面（`/ui/library/skills`、`/tools`、`/mcp`），有返回連結。
+每個項目是精簡的一列，說明截斷成一行，完整內容點「詳細內容」（內建）或「檢視」（團隊）。每個分類有兩組：
 
 - **內建・唯讀**：隨 AgEnD 附帶，從套件與程式碼列出，不能在這裡修改：內建 Skill（`src/general-knowledge/skills`，並標出適用角色：General、一般 Agent、Classic bot）、
   `tool_set` 各 profile（`TOOL_PROFILES`，含工具清單）、AgEnD 自己的 `agend` MCP server。
 - **團隊新增**：下面的資源庫項目，可新增、檢視、刪除。
 
-每個項目都標出「使用中」：內建 Skill 依 Agent 的角色（General 拿到全部，其他 Agent 拿到標給一般 Agent 的）、工具組依 Agent 的 `tool_set`（和 daemon 用同一條規則）、
-`agend` MCP server 是所有 Agent、團隊 Skill 依掛載到哪些 Agent。這一頁只讀現有設定，不會改變任何 Agent 的檔案、設定或啟動指令。
-團隊 Skill 掛在 CLI 沒有 skill 資料夾的 Agent 上（對照表在 `src/native-skills-dir.ts`）會被標出來：它在那裡不會生效。Agent 設定頁的「團隊 Skill」欄位也會顯示同樣的提醒。
+**使用中**是一排標籤，每個 Agent 一個：內建 Skill 依 Agent 的角色（General 拿到全部，其他 Agent 拿到標給一般 Agent 的，且只算 CLI 有 skill 資料夾的）、
+工具組依 Agent 的 `tool_set`（和 daemon 用同一條規則）、`agend` MCP server 是所有 Agent、團隊 Skill 依掛載到哪些 Agent。點標籤會開啟該 Agent：
+團隊 Skill 直接到「設定 → 該 Agent → 工作目錄 → 團隊 Skill（來自資源庫）」，其他到該 Agent 頁。團隊 Skill 另有一個 **＋** 標籤：挑 Agent 就會寫進它們的設定，
+寫的是同一個 `library` 值、同一個 `PATCH /api/settings/fleet/instances/<name>`、同一個 Apply，和在 Agent 自己的設定頁勾選完全一樣
+（`settings-model.js` 的 `agentPatchRequest`／`libraryMountPatch` 是這個寫入唯一的一份）。下次啟動時生效。內建的標籤只能跳轉，內建項目不能加也不能改。
+
+這一頁只讀現有設定，自己不改任何東西：除非你用 **＋**（或 Agent 自己的設定），否則不會改變任何 Agent 的檔案、設定或啟動指令。
+團隊 Skill 掛在 CLI 沒有 skill 資料夾的 Agent 上（對照表在 `src/native-skills-dir.ts`），標籤和 Agent 設定頁的「團隊 Skill」欄位都會標出：它在那裡不會生效。
+MCP server 目前只能存放，還不能交給 Agent。
 
 ## 位置
 
@@ -54,7 +62,7 @@ env: [GITHUB_TOKEN]         # 只寫名稱；`KEY: value` 這種寫法會被拒�
 
 ## 把 Skill 掛載到 Agent
 
-管理員在 **設定 → 該 Agent → 工作區 → 資源庫** 勾選團隊 Skill，或直接寫在 `fleet.yaml`：
+管理員在 **設定 → 該 Agent → 工作目錄 → 團隊 Skill（來自資源庫）** 勾選團隊 Skill，或直接寫在 `fleet.yaml`：
 
 ```yaml
 instances:

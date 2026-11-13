@@ -10,19 +10,28 @@ Open it from the sidebar (**Library**, `/ui/library`). It is for an administrato
 
 ## The overview
 
-The page is an overview of what this AgEnD has — **Skills**, **Tools** and **MCP servers**, one card each — and of which agents use them.
-Each card has two kinds of rows:
+The page is an overview of what this AgEnD has — **Skills**, **Tools** and **MCP servers** — and of which agents use them. It is laid out
+like Settings: the categories in a list on the left (the Settings page's own `.s-nav`), the chosen one on the right, a filter box on top;
+on a phone `/ui/library` is the list of categories and a category opens on its own (`/ui/library/skills`, `/tools`, `/mcp`) with a back link.
+Every item is one compact row; the description is cut to a line, and *Details* (built in) or *View* (team) shows the rest. Each category has two groups:
 
 - **Built in · read only** — what ships with AgEnD, listed from the package and the code, never editable here: the bundled skills
   (`src/general-knowledge/skills`, with the roles they are published to: General, workers, classic bots), the `tool_set` profiles
   (`TOOL_PROFILES`, with each tool list) and AgEnD's own `agend` MCP server.
 - **Added by your team** — the library items below: add, view, delete.
 
-Each row shows **Used by**: bundled skills by the agent's role (General gets every one; any other agent those marked for workers), tool sets by the
-agent's `tool_set` (the rule the daemon itself uses), the `agend` MCP server by every agent, and team skills by the agents they are mounted on.
-It only reads the existing settings; the page changes no agent file, setting or launch command. A team skill mounted on an agent whose CLI
-has no skills folder (the backend table in `src/native-skills-dir.ts`) is flagged: it cannot take effect there. The same warning shows on the
-agent's *Team skills* field.
+**Used by** is a row of tags, one per agent: bundled skills by the agent's role (General gets every one; any other agent those marked for
+workers, and only an agent whose CLI has a skills folder), tool sets by the agent's `tool_set` (the rule the daemon itself uses), the `agend`
+MCP server by every agent, and team skills by the agents they are mounted on. A tag opens that agent: for a team skill straight to
+*Settings → the agent → Workspace → Team skills (from the Library)*, otherwise to the agent. A team skill also has a **+** tag: pick agents
+and it is written into their settings — the same `library` value, through the same `PATCH /api/settings/fleet/instances/<name>` and the same
+Apply as ticking the skill on the agent's own Settings page (`agentPatchRequest` / `libraryMountPatch` in `settings-model.js` are the one copy
+of that write). It takes effect the next time the agent starts. Built-in tags only open an agent; nothing built in can be added or changed.
+
+The page reads the existing settings and changes nothing by itself: no agent file, setting or launch command moves unless you use **+**
+(or the agent's own Settings). A team skill mounted on an agent whose CLI has no skills folder (the backend table in
+`src/native-skills-dir.ts`) is flagged on its tag and on the agent's *Team skills* field: it cannot take effect there. MCP servers are stored
+here but cannot be given to agents yet.
 
 ## Where it lives
 
@@ -62,7 +71,7 @@ An `http` server has `url` (no credentials, no query string) and `headers`, a ma
 
 ## Mounting skills on an agent
 
-An administrator gives an agent library skills in **Settings → the agent → Workspace → Library** (tick the team skills), or in
+An administrator gives an agent library skills in **Settings → the agent → Workspace → Team skills (from the Library)** (tick them), with the **+** tag on the Library page, or in
 `fleet.yaml`:
 
 ```yaml

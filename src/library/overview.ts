@@ -4,7 +4,8 @@
  * settings (`instances`). No agent's file, setting or launch command is touched, and nothing here is saved.
  *
  *  - bundled skills (src/general-knowledge/skills): name, description, the roles they are published to, and the agents that get them
- *    by role (General gets every one; any other agent gets those marked `worker`; a native Windows agent has no skills folder here);
+ *    by role (General gets every one; any other agent gets those marked `worker`; a native Windows agent, or one whose CLI has no skills
+ *    folder, gets none published);
  *  - tool profiles (`tool_set`): each profile and its tools, and the agents that run under it (resolveToolSet, the one rule the daemon uses);
  *  - the `agend` MCP server every agent is given (its tools are the profile's);
  *  - team skills' usage: `librarySkillUsage` (AGEND-244) — and, per agent, whether its CLI has a skills folder at all (a skill mounted on
@@ -62,7 +63,8 @@ export function buildOverview(input: OverviewInput): Overview {
       windows: def.runtime === "windows", nativeSkills: hasNativeSkillsDir(backend),
     });
   }
-  const publishing = agents.filter(a => !a.windows);
+  // An agent whose CLI has no skills folder is not given a bundled skill either (syncRoleSkills returns before it writes): not listed as using one.
+  const publishing = agents.filter(a => !a.windows && a.nativeSkills);
   const dir = input.bundledDir ?? BUNDLED_SKILLS_DIR;
   const builtinSkills = listBundledSkills(dir).map(({ name, description }) => {
     const read = readBundledSkill(name, dir);
