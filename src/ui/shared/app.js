@@ -110,6 +110,9 @@ if (hubPage) {
     // again after a reconnect: a poll page hears no `notice`), then each new one from the stream.
     const loadNotices = retryable((a) => import(retryUrl("/ui/js/panel-notices.js", a)));
     panels.set("notices", { load: () => loadNotices().then((m) => m.NoticesPanel) });
+    // AGEND-243: the Skill / MCP library (/ui/library), loaded the first time it is opened.
+    const loadLibrary = retryable((a) => import(retryUrl("/ui/js/panel-library.js", a)));
+    panels.set("library", { load: () => loadLibrary().then((m) => m.LibraryPanel) });
     // A list read and a live notice can cross: each is merged into what the page has (app-store.js mergeNoticeList); a
     // read that leaves the page behind what the status frame names is asked again (createNoticesSync).
     const notices = createNoticesSync({ store: appStore,

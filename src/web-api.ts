@@ -16,6 +16,7 @@ import type { SettingsExecution } from "./settings-transaction.js";
 import type { PaneContextSource } from "./pane-context-cache.js";
 import { settingsRequestExecution, settingsRequestLocalAdmin, settingsRequestRequester, settingsWrite, isSettingsReplay } from "./settings-request-capability.js";
 import { readBoundedWebBody } from "./web-body.js";
+import { handleLibraryRequest } from "./library/web.js";
 import type { OwnerCssStore } from "./web-owner-css-store.js";
 import { APP_ICON_MAX_BYTES, type AppIconStore } from "./web-app-icon.js";
 import { withAppIconLinks } from "./web-icons.js";
@@ -2230,6 +2231,10 @@ export function handleWebRequest(
     })().catch(() => { if (!res.headersSent) json(res, 500, { error: "agent_export_failed" }); });
     return true;
   }
+
+  // AGEND-243: the Skill / MCP library's storage routes (src/library/web.ts). Admin only; nothing here reaches an agent.
+  if (path.startsWith("/ui/library/") && handleLibraryRequest({ method, path, url, req, res, home: ctx.dataDir, json, readJson: parseBody,
+    admission: () => adminAdmissionOf(req, url, ctx), stillOpen: () => permitWebContinuation(req, res, ctx) })) return true;
 
   if (method === "GET" && path === "/ui/models") {
     const backend = url.searchParams.get("backend") ?? "";
