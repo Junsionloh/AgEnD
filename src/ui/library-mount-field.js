@@ -14,12 +14,14 @@ register("libraryMount", {
     none: "The Library has no usable skills yet. Add one on the Library page.", loadFailed: "Could not read the Library.", loading: "Reading the Library…",
     gone: "Not in the Library any more", notReady: "Not given: it was changed outside the Library or breaks a rule — check it on the Library page",
     note: "A skill folder of the same name that you made yourself, or a built-in skill of the same name, always wins; the library skill is skipped.",
+    noFolder: "This agent’s CLI ({0}) has no skills folder, so team skills do not take effect on it.",
   },
   "zh-TW": {
     card: "資源庫", label: "團隊 Skill", tip: "從資源庫選給這個 Agent 的團隊 Skill，和內建 Skill 並用。Agent 啟動時會寫進它 CLI 的 skill 資料夾，所以變更要重啟後才生效。內建 Skill 依 Agent 的角色自動帶入，不在這裡列出。",
     none: "資源庫裡還沒有可用的 Skill，請先到「資源庫」頁新增。", loadFailed: "無法讀取資源庫。", loading: "讀取資源庫中…",
     gone: "已不在資源庫", notReady: "不會交給 Agent：它在資源庫外被改過或不符規則，請到資源庫頁檢查",
     note: "若有同名的自建 skill 資料夾或內建 Skill，一律以它們為準，資源庫的 Skill 會被略過。",
+    noFolder: "這個 Agent 的 CLI（{0}）沒有 skill 資料夾，團隊 Skill 在它身上不會生效。",
   },
 });
 const lw = (key, ...values) => t(`libraryMount.${key}`, ...values);
@@ -38,7 +40,7 @@ export function LibrarySkillsField({ m, L }) {
     let live = true;
     fetch("/ui/library/list", { credentials: "same-origin", cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((data) => { if (live) setState({ skills: mountableSkills(data && data.items) }); }, () => { if (live) setState({ error: true }); });
+      .then((data) => { if (live) setState({ skills: mountableSkills(data && data.items), folderBackends: Array.isArray(data && data.skillsFolderBackends) ? data.skillsFolderBackends : null }); }, () => { if (live) setState({ error: true }); });
     return () => { live = false; };
   }, []);
   const chosen = f.library_skills || [];
@@ -46,8 +48,11 @@ export function LibrarySkillsField({ m, L }) {
   const listed = state.skills || [];
   // A skill the agent has but the Library does not list (deleted there) stays visible, so it can be unticked.
   const rows = [...listed, ...chosen.filter((id) => !listed.some((s) => s.id === id)).map((id) => ({ id, description: "", status: "missing" }))];
+  // The server says which CLIs read a skills folder (no list is written here); until it has, nothing is claimed.
+  const noFolder = !!state.folderBackends && !!f.backend && !state.folderBackends.includes(f.backend);
   const pickable = (s) => s.status === "ok" || chosen.includes(s.id);
   return html`<div class="field" data-library-skills>${L(lw("label"), "instance.library", undefined, lw("tip"))}
+    ${noFolder ? html`<p class="feedback warning" role="note" data-library-no-folder>${lw("noFolder", f.backend)}</p>` : null}
     ${state.loading ? html`<p class="note">${lw("loading")}</p>` : null}
     ${state.error && !rows.length ? html`<p class="note">${lw("loadFailed")}</p>` : null}
     ${!state.loading && !state.error && !rows.length ? html`<p class="note">${lw("none")}</p>` : null}

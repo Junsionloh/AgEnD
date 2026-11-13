@@ -855,6 +855,16 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .row-item.is-off { opacity: 0.62; }
 /* A row that needs a look (the library: an item whose file changed, is missing or breaks a rule). */
 .row-item.is-warn { box-shadow: inset 3px 0 0 var(--warn); }
+/* AGEND-248: the Library overview — one card per category, its title and its rows in the same box (tokens only; the rows take the
+   card-inside tone the Hub's lists use). */
+.p-library .lib-head { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.p-library .lib-card h3 { margin: 0; color: var(--text); font-size: var(--fs-lg); text-transform: none; letter-spacing: 0; }
+.p-library .lib-group { display: flex; flex-direction: column; gap: var(--s-2); }
+.p-library .lib-group > h4 { margin: 0; }
+.p-library .lib-card .row-item { background: var(--surface-2); }
+.p-library .lib-card .empty { padding: var(--s-4) var(--s-2); }
+.p-library .lib-tools > summary { cursor: pointer; width: fit-content; }
+.p-library .lib-tools > p { margin: var(--s-1) 0 0; overflow-wrap: anywhere; }
 .row-item.sched { flex-wrap: nowrap; }
 .row-item.sched .sched-text { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 2px; }
 .sched-actions { display: inline-flex; flex: none; gap: var(--s-1); }
