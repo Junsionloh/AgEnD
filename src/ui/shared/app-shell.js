@@ -10,7 +10,7 @@ import { t, lang, setLang, onLang, register } from "./app-i18n.js";
 import { appStore, createStore, guestBadge, guestPage, guestTrusted, useStore } from "./app-store.js";
 import { navStore } from "./app-nav.js";
 import { toast } from "./ui-toast.js";
-import { chatPath, viewPath, settingsPath, routeKey, NEEDS_PATH, NOTICES_PATH, fleetEntryPath } from "./app-route.js";
+import { chatPath, viewPath, settingsPath, routeKey, NEEDS_PATH, NOTICES_PATH, LIBRARY_PATH, fleetEntryPath } from "./app-route.js";
 import { SessionMenu } from "./app-session.js";
 import { onPrefsChanged, savePref } from "./app-prefs.js";
 import { applyPageTheme, pageNow, resolvedMode, themesStore } from "./app-themes.js";
@@ -465,6 +465,7 @@ function Sidebar({ route, onNewInstance, viewOnly }) {
       ${navLink("needs", NEEDS_PATH, "inbox", t("app.needsNav"), needsCount)}
       ${/* #2910 D2: a web-only fleet (no chat connection) has Notices — what General would have said. AGEND-122: a chat fleet too, while one is unread (a confirmation from another device that nothing else could carry). */
         (app.connections === 0 || (app.notices && app.notices.unread > 0)) && app.notices && app.notices.enabled ? navLink("notices", NOTICES_PATH, "bell", t("app.noticesNav"), app.notices.unread | 0, "app.noticesCount") : null}
+      ${/* AGEND-243: the Skill / MCP library, for a session that can change the fleet (the page and its routes are admin only). */ canCreate ? navLink("library", LIBRARY_PATH, "book", t("app.libraryNav")) : null}
       ${searchOffered(canCreate) ? searchRow() : null}
       ${canCreate && onNewInstance ? html`<button type="button" class="side-row side-new" onClick=${onNewInstance}><${Icon} name="plus" /><span class="grow">${t("app.newAgent")}</span></button>` : null}
     </nav>
