@@ -92,7 +92,7 @@ describe("resolveLibraryMcp", () => {
   });
 
   it("helpers: the variables an item reads, and which are missing", () => {
-    const v = validateMcpText("x", http("x")) as { ok: true; item: never };
+    const v = validateMcpText("x", http("x")) as Extract<ReturnType<typeof validateMcpText>, { ok: true }>;
     expect(mcpVariables(v.item)).toEqual(["EXAMPLE_API_KEY"]);
     expect(missingVariables(v.item, {})).toEqual(["EXAMPLE_API_KEY"]);
     expect(buildLibraryMcpEntry(v.item, (n) => `A_${n}`)).toMatchObject({ headers: { "X-Api-Key": "${A_EXAMPLE_API_KEY}" } });
