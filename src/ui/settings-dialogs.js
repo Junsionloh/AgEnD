@@ -465,6 +465,7 @@ export function AgentFields({ m, cat, onDelete, idPrefix = "" }) {
     <${Card} title=${pt("cardWorkdir")}>
       <div class="field">${L(tn("workingDir"), "instance.working_directory", "ag-wd", pt("tip_workingDir"))}<input id=${fieldId("ag-wd")} type="text" value=${f.working_directory} onInput=${(e) => set("working_directory")(e.target.value)} /></div>
       <${Info}>${pt("note_workdir")}</${Info}></${Card}>
+    ${windows ? null : html`<${Card} title=${libraryCardTitle()} span=${true}><${LibrarySkillsField} m=${m} L=${L} /></${Card}>`}
     <${Card} title=${pt("cardIdle")}>
       <div class="field">${L(`${tn("autoPause")} (${tn("minutes")})`, "instance.auto_pause_after", "ag-auto", pt("tip_autoPause"))}
         <${Override} inherit=${f.inherit.auto_pause_after} onInherit=${setInherit("auto_pause_after")} inherited=${inh("auto_pause_after", defaults.auto_pause_after ?? 0, "#g-auto", "minutes")}>
@@ -493,7 +494,7 @@ export function AgentFields({ m, cat, onDelete, idPrefix = "" }) {
           <label class="check"><input aria-label=${tn("lightweight")} type="checkbox" disabled=${f.inherit.lightweight} checked=${shown("lightweight", f.lightweight, defaults.lightweight ?? false)}
             onChange=${(e) => set("lightweight")(e.target.checked)} /><span>${pt("checkEnable")}</span></label></${Override}></div>
     </div></${Card}>
-    ${windows ? null : html`<${Card} title=${libraryCardTitle()} span=${true}><${LibrarySkillsField} m=${m} L=${L} /></${Card}>`}</div>`;
+</div>`;
   if (cat === "channel") {
     const channel = f.channel_id || ids[0] || null;
     return html`<div class="ap-grid">

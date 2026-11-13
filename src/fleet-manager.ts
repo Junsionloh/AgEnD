@@ -429,7 +429,8 @@ import { companyJoinSession } from "./authority/company-join.js";
 import { allowedHostNames, applyWebSecurityHeaders, hostnameOf, isHostAllowed, LOOPBACK_HOST_NAMES, WEB_HOST_REJECTED_MESSAGE } from "./web-host-guard.js";
 import { createPreviewListener, normalizeOrigin, previewAvailability, previewSettings, type PreviewAvailability, type PreviewListener, type PreviewOffCode } from "./web-preview.js";
 import { isCanvasWorkerTool, CANVAS_WORKER_EXPERIMENTAL_MESSAGE } from "./web-experimental.js";
-import { bundledSkillContents } from "./bundled-skills.js";
+import { bundledSkillContents, parseBundledSkillRoles } from "./bundled-skills.js";
+import { NATIVE_SKILLS_DIR_SEGMENTS } from "./native-skills-dir.js";
 import { LIBRARY_SKILLS_MANIFEST, LibraryStore, normalizeMount, syncLibrarySkills } from "./library/index.js";
 import { fleetLevelDifferences, fleetLevelSignature, appendedConnections } from "./fleet-level-config.js";
 import { checkSelfRestartAllowance, recordSelfRestartAttempt } from "./self-restart-limit.js";
@@ -23239,26 +23240,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     return workDir;
   }
 
-  /**
-   * Where each backend natively loads on-demand skills from, relative to the
-   * workspace. Backends without a native skill mechanism (opencode, grok,
-   * antigravity) are deliberately absent: dropping files a CLI
-   * never reads is clutter, not capability. Unknown directories are ignored
-   * by older CLI versions, so publishing is fail-open across upgrades.
-   */
-  private static SKILLS_DIR_SEGMENTS: Record<string, string[]> = {
-    "kiro-cli": [".kiro", "skills"],
-    "claude-code": [".claude", "skills"],
-    "codex": [".agents", "skills"],
-    // Live-verified: OpenCode and Antigravity scan .agents/skills; Grok's
-    // vendor-canonical location is .grok/skills.
-    "opencode": [".agents", "skills"],
-    "grok": [".grok", "skills"],
-    // Live-verified on muse 1.3.0: `muse skills list --source project` sees
-    // .agents/skills and ignores .muse/skills.
-    "muse": [".agents", "skills"],
-    "antigravity": [".agents", "skills"],
-  };
+  /** Where each backend natively loads on-demand skills from (src/native-skills-dir.ts; the library overview reads the same table). */
+  private static SKILLS_DIR_SEGMENTS: Record<string, string[]> = NATIVE_SKILLS_DIR_SEGMENTS;
 
   /** Copy general-knowledge steering + all role-eligible skills to General. */
   private syncGeneralKnowledge(workDir: string, backend: string): void {
@@ -23548,28 +23531,17 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
 
   /** Read AgEnD's roles extension from SKILL.md YAML frontmatter. */
   private readManagedSkillRoles(skillPath: string): ManagedSkillRole[] {
-    const fallback: ManagedSkillRole[] = ["general"];
     try {
-      const content = readFileSync(skillPath, "utf-8");
-      const match = content.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
-      if (!match) return fallback;
-      const document = parseDocument(match[1]);
-      if (document.errors.length > 0) throw document.errors[0];
-      const frontmatter = document.toJS() as { roles?: unknown } | null;
-      if (!frontmatter || frontmatter.roles === undefined) return fallback;
-      if (!Array.isArray(frontmatter.roles)) throw new Error("roles must be an array");
-      const roles = [...new Set(frontmatter.roles)]
-        .filter((value): value is ManagedSkillRole => value === "general" || value === "worker" || value === "classic");
-      if (roles.length !== frontmatter.roles.length || roles.length === 0) {
-        throw new Error("roles must contain only general, worker and/or classic");
-      }
-      return roles;
-    } catch (err) {
+      const { roles, error } = parseBundledSkillRoles(readFileSync(skillPath, "utf-8"));
+      if (error === undefined) return roles;
       // Fail closed for workers: malformed or unknown metadata keeps the
       // backwards-compatible General-only behavior instead of leaking an
       // administrative skill into worker workspaces.
+      this.logger.warn({ err: error, skillPath }, "Invalid bundled skill roles — defaulting to General only");
+      return roles;
+    } catch (err) {
       this.logger.warn({ err, skillPath }, "Invalid bundled skill roles — defaulting to General only");
-      return fallback;
+      return ["general"];
     }
   }
 
