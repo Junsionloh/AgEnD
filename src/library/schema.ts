@@ -33,9 +33,15 @@ export const LIBRARY_LIMITS = Object.freeze({
   mcpEnv: 64,
 });
 
-/** The same id rule as the bundled skills. */
+/**
+ * Names Windows reserves as devices (CON, PRN, AUX, NUL, COM1-9, LPT1-9, with or without an extension): a folder or file called
+ * that cannot be created or removed there, so an item that is shared between machines may not carry one.
+ */
+export const isWindowsReservedName = (name: string): boolean => /^(?:con|prn|aux|nul|com[1-9\u00b9\u00b2\u00b3]|lpt[1-9\u00b9\u00b2\u00b3])$/i.test(name.split(".")[0]!);
+
+/** The same id rule as the bundled skills, minus the names Windows reserves. */
 export const LIBRARY_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-export const isLibraryId = (v: unknown): v is string => typeof v === "string" && LIBRARY_ID_RE.test(v);
+export const isLibraryId = (v: unknown): v is string => typeof v === "string" && LIBRARY_ID_RE.test(v) && !isWindowsReservedName(v);
 
 export type LibraryErrorCode =
   | "invalid_request" | "invalid_id" | "invalid_path" | "duplicate_path" | "missing_skill_md" | "bad_frontmatter" | "name_mismatch"
@@ -43,6 +49,33 @@ export type LibraryErrorCode =
   | "invalid_yaml" | "bad_mcp" | "unsafe_item";
 export interface LibraryError { ok: false; error: LibraryErrorCode; path?: string; detail?: string; findings?: SecretFinding[] }
 const fail = (error: LibraryErrorCode, extra: { path?: string; detail?: string; findings?: SecretFinding[] } = {}): LibraryError => ({ ok: false, error, ...extra });
+
+// ── Mounting (an agent's `library` setting; applied in mount.ts) ──
+
+/** The ids a mount list names, in order, once each. Anything that is not a valid library id is dropped. */
+export function normalizeMount(list: unknown): string[] {
+  if (!Array.isArray(list)) return [];
+  const out: string[] = [];
+  for (const id of list) if (isLibraryId(id) && !out.includes(id)) out.push(id);
+  return out;
+}
+
+/** What is wrong with an instance's `library` value (null when fine). The one place fleet.yaml's shape is judged. */
+export function libraryMountProblem(value: unknown, isDefaults: boolean): string | null {
+  if (isDefaults) return "is set per agent: the fleet defaults cannot mount library items";
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "must be a mapping like { skills: [id, …] }";
+  for (const key of Object.keys(value)) if (key !== "skills" && key !== "mcp") return `has an unknown key "${key}" (only skills is available)`;
+  const { skills, mcp } = value as { skills?: unknown; mcp?: unknown };
+  if (skills !== undefined) {
+    if (!Array.isArray(skills) || !skills.every((id) => isLibraryId(id))) {
+      return "skills must be a list of library skill ids (lowercase letters, digits and hyphens, not a Windows device name)";
+    }
+    if (new Set(skills).size !== skills.length) return "skills lists the same id twice";
+    if (skills.length > LIBRARY_LIMITS.itemsPerKind) return `skills lists more than ${LIBRARY_LIMITS.itemsPerKind} ids`;
+  }
+  if (mcp !== undefined && !Array.isArray(mcp)) return "mcp must be a list";
+  return null;
+}
 
 // ── Skills ─────────────────────────────────────────────────────────────
 
@@ -54,13 +87,14 @@ const byteLength = (s: string): number => Buffer.byteLength(s, "utf8");
 
 /**
  * A path inside a skill's folder: relative, `/`-separated, no empty / `.` / `..` segment, no hidden segment, no drive letter or
- * backslash, plain characters only (so it means the same on Linux, macOS and Windows), not ending in a dot.
+ * backslash, plain characters only (so it means the same on Linux, macOS and Windows), not ending in a dot, and no segment a
+ * Windows device name (`con`, `nul.txt`…).
  */
 export function isSafeSkillPath(p: unknown): p is string {
   if (typeof p !== "string" || !p || p.length > LIBRARY_LIMITS.skillPathChars) return false;
   const parts = p.split("/");
   if (parts.length > LIBRARY_LIMITS.skillPathDepth) return false;
-  return parts.every((seg) => SEGMENT_RE.test(seg) && !seg.endsWith(".") && seg !== "." && seg !== "..");
+  return parts.every((seg) => SEGMENT_RE.test(seg) && !seg.endsWith(".") && seg !== "." && seg !== ".." && !isWindowsReservedName(seg));
 }
 
 /** The frontmatter of a SKILL.md: `{ name, description, … }` between two `---` lines. */

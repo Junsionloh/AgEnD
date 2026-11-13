@@ -35,6 +35,7 @@ import {
 } from "./settings-model.js";
 import { ModelRefresh, useRefreshableModels, mw } from "./model-picker.js";
 import "./settings-codex-copy.js";   // M-2446: the Speed field's words (a retained old settings-strings lacks them)
+import { LibrarySkillsField, libraryCardTitle } from "./library-mount-field.js";   // AGEND-244: its own module and words (never a stale named import)
 import { AccountSelect } from "./accounts-view.js";   // #3212: the Account field (a new module: never a stale named import)
 import { capsOf } from "./cli-caps.js";
 /** M-2446: Codex speed choices (backend_options.codex.speed); "" = unset. Local, not imported: a stale tab may keep an
@@ -491,7 +492,8 @@ export function AgentFields({ m, cat, onDelete, idPrefix = "" }) {
         <${Override} inherit=${f.inherit.lightweight} onInherit=${setInherit("lightweight")} inherited=${inh("lightweight", defaults.lightweight ?? false, null)}>
           <label class="check"><input aria-label=${tn("lightweight")} type="checkbox" disabled=${f.inherit.lightweight} checked=${shown("lightweight", f.lightweight, defaults.lightweight ?? false)}
             onChange=${(e) => set("lightweight")(e.target.checked)} /><span>${pt("checkEnable")}</span></label></${Override}></div>
-    </div></${Card}></div>`;
+    </div></${Card}>
+    ${windows ? null : html`<${Card} title=${libraryCardTitle()} span=${true}><${LibrarySkillsField} m=${m} L=${L} /></${Card}>`}</div>`;
   if (cat === "channel") {
     const channel = f.channel_id || ids[0] || null;
     return html`<div class="ap-grid">
