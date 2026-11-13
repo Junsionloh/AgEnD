@@ -12,6 +12,7 @@ import { t } from "../locale.js";
 import { selectedGeneralHostSession } from "../general-binding.js";
 import { ResumeBlockedError } from "./types.js";
 import { claudeOneMillionOffered } from "./claude-context.js";
+import { claudeMcpEntry } from "../library/mcp-render.js";
 import { type CliBackend, type CliBackendConfig, type ErrorPattern, type InputBox, type RuntimeDialog, type StartupDialog, CLI_PROBE_LONGEST_LEAF_MS, promptCacheTtl, resolveBinary, shellQuote, validateModel, warnIfModelMismatch } from "./types.js";
 
 /** Mirror Claude Code's ~/.claude/projects key for a working directory. Exported for the detection-signal seam. */
@@ -1629,8 +1630,14 @@ export class ClaudeCodeBackend extends ClaudePaneDetectors implements CliBackend
   writeConfig(config: CliBackendConfig): void {
     // 1. Write mcp-config.json to instance dir (loaded via --mcp-config)
     const mcpConfigPath = join(this.instanceDir, "mcp-config.json");
-    const mcpConfig = { mcpServers: config.mcpServers };
+    // AGEND-261: library MCP servers an administrator mounted are appended; with none, this is the same object as before.
+    const libraryEntries = Object.entries(config.libraryMcp ?? {});
+    const mcpConfig = { mcpServers: libraryEntries.length
+      ? { ...config.mcpServers, ...Object.fromEntries(libraryEntries.map(([name, entry]) => [name, claudeMcpEntry(entry)])) }
+      : config.mcpServers };
     writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+    // It now holds the values of the variables those servers need: owner only (written under the user's umask before).
+    if (libraryEntries.length) { try { chmodSync(mcpConfigPath, 0o600); } catch { /* best effort: the instance folder is private too */ } }
 
     // 2. Write statusline script
     const statusLineCommand = this.writeStatusLineScript();

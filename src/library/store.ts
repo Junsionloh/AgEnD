@@ -288,6 +288,22 @@ export class LibraryStore {
     return { ok: true, sha256: detail.sha256, files };
   }
 
+  /**
+   * AGEND-261: an MCP item as mounting needs it — through every rule of validateMcpText, and only when its file is the one the lock
+   * recorded (`ok`). A hand-edited (`modified`) or hand-placed (`untracked`) item is not handed on until someone saves it in the
+   * Library: the same rule as `skillForMount`.
+   */
+  mcpForMount(id: string): Ok<{ sha256: string; item: McpItem }> | { ok: false; reason: "not_found" | "invalid" | "untracked" | "modified" } {
+    const d = this.get("mcp", id);
+    if (!d.ok) return { ok: false, reason: d.error === "not_found" ? "not_found" : "invalid" };
+    const detail = d.detail;
+    if (detail.kind !== "mcp") return { ok: false, reason: "invalid" };
+    const entry = this.readLock().items[`mcp:${id}`];
+    if (!entry) return { ok: false, reason: "untracked" };
+    if (entry.sha256 !== detail.sha256) return { ok: false, reason: "modified" };
+    return { ok: true, sha256: detail.sha256, item: detail.item };
+  }
+
   // ── writes ───────────────────────────────────────────────────────────
 
   private countOf(kind: LibraryKind): number { return this.ids(kind).length; }

@@ -16,10 +16,12 @@ import { hasNativeSkillsDir } from "../native-skills-dir.js";
 import { TOOL_PROFILES, resolveToolSet } from "../tool-permissions.js";
 import { generalByName } from "../general-instance.js";
 import { librarySkillUsage } from "./mount.js";
+import { libraryMcpUsage } from "./mcp-mount.js";
+import { supportsLibraryMcp } from "./mcp-support.js";
 
 /** The fleet's `instances`, as far as the overview reads them. */
 export type OverviewInstances = Record<string, {
-  backend?: string; runtime?: string; general_topic?: boolean; tool_set?: string; library?: { skills?: unknown };
+  backend?: string; runtime?: string; general_topic?: boolean; tool_set?: string; library?: { skills?: unknown; mcp?: unknown };
 } | null | undefined>;
 
 export interface OverviewAgent {
@@ -32,6 +34,8 @@ export interface OverviewAgent {
   windows: boolean;
   /** Its CLI reads skills from a folder in the workspace (false: a skill mounted on it cannot take effect). */
   nativeSkills: boolean;
+  /** AGEND-261: its CLI takes library MCP servers (src/library/mcp-support.ts; false: the page says it is not supported yet). */
+  libraryMcp: boolean;
 }
 export interface Overview {
   agents: OverviewAgent[];
@@ -40,6 +44,8 @@ export interface Overview {
   mcp: Array<{ name: string; agents: string[] }>;
   /** `{ librarySkillId: [agent names] }`, only for ids mounted somewhere (librarySkillUsage). */
   teamUsage: Record<string, string[]>;
+  /** AGEND-261: `{ libraryMcpId: [agent names] }`, only for ids mounted somewhere (libraryMcpUsage). */
+  teamMcpUsage: Record<string, string[]>;
 }
 
 export interface OverviewInput {
@@ -60,7 +66,7 @@ export function buildOverview(input: OverviewInput): Overview {
     const general = def.general_topic === true || generalByName(name, def);
     agents.push({
       name, backend, role: general ? "general" : "worker", toolSet: resolveToolSet(def, name),
-      windows: def.runtime === "windows", nativeSkills: hasNativeSkillsDir(backend),
+      windows: def.runtime === "windows", nativeSkills: hasNativeSkillsDir(backend), libraryMcp: supportsLibraryMcp(backend),
     });
   }
   // An agent whose CLI has no skills folder is not given a bundled skill either (syncRoleSkills returns before it writes): not listed as using one.
@@ -78,5 +84,6 @@ export function buildOverview(input: OverviewInput): Overview {
     agents, builtinSkills, toolSets,
     mcp: [{ name: "agend", agents: agents.map(a => a.name) }],
     teamUsage: { ...librarySkillUsage(instances as never) },
+    teamMcpUsage: { ...libraryMcpUsage(instances as never) },
   };
 }

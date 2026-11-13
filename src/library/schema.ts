@@ -68,7 +68,7 @@ export function normalizeMount(list: unknown): string[] {
 export function libraryMountProblem(value: unknown, isDefaults: boolean): string | null {
   if (isDefaults) return "is set per agent: the fleet defaults cannot mount library items";
   if (!value || typeof value !== "object" || Array.isArray(value)) return "must be a mapping like { skills: [id, …] }";
-  for (const key of Object.keys(value)) if (key !== "skills" && key !== "mcp") return `has an unknown key "${key}" (only skills is available)`;
+  for (const key of Object.keys(value)) if (key !== "skills" && key !== "mcp") return `has an unknown key "${key}" (only skills and mcp are available)`;
   const { skills, mcp } = value as { skills?: unknown; mcp?: unknown };
   if (skills !== undefined) {
     if (!Array.isArray(skills) || !skills.every((id) => isLibraryId(id))) {
@@ -77,7 +77,13 @@ export function libraryMountProblem(value: unknown, isDefaults: boolean): string
     if (new Set(skills).size !== skills.length) return "skills lists the same id twice";
     if (skills.length > LIBRARY_LIMITS.itemsPerKind) return `skills lists more than ${LIBRARY_LIMITS.itemsPerKind} ids`;
   }
-  if (mcp !== undefined && !Array.isArray(mcp)) return "mcp must be a list";
+  if (mcp !== undefined) {
+    if (!Array.isArray(mcp) || !mcp.every((id) => isLibraryId(id))) {
+      return "mcp must be a list of library MCP ids (lowercase letters, digits and hyphens, not a Windows device name)";
+    }
+    if (new Set(mcp).size !== mcp.length) return "mcp lists the same id twice";
+    if (mcp.length > LIBRARY_LIMITS.itemsPerKind) return `mcp lists more than ${LIBRARY_LIMITS.itemsPerKind} ids`;
+  }
   return null;
 }
 
@@ -161,6 +167,9 @@ export function validateSkill(id: unknown, files: unknown): { ok: true; id: stri
 /** The file's own marker, as `agend_export: 1` marks an export file. */
 export const MCP_FILE_VERSION = 1;
 const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+/** Variables an MCP server may not be given from `.env`: the ones that change how a program is found or loaded (the secret store refuses them too). */
+const RESERVED_ENV_NAMES = new Set(["PATH", "HOME", "PWD", "SHELL", "ENV", "BASH_ENV", "NODE_OPTIONS", "LD_PRELOAD"]);
+const isVariableName = (n: unknown): n is string => typeof n === "string" && ENV_NAME_RE.test(n) && !RESERVED_ENV_NAMES.has(n);
 const HEADER_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
 
 /** What an MCP library file holds. `env` and `headers` name VARIABLES: the values live where the agent runs, never here. */
@@ -211,7 +220,7 @@ export function validateMcpText(id: unknown, text: unknown): { ok: true; id: str
     }
     if (doc.env !== undefined) {
       // A map (`KEY: value`) is the shape that carries a value: refused, whatever the value is.
-      if (!Array.isArray(doc.env) || doc.env.length > LIBRARY_LIMITS.mcpEnv || !doc.env.every((n) => typeof n === "string" && ENV_NAME_RE.test(n))) return bad("env");
+      if (!Array.isArray(doc.env) || doc.env.length > LIBRARY_LIMITS.mcpEnv || !doc.env.every(isVariableName)) return bad("env");
       if (new Set(doc.env).size !== doc.env.length) return bad("env");
       if (doc.env.length) item.env = [...(doc.env as string[])];
     }
@@ -227,7 +236,7 @@ export function validateMcpText(id: unknown, text: unknown): { ok: true; id: str
       if (!isObj(doc.headers) || Object.keys(doc.headers).length > LIBRARY_LIMITS.mcpEnv) return bad("headers");
       const headers: Record<string, string> = {};
       for (const [h, v] of Object.entries(doc.headers)) {
-        if (!HEADER_NAME_RE.test(h) || typeof v !== "string" || !ENV_NAME_RE.test(v)) return bad("headers");
+        if (!HEADER_NAME_RE.test(h) || !isVariableName(v)) return bad("headers");
         headers[h] = v;
       }
       if (Object.keys(headers).length) item.headers = headers;

@@ -16,7 +16,13 @@
  *   POST /ui/library/import?sha256=&decisions=     the same bytes again, with the preview's hash and the admin's per-skill choices (URL-encoded JSON): stores
  *   Importing only puts a skill in the library; no agent is given it.
  *
- * Nothing here reaches an agent: the library is only a place to keep and look at items, and the overview only reads settings.
+ * AGEND-261 (library MCP servers mounted on an agent, Claude Code and Codex; src/library/mcp-mount.ts):
+ *   GET  /ui/library/mcp-status?agent=<name>           every MCP item as the agent's settings page needs it: what it would run, the variables it names
+ *                                                  (set / missing — names only, never a value), and whether it was confirmed for this agent at its current version
+ *   POST /ui/library/mcp-confirm {agent, id, sha256}   the administrator saw that exact version and confirms it for that agent (409 `changed` if the item is another now)
+ *   Mounting itself is `library.mcp` in the agent's settings; the confirmation is the second key: an item that was edited after it is not written until confirmed again.
+ *
+ * Nothing here hands an agent anything: the library is a place to keep and look at items, the overview only reads settings, and what an agent is given is decided at its launch.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { LibraryStore } from "./store.js";
@@ -26,6 +32,9 @@ import { ZIP_LIMITS } from "./zip.js";
 import { NATIVE_SKILLS_DIR_SEGMENTS } from "../native-skills-dir.js";
 import { buildOverview, type OverviewInstances } from "./overview.js";
 import { LIBRARY_LIMITS, isLibraryId, type LibraryError, type LibraryKind } from "./schema.js";
+import { McpConfirmations, envNamesSet, mcpSummary, mcpVariables, type McpSummary } from "./mcp-mount.js";
+import { LIBRARY_MCP_BACKENDS, supportsLibraryMcp } from "./mcp-support.js";
+import { join } from "node:path";
 
 export interface LibraryWebHost {
   method: string;
@@ -67,14 +76,27 @@ function readDecisions(raw: string | null): Map<string, ImportDecision> | null {
   }
   return out;
 }
+/** The agent's definition as the page needs it: its backend (the fleet's default when it names none) and runtime. Null: no such agent. */
+function agentOf(h: LibraryWebHost, name: string): { backend: string; runtime?: string; library?: { mcp?: unknown } } | null {
+  const fleet = h.fleet?.();
+  const instances = fleet?.instances;
+  if (!name || !instances || !Object.hasOwn(instances, name) || !instances[name]) return null;
+  const def = instances[name]!;
+  return { backend: def.backend ?? fleet?.defaultBackend ?? "claude-code", ...(def.runtime ? { runtime: def.runtime } : {}), ...(def.library ? { library: def.library } : {}) };
+}
+const mcpMountedOn = (def: { library?: { mcp?: unknown } }, id: string): boolean => Array.isArray(def.library?.mcp) && (def.library!.mcp as unknown[]).includes(id);
+interface McpMountItem {
+  id: string; description: string; status: string; sha256?: string; confirmed: boolean; mounted: boolean;
+  summary?: McpSummary; variables?: Array<{ name: string; set: boolean }>;
+}
 const kindOf = (v: unknown): LibraryKind | null => (v === "skill" || v === "mcp" ? v : null);
 
 /** True when the request was a library route (answered here, whatever the outcome). */
 export function handleLibraryRequest(h: LibraryWebHost): boolean {
   const { method, path, res } = h;
   const route = method === "GET"
-    ? (path === "/ui/library/list" || path === "/ui/library/item" || path === "/ui/library/overview" || path === "/ui/library/export" || path === "/ui/library/export-all" || path === "/ui/library/builtin")
-    : method === "POST" && (path === "/ui/library/save" || path === "/ui/library/delete" || path === "/ui/library/import/preview" || path === "/ui/library/import");
+    ? (path === "/ui/library/list" || path === "/ui/library/item" || path === "/ui/library/overview" || path === "/ui/library/export" || path === "/ui/library/export-all" || path === "/ui/library/builtin" || path === "/ui/library/mcp-status")
+    : method === "POST" && (path === "/ui/library/save" || path === "/ui/library/mcp-confirm" || path === "/ui/library/delete" || path === "/ui/library/import/preview" || path === "/ui/library/import");
   if (!route) return false;
   const admission = h.admission();
   if (!admission) { h.json(res, 403, { error: "admin_required" }); return true; }
@@ -86,7 +108,30 @@ export function handleLibraryRequest(h: LibraryWebHost): boolean {
   };
   try {
     if (method === "GET") {
-      if (path === "/ui/library/list") { h.json(res, 200, { items: store.list(), limits: LIBRARY_LIMITS, skillsFolderBackends: Object.keys(NATIVE_SKILLS_DIR_SEGMENTS) }); return true; }
+      if (path === "/ui/library/list") { h.json(res, 200, { items: store.list(), limits: LIBRARY_LIMITS, skillsFolderBackends: Object.keys(NATIVE_SKILLS_DIR_SEGMENTS), mcpBackends: Object.keys(LIBRARY_MCP_BACKENDS) }); return true; }
+      if (path === "/ui/library/mcp-status") {
+        const agent = h.url.searchParams.get("agent") ?? "";
+        const def = agentOf(h, agent);
+        if (!def) { h.json(res, 404, { error: "not_found" }); return true; }
+        const confirmed = new McpConfirmations(store).forAgent(agent);
+        const envPath = join(h.home, ".env");
+        const items: McpMountItem[] = [];
+        for (const it of store.list()) {
+          if (it.kind !== "mcp") continue;
+          const got = store.mcpForMount(it.id);
+          const row: McpMountItem = { id: it.id, description: it.description, status: it.status, ...(it.sha256 ? { sha256: it.sha256 } : {}), confirmed: false, mounted: mcpMountedOn(def, it.id) };
+          if (got.ok) {
+            const summary = mcpSummary(got.item);
+            const set = envNamesSet(envPath, summary.variables);
+            row.summary = summary;
+            row.variables = summary.variables.map((name) => ({ name, set: set.has(name) }));
+            row.confirmed = Object.hasOwn(confirmed, it.id) && confirmed[it.id] === got.sha256;
+          }
+          items.push(row);
+        }
+        h.json(res, 200, { agent, backend: def.backend, supported: supportsLibraryMcp(def.backend), windows: def.runtime === "windows", items });
+        return true;
+      }
       if (path === "/ui/library/overview") {
         const fleet = h.fleet?.();
         h.json(res, 200, buildOverview({ instances: fleet?.instances, defaultBackend: fleet?.defaultBackend }));
@@ -153,6 +198,19 @@ export function handleLibraryRequest(h: LibraryWebHost): boolean {
     try { body = await h.readJson(h.req); } catch { h.json(res, 400, { error: "Invalid JSON" }); return; }
     if (!h.stillOpen()) return;
     if (h.admission() !== admission) { h.json(res, 403, { error: "admin_required" }); return; }
+    if (path === "/ui/library/mcp-confirm") {
+      if (!body || Array.isArray(body) || typeof body !== "object") { h.json(res, 400, { error: "invalid_request" }); return; }
+      const agent = typeof body.agent === "string" ? body.agent : "";
+      if (!isLibraryId(body.id) || typeof body.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(body.sha256)) { h.json(res, 400, { error: "invalid_request" }); return; }
+      if (!agentOf(h, agent)) { h.json(res, 404, { error: "not_found" }); return; }
+      // The version the administrator was shown must be the one stored now, and one the library would hand on at all.
+      const got = store.mcpForMount(body.id);
+      if (!got.ok) { h.json(res, got.reason === "not_found" ? 404 : 422, { error: got.reason === "not_found" ? "not_found" : "unsafe_item", detail: got.reason }); return; }
+      if (got.sha256 !== body.sha256) { send({ ok: false, error: "changed" } as LibraryError); return; }
+      new McpConfirmations(store).confirm(agent, body.id, got.sha256);
+      h.json(res, 200, { ok: true });
+      return;
+    }
     const kind = kindOf(body?.kind);
     if (!body || Array.isArray(body) || typeof body !== "object" || !kind) { h.json(res, 400, { error: "invalid_request" }); return; }
     if (path === "/ui/library/delete") { send(store.remove(kind, body.id)); return; }

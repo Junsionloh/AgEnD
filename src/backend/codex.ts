@@ -45,6 +45,7 @@ import { snapshotCodexQuotaHistory, snapshotCodexSessionQuotaHistory } from "./c
 import { quotaLine, quotaLowLine, quotaPausedLine } from "../quota-notice.js";
 import { parse as parseToml } from "smol-toml";
 import { selectionCard } from "../selection-card.js";
+import { codexMcpBlock } from "../library/mcp-render.js";
 /**
  * #2910 D4: a Codex selection AgEnD holds for a person (an approval, a trust variant, a model switch, a session picker),
  * as a card to answer from the dashboard of a web-only fleet. Never the sign-in screen: it is signed in from the
@@ -2019,6 +2020,13 @@ export class CodexBackend extends CodexPaneDetectors implements CliBackend {
     if (content && !content.endsWith("\n")) content += "\n";
     for (const [name, entry] of Object.entries(config.mcpServers)) {
       content += `\n${renderMcpServer(name, entry, config.instanceName)}`;
+    }
+    // AGEND-261: library MCP servers an administrator mounted. A block that does not read back as what was meant is left out.
+    if (config.libraryMcp && Object.keys(config.libraryMcp).length) {
+      const block = codexMcpBlock(config.libraryMcp);
+      content += block.text;
+      // Names only: the entries hold secret values.
+      if (block.dropped.length) console.warn(`[agend] library MCP not written for ${config.instanceName} (its text could not be made safe for config.toml): ${block.dropped.join(", ")}`);
     }
     atomicWritePrivate(join(this.isolatedCodexHome, "config.toml"), content);
 

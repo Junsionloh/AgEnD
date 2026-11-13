@@ -44,6 +44,9 @@ export interface InstanceStateSnapshot {
   interaction?: InteractionSnapshot;
 }
 
+/** AGEND-261: a library MCP server resolved for this launch (values filled in); see src/library/mcp-mount.ts. */
+export type { LibraryMcpEntry } from "../library/mcp-mount.js";
+
 export interface McpServerEntry {
   command: string;
   args: string[];
@@ -111,6 +114,12 @@ export interface CliBackendConfig {
   instanceDir: string;
   instanceName: string;
   mcpServers: Record<string, McpServerEntry>;
+  /**
+   * AGEND-261: library MCP servers an administrator mounted on this agent, by their config name (`agend-lib-<id>`), values resolved.
+   * Absent when nothing is mounted — then no backend's output differs from before. Only the backends in src/library/mcp-support.ts
+   * render it; the others ignore it. It carries secret values: never logged.
+   */
+  libraryMcp?: Record<string, import("../library/mcp-mount.js").LibraryMcpEntry>;
   skipPermissions?: boolean;
   model?: string;
   /** Reasoning effort for backends that take it as a launch flag. */

@@ -324,10 +324,10 @@ describe("fleet.yaml: library", () => {
     expect(cfg({}, { library: { skills: ["a"] } }).errors.some((e) => e.path === "defaults.library")).toBe(true);
     expect(libraryMountProblem({ skills: ["ok"] }, false)).toBeNull();
   });
-  it("mcp is reserved: accepted with a warning, not applied", () => {
+  it("mcp: a list of library MCP ids (AGEND-261 mounts them; the 244-era \"not available yet\" warning is gone)", () => {
     const r = cfg({ library: { mcp: ["github"] } });
     expect(r.errors).toEqual([]);
-    expect(r.warnings.some((w) => w.path === "instances.a.library.mcp")).toBe(true);
+    expect(r.warnings.some((w) => w.path === "instances.a.library.mcp")).toBe(false);
   });
 });
 
@@ -342,7 +342,7 @@ describe("agents cannot mount anything on themselves", () => {
     } as unknown as OutboundContext;
     for (const caller of ["worker", "someone-else"]) {
       await new Promise<void>((resolve) => {
-        void outboundHandlers.get("update_instance_config")!(ctx, { name: "worker", config: { library: { skills: ["review"] }, description: "d" } } as never, () => resolve(), { instanceName: caller } as never);
+        void outboundHandlers.get("update_instance_config")!(ctx, { name: "worker", config: { library: { skills: ["review"], mcp: ["github"] }, description: "d" } } as never, () => resolve(), { instanceName: caller } as never);
       });
       await new Promise((r) => setTimeout(r, 20));
       expect(instance.library).toBeUndefined();

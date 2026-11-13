@@ -256,7 +256,6 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
     if (value.library !== undefined) {
       const problem = libraryMountProblem(value.library, path === "defaults");
       if (problem) err(`${path}.library`, problem);
-      else if ((value.library as { mcp?: unknown[] }).mcp?.length) warn(`${path}.library.mcp`, "MCP mounting is not available yet — ignored");
     }
     if (value.board_cards_at_once !== undefined && !(Number.isInteger(value.board_cards_at_once) && (value.board_cards_at_once as number) >= 1)) {
       err(`${path}.board_cards_at_once`, "must be a whole number of at least 1");
