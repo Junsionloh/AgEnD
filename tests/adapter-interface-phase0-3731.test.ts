@@ -23,7 +23,8 @@ vi.mock("../src/daemon.js", async importOriginal => {
     readonly bootId = `boot-${++FakeDaemon.seq}`;
     isPaused = false;
     calls: string[] = [];
-    constructor(public name: string) { super(); fake.created.push(this); }
+    args: unknown[];
+    constructor(public name: string, ...rest: unknown[]) { super(); this.args = [name, ...rest]; fake.created.push(this); }
     setDeliveryOutboxPort() {}
     setAgentCredentialIssuer() {}
     setPeerWorkingDirectories() {}
@@ -227,6 +228,14 @@ describe("the fleet runs instances through the adapter", () => {
     expect(fake.created).toEqual([daemon]);
     // No admission fence for a plain start: the daemon is called with no argument, as before.
     expect((daemon as any).calls).toEqual(["start:0"]);
+  });
+  it("constructs the daemon with the arguments it always had", async () => {
+    const { fm, config } = fleet();
+    await fm.lifecycle.start("worker", config, true);
+    const [name, cfg, dir, topicMode, backend, , , identity] = fake.created[0].args;
+    expect([name, cfg, dir, topicMode]).toEqual(["worker", config, fm.getInstanceDir("worker"), true]);
+    expect((backend as { constructor: { name: string } }).constructor.name).toBe("ClaudeCodeBackend");
+    expect(identity).toEqual({ kind: "fleet-topic", backend: "claude-code", model: "default" });
   });
   it("stops through the adapter", async () => {
     const { fm, config } = fleet();
