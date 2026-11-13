@@ -19,6 +19,7 @@ import { isUnsupportedHomeRef, resolveFileRefPath, systemPromptParts } from "./p
 import { isRemovedBackend, removedBackendMessage } from "./backend/removed.js";
 import { CROSS_INSTANCE_VISIBILITY_MODES, isCrossInstanceVisibility } from "./cross-instance-notice.js";
 import { dashboardAccessProblem } from "./dashboard-permissions.js";
+import { libraryMountProblem } from "./library/schema.js";
 import { ENV_ISOLATION_MODES, isEnvIsolationMode, isEnvVariableName } from "./env-isolation.js";
 import { validWindowsAgentId, validWindowsDirectory } from "./windows-cli-worker.js";
 import { isNativeProviderId, nativeProvider } from "./windows-cli-providers.js";
@@ -251,6 +252,11 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
     }
     if (value.env_passthrough !== undefined && !(Array.isArray(value.env_passthrough) && value.env_passthrough.every(isEnvVariableName))) {
       err(`${path}.env_passthrough`, "must be a list of environment variable names (letters, digits and underscores)");
+    }
+    if (value.library !== undefined) {
+      const problem = libraryMountProblem(value.library, path === "defaults");
+      if (problem) err(`${path}.library`, problem);
+      else if ((value.library as { mcp?: unknown[] }).mcp?.length) warn(`${path}.library.mcp`, "MCP mounting is not available yet — ignored");
     }
     if (value.board_cards_at_once !== undefined && !(Number.isInteger(value.board_cards_at_once) && (value.board_cards_at_once as number) >= 1)) {
       err(`${path}.board_cards_at_once`, "must be a whole number of at least 1");
