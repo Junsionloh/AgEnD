@@ -2234,7 +2234,8 @@ export function handleWebRequest(
 
   // AGEND-243: the Skill / MCP library's storage routes (src/library/web.ts). Admin only; nothing here reaches an agent.
   if (path.startsWith("/ui/library/") && handleLibraryRequest({ method, path, url, req, res, home: ctx.dataDir, json, readJson: parseBody,
-    admission: () => adminAdmissionOf(req, url, ctx), stillOpen: () => permitWebContinuation(req, res, ctx) })) return true;
+    admission: () => adminAdmissionOf(req, url, ctx), stillOpen: () => permitWebContinuation(req, res, ctx),
+    fleet: () => ({ instances: ctx.fleetConfig?.instances as never, defaultBackend: ctx.fleetConfig?.defaults?.backend }) })) return true;
 
   if (method === "GET" && path === "/ui/models") {
     const backend = url.searchParams.get("backend") ?? "";

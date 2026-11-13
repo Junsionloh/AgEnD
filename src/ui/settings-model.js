@@ -196,6 +196,20 @@ export function libraryValue(inst, ids) {
   const next = ids.length ? { skills: [...ids], ...rest } : rest;
   return Object.keys(next).length ? next : null;
 }
+/**
+ * AGEND-248: the write behind "an agent's settings are changed" — one place for the URL and the shape, used by Settings' staging
+ * (makeCtx.stageAgent) and by the Library's "+" on a team skill, so a mount made there is exactly the one the agent's Settings page makes.
+ */
+export const agentPatchRequest = (name, inst, patch) => ({
+  method: "PATCH",
+  url: inst && inst.runtime === "windows" ? `/ui/instances/${encodeURIComponent(name)}` : `/api/settings/fleet/instances/${encodeURIComponent(name)}`,
+  body: patch,
+});
+/** The patch that mounts one more library skill: the same `library` value the Team skills field writes when it is ticked (agentPatch). */
+export const libraryMountPatch = (inst, id) => {
+  const have = librarySkillsOf(inst);
+  return have.includes(id) ? {} : { library: libraryValue(inst, [...have, id]) };
+};
 export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmojisBaseline) {
   const hang = inst.hang_detector || {};
   const next = {

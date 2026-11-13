@@ -100,7 +100,8 @@ describe("(b) every AgEnD CLI launch sets its own filter — even in a tmux serv
 
   it.skipIf(!existsSync(cli))("the daemon puts it in front of every launch command (built daemon.js)", () => {
     const daemon = readFileSync(join(process.cwd(), "dist", "daemon.js"), "utf8");
-    expect(daemon).toMatch(/const cmd = coredumpFilterLaunchPrefix\(\) \+ `\$\{envPrefix\} ` \+ this\.backend\.buildCommand\(launchConfig\);/);
+    // AGEND-242 wraps the command in applyEnvIsolation({ command: …, … }); the prefix is still the front of that command.
+    expect(daemon).toMatch(/command: coredumpFilterLaunchPrefix\(\) \+ `\$\{envPrefix\} ` \+ this\.backend\.buildCommand\(launchConfig\),/);
   });
 
   // A server that already existed with the default (0x33) filter — the
