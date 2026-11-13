@@ -149,26 +149,26 @@ describe("skills", () => {
 });
 
 describe("MCP items", () => {
-  const ok = MCP("github", "description: GitHub\ntransport: stdio\ncommand: npx\nargs:\n  - -y\n  - '@modelcontextprotocol/server-github'\nenv:\n  - GITHUB_TOKEN\n");
+  const ok = MCP("github", "description: GitHub\ntransport: stdio\ncommand: npx\nargs:\n  - -y\n  - '@modelcontextprotocol/server-github'\nenv:\n  - MCP_GITHUB_TOKEN\n");
 
   it("stores a stdio server with variable names only, as canonical text", () => {
     const h = home(); const s = new LibraryStore(h);
     const r = s.addMcp("github", ok);
     expect(r).toMatchObject({ ok: true });
     const text = readFileSync(join(h, "library/mcp/github.yaml"), "utf8");
-    expect(text).toContain("env:\n  - GITHUB_TOKEN");
+    expect(text).toContain("env:\n  - MCP_GITHUB_TOKEN");
     expect(s.list()[0]).toMatchObject({ kind: "mcp", id: "github", description: "GitHub", status: "ok" });
-    expect(s.get("mcp", "github")).toMatchObject({ ok: true, detail: { kind: "mcp", text, item: { transport: "stdio", command: "npx", env: ["GITHUB_TOKEN"] } } });
+    expect(s.get("mcp", "github")).toMatchObject({ ok: true, detail: { kind: "mcp", text, item: { transport: "stdio", command: "npx", env: ["MCP_GITHUB_TOKEN"] } } });
   });
 
   it("stores an http server whose headers point at variables", () => {
-    const v = validateMcpText("remote", MCP("remote", "transport: http\nurl: https://mcp.example.com/v1\nheaders:\n  Authorization: REMOTE_TOKEN\n"));
-    expect(v).toMatchObject({ ok: true, item: { transport: "http", url: "https://mcp.example.com/v1", headers: { Authorization: "REMOTE_TOKEN" } } });
+    const v = validateMcpText("remote", MCP("remote", "transport: http\nurl: https://mcp.example.com/v1\nheaders:\n  Authorization: MCP_REMOTE_TOKEN\n"));
+    expect(v).toMatchObject({ ok: true, item: { transport: "http", url: "https://mcp.example.com/v1", headers: { Authorization: "MCP_REMOTE_TOKEN" } } });
   });
 
   it("refuses a value where a variable name belongs, a secret in the command, and credentials or a query in the address", () => {
-    expect(validateMcpText("m", MCP("m", "transport: stdio\ncommand: node\nenv:\n  GITHUB_TOKEN: abc\n"))).toMatchObject({ ok: false, error: "bad_mcp", detail: "env" });
-    expect(validateMcpText("m", MCP("m", "transport: stdio\ncommand: node\nenv:\n  - GITHUB_TOKEN=abc123\n"))).toMatchObject({ ok: false, error: "bad_mcp", detail: "env" });
+    expect(validateMcpText("m", MCP("m", "transport: stdio\ncommand: node\nenv:\n  MCP_GITHUB_TOKEN: abc\n"))).toMatchObject({ ok: false, error: "bad_mcp", detail: "env" });
+    expect(validateMcpText("m", MCP("m", "transport: stdio\ncommand: node\nenv:\n  - MCP_GITHUB_TOKEN=abc123\n"))).toMatchObject({ ok: false, error: "bad_mcp", detail: "env" });
     expect(validateMcpText("m", MCP("m", `transport: stdio\ncommand: node\nargs: ["--key", "${fake.anthropicKey()}"]\n`))).toMatchObject({ ok: false, error: "secret_found" });
     for (const url of ["https://u:p@example.com/x", "https://example.com/x?token=abc", "https://example.com/x#y", "ftp://example.com", "not a url"])
       expect(validateMcpText("m", MCP("m", `transport: http\nurl: ${JSON.stringify(url)}\n`)), url).toMatchObject({ ok: false, error: "bad_mcp", detail: "url" });
@@ -178,7 +178,7 @@ describe("MCP items", () => {
   });
 
   it("does not mistake a long variable NAME in a header for a secret", () => {
-    expect(validateMcpText("m", MCP("m", "transport: http\nurl: https://example.com/x\nheaders:\n  X-Api-Key: MY_SERVICE_API_KEY_VARIABLE\n"))).toMatchObject({ ok: true });
+    expect(validateMcpText("m", MCP("m", "transport: http\nurl: https://example.com/x\nheaders:\n  X-Api-Key: MCP_MY_SERVICE_API_KEY_VARIABLE\n"))).toMatchObject({ ok: true });
   });
 
   it("rejects other shapes: wrong marker/kind, name not the id, unknown keys, mixed transports, bad yaml, oversize, bad id", () => {
@@ -231,7 +231,7 @@ describe("lock file", () => {
 });
 
 describe("nothing else uses the library yet", () => {
-  it("only the web route, the config check and the fleet's skill mount import src/library — no other agent start, publish or config path reaches it", async () => {
+  it("only the web route, the config check, the fleet's mounts and the two backends that render library MCP import src/library — no other agent start, publish or config path reaches it", async () => {
     const { readdirSync, readFileSync, statSync } = await import("node:fs");
     const importers: string[] = [];
     const walk = (dir: string): void => {
@@ -243,6 +243,8 @@ describe("nothing else uses the library yet", () => {
     };
     walk(join(__dirname, "..", "src"));
     // AGEND-244: the mount (fleet-manager.ts) and the shape check of an agent's `library` setting (config-validator.ts).
-    expect(importers.sort()).toEqual(["config-validator.ts", "fleet-manager.ts", "web-api.ts"]);
+    // AGEND-261: library MCP mounting — the two backends that render it (claude-code.ts, codex.ts), the type they receive (backend/types.ts)
+    // and the daemon that passes it on (daemon.ts, a type). Every other backend and path still does not reach the library.
+    expect(importers.sort()).toEqual(["backend/claude-code.ts", "backend/codex.ts", "backend/types.ts", "config-validator.ts", "daemon.ts", "fleet-manager.ts", "web-api.ts"]);
   });
 });

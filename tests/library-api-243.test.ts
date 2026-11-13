@@ -29,7 +29,7 @@ async function rig() {
   return { dataDir, base, admin: { post: post(admin.sessionId), get: get(admin.sessionId) }, viewer: { post: post(viewer.sessionId), get: get(viewer.sessionId) } };
 }
 const SKILL = `---\nname: demo\ndescription: A demo\n---\nBody\n`;
-const MCP = "agend_library: 1\nkind: mcp\nname: m\ntransport: stdio\ncommand: node\nenv:\n  - TOKEN_VAR\n";
+const MCP = "agend_library: 1\nkind: mcp\nname: m\ntransport: stdio\ncommand: node\nenv:\n  - MCP_TOKEN_VAR\n";
 
 it("an admin saves, lists, reads and deletes a skill and an MCP item", async () => {
   const r = await rig();
@@ -64,7 +64,11 @@ it("answers the library's errors with a code and the place, never the secret", a
   const ok = { kind: "skill", id: "demo", files: [{ path: "SKILL.md", content: SKILL }] };
   expect((await r.admin.post("/ui/library/save", ok)).status).toBe(200);
   expect((await r.admin.post("/ui/library/save", ok)).status).toBe(409);
-  expect((await r.admin.post("/ui/library/save", { ...ok, overwrite: true })).status).toBe(200);
+  // AGEND-261: replacing says which version it started from; without it the answer is 400 and nothing changes
+  expect(await (await r.admin.post("/ui/library/save", { ...ok, overwrite: true })).json()).toMatchObject({ error: "expect_required" });
+  const sha = (await (await r.admin.get("/ui/library/item?kind=skill&id=demo")).json()).detail.sha256;
+  expect((await r.admin.post("/ui/library/save", { ...ok, overwrite: true, expect: "0".repeat(64) })).status).toBe(409);
+  expect((await r.admin.post("/ui/library/save", { ...ok, overwrite: true, expect: sha })).status).toBe(200);
   expect((await r.admin.post("/ui/library/delete", { kind: "skill", id: "missing" })).status).toBe(404);
 });
 
@@ -76,4 +80,18 @@ it("is for the administrator only: a read-only session or no session cannot read
   expect([401, 403]).toContain((await fetch(`${r.base}/ui/library/list`)).status);
   expect([401, 403]).toContain((await fetch(`${r.base}/ui/library/save`, { method: "POST", body: "{}" })).status);
   expect(existsSync(join(r.dataDir, "library"))).toBe(false);
+});
+
+it("AGEND-261: an MCP item is replaced only with the hash it had; a skill may not take a built-in skill's name", async () => {
+  const r = await rig();
+  expect((await r.admin.post("/ui/library/save", { kind: "mcp", id: "m", text: MCP })).status).toBe(200);
+  const next = MCP.replace("node", "deno");
+  expect(await (await r.admin.post("/ui/library/save", { kind: "mcp", id: "m", text: next, overwrite: true })).json()).toMatchObject({ error: "expect_required" });
+  const sha = (await (await r.admin.get("/ui/library/item?kind=mcp&id=m")).json()).detail.sha256;
+  expect((await r.admin.post("/ui/library/save", { kind: "mcp", id: "m", text: next, overwrite: true, expect: sha })).status).toBe(200);
+  // a built-in skill's name (the bundled `concepts`) is taken, as an import already treats it
+  const builtin = await r.admin.post("/ui/library/save", { kind: "skill", id: "concepts", files: [{ path: "SKILL.md", content: SKILL.replace("demo", "concepts") }] });
+  expect(builtin.status).toBe(409);
+  expect(await builtin.json()).toMatchObject({ error: "exists", detail: "builtin" });
+  expect(existsSync(join(r.dataDir, "library", "skills", "concepts"))).toBe(false);
 });

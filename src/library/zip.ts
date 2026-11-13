@@ -132,7 +132,8 @@ export function readZip(buf: Buffer, limits: Partial<ZipLimits> = {}): ZipRead |
     }
     if (external & 0x400) return fail("unsafe_item", { path: shown, detail: "link" });
     if (isDir) { if (size !== 0) return fail("bad_archive", { path: shown }); continue; }
-    const key = name.toLowerCase();
+    // Case AND Unicode form: a macOS (NFD) and a Windows (NFC) spelling of one name are the same file.
+    const key = name.normalize("NFC").toLowerCase();
     if (seen.has(key)) return fail("duplicate_path", { path: shown });
     seen.add(key);
     if (flags & FLAG_ENCRYPTED) return fail("bad_archive", { path: shown, detail: "encrypted" });

@@ -48,9 +48,13 @@ export type LibraryErrorCode =
   | "missing_description" | "too_large" | "too_many_files" | "not_text" | "secret_found" | "exists" | "not_found" | "too_many_items"
   | "invalid_yaml" | "bad_mcp" | "unsafe_item"
   // AGEND-257: an upload that is not a usable archive / has no skill in it; a skill that changed since it was read.
-  | "bad_archive" | "no_skill" | "changed";
-export interface LibraryError { ok: false; error: LibraryErrorCode; path?: string; detail?: string; findings?: SecretFinding[] }
-const fail = (error: LibraryErrorCode, extra: { path?: string; detail?: string; findings?: SecretFinding[] } = {}): LibraryError => ({ ok: false, error, ...extra });
+  | "bad_archive" | "no_skill" | "changed"
+  // AGEND-261: replacing an item without saying which version it started from.
+  | "expect_required"
+  // AGEND-261: an MCP item names a variable that does not start with MCP_ (`detail`: env | headers; `names`: the variable names at fault).
+  | "mcp_var_prefix";
+export interface LibraryError { ok: false; error: LibraryErrorCode; path?: string; detail?: string; findings?: SecretFinding[]; names?: string[] }
+const fail = (error: LibraryErrorCode, extra: { path?: string; detail?: string; findings?: SecretFinding[]; names?: string[] } = {}): LibraryError => ({ ok: false, error, ...extra });
 
 // ── Mounting (an agent's `library` setting; applied in mount.ts) ──
 
@@ -66,8 +70,8 @@ export function normalizeMount(list: unknown): string[] {
 export function libraryMountProblem(value: unknown, isDefaults: boolean): string | null {
   if (isDefaults) return "is set per agent: the fleet defaults cannot mount library items";
   if (!value || typeof value !== "object" || Array.isArray(value)) return "must be a mapping like { skills: [id, …] }";
-  for (const key of Object.keys(value)) if (key !== "skills" && key !== "mcp") return `has an unknown key "${key}" (only skills is available)`;
-  const { skills, mcp } = value as { skills?: unknown; mcp?: unknown };
+  for (const key of Object.keys(value)) if (key !== "skills" && key !== "mcp" && key !== "paused") return `has an unknown key "${key}" (only skills, mcp and paused are available)`;
+  const { skills, mcp, paused } = value as { skills?: unknown; mcp?: unknown; paused?: unknown };
   if (skills !== undefined) {
     if (!Array.isArray(skills) || !skills.every((id) => isLibraryId(id))) {
       return "skills must be a list of library skill ids (lowercase letters, digits and hyphens, not a Windows device name)";
@@ -75,7 +79,28 @@ export function libraryMountProblem(value: unknown, isDefaults: boolean): string
     if (new Set(skills).size !== skills.length) return "skills lists the same id twice";
     if (skills.length > LIBRARY_LIMITS.itemsPerKind) return `skills lists more than ${LIBRARY_LIMITS.itemsPerKind} ids`;
   }
-  if (mcp !== undefined && !Array.isArray(mcp)) return "mcp must be a list";
+  if (mcp !== undefined) {
+    if (!Array.isArray(mcp) || !mcp.every((id) => isLibraryId(id))) {
+      return "mcp must be a list of library MCP ids (lowercase letters, digits and hyphens, not a Windows device name)";
+    }
+    if (new Set(mcp).size !== mcp.length) return "mcp lists the same id twice";
+    if (mcp.length > LIBRARY_LIMITS.itemsPerKind) return `mcp lists more than ${LIBRARY_LIMITS.itemsPerKind} ids`;
+  }
+  // AGEND-261: `paused` keeps what is assigned to the agent but switched off — `{ skills: [id…], mcp: [id…] }`. `skills` / `mcp` stay exactly what
+  // is given (a paused id is NOT in them), so nothing that reads them — the publisher, the MCP writer, an older AgEnD — ever gives a paused item.
+  if (paused !== undefined) {
+    if (!paused || typeof paused !== "object" || Array.isArray(paused)) return "paused must be a mapping like { skills: [id, …], mcp: [id, …] }";
+    for (const key of Object.keys(paused)) if (key !== "skills" && key !== "mcp") return `paused has an unknown key "${key}" (only skills and mcp)`;
+    for (const kind of ["skills", "mcp"] as const) {
+      const list = (paused as Record<string, unknown>)[kind];
+      if (list === undefined) continue;
+      if (!Array.isArray(list) || !list.every((id) => isLibraryId(id))) return `paused.${kind} must be a list of library ids (lowercase letters, digits and hyphens, not a Windows device name)`;
+      if (new Set(list).size !== list.length) return `paused.${kind} lists the same id twice`;
+      if (list.length > LIBRARY_LIMITS.itemsPerKind) return `paused.${kind} lists more than ${LIBRARY_LIMITS.itemsPerKind} ids`;
+      const given = (kind === "skills" ? skills : mcp) as unknown[] | undefined;
+      if (Array.isArray(given) && list.some((id) => given.includes(id))) return `paused.${kind} lists an id that ${kind} gives (an item is either on or paused)`;
+    }
+  }
   return null;
 }
 
@@ -128,7 +153,7 @@ export function validateSkill(id: unknown, files: unknown): { ok: true; id: stri
     if (seen.has(path)) return fail("duplicate_path", { path });
     seen.add(path);
     // A name that differs only by case is the same file on macOS and Windows.
-    const lower = path.toLowerCase();
+    const lower = path.normalize("NFC").toLowerCase();
     if (folded.includes(lower)) return fail("duplicate_path", { path });
     folded.push(lower);
     if (content.includes("\u0000")) return fail("not_text", { path });
@@ -159,6 +184,37 @@ export function validateSkill(id: unknown, files: unknown): { ok: true; id: stri
 /** The file's own marker, as `agend_export: 1` marks an export file. */
 export const MCP_FILE_VERSION = 1;
 const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+/**
+ * AGEND-261: the variables an MCP item may take from `.env` are the ones whose name starts with `MCP_` — upper case, exactly (a later case
+ * compare would let `mcp_` and `Mcp_` mean different things on different systems). So an MCP item can no longer ask for AgEnD's own credentials
+ * (a chat bot token, a tunnel token…) or any other `.env` variable: the person puts a value in `.env` under an `MCP_…` name ON PURPOSE for an MCP
+ * server. What the server calls it is a separate matter (`env: { SERVER_NAME: ${MCP_NAME} }`, below).
+ */
+export const MCP_VAR_PREFIX = "MCP_";
+export const isMcpVariable = (n: unknown): n is string => typeof n === "string" && ENV_NAME_RE.test(n) && n.startsWith(MCP_VAR_PREFIX) && n.length > MCP_VAR_PREFIX.length;
+/**
+ * Names an MCP server may not be GIVEN (the name it sees, whatever `.env` calls the value): the ones that change how a program is found or
+ * loaded, how a tool runs or where its traffic goes (the secret store refuses a few of them too). Compared without regard to case, and a whole
+ * family by prefix (`LD_*`, `DYLD_*`). Kept beside the `MCP_` rule: both apply.
+ */
+const RESERVED_ENV_NAMES = new Set([
+  "PATH", "HOME", "PWD", "SHELL", "ENV", "BASH_ENV", "IFS", "NODE_OPTIONS", "NODE_PATH", "PYTHONPATH", "PYTHONSTARTUP", "PYTHONHOME",
+  "PERL5OPT", "PERL5LIB", "RUBYOPT", "RUBYLIB", "JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS", "GIT_SSH_COMMAND", "CODEX_HOME",
+  // Where its traffic goes and which certificates it trusts; more places a program is told to look (from the #79 review).
+  "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "GIT_ASKPASS", "GIT_EXEC_PATH",
+  "CLASSPATH", "TMPDIR", "PYTHONUSERBASE", "PATHEXT", "COMSPEC",
+]);
+const RESERVED_ENV_PREFIXES = ["LD_", "DYLD_"];
+export const isReservedMcpEnvName = (n: string): boolean => {
+  const u = n.toUpperCase();
+  return RESERVED_ENV_NAMES.has(u) || RESERVED_ENV_PREFIXES.some((p) => u.startsWith(p));
+};
+/** A name the server is given: a plain variable name that is not one of the reserved ones. */
+const isGivenName = (n: unknown): n is string => typeof n === "string" && ENV_NAME_RE.test(n) && !isReservedMcpEnvName(n);
+/** `${MCP_NAME}` — a reference to a `.env` variable, the only thing the right side of a renaming `env` map may be (a literal there would be a value). */
+const REF_RE = /^\$\{([A-Za-z_][A-Za-z0-9_]{0,63})\}$/;
+/** Variable names for an error answer: only a plain name, and never one that looks like a secret (a value pasted where a name belongs). */
+const nameForError = (n: unknown): string => (typeof n === "string" && ENV_NAME_RE.test(n) && scanForSecrets("mcp-name", n).length === 0 ? n : "?");
 const HEADER_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
 
 /** What an MCP library file holds. `env` and `headers` name VARIABLES: the values live where the agent runs, never here. */
@@ -168,8 +224,10 @@ export interface McpItem {
   transport: "stdio" | "http";
   command?: string;
   args?: string[];
-  /** stdio: the environment variables the server reads (names only). */
+  /** stdio: the environment variables the server reads, as a list (`MCP_…` names; the server sees the same name). Names only. */
   env?: string[];
+  /** stdio, the other form: the name the server sees → the `.env` variable (`MCP_…`) that holds its value — `env: { GITHUB_PERSONAL_ACCESS_TOKEN: ${MCP_GITHUB_TOKEN} }`. */
+  envMap?: Record<string, string>;
   url?: string;
   /** http: header name → the variable that holds its value (e.g. `Authorization: GITHUB_TOKEN`). */
   headers?: Record<string, string>;
@@ -208,10 +266,23 @@ export function validateMcpText(id: unknown, text: unknown): { ok: true; id: str
       if (doc.args.length) item.args = doc.args as string[];
     }
     if (doc.env !== undefined) {
-      // A map (`KEY: value`) is the shape that carries a value: refused, whatever the value is.
-      if (!Array.isArray(doc.env) || doc.env.length > LIBRARY_LIMITS.mcpEnv || !doc.env.every((n) => typeof n === "string" && ENV_NAME_RE.test(n))) return bad("env");
-      if (new Set(doc.env).size !== doc.env.length) return bad("env");
-      if (doc.env.length) item.env = [...(doc.env as string[])];
+      if (Array.isArray(doc.env)) {
+        // The list form: each entry is the `.env` variable AND the name the server sees, so both rules apply to it.
+        if (doc.env.length > LIBRARY_LIMITS.mcpEnv || !doc.env.every((n) => typeof n === "string" && ENV_NAME_RE.test(n))) return bad("env");
+        if (new Set(doc.env).size !== doc.env.length) return bad("env");
+        const wrong = (doc.env as string[]).filter((n) => !isMcpVariable(n));
+        if (wrong.length) return fail("mcp_var_prefix", { detail: "env", names: wrong.map(nameForError) });
+        if ((doc.env as string[]).some((n) => !isGivenName(n))) return bad("env");
+        if (doc.env.length) item.env = [...(doc.env as string[])];
+      } else if (isObj(doc.env)) {
+        // The map form renames: `NAME_THE_SERVER_SEES: ${MCP_VARIABLE}`. The right side must be a reference — a literal there is a value, refused as before.
+        const entries = Object.entries(doc.env);
+        if (entries.length > LIBRARY_LIMITS.mcpEnv || entries.some(([k, v]) => !isGivenName(k) || typeof v !== "string" || !REF_RE.test(v.trim()))) return bad("env");
+        const sources = entries.map(([, v]) => REF_RE.exec((v as string).trim())![1]!);
+        const wrong = sources.filter((n) => !isMcpVariable(n));
+        if (wrong.length) return fail("mcp_var_prefix", { detail: "env", names: wrong.map(nameForError) });
+        if (entries.length) item.envMap = Object.fromEntries(entries.map(([k], i) => [k, sources[i]!]));
+      } else return bad("env");
     }
     if (doc.url !== undefined || doc.headers !== undefined) return bad(doc.url !== undefined ? "url" : "headers");
   } else {
@@ -228,6 +299,8 @@ export function validateMcpText(id: unknown, text: unknown): { ok: true; id: str
         if (!HEADER_NAME_RE.test(h) || typeof v !== "string" || !ENV_NAME_RE.test(v)) return bad("headers");
         headers[h] = v;
       }
+      const wrong = Object.values(headers).filter((n) => !isMcpVariable(n));
+      if (wrong.length) return fail("mcp_var_prefix", { detail: "headers", names: wrong.map(nameForError) });
       if (Object.keys(headers).length) item.headers = headers;
     }
     if (doc.command !== undefined || doc.args !== undefined || doc.env !== undefined) return bad(doc.command !== undefined ? "command" : doc.args !== undefined ? "args" : "env");
@@ -248,6 +321,7 @@ export function stringifyMcp(item: McpItem): string {
   if (item.command) doc.command = item.command;
   if (item.args?.length) doc.args = item.args;
   if (item.env?.length) doc.env = item.env;
+  else if (item.envMap && Object.keys(item.envMap).length) doc.env = Object.fromEntries(Object.entries(item.envMap).map(([k, v]) => [k, `\${${v}}`]));
   if (item.url) doc.url = item.url;
   if (item.headers && Object.keys(item.headers).length) doc.headers = item.headers;
   return stringify(doc, { lineWidth: 0 });

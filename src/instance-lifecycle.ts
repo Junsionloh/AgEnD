@@ -316,6 +316,8 @@ export interface LifecycleContext {
   kiroPeerWorkingDirectories?(name: string): string[];
   /** The fleet's startup snapshot of active decisions; each daemon selects its own Active Decisions from it. */
   activeDecisions?(): readonly ActiveDecisionRow[];
+  /** AGEND-261: the library MCP servers mounted on an agent, resolved for this launch (src/fleet-manager.ts libraryMcpFor). */
+  libraryMcpFor?(name: string, ids: readonly string[], backend: string): Record<string, import("./library/mcp-mount.js").LibraryMcpEntry> | undefined;
   /** True while the fleet is stopping on purpose or an `agend update` is running. */
   isPlannedRestart(): boolean;
   /** Suppress only incident kinds caused by the active tmux server storm. */
@@ -2066,6 +2068,8 @@ export class InstanceLifecycle {
     // Read at each spawn, like the peers below: joining or leaving a team changes the next launch's Active Decisions.
     daemon.setDecisionTeams(() => instanceTeams(this.ctx.fleetConfig?.teams, name));
     daemon.setDecisionSource(this.ctx.activeDecisions ? () => this.ctx.activeDecisions!() : undefined);
+    // AGEND-261: read at each launch; an agent with nothing mounted never calls it.
+    daemon.setLibraryMcpSource?.(this.ctx.libraryMcpFor ? ids => this.ctx.libraryMcpFor!(name, ids, backendName) : undefined);
     // Read at each spawn so a fleet.yaml reload is honoured (#984).
     daemon.setPeerWorkingDirectories(backendName === "kiro-cli"
       ? this.ctx.kiroPeerWorkingDirectories ? () => this.ctx.kiroPeerWorkingDirectories!(name) : undefined

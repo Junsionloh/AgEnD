@@ -12,6 +12,7 @@ import { t } from "../locale.js";
 import { selectedGeneralHostSession } from "../general-binding.js";
 import { ResumeBlockedError } from "./types.js";
 import { claudeOneMillionOffered } from "./claude-context.js";
+import { claudeMcpEntry } from "../library/mcp-render.js";
 import { type CliBackend, type CliBackendConfig, type ErrorPattern, type InputBox, type RuntimeDialog, type StartupDialog, CLI_PROBE_LONGEST_LEAF_MS, promptCacheTtl, resolveBinary, shellQuote, validateModel, warnIfModelMismatch } from "./types.js";
 
 /** Mirror Claude Code's ~/.claude/projects key for a working directory. Exported for the detection-signal seam. */
@@ -1629,8 +1630,24 @@ export class ClaudeCodeBackend extends ClaudePaneDetectors implements CliBackend
   writeConfig(config: CliBackendConfig): void {
     // 1. Write mcp-config.json to instance dir (loaded via --mcp-config)
     const mcpConfigPath = join(this.instanceDir, "mcp-config.json");
-    const mcpConfig = { mcpServers: config.mcpServers };
-    writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+    // AGEND-261: library MCP servers an administrator mounted are appended; with none, this is the same object as before.
+    const libraryEntries = Object.entries(config.libraryMcp ?? {});
+    const mcpConfig = { mcpServers: libraryEntries.length
+      ? { ...config.mcpServers, ...Object.fromEntries(libraryEntries.map(([name, entry]) => [name, claudeMcpEntry(entry)])) }
+      : config.mcpServers };
+    const mcpConfigText = JSON.stringify(mcpConfig, null, 2);
+    if (libraryEntries.length) {
+      // It now holds the values of the variables those servers need: owner only from the first byte. An old file keeps its mode when it is
+      // rewritten, so it is tightened BEFORE the values go in (or removed if that is not possible); a new one is created 0600 (not
+      // created under the umask and tightened afterwards, which leaves a window where it can be read).
+      try { chmodSync(mcpConfigPath, 0o600); } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") { try { unlinkSync(mcpConfigPath); } catch { /* the write below fails or replaces it */ } }
+      }
+      writeFileSync(mcpConfigPath, mcpConfigText, { mode: 0o600 });
+      try { chmodSync(mcpConfigPath, 0o600); } catch { /* already 0600 from the open above */ }
+    } else {
+      writeFileSync(mcpConfigPath, mcpConfigText);
+    }
 
     // 2. Write statusline script
     const statusLineCommand = this.writeStatusLineScript();

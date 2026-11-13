@@ -435,7 +435,7 @@ import { createPreviewListener, normalizeOrigin, previewAvailability, previewSet
 import { isCanvasWorkerTool, CANVAS_WORKER_EXPERIMENTAL_MESSAGE } from "./web-experimental.js";
 import { bundledSkillContents, parseBundledSkillRoles } from "./bundled-skills.js";
 import { NATIVE_SKILLS_DIR_SEGMENTS } from "./native-skills-dir.js";
-import { LIBRARY_SKILLS_MANIFEST, LibraryStore, normalizeMount, syncLibrarySkills } from "./library/index.js";
+import { LIBRARY_SKILLS_MANIFEST, LibraryStore, McpConfirmations, mcpVariables, normalizeMount, readEnvValues, resolveMcpMount, supportsLibraryMcp, syncLibrarySkills, type LibraryMcpEntry } from "./library/index.js";
 import { fleetLevelDifferences, fleetLevelSignature, appendedConnections } from "./fleet-level-config.js";
 import { checkSelfRestartAllowance, recordSelfRestartAttempt } from "./self-restart-limit.js";
 import { SecretStore } from "./secret-store.js";
@@ -23368,6 +23368,45 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       role === "classic" ? (path: string) => insideManagedWorkspaces(path) : undefined,
     );
     this.logger.debug({ workDir, backend, role }, "Synced role-based bundled skills");
+  }
+
+  /** AGEND-261: what `libraryMcpFor` has already said per agent, so a restart or a second config build repeats nothing. */
+  private libraryMcpSaid = new Map<string, string>();
+
+  /**
+   * AGEND-261: the library MCP servers an administrator mounted on this agent (`library.mcp`), ready to be written into its CLI's MCP
+   * config. Called by the agent's daemon at each launch (and only for an agent that has a mount). Returns nothing when the backend
+   * cannot take them; an item that is not confirmed for this agent at its current version, or that names a variable with no value in
+   * `.env`, is left out (the server is not started) — and the log says which, by NAME only. The values go to the backend's config
+   * writer and nowhere else. Fail-open for the agent: an error here means no library MCP, never a refused start.
+   */
+  libraryMcpFor(name: string, ids: readonly string[], backend: string): Record<string, LibraryMcpEntry> | undefined {
+    if (!supportsLibraryMcp(backend)) {
+      const said = `unsupported:${backend}`;
+      if (this.libraryMcpSaid.get(name) !== said) {
+        this.libraryMcpSaid.set(name, said);
+        this.logger.warn({ name, backend }, "Library MCP servers are mounted but this backend does not support them yet — none written");
+      }
+      return undefined;
+    }
+    try {
+      const store = new LibraryStore(this.dataDir);
+      const wanted: string[] = [];
+      for (const id of normalizeMount([...ids])) { const got = store.mcpForMount(id); if (got.ok) wanted.push(...mcpVariables(got.item)); }
+      const result = resolveMcpMount({
+        ids, store, confirmed: new McpConfirmations(store).forAgent(name), values: readEnvValues(join(this.dataDir, ".env"), wanted),
+      });
+      const said = JSON.stringify([result.mounted, result.skipped]);
+      if (this.libraryMcpSaid.get(name) !== said) {
+        this.libraryMcpSaid.set(name, said);
+        if (result.skipped.length) this.logger.warn({ name, skipped: result.skipped }, "Library MCP servers not written (see reason per server; variable names only)");
+        if (result.mounted.length) this.logger.info({ name, mounted: result.mounted }, "Library MCP servers written into the agent's MCP config");
+      }
+      return result.mounted.length ? result.entries : undefined;
+    } catch (err) {
+      this.logger.warn({ name, backend, err: err instanceof Error ? err.message : "failed" }, "Failed to resolve library MCP servers — continuing without them");
+      return undefined;
+    }
   }
 
   /** AGEND-244: what `syncInstanceLibrarySkills` has already said per skills folder, so a start-up repeats nothing it said before. */

@@ -190,11 +190,36 @@ export const proxyReplyOf = (inst, defaults) => (typeof (inst && inst.mcp_proxy_
  * keeps whatever else `library` holds (`mcp`) and is null (the key goes) when nothing is left, so a patch never drops what it did not touch.
  */
 export const librarySkillsOf = (inst) => (inst && inst.library && Array.isArray(inst.library.skills) ? inst.library.skills.filter((id) => typeof id === "string") : []);
-export function libraryValue(inst, ids) {
+/** AGEND-261: the library MCP servers an agent is given (`library.mcp`). */
+export const libraryMcpOf = (inst) => (inst && inst.library && Array.isArray(inst.library.mcp) ? inst.library.mcp.filter((id) => typeof id === "string") : []);
+/**
+ * `mcp` is the new list of MCP ids; left out (undefined) it is whatever `library` already holds, so a caller that only knows skills never
+ * drops it. Skills come first, then mcp, then anything else — for a `library` with no mcp that is the very value this made before.
+ */
+/**
+ * AGEND-261: what is assigned to an agent but switched off (`library.paused: { skills: […], mcp: […] }`). A paused id is NOT in `library.skills` /
+ * `library.mcp` — those stay exactly what is given — so the publisher, the MCP writer and an older AgEnD never give a paused item.
+ */
+export const libraryPausedOf = (inst) => {
+  const p = inst && inst.library && inst.library.paused && typeof inst.library.paused === "object" ? inst.library.paused : {};
+  const ids = (v) => (Array.isArray(v) ? v.filter((id) => typeof id === "string") : []);
+  return { skills: ids(p.skills), mcp: ids(p.mcp) };
+};
+/**
+ * `mcp` is the new list of MCP ids and `paused` the new `{ skills, mcp }` paused lists; left out (undefined) each is whatever `library` already
+ * holds, so a caller that only knows skills never drops them. Order: skills, mcp, paused, then anything else — for a `library` with no `paused`
+ * that is the very value this made before (no `paused` key appears unless something is paused).
+ */
+export function libraryValue(inst, ids, mcp, paused) {
   const rest = { ...((inst && inst.library) || {}) };
   delete rest.skills;
-  const next = ids.length ? { skills: [...ids], ...rest } : rest;
-  return Object.keys(next).length ? next : null;
+  const kept = mcp === undefined ? (Array.isArray(rest.mcp) ? rest.mcp : []) : mcp;
+  delete rest.mcp;
+  const off = paused === undefined ? libraryPausedOf(inst) : { skills: paused.skills || [], mcp: paused.mcp || [] };
+  delete rest.paused;
+  const pausedValue = { ...(off.skills.length ? { skills: [...off.skills] } : {}), ...(off.mcp.length ? { mcp: [...off.mcp] } : {}) };
+  const value = { ...(ids.length ? { skills: [...ids] } : {}), ...(kept.length ? { mcp: [...kept] } : {}), ...(Object.keys(pausedValue).length ? { paused: pausedValue } : {}), ...rest };
+  return Object.keys(value).length ? value : null;
 }
 /**
  * AGEND-248: the write behind "an agent's settings are changed" — one place for the URL and the shape, used by Settings' staging
@@ -208,7 +233,17 @@ export const agentPatchRequest = (name, inst, patch) => ({
 /** The patch that mounts one more library skill: the same `library` value the Team skills field writes when it is ticked (agentPatch). */
 export const libraryMountPatch = (inst, id) => {
   const have = librarySkillsOf(inst);
-  return have.includes(id) ? {} : { library: libraryValue(inst, [...have, id]) };
+  if (have.includes(id)) return {};
+  // Adding one that was paused turns it on (it leaves the paused list).
+  const off = libraryPausedOf(inst);
+  return { library: libraryValue(inst, [...have, id], undefined, { skills: off.skills.filter((x) => x !== id), mcp: off.mcp }) };
+};
+/** The patch that mounts one more library MCP server (the Library's "+" on an MCP row); the confirmation is recorded before it is sent. */
+export const libraryMcpMountPatch = (inst, id) => {
+  const have = libraryMcpOf(inst);
+  if (have.includes(id)) return {};
+  const off = libraryPausedOf(inst);
+  return { library: libraryValue(inst, librarySkillsOf(inst), [...have, id], { skills: off.skills, mcp: off.mcp.filter((x) => x !== id) }) };
 };
 export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmojisBaseline) {
   const hang = inst.hang_detector || {};
@@ -237,7 +272,7 @@ export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmoji
     board_cards_at_once: form.board_cards_at_once === undefined ? boardCardsOf(inst) : Number(form.board_cards_at_once),
     resume_interrupted_work: form.resume_interrupted_work === undefined ? resumeWorkOf(inst, defaults) : form.resume_interrupted_work,
     mcp_proxy_reply: form.mcp_proxy_reply === undefined ? proxyReplyOf(inst, defaults) : form.mcp_proxy_reply,
-    library: libraryValue(inst, form.library_skills === undefined ? librarySkillsOf(inst) : form.library_skills),
+    library: libraryValue(inst, form.library_skills === undefined ? librarySkillsOf(inst) : form.library_skills, form.library_mcp === undefined ? undefined : form.library_mcp, form.library_paused === undefined ? undefined : form.library_paused),
   };
   return Object.assign(changedFields(next, {
     backend: inst.backend || defaults.backend || "claude-code",
@@ -311,6 +346,8 @@ export function agentForm(inst, defaults, name = "") {
     resume_interrupted_work: resumeWorkOf(inst, defaults),
     mcp_proxy_reply: proxyReplyOf(inst, defaults),
     library_skills: librarySkillsOf(inst),
+    library_mcp: libraryMcpOf(inst),
+    library_paused: libraryPausedOf(inst),
     inherit: {
       auto_pause_after: inherit("auto_pause_after"), hang: !hasOwn(hang, "timeout_minutes"), agent_mode: inherit("agent_mode"),
       tool_set: inherit("tool_set"), tool_progress: inherit("tool_progress"), cross_instance_visibility: inherit("cross_instance_visibility"),
