@@ -85,6 +85,8 @@ describe("the archive reader refuses what could leave the folder or hide somethi
     // the end record may be followed by a comment, and two entries that differ only by case are one name on macOS and Windows
     expect(readZip(raw([file("demo/a.md", "a")], { comment: Buffer.from("made by a tool") }))).toMatchObject({ ok: true });
     expect(readZip(raw([file("demo/a.md", "a"), file("demo/A.md", "b")]))).toMatchObject({ ok: false, error: "duplicate_path" });
+    // AGEND-261: and so do two spellings of one name (é as one character, as macOS writes it, and as e + an accent)
+    expect(readZip(raw([file("demo/caf\u00e9.md", "a"), file("demo/cafe\u0301.md", "b")]))).toMatchObject({ ok: false, error: "duplicate_path" });
   });
 
   it("leaves macOS and Windows file-manager litter out and says so", () => {

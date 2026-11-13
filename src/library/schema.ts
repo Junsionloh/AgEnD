@@ -48,7 +48,9 @@ export type LibraryErrorCode =
   | "missing_description" | "too_large" | "too_many_files" | "not_text" | "secret_found" | "exists" | "not_found" | "too_many_items"
   | "invalid_yaml" | "bad_mcp" | "unsafe_item"
   // AGEND-257: an upload that is not a usable archive / has no skill in it; a skill that changed since it was read.
-  | "bad_archive" | "no_skill" | "changed";
+  | "bad_archive" | "no_skill" | "changed"
+  // AGEND-261: replacing an item without saying which version it started from.
+  | "expect_required";
 export interface LibraryError { ok: false; error: LibraryErrorCode; path?: string; detail?: string; findings?: SecretFinding[] }
 const fail = (error: LibraryErrorCode, extra: { path?: string; detail?: string; findings?: SecretFinding[] } = {}): LibraryError => ({ ok: false, error, ...extra });
 
@@ -128,7 +130,7 @@ export function validateSkill(id: unknown, files: unknown): { ok: true; id: stri
     if (seen.has(path)) return fail("duplicate_path", { path });
     seen.add(path);
     // A name that differs only by case is the same file on macOS and Windows.
-    const lower = path.toLowerCase();
+    const lower = path.normalize("NFC").toLowerCase();
     if (folded.includes(lower)) return fail("duplicate_path", { path });
     folded.push(lower);
     if (content.includes("\u0000")) return fail("not_text", { path });

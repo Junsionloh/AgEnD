@@ -78,6 +78,7 @@ register("library", {
     e_bad_archive: "That file is not a ZIP, a .skill file or a SKILL.md, or it is damaged or uses something that is not supported.",
     e_no_skill: "No skill found. The archive needs a SKILL.md, in a folder named for the skill or at the top.",
     e_changed: "It was changed after you opened it. Close this and open it again.",
+    e_expect_required: "This item cannot be replaced from here. Delete it first, then add it again.",
   },
   "zh-TW": {
     title: "資源庫", sub: "這一頁是總覽：這個 AgEnD 有哪些 Skill、工具和 MCP server，以及哪些 Agent 正在使用。內建項目隨 AgEnD 附帶，唯讀；團隊項目是你在這裡新增的。除了「＋」標籤（效果等同在該 Agent 的設定裡勾選這個 Skill），這一頁不會改變任何 Agent。",
@@ -134,6 +135,7 @@ register("library", {
     e_bad_archive: "這個檔案不是 ZIP、.skill 或 SKILL.md，或是已經損壞，或使用了不支援的功能。",
     e_no_skill: "找不到 Skill。壓縮檔裡需要有 SKILL.md，放在以 Skill 名稱命名的資料夾裡，或放在最上層。",
     e_changed: "它在你打開之後被改過了。請關掉再重新打開。",
+    e_expect_required: "這一項無法從這裡取代。請先刪除，再重新新增。",
   },
 });
 const tn = (k, ...v) => t(`library.${k}`, ...v);
@@ -183,10 +185,12 @@ function AddDialog({ kind, existing, onClose, onSaved }) {
   const submit = async () => {
     setError("");
     const taken = existing.has(id);
+    // Replacing says which version it started from (the list's hash): the server refuses a blind overwrite.
+    const expect = existing.get(id);
     if (taken && !(await confirmDialog({ title: tn("replaceTitle", id), message: tn("replaceBody", id, kind === "skill" ? "skill" : "MCP"), confirmLabel: tn("replace"), danger: true }))) return;
     setBusy(true);
     try {
-      const payload = kind === "skill" ? { kind, id, files: [{ path: "SKILL.md", content: text }], overwrite: taken } : { kind, id, text, overwrite: taken };
+      const payload = kind === "skill" ? { kind, id, files: [{ path: "SKILL.md", content: text }], overwrite: taken, ...(taken && expect ? { expect } : {}) } : { kind, id, text, overwrite: taken, ...(taken && expect ? { expect } : {}) };
       const r = await call("/ui/library/save", payload);
       if (r.ok) { toast(tn("saved", id)); onSaved(); onClose(); } else setError(libraryErrorText(r.data, "saveFailed"));
     } catch { setError(tn("saveFailed")); } finally { setBusy(false); }
@@ -419,7 +423,7 @@ export function LibraryPanel({ route, navKey }) {
   };
   const items = state.items || [];
   const skills = items.filter((i) => i.kind === "skill"), mcp = items.filter((i) => i.kind === "mcp");
-  const existing = (kind) => new Set(items.filter((i) => i.kind === kind).map((i) => i.id));
+  const existing = (kind) => new Map(items.filter((i) => i.kind === kind).map((i) => [i.id, i.sha256]));
   const q = filter.trim().toLowerCase();
   const names = (list, to) => ({ names: list, all: agents });
   const roleText = (r) => (t(`library.role_${r}`) !== `library.role_${r}` ? tn(`role_${r}`) : r);

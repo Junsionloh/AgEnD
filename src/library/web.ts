@@ -5,7 +5,7 @@
  *   GET  /ui/library/list                          every item and its status (see LibraryStatus)
  *   GET  /ui/library/item?kind=skill|mcp&id=<id>   one item, whole
  *   GET  /ui/library/overview                      AGEND-248: bundled skills, tool profiles, the agend MCP server and which agents use what (read only)
- *   POST /ui/library/save   {kind, id, files | text, overwrite?, expect?}   a skill's files, or an MCP file's YAML text (`expect`: the hash the editor read — 409 `changed` if the skill is not that any more)
+ *   POST /ui/library/save   {kind, id, files | text, overwrite?, expect?}   a skill's files, or an MCP file's YAML text (`expect`: the hash the editor read — 409 `changed` if the item is not that any more; `overwrite: true` without it is 400 `expect_required`; a skill named like a built-in one is 409 `exists`)
  *   POST /ui/library/delete {kind, id}
  *
  * AGEND-257 (Skills only; MCP items are not moved):
@@ -48,7 +48,7 @@ export interface LibraryWebHost {
 const STATUS: Record<LibraryError["error"], number> = {
   invalid_request: 400, invalid_id: 400, invalid_path: 400, duplicate_path: 400, missing_skill_md: 400, bad_frontmatter: 400, name_mismatch: 400,
   missing_description: 400, too_large: 413, too_many_files: 413, not_text: 400, secret_found: 400, exists: 409, not_found: 404, too_many_items: 409,
-  invalid_yaml: 400, bad_mcp: 400, unsafe_item: 422, bad_archive: 400, no_skill: 400, changed: 409,
+  invalid_yaml: 400, bad_mcp: 400, unsafe_item: 422, bad_archive: 400, no_skill: 400, changed: 409, expect_required: 400,
 };
 /** The `decisions` parameter: `{ "<name in the upload>": { action, as? } }`, kept as a Map so a name like `constructor` is just a name. Null when it is not that shape. */
 function readDecisions(raw: string | null): Map<string, ImportDecision> | null {
@@ -157,9 +157,13 @@ export function handleLibraryRequest(h: LibraryWebHost): boolean {
     if (!body || Array.isArray(body) || typeof body !== "object" || !kind) { h.json(res, 400, { error: "invalid_request" }); return; }
     if (path === "/ui/library/delete") { send(store.remove(kind, body.id)); return; }
     const overwrite = body.overwrite === true;
-    // An edit says which version it started from; a skill that is another one now is not overwritten.
-    if (kind === "skill" && typeof body.expect === "string") {
-      const now = isLibraryId(body.id) ? store.get("skill", body.id) : null;
+    // A skill may not take a built-in skill's name (importing already refuses it): the bundled copy is what an agent would get.
+    if (kind === "skill" && isLibraryId(body.id) && builtinSkillNames().has(body.id)) { send({ ok: false, error: "exists", detail: "builtin" } as LibraryError); return; }
+    // Replacing says which version it started from (AGEND-261, from the review of #76): a call that does not is refused, so the API
+    // cannot overwrite blind. The version is the hash of what is stored now; one that is another now is not overwritten.
+    if (overwrite && typeof body.expect !== "string") { send({ ok: false, error: "expect_required" } as LibraryError); return; }
+    if (typeof body.expect === "string") {
+      const now = isLibraryId(body.id) ? store.get(kind, body.id) : null;
       if (!now || !now.ok || now.detail.sha256 !== body.expect) { send({ ok: false, error: "changed" } as LibraryError); return; }
     }
     send(kind === "skill" ? store.addSkill(body.id, body.files, { overwrite }) : store.addMcp(body.id, body.text, { overwrite }));
