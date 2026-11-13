@@ -855,6 +855,22 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .row-item.is-off { opacity: 0.62; }
 /* A row that needs a look (the library: an item whose file changed, is missing or breaks a rule). */
 .row-item.is-warn { box-shadow: inset 3px 0 0 var(--warn); }
+/* AGEND-248: the Library overview — the Settings page's own layout (.p-settings: category list beside the chosen category; a phone shows the
+   list, then the category). Rows are one compact line; an agent is a tag. Tokens only; the rows take the card-inside tone the Hub's lists use. */
+.p-library .lib-group { display: flex; flex-direction: column; gap: var(--s-2); }
+.p-library .lib-group > h4 { margin: 0; }
+.p-library .lib-card .row-item { background: var(--surface-2); }
+.p-library .lib-card .empty { padding: var(--s-4) var(--s-2); }
+.p-library .lib-row { flex-wrap: wrap; row-gap: var(--s-1); }
+.p-library .lib-row .grow { flex: 1 1 220px; min-width: 0; }
+.p-library .lib-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-library .lib-tags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); min-width: 0; }
+.p-library .lib-tag { display: inline-flex; align-items: center; gap: var(--s-1); max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-transform: none; letter-spacing: 0; text-decoration: none; border: 0; cursor: pointer; font-family: var(--font-ui); background: var(--surface); }
+.p-library .lib-tag:hover { background: var(--accent-dim); color: var(--accent); }
+.p-library .lib-tag.warn { background: var(--warn-bg); color: var(--warn); }
+.p-library .lib-tag:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.p-library .lib-foot { margin: var(--s-3) 0 0; }
 .row-item.sched { flex-wrap: nowrap; }
 .row-item.sched .sched-text { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 2px; }
 .sched-actions { display: inline-flex; flex: none; gap: var(--s-1); }

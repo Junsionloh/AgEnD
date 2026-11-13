@@ -4,13 +4,16 @@
  *
  *   GET  /ui/library/list                          every item and its status (see LibraryStatus)
  *   GET  /ui/library/item?kind=skill|mcp&id=<id>   one item, whole
+ *   GET  /ui/library/overview                      AGEND-248: bundled skills, tool profiles, the agend MCP server and which agents use what (read only)
  *   POST /ui/library/save   {kind, id, files | text, overwrite?}   a skill's files, or an MCP file's YAML text
  *   POST /ui/library/delete {kind, id}
  *
- * Nothing here reaches an agent: the library is only a place to keep and look at items.
+ * Nothing here reaches an agent: the library is only a place to keep and look at items, and the overview only reads settings.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { LibraryStore } from "./store.js";
+import { NATIVE_SKILLS_DIR_SEGMENTS } from "../native-skills-dir.js";
+import { buildOverview, type OverviewInstances } from "./overview.js";
 import { LIBRARY_LIMITS, isLibraryId, type LibraryError, type LibraryKind } from "./schema.js";
 
 export interface LibraryWebHost {
@@ -25,6 +28,8 @@ export interface LibraryWebHost {
   readJson(req: IncomingMessage): Promise<Record<string, unknown>>;
   /** The admin's admission, or null when the request is not an administrator's. */
   admission(): string | null;
+  /** AGEND-248: the fleet's `instances` and default backend, for the overview (read only). */
+  fleet?(): { instances?: OverviewInstances | null; defaultBackend?: string } | null | undefined;
   /** False (and the answer already sent) when the connection was closed or the session changed while the body was read. */
   stillOpen(): boolean;
 }
@@ -39,7 +44,7 @@ const kindOf = (v: unknown): LibraryKind | null => (v === "skill" || v === "mcp"
 /** True when the request was a library route (answered here, whatever the outcome). */
 export function handleLibraryRequest(h: LibraryWebHost): boolean {
   const { method, path, res } = h;
-  const route = method === "GET" ? (path === "/ui/library/list" || path === "/ui/library/item") : method === "POST" && (path === "/ui/library/save" || path === "/ui/library/delete");
+  const route = method === "GET" ? (path === "/ui/library/list" || path === "/ui/library/item" || path === "/ui/library/overview") : method === "POST" && (path === "/ui/library/save" || path === "/ui/library/delete");
   if (!route) return false;
   const admission = h.admission();
   if (!admission) { h.json(res, 403, { error: "admin_required" }); return true; }
@@ -51,7 +56,12 @@ export function handleLibraryRequest(h: LibraryWebHost): boolean {
   };
   try {
     if (method === "GET") {
-      if (path === "/ui/library/list") { h.json(res, 200, { items: store.list(), limits: LIBRARY_LIMITS }); return true; }
+      if (path === "/ui/library/list") { h.json(res, 200, { items: store.list(), limits: LIBRARY_LIMITS, skillsFolderBackends: Object.keys(NATIVE_SKILLS_DIR_SEGMENTS) }); return true; }
+      if (path === "/ui/library/overview") {
+        const fleet = h.fleet?.();
+        h.json(res, 200, buildOverview({ instances: fleet?.instances, defaultBackend: fleet?.defaultBackend }));
+        return true;
+      }
       const kind = kindOf(h.url.searchParams.get("kind")), id = h.url.searchParams.get("id") ?? "";
       if (!kind || !isLibraryId(id)) { h.json(res, 400, { error: "invalid_request" }); return true; }
       send(store.get(kind, id));
