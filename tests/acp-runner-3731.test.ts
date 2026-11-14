@@ -393,4 +393,17 @@ describe("the Log's view of an ACP instance", () => {
     expect(other.reset).toBe(true);
     expect(other.steps.length).toBeGreaterThan(4);
   });
+
+  it("with the Log switched off, an admin still gets the request that is waiting for an answer, and nothing else", async () => {
+    const h = await boot();
+    h.fleet.send(person("#tool"));
+    await until(() => h.runner.steps.pendingPermissions().length === 1);
+    const live = h.runner.liveSteps;
+    const service = new LogService({ enabled: () => false, thinking: () => true, known: () => true, source: (): LogSource => ({ backend: "antigravity", path: null, format: null, live }), events: () => [], emit: () => undefined });
+    const admin = await service.steps("worker", { admin: true }) as any;
+    expect(admin.steps.map((s: any) => s.kind)).toEqual(["permission"]);
+    expect(admin.steps[0].options).toHaveLength(2);
+    expect(await service.steps("worker", { admin: false })).toEqual({ enabled: false });
+    expect(await service.steps("worker", {})).toEqual({ enabled: false });
+  });
 });

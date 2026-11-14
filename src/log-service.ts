@@ -193,7 +193,19 @@ export class LogService {
     const chat = q.chat === true;
     // The Log tab is `web.log_tab`'s. The chat's block is the instance's own `tool_progress`'s (AGEND-197): with log_tab off it
     // still works, and with log_tab on but tool_progress off it shows nothing.
-    if (!chat && !this.deps.enabled()) { this.unwatchAll(false); return { enabled: false }; }
+    if (!chat && !this.deps.enabled()) {
+      this.unwatchAll(false);
+      // An ACP instance's permission request is a step a person has to answer, so it reaches an admin's page even with the
+      // Log switched off — and nothing else of the Log does.
+      if (q.admin === true && this.deps.known(name)) {
+        const src = this.deps.source(name);
+        if (src.live) {
+          const base = { enabled: true as const, instance: name, backend: src.backend, events: [] as LogEvent[], ev: q.ev ?? 0, thinking: false };
+          return this.liveAnswer(name, src.live, q, base, (a) => ({ ...a, thinking: false }), () => ({ enabled: false }), false, "permission");
+        }
+      }
+      return { enabled: false };
+    }
     if (!this.deps.known(name)) return null;
     const level: ToolProgressLevel = chat ? (this.deps.toolProgress?.(name) ?? "off") : "verbose";
     const src = this.deps.source(name);
@@ -258,14 +270,15 @@ export class LogService {
    * summary cut follow the same rules as a transcript's (`settle`); the answer buttons of a permission request are for an admin alone.
    */
   private liveAnswer(name: string, live: LiveSteps, q: LogQuery, base: { enabled: true; instance: string; backend: string; events: LogEvent[]; ev: number; thinking: boolean },
-    settle: (a: { steps: LogStep[] }) => ({ steps: LogStep[]; thinking: boolean; level?: ToolProgressLevel }) | null, offAnswer: () => LogAnswer, chat: boolean): LogAnswer {
-    if (q.watch) this.watchLive(name, live, chat);
+    settle: (a: { steps: LogStep[] }) => ({ steps: LogStep[]; thinking: boolean; level?: ToolProgressLevel }) | null, offAnswer: () => LogAnswer, chat: boolean, only?: "permission"): LogAnswer {
+    if (q.watch) this.watchLive(name, live, chat || only !== undefined);
     const thoughts = base.thinking;
     const stale = (q.key !== undefined && q.key !== live.key) || (q.after !== undefined && q.after > live.snapshot(undefined, { thoughts, limit: 1 }).rev);
     const after = stale ? undefined : q.after;
     const got = live.snapshot(after, { thoughts, ...(q.limit !== undefined ? { limit: Math.min(q.limit, LOG_STEPS_LIMIT) } : {}) });
     // A person who is not an admin sees that a request is waiting, and never its answer buttons. (The chat's block is admin-only already.)
-    const mine = chat || q.admin === true ? got.steps : got.steps.map(s => { if (s.kind !== "permission" || !s.options) return s; const { options: _options, ...rest } = s; return rest; });
+    const wanted = only ? got.steps.filter(s => s.kind === only) : got.steps;
+    const mine = chat || q.admin === true ? wanted : wanted.map(s => { if (s.kind !== "permission" || !s.options) return s; const { options: _options, ...rest } = s; return rest; });
     const settled = settle({ steps: mine });
     if (!settled) { this.releaseLive(name, "chat"); return offAnswer(); }
     return {

@@ -2996,6 +2996,9 @@ export class InstanceLifecycle {
         ...(args.model ? { model: args.model } : {}),
         ...(args.backend ? { backend: args.backend } : {}),
         ...(args.backend_options ? { backend_options: args.backend_options } : {}),
+        // #3731: only "acp" is ever stored (tmux is the default); the web handler validated it against the backend.
+        ...(args.cli_adapter === "acp" ? { cli_adapter: "acp" as const } : {}),
+        ...(args.cli_adapter === "acp" && args.acp_always_approve === true ? { acp_always_approve: true } : {}),
         ...(args.model_failover ? { model_failover: args.model_failover } : {}),
         ...(args.tool_set ? { tool_set: args.tool_set } : {}),
         ...(args.skipPermissions != null ? { skipPermissions: args.skipPermissions } : {}),
