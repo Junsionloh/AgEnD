@@ -381,7 +381,7 @@ describe("the Log's view of an ACP instance", () => {
     h.fleet.send(person("hello"));
     await idle(h);
     const first = await view(h, { admin: true }, true);
-    expect(first.key).toBe(`acp-${h.runner.bootId}`);
+    expect(first.key).toMatch(/^\d{1,20}-\d{1,20}$/); // the shape GET /ui/steps accepts for `key`
     const live = h.runner.liveSteps;
     const service = new LogService({ enabled: () => true, thinking: () => true, known: () => true, source: (): LogSource => ({ backend: "antigravity", path: null, format: null, live }), events: () => [], emit: () => undefined });
     expect((await service.steps("worker", { admin: true, after: first.after, key: first.key }) as any).steps).toEqual([]);
@@ -389,7 +389,7 @@ describe("the Log's view of an ACP instance", () => {
     await until(() => steps(h).filter(s => s.kind === "turn_end").length === 2, 5000);
     const next = await service.steps("worker", { admin: true, after: first.after, key: first.key }) as any;
     expect(next.steps.map((s: any) => s.kind)).toEqual(["user", "thought", "assistant", "turn_end"]);
-    const other = await service.steps("worker", { admin: true, after: 3, key: "acp-someone-else" }) as any;
+    const other = await service.steps("worker", { admin: true, after: 3, key: "1-2" }) as any;
     expect(other.reset).toBe(true);
     expect(other.steps.length).toBeGreaterThan(4);
   });

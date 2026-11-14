@@ -145,7 +145,9 @@ export class AcpRunner extends EventEmitter {
 
   /** The chat timeline, for the Log's live source: this boot's own cursor space. */
   get liveSteps(): LiveSteps {
-    return { key: `acp-${this.bootId}`, snapshot: (after, o) => this.steps.snapshot(after, o), subscribe: l => this.steps.onChange(l) };
+    // The page's `key` parameter is `<digits>-<digits>` (a transcript's device-inode): this boot's id, as two numbers.
+    const [a, b] = [this.bootId.slice(0, 8), this.bootId.slice(9, 13) + this.bootId.slice(14, 18)].map(h => parseInt(h, 16));
+    return { key: `${a}-${b}`, snapshot: (after, o) => this.steps.snapshot(after, o), subscribe: l => this.steps.onChange(l) };
   }
 
   private get log(): Logger { return this.opts.logger; }
