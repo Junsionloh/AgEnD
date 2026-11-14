@@ -254,10 +254,10 @@ const agentBusy = (name) => R().isBusy(store.state.exec[name]);
 /** Epoch ms the agent began working, by the working bar's own clock (a monotonic one), or null. */
 const agentSince = (name) => { const t = store.state.workingSince[name]; return t == null ? null : Date.now() - (performance.now() - t); };
 const rowsOf = (name) => (activityShown() ? composeActivity(name, store.threadRows(name), Date.now(), { busy: agentBusy(name), since: agentSince(name) }) : store.threadRows(name));
-/** What a chat's activity blocks need to draw: its paths to shorten, and whether thinking is shown. */
+/** What a chat's activity blocks need to draw: its paths to shorten, and whether thinking is shown (`instance`: where a permission card posts its answer). */
 const activityCtx = (name) => () => {
   const info = activityInfo(name);
-  return { paths: info ? { cwd: info.cwd, home: info.home } : null, thinking: activityPrefs.get().thinking && !!info && info.thinking === true };
+  return { instance: name, paths: info ? { cwd: info.cwd, home: info.home } : null, thinking: activityPrefs.get().thinking && !!info && info.thinking === true };
 };
 
 // ── Announcements: one polite, visually hidden line for the coarse events only (a reply arrived, the agent started,

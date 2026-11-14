@@ -17,7 +17,7 @@ import { open, type FileHandle } from "node:fs/promises";
 import { LINE_MAX_BYTES, LONG_HEAD_BYTES, boundaryBefore, openTranscript, type LongLine } from "./transcript-jsonl.js";
 import { redactSecrets, shellProgramName, type ToolProgressLevel } from "./tool-progress.js";
 
-export type StepKind = "user" | "assistant" | "thinking" | "tool" | "error" | "turn_end" | "state" | "thought" | "permission";
+export type StepKind = "user" | "assistant" | "thinking" | "tool" | "error" | "turn_end" | "state" | "permission";
 /** What a tool call does, for its icon and words on the page. */
 export type StepCat = "read" | "edit" | "search" | "run" | "web" | "mcp" | "agent" | "plan" | "message" | "other";
 export type StepStatus = "running" | "done" | "failed" | "interrupted";

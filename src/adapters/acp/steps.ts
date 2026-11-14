@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { bounded, stepBody, stepInput, stepSubject, TEXT_MAX, type LogStep, type StepCat } from "../../log-steps.js";
+import { bounded, promptAnchor, replyAnchor, replyResult, stepBody, stepInput, stepSubject, TEXT_MAX, type LogStep, type StepCat } from "../../log-steps.js";
 import type { AdapterEvent } from "../types.js";
 
 /** A thought can be long, and "the full thought" is the point of showing it: more room than an assistant reply. */
@@ -10,6 +10,18 @@ const FILE = "acp-steps.jsonl";
 const KEEP = 600;
 /** The file is rewritten (from the steps kept) when it grows past this many lines. */
 const COMPACT_AT = 3000;
+
+/** AgEnD's reply tool as a transcript names it (what the chat's grouping looks for). */
+const REPLY_TOOL_NAME = "mcp__agend__reply";
+/** The CLIs' own spellings: grok `agend__reply`, agy `mcp_agend_reply` (optionally led by "Run "). */
+const OWN_REPLY = /^(?:run\s+)?(?:mcp_{1,2})?agend[\w-]*?_{1,2}reply$/i;
+/** The call's input when this tool call is AgEnD's own `reply` (never a look-alike such as another server's `reply`). */
+function replyCall(e: Extract<AdapterEvent, { kind: "tool" }>): { input: unknown } | null {
+  const raw = e.rawInput && typeof e.rawInput === "object" ? e.rawInput as Record<string, unknown> : {};
+  const name = typeof raw.tool_name === "string" ? raw.tool_name : e.title;
+  if (!OWN_REPLY.test(name.trim())) return null;
+  return { input: raw.tool_input !== undefined ? raw.tool_input : e.rawInput };
+}
 
 const CAT: Record<string, StepCat> = {
   read: "read", edit: "edit", delete: "edit", move: "edit", search: "search", execute: "run", fetch: "web",
@@ -50,7 +62,7 @@ export class AcpStepStore {
   private rev = 0;
   private seq = 0;
   private turn = "";
-  private open: { kind: "thought" | "assistant"; id: string } | null = null;
+  private open: { kind: "thinking" | "assistant"; id: string } | null = null;
   private lines = 0;
   private readonly listeners = new Set<() => void>();
   private readonly permissions = new Map<string, PermissionStepInfo>();
@@ -61,19 +73,22 @@ export class AcpStepStore {
 
   onChange(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
 
-  /** The turn's own id and the person's message. */
-  beginTurn(turnId: string, text: string, ts = this.now()): void {
+  /** The turn's own id and the person's message. `wire`: what was sent to the CLI — the ids the chat joins by are in it. */
+  beginTurn(turnId: string, text: string, ts = this.now(), wire = text): void {
     this.closeOpen();
     this.turn = turnId;
     const step: LogStep = { id: `u-${turnId}`, turn: turnId, ts, kind: "user" };
     stepBody(step, text, TEXT_MAX);
+    // What ties this turn to the chat's rows (the ids AgEnD wrote into the delivered prompt), as a transcript's user step has.
+    const anchor = promptAnchor(wire);
+    if (anchor) step.anchor = anchor;
     this.put(step, true);
   }
 
   /** Fold one adapter event into the timeline. Events with no place in it (usage, quota, user echo) are ignored. */
   apply(event: AdapterEvent): void {
     switch (event.kind) {
-      case "thought": return this.chunk("thought", event.text);
+      case "thought": return this.chunk("thinking", event.text);
       case "message": return this.chunk("assistant", event.text);
       case "tool": return this.tool(event);
       case "plan": return this.plan(event.entries);
@@ -114,7 +129,7 @@ export class AcpStepStore {
 
   snapshot(after: number | undefined, opts: { thoughts: boolean; limit?: number }): StepsAnswer {
     const limit = opts.limit ?? 200;
-    const visible = (s: LogStep) => opts.thoughts || s.kind !== "thought";
+    const visible = (s: LogStep) => opts.thoughts || s.kind !== "thinking";
     let out: LogStep[];
     let older = false;
     if (after === undefined) {
@@ -132,19 +147,19 @@ export class AcpStepStore {
 
   // ───────────────────────────────────────────────────────────── building
 
-  private chunk(kind: "thought" | "assistant", text: string): void {
+  private chunk(kind: "thinking" | "assistant", text: string): void {
     if (!text) return;
     if (this.open && this.open.kind !== kind) this.closeOpen();
     let step = this.open ? this.byId.get(this.open.id) : undefined;
     if (!step) {
-      step = { id: `${kind === "thought" ? "th" : "a"}-${this.turn || "x"}-${++this.seq}`, turn: this.turn, ts: this.now(), kind, status: "running" };
+      step = { id: `${kind === "thinking" ? "th" : "a"}-${this.turn || "x"}-${++this.seq}`, turn: this.turn, ts: this.now(), kind, status: "running" };
       this.open = { kind, id: step.id };
       step.body = "";
     }
     // Keep the raw text while it grows, so a secret split across two chunks is still masked when the step is shown.
     const raw = ((this.rawOf.get(step.id) ?? "") + text);
     this.rawOf.set(step.id, raw.length > THOUGHT_MAX * 2 ? raw.slice(0, THOUGHT_MAX * 2) : raw);
-    const b = bounded(this.rawOf.get(step.id)!, kind === "thought" ? THOUGHT_MAX : TEXT_MAX);
+    const b = bounded(this.rawOf.get(step.id)!, kind === "thinking" ? THOUGHT_MAX : TEXT_MAX);
     step.body = b.text;
     if (b.cut) step.bodyCut = b.cut;
     this.put(step, false);
@@ -158,6 +173,15 @@ export class AcpStepStore {
     if (!step) { step = { id, turn: this.turn, ts: this.now(), kind: "tool" }; }
     step.tool = e.title.slice(0, 120);
     step.cat = CAT[e.toolKind] ?? "other";
+    // AgEnD's own `reply` tool, by whatever name the CLI gives it: the chat joins a timeline to its bubbles by this call
+    // (log-steps.ts: replyAnchor / replyResult), so it carries the canonical name and the same anchor as a transcript's.
+    const named = replyCall(e);
+    if (named) {
+      step.tool = REPLY_TOOL_NAME;
+      step.cat = "message";
+      const anchor = replyAnchor(named.input);
+      if (anchor) step.anchor = anchor;
+    }
     const subject = subjectFromInput(e.rawInput) ?? e.title;
     const s = stepSubject(subject);
     if (s) step.subject = s;
@@ -166,6 +190,7 @@ export class AcpStepStore {
     if (e.rawOutput !== undefined && e.status !== "pending" && e.status !== "in_progress") {
       const text = typeof e.rawOutput === "string" ? e.rawOutput : outputText(e.rawOutput);
       if (text) stepBody(step, text, 2000);
+      if (named && text) replyResult(step, text);
     }
     const settled = step.status !== "running";
     this.put(step, settled);
@@ -236,7 +261,7 @@ export class AcpStepStore {
     this.byId.set(step.id, step);
     this.revOf.set(step.id, ++this.rev);
     if (this.steps.length > KEEP * 1.5) this.trim();
-    if (settled && step.kind !== "thought") this.persist(step);
+    if (settled && step.kind !== "thinking") this.persist(step);
     for (const l of this.listeners) { try { l(); } catch { /* an observer cannot break the timeline */ } }
   }
 
@@ -256,7 +281,7 @@ export class AcpStepStore {
 
   private compact(): void {
     try {
-      const keep = this.steps.filter(s => s.kind !== "thought" && s.status !== "running");
+      const keep = this.steps.filter(s => s.kind !== "thinking" && s.status !== "running");
       const file = join(this.dir, FILE);
       writeFileSync(`${file}.tmp`, keep.map(s => JSON.stringify(s)).join("\n") + (keep.length ? "\n" : ""), { mode: 0o600 });
       renameSync(`${file}.tmp`, file);

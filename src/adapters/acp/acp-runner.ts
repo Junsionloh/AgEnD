@@ -547,7 +547,7 @@ export class AcpRunner extends EventEmitter {
     const wire = this.format(content, meta);
     const t = { item, startedAt: this.now(), text: "", outbound: false, consumed: false, deliveryId: attempt ? attempt.deliveryId : null, attemptNo: attempt ? attempt.attemptNo : 0, cancelled: false };
     this.turn = t;
-    this.steps.beginTurn(item.turnId, content);
+    this.steps.beginTurn(item.turnId, content, undefined, wire);
     this.setBusy(true);
     if (meta.chat_id) this.lastActivityAt = this.now();
     if (attempt) this.outbox?.markEnterStarted(attempt.deliveryId, this.bootId, attempt.attemptNo);

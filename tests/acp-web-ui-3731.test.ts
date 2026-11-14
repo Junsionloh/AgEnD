@@ -261,32 +261,24 @@ describe("a permission request", () => {
   });
 });
 
-describe("a thought", () => {
-  const long = Array.from({ length: 12 }, (_, i) => `line ${i + 1} of thinking`).join("\n");
-  it("a short one is shown whole, with its label, and nothing to open", async () => {
-    const pg = await mountOnly(h(A.ThoughtBlock, { step: step("th1", { kind: "thought", body: "Checking the config." }) }));
-    expect(text(pg.root.querySelector(".log-thought-label"))).toBe("Thinking");
-    expect(text(pg.root.querySelector(".log-thought-text"))).toBe("Checking the config.");
-    expect(pg.root.querySelector(".log-more")).toBeNull();
+describe("a permission request in the rows both pages share (log-row.js)", () => {
+  let R: any;
+  beforeAll(async () => { R = await import("/ui/js/log-row.js"); });
+  it("the Log's row: the card under a Permission head with its status", async () => {
+    const pg = await mountOnly(h(R.LogRow, { x: pendingStep(), instance: "agy", fetcher: async () => ({ ok: true, status: 200, json: async () => ({}) }) }));
+    expect(pg.root.querySelector(".log-item.k-permission.s-running")).not.toBeNull();
+    expect(text(pg.root.querySelector(".log-head"))).toContain("Permission");
+    expect(text(pg.root.querySelector(".perm-what"))).toBe("Wants to use run_command rm -rf build");
   });
-  it("a long one is folded to its label until opened, and folds again", async () => {
-    const pg = await mountOnly(h(A.ThoughtBlock, { step: step("th2", { kind: "thought", body: long }) }));
-    expect(pg.root.querySelector(".log-thought.collapsed")).not.toBeNull();
-    expect(pg.root.querySelector(".log-thought-text")).toBeNull();
-    const toggle = pg.root.querySelector(".log-more") as any;
-    expect(text(toggle)).toBe("Show thinking");
-    toggle.click(); await settle(4);
-    expect(text(pg.root.querySelector(".log-thought-text"))).toContain("line 12 of thinking");
-    expect(text(pg.root.querySelector(".log-more"))).toBe("Hide thinking");
-    (pg.root.querySelector(".log-more") as any).click(); await settle(4);
-    expect(pg.root.querySelector(".log-thought-text")).toBeNull();
+  it("the chat block's compact row carries the same card, answering for the instance it was given", async () => {
+    calls = [];
+    const pg = await mountOnly(h(R.LogRow, { x: pendingStep(), instance: "agy", chat: true, compact: true }));
+    expect(pg.root.querySelector(".log-item.compact.k-permission")).not.toBeNull();
+    (pg.root.querySelector(".perm-allow") as any).click(); await settle(6);
+    expect(calls).toEqual([{ method: "POST", url: "/ui/permission", body: { instance: "agy", request_id: "req-1", decision: "allow" } }]);
   });
-  it("what counts as long", () => {
-    expect(A.thoughtIsLong("short")).toBe(false);
-    expect(A.thoughtIsLong("a\nb\nc\nd")).toBe(false);
-    expect(A.thoughtIsLong("a\nb\nc\nd\ne")).toBe(true);
-    expect(A.thoughtIsLong("x".repeat(281))).toBe(true);
-    expect(A.thoughtIsLong(undefined)).toBe(false);
+  it("its one-line words for the block's header name what it asks to run", () => {
+    expect(R.stepLine(pendingStep(), null)).toBe("Permission: rm -rf build");
   });
 });
 
@@ -317,16 +309,16 @@ async function logApp(instances: unknown[]) {
 const tick = async () => { for (const fn of [...ticks]) fn({ instance: "agy" }); await settle(8); };
 
 describe("the Log tab of an ACP agent", () => {
-  it("renders thoughts and permission requests in the timeline, and a request answers through POST /ui/permission", async () => {
+  it("renders thinking and permission requests in the timeline, and a request answers through POST /ui/permission", async () => {
     stepAnswers = [ON({ steps: [
       step("o1", { kind: "user", body: "clean the build" }),
-      step("th1", { kind: "thought", body: "I should remove the build folder." }),
+      step("th1", { kind: "thinking", body: "I should remove the build folder." }),
       pendingStep(),
     ] })];
     const pg = await logApp([live("agy")]);
     const items = pg.root.querySelectorAll(".p-log .log-item");
-    expect(items.map((li: any) => li.classList.contains("k-thought") ? "thought" : li.classList.contains("k-permission") ? "permission" : "other")).toEqual(["other", "thought", "permission"]);
-    expect(text(pg.root.querySelector(".p-log .k-thought .log-thought-text"))).toBe("I should remove the build folder.");
+    expect(items.map((li: any) => li.classList.contains("k-thinking") ? "thinking" : li.classList.contains("k-permission") ? "permission" : "other")).toEqual(["other", "thinking", "permission"]);
+    expect(text(pg.root.querySelector(".p-log .k-thinking .log-think"))).toContain("I should remove the build folder");
     const permission = pg.root.querySelector(".p-log .k-permission") as any;
     expect(text(permission.querySelector(".log-head"))).toContain("Permission");
     expect(text(permission.querySelector(".perm-what"))).toBe("Wants to use run_command rm -rf build");
@@ -341,7 +333,7 @@ describe("the Log tab of an ACP agent", () => {
     expect(Object.values(Object.fromEntries(after.querySelectorAll(".perm-actions button").map((b: any) => [text(b), !b.disabled])))).toEqual([false, false, false]);
   });
   it("the Tools filter keeps permission requests (they are what the agent waits on)", async () => {
-    stepAnswers = [ON({ steps: [step("th1", { kind: "thought", body: "hm" }), pendingStep(), step("toolu_1", { kind: "tool", tool: "Read", cat: "read", subject: "a.ts", status: "done" })] })];
+    stepAnswers = [ON({ steps: [step("th1", { kind: "thinking", body: "hm" }), pendingStep(), step("toolu_1", { kind: "tool", tool: "Read", cat: "read", subject: "a.ts", status: "done" })] })];
     const pg = await logApp([live("agy")]);
     const chip = pg.root.querySelectorAll(".p-log .log-bar .chip-btn").find((b: any) => text(b) === "Tools") as any;
     chip.click(); await settle(4);
@@ -354,12 +346,12 @@ describe("a terminal agent's View tab, and one without a pane", () => {
   it("a terminal agent's tabs are all links", async () => {
     stepAnswers = [ON()];
     const pg = await logApp([live("agy", { cli_adapter: "tmux", pane_view: true })]);
-    expect(tabs(pg)).toEqual([["Chat", "a", null, null], ["View", "a", null, null], ["Log", "a", null, null], ["Details", "a", null, null]]);
+    expect(tabs(pg)).toEqual([["Chat", "a", null, null], ["View", "a", null, null], ["Log", "a", null, null], ["Settings", "a", null, null]]);
   });
   it("an agent with no pane has View switched off, with why", async () => {
     stepAnswers = [ON()];
     const pg = await logApp([live("agy")]);
-    expect(tabs(pg)).toEqual([["Chat", "a", null, null], ["View", "span", "true", "No terminal: this agent runs over ACP."], ["Log", "a", null, null], ["Details", "a", null, null]]);
+    expect(tabs(pg)).toEqual([["Chat", "a", null, null], ["View", "span", "true", "No terminal: this agent runs over ACP."], ["Log", "a", null, null], ["Settings", "a", null, null]]);
   });
   it("an older server's row (no pane_view) keeps View", async () => {
     stepAnswers = [ON()];

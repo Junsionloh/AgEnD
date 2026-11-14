@@ -1,8 +1,8 @@
 // #3731 (ACP adapter, phase 1): how an agent runs — `cli_adapter` "tmux" (a terminal pane, today's way) or "acp" (the CLI
 // spoken to over ACP on stdio: no terminal, but live thinking, tool progress and permission requests in the Log).
 // One module for what the pages share: the execution-mode fields of the create and edit forms, the confirmation before
-// a switch, the mode badge, the terminal gating (`pane_view`), and the Log's two new rows — a thought and a permission
-// request with its Allow / Deny / Cancel turn buttons. Behind the session gate (/ui/js/).
+// a switch, the mode badge, the terminal gating (`pane_view`), and the permission request with its Allow / Deny / Cancel
+// turn buttons (the thought is the `thinking` row both pages already draw). Behind the session gate (/ui/js/).
 import { html, useRef, useState } from "/assets/app-html.js";
 import { register, t } from "/assets/app-i18n.js";
 import { confirmDialog } from "/assets/ui-confirm.js";
@@ -19,7 +19,6 @@ register("adapter", {
     switchToTmux: "{0} will restart in a terminal (tmux). Live thinking and permission buttons go away and a terminal appears. Whether the conversation carries over depends on the CLI.",
     switchConfirm: "Switch and restart",
     noPane: "No terminal: this agent runs over ACP.",
-    thought: "Thinking", showThought: "Show thinking", hideThought: "Hide thinking",
     permission: "Permission requested", allow: "Allow", deny: "Deny", cancelTurn: "Cancel turn",
     waiting: "Waiting for you", sending: "Answer sent…", sendFailed: "Could not send the answer: {0}",
     answered: "Answered: {0}", outcomeCancelled: "Turn cancelled", notOffered: "The CLI did not offer this choice",
@@ -36,7 +35,6 @@ register("adapter", {
     switchToTmux: "{0} 會改用終端機（tmux）重新啟動。即時思考與權限按鈕會消失，並出現終端機。對話是否延續取決於這個 CLI。",
     switchConfirm: "切換並重新啟動",
     noPane: "沒有終端機：這個 Agent 以 ACP 執行。",
-    thought: "思考", showThought: "顯示思考", hideThought: "收合思考",
     permission: "要求權限", allow: "允許", deny: "拒絕", cancelTurn: "取消這一輪",
     waiting: "等你決定", sending: "已送出回覆…", sendFailed: "無法送出回覆：{0}",
     answered: "已回覆：{0}", outcomeCancelled: "這一輪已取消", notOffered: "CLI 沒有提供這個選項",
@@ -104,23 +102,7 @@ export function ModeBadge({ inst, className = "" }) {
   return html`<span class=${`mode-badge${className ? ` ${className}` : ""}`} title=${ta("badgeTitle")}>${ta("badge")}</span>`;
 }
 
-// ── The Log's rows ──
-
-/** A thought longer than this many lines (or characters) is folded until opened. */
-export const THOUGHT_FOLD_LINES = 4;
-export const THOUGHT_FOLD_CHARS = 280;
-export const thoughtIsLong = (body) => !!body && (body.split("\n").length > THOUGHT_FOLD_LINES || body.length > THOUGHT_FOLD_CHARS);
-
-/** Thinking text: muted, italic, and collapsed to its label when long (the reader opens it). */
-export function ThoughtBlock({ step, label = true }) {
-  const long = thoughtIsLong(step.body);
-  const [open, setOpen] = useState(false);
-  const shown = !long || open;
-  return html`<div class=${`log-thought${shown ? "" : " collapsed"}`}>
-    ${label ? html`<span class="log-thought-label">${ta("thought")}</span>` : null}
-    ${shown && step.body ? html`<div class="log-text log-thought-text">${step.body}</div>` : null}
-    ${long ? html`<button type="button" class="link-btn log-more" aria-expanded=${open ? "true" : "false"} onClick=${() => setOpen(!open)}>${open ? ta("hideThought") : ta("showThought")}</button>` : null}</div>`;
-}
+// ── A permission request, as a row (the Log's and the chat's activity block: log-row.js) ──
 
 /** The choices a permission step offers that the page may press: only once-only ones, never an *_always. */
 export function permissionChoices(step) {

@@ -224,6 +224,7 @@ export function collapse(items) {
 export function stepLine(x, paths) {
   const short = (v) => shortenPaths(v, paths);
   if (x.kind === "thinking") return tl("thinking");
+  if (x.kind === "permission") return `${tl("permission")}: ${short(x.subject || x.tool || "")}`.replace(/: $/, "");
   if (x.kind === "assistant") return `${tl("said")}: ${short(String(x.body || "").replace(/\s+/g, " ").trim()).slice(0, 80)}`;
   if (x.kind === "error") return x.note ? tl("errorCode", x.note) : tl("error");
   const cat = x.cat || "other";

@@ -94,9 +94,9 @@ describe("a turn through the IPC socket", () => {
     await until(() => h.runner.getInstanceState() === "working", 3000, "busy");
     await idle(h);
     const s = steps(h);
-    expect(s.map(x => x.kind)).toEqual(["user", "thought", "assistant", "turn_end"]);
+    expect(s.map(x => x.kind)).toEqual(["user", "thinking", "assistant", "turn_end"]);
     expect(s[0]).toMatchObject({ body: "hello there #linger" });
-    expect(s[1]).toMatchObject({ kind: "thought", body: "Let me think." }); // two chunks, one step
+    expect(s[1]).toMatchObject({ kind: "thinking", body: "Let me think." }); // two chunks, one step
     expect(s[2]).toMatchObject({ kind: "assistant", body: "OK", status: "done" });
     expect(h.events.message_delivered).toEqual([{ chatId: "chat-1", messageId: "msg-1" }]);
     expect(h.events.message_confirmed).toEqual([{ chatId: "chat-1", messageId: "msg-1" }]);
@@ -256,7 +256,7 @@ describe("cancel", () => {
   it("a running turn is interrupted with session/cancel", async () => {
     const h = await boot();
     h.fleet.send(person("#slow"));
-    await until(() => steps(h).some(s => s.kind === "thought"), 4000, "the turn to start");
+    await until(() => steps(h).some(s => s.kind === "thinking"), 4000, "the turn to start");
     h.runner.clearPendingDeliveries();
     await h.adapter.cancel();
     await until(() => steps(h).some(s => s.kind === "turn_end"), 4000);
@@ -371,7 +371,7 @@ describe("what survives a restart", () => {
     expect(h2.adapter.isNewSession).toBe(false);
     const again = steps(h2);
     expect(again.map(s => s.kind)).toEqual(["user", "assistant", "turn_end"]);
-    expect(again.some(s => s.kind === "thought")).toBe(false);
+    expect(again.some(s => s.kind === "thinking")).toBe(false);
   });
 });
 
@@ -399,25 +399,47 @@ describe("request ids restart with every agent process", () => {
 });
 
 describe("the Log's view of an ACP instance", () => {
-  const view = async (h: Harness, q: { admin?: boolean }, thinking: boolean) => {
+  const view = async (h: Harness, q: { admin?: boolean; thinking?: boolean; chat?: boolean }, thinking: boolean, toolProgress: "off" | "standard" | "verbose" = "verbose") => {
     const live = h.runner.liveSteps;
     const service = new LogService({
-      enabled: () => true, thinking: () => thinking, known: () => true,
+      enabled: () => true, thinking: () => thinking, toolProgress: () => toolProgress, known: () => true,
       source: (): LogSource => ({ backend: "antigravity", path: null, format: null, live }),
       events: () => [], emit: () => undefined,
     });
     return service.steps("worker", q) as Promise<any>;
   };
 
-  it("thought text only for an admin, and only when web.log_thinking is on", async () => {
+  it("thinking only when the route asked for it (an admin's request), and only while web.log_thinking is on", async () => {
     const h = await boot();
     h.fleet.send(person("hello"));
     await idle(h);
     const kinds = (a: any) => a.steps.map((s: any) => s.kind);
-    expect(kinds(await view(h, { admin: true }, true))).toContain("thought");
-    expect(kinds(await view(h, { admin: true }, false))).not.toContain("thought");
-    expect(kinds(await view(h, { admin: false }, true))).not.toContain("thought");
-    expect(kinds(await view(h, {}, true))).not.toContain("thought");
+    expect(kinds(await view(h, { admin: true, thinking: true }, true))).toContain("thinking");
+    expect(kinds(await view(h, { admin: true, thinking: true }, false))).not.toContain("thinking");
+    expect(kinds(await view(h, { admin: true }, true))).not.toContain("thinking");   // not asked
+    expect(kinds(await view(h, {}, true))).not.toContain("thinking");
+  });
+
+  it("the chat's read is cut to the agent's tool_progress, like a transcript's, and `off` answers nothing", async () => {
+    const h = await boot();
+    h.fleet.send(person("hello"));
+    await idle(h);
+    const std = await view(h, { chat: true, admin: true, thinking: true }, true, "standard");
+    expect(std.level).toBe("standard");
+    expect(std.thinking).toBe(true);
+    expect(std.steps.find((s: any) => s.kind === "user").body).toBeUndefined();      // the chat shows the prompt itself
+    expect(std.steps.map((s: any) => s.kind)).toContain("thinking");
+    const off = await view(h, { chat: true, admin: true, thinking: true }, true, "off");
+    expect(off.level).toBe("off");
+    expect(off.steps).toEqual([]);
+  });
+
+  it("a user step carries the chat's anchor, so the timeline can sit above the reply it led to", async () => {
+    const h = await boot();
+    h.fleet.send(person("hello", "m-1"));
+    await idle(h);
+    const user = steps(h).find(s => s.kind === "user");
+    expect(user?.anchor).toBeDefined();
   });
 
   it("a reader who is not an admin sees a request waiting but not its answer buttons", async () => {
@@ -436,16 +458,16 @@ describe("the Log's view of an ACP instance", () => {
     const h = await boot();
     h.fleet.send(person("hello"));
     await idle(h);
-    const first = await view(h, { admin: true }, true);
+    const first = await view(h, { admin: true, thinking: true }, true);
     expect(first.key).toMatch(/^\d{1,20}-\d{1,20}$/); // the shape GET /ui/steps accepts for `key`
     const live = h.runner.liveSteps;
     const service = new LogService({ enabled: () => true, thinking: () => true, known: () => true, source: (): LogSource => ({ backend: "antigravity", path: null, format: null, live }), events: () => [], emit: () => undefined });
-    expect((await service.steps("worker", { admin: true, after: first.after, key: first.key }) as any).steps).toEqual([]);
+    expect((await service.steps("worker", { admin: true, thinking: true, after: first.after, key: first.key }) as any).steps).toEqual([]);
     h.fleet.send(person("again", "m-2"));
     await until(() => steps(h).filter(s => s.kind === "turn_end").length === 2, 5000);
-    const next = await service.steps("worker", { admin: true, after: first.after, key: first.key }) as any;
-    expect(next.steps.map((s: any) => s.kind)).toEqual(["user", "thought", "assistant", "turn_end"]);
-    const other = await service.steps("worker", { admin: true, after: 3, key: "1-2" }) as any;
+    const next = await service.steps("worker", { admin: true, thinking: true, after: first.after, key: first.key }) as any;
+    expect(next.steps.map((s: any) => s.kind)).toEqual(["user", "thinking", "assistant", "turn_end"]);
+    const other = await service.steps("worker", { admin: true, thinking: true, after: 3, key: "1-2" }) as any;
     expect(other.reset).toBe(true);
     expect(other.steps.length).toBeGreaterThan(4);
   });

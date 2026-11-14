@@ -173,7 +173,7 @@ export function ActivityBlock({ group, ctx, now: clock }) {
     const folded = foldRuns(items, (x) => x === newest);
     return html`<ol class="log-list" role="list">${folded.map((x, i) => (x.group
       ? html`<${StepGroup} key=${`g:${x.items[0].id}`} g=${x} paths=${ctx.paths} />`
-      : html`<${LogRow} key=${`${x.kind}:${x.id}`} x=${x} prev=${folded[i - 1]} paths=${ctx.paths} chat=${true} compact=${true} latest=${x === newest} />`))}</ol>`;
+      : html`<${LogRow} key=${`${x.kind}:${x.id}`} x=${x} prev=${folded[i - 1]} paths=${ctx.paths} chat=${true} compact=${true} latest=${x === newest} instance=${ctx.instance} />`))}</ol>`;
   };
   const icon = live && last ? (last.kind === "tool" ? CAT_ICON[last.cat || "other"] : KIND_ICON[last.kind]) : null;
   return html`<details class=${`card act-block${live ? " live" : " done"}`} open=${open}>

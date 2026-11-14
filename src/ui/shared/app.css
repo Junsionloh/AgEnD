@@ -521,13 +521,11 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .act-block .log-item.k-error .log-text { color: var(--danger); }
 .act-block .log-sub { margin: 0 0 var(--s-1); }
 .act-block .log-sub .log-item { --row-h: 22px; }
-/* #3731: an ACP agent's thinking (muted, italic, folded when long) and its permission requests (a card with the buttons). */
-.p-log .log-item.k-thought { background: transparent; color: var(--text-3); padding-block: 2px; }
-.p-log .log-thought { min-width: 0; }
-.p-log .log-thought-label { font-size: var(--fs-xs); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
-.p-log .log-thought-text { font-style: italic; color: var(--text-3); }
+/* #3731: an ACP agent's permission requests (a card with the buttons), in the Log and in the chat's activity block. */
 .p-log .log-item.k-permission { background: var(--warn-bg); border: 1px solid var(--warn-line); }
 .p-log .log-item.k-permission.s-done { background: var(--surface); border-color: var(--border); }
+.act-block .log-item.k-permission .perm-card { margin: 0 0 var(--s-1); padding: var(--s-2); border-radius: var(--r-sm); background: var(--warn-bg); border: 1px solid var(--warn-line); }
+.act-block .log-item.k-permission.s-done .perm-card, .act-block .log-item.k-permission.s-interrupted .perm-card { background: var(--surface-2); border-color: var(--border); }
 .perm-card { display: flex; flex-direction: column; gap: var(--s-2); margin-top: var(--s-1); min-width: 0; }
 .perm-what { font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .perm-label { color: var(--text-3); }
