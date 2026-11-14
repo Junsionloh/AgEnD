@@ -534,7 +534,7 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .perm-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .perm-card .err { color: var(--danger); }
 /* #3731: the mode marker of an agent that runs over ACP (sidebar row, chat header, details) and the form's warning. */
-.mode-badge { flex: none; font-size: 10px; line-height: 14px; font-weight: var(--fw-semibold); padding: 0 var(--s-1); border-radius: var(--r-full); border: 1px solid var(--border); color: var(--text-3); white-space: nowrap; }
+.mode-badge { flex: none; font-size: var(--fs-xs); line-height: var(--lh-xs); font-weight: var(--fw-semibold); padding: 0 var(--s-1); border-radius: var(--r-full); border: 1px solid var(--border); color: var(--text-3); white-space: nowrap; }
 .mode-badge.hd-mode { margin-left: var(--s-2); align-self: center; }
 .exec-warn { color: var(--warn); }
 .v-nopane { padding: var(--s-6) var(--s-4); }
