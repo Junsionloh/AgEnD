@@ -106,6 +106,7 @@ describe("profiles and the version gate", () => {
     const env = buildChildEnv(GROK_PROFILE, { PATH: "/bin", HOME: "/h", XAI_API_KEY: "k", AGEND_TOKEN: "secret", AGEND_WEB_SECRET: "s", DISCORD_TOKEN: "d", OPENAI_API_KEY: "o", LC_ALL: "C" });
     expect(env).toMatchObject({ PATH: "/bin", HOME: "/h", XAI_API_KEY: "k", LC_ALL: "C", TERM: "dumb" });
     expect(Object.keys(env).some(k => /AGEND|DISCORD|OPENAI/.test(k))).toBe(false);
+    expect(buildChildEnv(AGY_PROFILE, { PATH: "/bin" })).toMatchObject({ AGY_CLI_DISABLE_AUTO_UPDATE: "1" });
   });
 });
 
