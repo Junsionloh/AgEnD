@@ -13,7 +13,7 @@
  */
 import { createHash } from "node:crypto";
 import { BUNDLED_SKILLS_DIR, listBundledSkills, readBundledSkill } from "../bundled-skills.js";
-import type { SecretFinding } from "../agent-export.js";
+import type { SecretFinding } from "../secret-scan.js";
 import type { LibraryStore } from "./store.js";
 import { LIBRARY_LIMITS, isLibraryId, parseSkillFrontmatter, validateSkill, type LibraryError, type LibraryErrorCode, type SkillFile } from "./schema.js";
 import { looksLikeZip, readZip, writeZip, ZIP_LIMITS, type ZipEntry } from "./zip.js";

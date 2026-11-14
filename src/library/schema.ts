@@ -12,7 +12,7 @@
  * Nothing here is mounted into an agent (that is a later step): the library only stores and checks.
  */
 import { parse, stringify } from "yaml";
-import { scanForSecrets, type SecretFinding } from "../agent-export.js";
+import { scanForSecrets, type SecretFinding } from "../secret-scan.js";
 
 export type LibraryKind = "skill" | "mcp";
 export const LIBRARY_KINDS: readonly LibraryKind[] = ["skill", "mcp"];
@@ -214,7 +214,10 @@ const isGivenName = (n: unknown): n is string => typeof n === "string" && ENV_NA
 /** `${MCP_NAME}` — a reference to a `.env` variable, the only thing the right side of a renaming `env` map may be (a literal there would be a value). */
 const REF_RE = /^\$\{([A-Za-z_][A-Za-z0-9_]{0,63})\}$/;
 /** Variable names for an error answer: only a plain name, and never one that looks like a secret (a value pasted where a name belongs). */
-const nameForError = (n: unknown): string => (typeof n === "string" && ENV_NAME_RE.test(n) && scanForSecrets("mcp-name", n).length === 0 ? n : "?");
+const ERROR_NAME_RE = /^[A-Z][A-Z0-9_]{0,63}$/;
+/** A variable name that may be echoed in an answer: upper-case letters, digits and `_` only (PR #79 review) — anything else, a pasted value included, is `?`. */
+export const echoableVarName = (n: unknown): string => (typeof n === "string" && ERROR_NAME_RE.test(n) && scanForSecrets("mcp-name", n).length === 0 ? n : "?");
+const nameForError = echoableVarName;
 const HEADER_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
 
 /** What an MCP library file holds. `env` and `headers` name VARIABLES: the values live where the agent runs, never here. */

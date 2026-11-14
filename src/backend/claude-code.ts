@@ -1641,7 +1641,12 @@ export class ClaudeCodeBackend extends ClaudePaneDetectors implements CliBackend
       // rewritten, so it is tightened BEFORE the values go in (or removed if that is not possible); a new one is created 0600 (not
       // created under the umask and tightened afterwards, which leaves a window where it can be read).
       try { chmodSync(mcpConfigPath, 0o600); } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== "ENOENT") { try { unlinkSync(mcpConfigPath); } catch { /* the write below fails or replaces it */ } }
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+          // Neither tightened nor removed: writing the values into a file others may read is worse than not writing, so stop here.
+          try { unlinkSync(mcpConfigPath); } catch (rm) {
+            if ((rm as NodeJS.ErrnoException).code !== "ENOENT") throw new Error(`mcp-config.json could not be made private (chmod and remove both failed): ${(rm as NodeJS.ErrnoException).code ?? "error"}`);
+          }
+        }
       }
       writeFileSync(mcpConfigPath, mcpConfigText, { mode: 0o600 });
       try { chmodSync(mcpConfigPath, 0o600); } catch { /* already 0600 from the open above */ }

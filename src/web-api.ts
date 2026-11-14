@@ -1,4 +1,4 @@
-import { buildAgentExport, parseAgentExport } from "./agent-export.js";
+import { buildAgentExport, parseAgentExport, parseAgentLibrary } from "./agent-export.js";
 import { STRUCTURED_PROFILE_BACKENDS } from "./structured-signin-transport.js";
 import { hubModeOf, hubNameOf, type HubSwitches } from "./hub-mode.js";
 import { validCredentialProfileName } from "./runtime-credential-profiles.js";
@@ -17,6 +17,10 @@ import type { PaneContextSource } from "./pane-context-cache.js";
 import { settingsRequestExecution, settingsRequestLocalAdmin, settingsRequestRequester, settingsWrite, isSettingsReplay } from "./settings-request-capability.js";
 import { readBoundedWebBody } from "./web-body.js";
 import { handleLibraryRequest } from "./library/web.js";
+import { LibraryStore } from "./library/store.js";
+import { applyLibrary, compareLibrary, resolveLibraryExport, type ImportChoice, type LibraryChoices } from "./library/agent-transfer.js";
+import { builtinSkillNames } from "./library/transfer.js";
+import { isLibraryId } from "./library/schema.js";
 import type { OwnerCssStore } from "./web-owner-css-store.js";
 import { APP_ICON_MAX_BYTES, type AppIconStore } from "./web-app-icon.js";
 import { withAppIconLinks } from "./web-icons.js";
@@ -645,6 +649,29 @@ export interface WebApiContext {
 }
 
 /** Parse JSON body from request. */
+/** AGEND-245: the administrator's per-item choices for a file's Library entries (`{ skills: { id: { action, as?, confirm? } }, mcp: {…} }`); null when not that shape. */
+function readImportChoices(raw: unknown): LibraryChoices | null {
+  if (raw === undefined) return { skills: {}, mcp: {} };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const out: LibraryChoices = { skills: {}, mcp: {} };
+  for (const kind of ["skills", "mcp"] as const) {
+    const group = (raw as Record<string, unknown>)[kind];
+    if (group === undefined) continue;
+    if (!group || typeof group !== "object" || Array.isArray(group)) return null;
+    const entries = Object.entries(group as Record<string, unknown>);
+    if (entries.length > 200) return null;
+    for (const [id, c] of entries) {
+      if (!isLibraryId(id) || !c || typeof c !== "object" || Array.isArray(c)) return null;
+      const { action, as, confirm } = c as Record<string, unknown>;
+      if (action !== "use" && action !== "add" && action !== "rename" && action !== "skip") return null;
+      if (as !== undefined && (typeof as !== "string" || as.length > 64)) return null;
+      if (confirm !== undefined && (typeof confirm !== "string" || !/^[0-9a-f]{64}$/.test(confirm))) return null;
+      out[kind][id] = { action, ...(typeof as === "string" ? { as } : {}), ...(typeof confirm === "string" ? { confirm } : {}) } satisfies ImportChoice;
+    }
+  }
+  return out;
+}
+
 async function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   return JSON.parse((await readBoundedWebBody(req, 512 * 1024)).toString("utf8"));
 }
@@ -2206,9 +2233,13 @@ export function handleWebRequest(
     return true;
   }
 
-  // AGEND-163: an agent's portable settings as a file, and the way back. Both only compute (nothing is written: loading a
-  // file fills the Settings form, and the person still saves it there), and both are for the admin, as Settings is.
-  if (method === "POST" && (path === "/ui/agent-export/build" || path === "/ui/agent-export/parse")) {
+  // AGEND-163: an agent's portable settings as a file, and the way back. Build and parse only compute (nothing is written: loading a
+  // file fills the Settings form, and the person still saves it there), and all of them are for the admin, as Settings is.
+  // AGEND-245: the file's `library` block. `build` reads the Library (never `.env`); `library-status` compares a file's entries with this
+  // computer's Library (reads only); `library-apply` stores and confirms what the administrator chose — the one step here that writes, and only the
+  // Library's own files (never an agent's settings: the answer is the list of ids the form may take).
+  const AGENT_EXPORT_ROUTES = ["/ui/agent-export/build", "/ui/agent-export/parse", "/ui/agent-export/library-status", "/ui/agent-export/library-apply"];
+  if (method === "POST" && AGENT_EXPORT_ROUTES.includes(path)) {
     const admission = adminAdmissionOf(req, url, ctx);
     if (!admission) { json(res, 403, { error: "admin_required" }); return true; }
     void (async () => {
@@ -2221,13 +2252,28 @@ export function handleWebRequest(
         json(res, 200, parseAgentExport(body.text));
         return;
       }
+      if (path === "/ui/agent-export/library-status" || path === "/ui/agent-export/library-apply") {
+        const lib = parseAgentLibrary(body.text);
+        if (!lib) { json(res, 400, { error: "invalid_request" }); return; }
+        const store = new LibraryStore(ctx.dataDir);
+        const host = { envPath: join(ctx.dataDir, ".env"), builtin: builtinSkillNames() };
+        if (path === "/ui/agent-export/library-status") { json(res, 200, { ok: true, ...compareLibrary(store, lib, host) }); return; }
+        const agent = body.instance;
+        const choices = readImportChoices(body.choices);
+        if (typeof agent !== "string" || !isSafeInstanceName(agent) || !Object.hasOwn(ctx.fleetConfig?.instances ?? {}, agent)) { json(res, 404, { error: "unknown_instance" }); return; }
+        if (!choices) { json(res, 400, { error: "invalid_request" }); return; }
+        json(res, 200, { ok: true, ...applyLibrary(store, lib, choices, { ...host, agent }) });
+        return;
+      }
       const name = body.instance, include = body.include;
-      if (typeof name !== "string" || !isSafeInstanceName(name) || !Array.isArray(include) || include.some(g => typeof g !== "string")) { json(res, 400, { error: "invalid_request" }); return; }
+      if (typeof name !== "string" || !isSafeInstanceName(name) || !Array.isArray(include) || include.some(g => typeof g !== "string") || (body.embed !== undefined && typeof body.embed !== "boolean")) { json(res, 400, { error: "invalid_request" }); return; }
       // The agent's own saved settings: `ctx.fleetConfig.instances[name]` has the fleet's defaults merged into it, and an export
       // must hold only what this agent itself sets.
       const inst = Object.hasOwn(ctx.fleetConfig?.instances ?? {}, name) ? ctx.rawInstanceConfig?.(name) : undefined;
       if (!inst) { json(res, 404, { error: "unknown_instance" }); return; }
-      json(res, 200, buildAgentExport(name, inst, include as string[]));
+      const library = typeof ctx.dataDir === "string" ? resolveLibraryExport(new LibraryStore(ctx.dataDir), inst.library,
+        { skills: include.includes("librarySkills"), mcp: include.includes("libraryMcp"), embed: body.embed === true }) : undefined;
+      json(res, 200, buildAgentExport(name, inst, include as string[], library));
     })().catch(() => { if (!res.headersSent) json(res, 500, { error: "agent_export_failed" }); });
     return true;
   }

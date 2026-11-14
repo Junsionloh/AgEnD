@@ -231,12 +231,12 @@ behavior:
     expect(r.ok && r.fill.model_failover).toBe("a-1");
     expect(r.ok && r.extraFailover).toBe(true);
   });
-  it("a unknown top-level key is skipped, a non-empty library is noted and never an error", () => {
+  it("a unknown top-level key is skipped, a non-empty library is noted and never an error (an entry in the reserved placeholder shape is skipped with its path)", () => {
     const r = parseAgentExport(file("extra: 1\nlibrary:\n  skills: [{ ref: ui-review, version: 1 }]\n  mcp: []\n  other: 1\nagent:\n  description: d\n"));
     if (!r.ok) throw new Error(r.error);
     expect(r.libraryUsed).toBe(true);
     expect(r.fill).toEqual({ description: "d" });
-    expect(r.skipped).toEqual(expect.arrayContaining([{ path: "extra", reason: "unknown" }, { path: "library.other", reason: "unknown" }]));
+    expect(r.skipped).toEqual(expect.arrayContaining([{ path: "extra", reason: "unknown" }, { path: "library.other", reason: "unknown" }, { path: "library.skills[0]", reason: "badValue" }]));
   });
   it("an inherited-looking key (__proto__, constructor) is just an unknown field", () => {
     const r = parseAgentExport(file("agent:\n  __proto__: { polluted: 1 }\n  constructor: x\n  description: d\n"));

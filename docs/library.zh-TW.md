@@ -141,3 +141,5 @@ MCP 掛載（AGEND-261）：`GET /ui/library/mcp-status?agent=<名稱>`（該 Ag
 
 Skill 的導入與導出（AGEND-257）：`GET /ui/library/export?id=<id>[&builtin=1]`、`GET /ui/library/export-all`（zip 下載）、`GET /ui/library/builtin?name=<name>`（顯示用的內建 Skill）、
 `POST /ui/library/import/preview?filename=` 和 `POST /ui/library/import?sha256=&decisions=`（body 是上傳檔案的 bytes；`decisions` 是 URL 編碼的 JSON：`{ "<名稱>": { "action": "overwrite"|"rename"|"skip", "as": "<新名稱>" } }`）。
+
+Agent 導出／導入帶資源庫項目（AGEND-245；格式與流程見 [features](features.zh-TW.md)）：`POST /ui/agent-export/build` 的 `include` 可含 `librarySkills`／`libraryMcp`，並可帶 `embed: true|false`（回應另有 `libraryAssigned`、`libraryOmitted`、`library` 計數）；`POST /ui/agent-export/library-status`（`{ text }`：把檔案 `library` 區塊的每個項目和這個資源庫比對——`present`／`differs`／`missing-embedded`／`missing`，附 SKILL.md 或完整指令與變數名稱（只標「已設定／缺少」，絕不含值）；只讀取）與 `POST /ui/agent-export/library-apply`（`{ text, instance, choices }`：寫入被選的項目、替該 Agent 確認使用者看過的那個雜湊值的 MCP server，絕不覆蓋本機項目，回傳表單可以拿的 id；不會改任何 Agent 設定）。和其他路由一樣僅限管理員。

@@ -1094,13 +1094,15 @@ agent:
   tool_set: coordinator
 behavior:
   tool_progress: standard
-library: { skills: [], mcp: [] }   # 預留
+library: { skills: [], mcp: [] }   # 沒勾資源庫選項時為空（見下）
 ```
 
 - **白名單。** 只寫入、只讀取上面這些欄位。帳號與憑證設定檔、密鑰、頻道與討論串 ID、`working_directory`、`machine_id`、`dashboard`／`skipPermissions`、`pre_task_command`、Status emojis、用量提醒與顯示名稱一律不導出；檔案裡若有這些，載入時略過並說明原因。
 - **密鑰掃描。** 描述、標籤或 Agent 指示看起來含有密鑰（API key、token、私鑰、網址內的密碼…）時，會擋下複製與下載，移除後才能導出。
 - **不導出 `file:` 引用**（它指向導出者電腦上的檔案）；載入時檔案裡的 `file:` 值會略過而不是填入。超過 24,000 字元（編輯器上限）的文字不會放進導出檔，對話框會說明。
 - **載入只填表單。** 仍要按「儲存」並走原本的確認流程。尚未發佈的草稿格式（`agent.instructions`）會被列為不認得的欄位。
+- **資源庫的 Skill 與 MCP server（AGEND-245）。** 導出對話框多一組勾選：「資源庫的 Skill」、「資源庫的 MCP server」（會顯示 Agent 有幾個）與「把定義一併打包進檔案」（預設關閉）。`library` 區塊每個項目帶 `id` 與 `sha256`（Skill 另可帶 `source`）；MCP server 另有 `vars`，列出它需要的 `.env` 變數**名稱**（只會是 `MCP_` 開頭的名稱，絕不帶值，導出時甚至不會開啟 `.env`）。打包會加上 `archive`（Skill，資源庫自己的 ZIP 格式，base64）或 `definition`（MCP 項目的 YAML）；放不進檔案額度（合計 120,000 字元）的項目改成只帶引用，對話框會說明。`paused` 照 Agent 當下的設定列出暫停的項目。已不在資源庫、或在資源庫外被改過的項目不會導出並說明原因（Agent 也不會拿到它）。**這是暫定格式：**上游（#3638）只預留了 `library: { skills: [], mcp: [] }`，裡面沒有定義，這些元素是本 fork 的提案；版本仍是 `agend_export: 1`，讀檔的一方不認得的元素會略過並說明。密鑰掃描涵蓋整個區塊（命中就不給複製／下載）。
+- **載入有 `library` 區塊的檔案。**「檢查」會把每個項目和這台電腦的資源庫比對，分成四種狀態：**present**（有完全相同的版本）、**differs**（有同 id 但版本不同——絕不覆蓋：用你的版本、另存檔案的版本為新 id，或略過）、**missing-embedded**（檔案內有附上：先閱讀——Skill 的 SKILL.md 全文、MCP server 的完整指令與變數名稱——勾選後才加進資源庫）、**missing**（檔案只寫了名稱：略過並警告；MCP server 會提示要在 `.env` 補哪個 `MCP_` 名稱；其餘設定照常載入）。MCP server 一律要你明確確認讀過的那個版本；缺值的變數會告訴你要補哪個 `MCP_` 名稱。按下「填入表單」之前不會動到資源庫；按下後才會寫入你勾選的項目（附帶的定義會用資源庫自己的規則檢查，雜湊值必須相符）、替這個 Agent 確認那個版本的 MCP server，並把 id 填進**表單**——加在 Agent 現有項目之後、暫停的維持暫停、Agent 已有的 id 維持原狀態。Agent 的設定要按「儲存」才會改。任何一項失敗時對話框不會關閉，會說明哪一項、為什麼，且什麼都不填。
 - **範本。** `deploy_template` 與 `create_instance` 照舊傳遞 `systemPrompt`。沒有 `instructions` 參數或範本鍵：給了也會被忽略。
 
 ## 分批錯開啟動 (Staggered startup)

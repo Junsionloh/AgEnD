@@ -6,8 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **An agent's export and import carry its Library skills and MCP servers (AGEND-245).** Export has boxes for the Library's skills and MCP servers and *Bundle their definitions* (off: the file only names each item by id and hash; an MCP server also lists the `MCP_…` variable names it needs — never a value). Loading a file shows each item against this computer's Library as present / differs / missing-embedded / missing; a different local version is never overwritten, a bundled definition is read with the Library's own rules and added only after you tick it (an MCP server only after you confirm its whole command and variable names), and the form — not `fleet.yaml` — gets the ids. The `library` block's elements are provisional (upstream #3638 reserved the block without defining them); the version stays `agend_export: 1`.
+
 ### Changed
 - **A beta is a release candidate first: it publishes to npm `@rc`, and reaches `@beta` only when it is promoted.** A `vX.Y.Z-beta.N` tag used to publish straight to `@beta`, so every beta install's `agend update` and update notice picked it up before it had run anywhere. It now publishes to the new `@rc` dist-tag. After it has run on a test host (`agend update --rc`), the new **Promote beta** workflow moves `@beta` to that exact version: nothing is rebuilt, beta never moves backwards, and the move is verified. Beta users see nothing until then. A host that installed from `@rc` follows `@beta` again afterwards. Stable (`@latest`) and alpha (`@alpha`) publishing is unchanged. (#2987)
+- **Library: downgrading with `library.paused` set (AGEND-261).** An agent whose `library` setting has a `paused` list is refused by an AgEnD from before it existed ("`library` has an unknown key `paused`"), so the config check fails after a downgrade. Remove the `paused` key (move its ids back into `skills` / `mcp` if you want them given) before going back; nothing else about the `library` setting changed.
+- Library MCP servers: on Claude Code, if `mcp-config.json` can be neither made owner-only nor removed, the file is not written at all (the values of the variables are never put into a file others may read). An error answer about a variable that breaks the `MCP_` rule now names only a variable of the form `[A-Z][A-Z0-9_]*`; any other text is shown as `?`.
 
 ## [2.3.3] - 2026-11-02
 

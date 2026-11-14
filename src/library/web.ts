@@ -31,7 +31,7 @@ import { allTeamSkillsArchive, applyImport, builtinSkillFiles, builtinSkillNames
 import { ZIP_LIMITS } from "./zip.js";
 import { NATIVE_SKILLS_DIR_SEGMENTS } from "../native-skills-dir.js";
 import { buildOverview, type OverviewInstances } from "./overview.js";
-import { LIBRARY_LIMITS, isLibraryId, type LibraryError, type LibraryKind } from "./schema.js";
+import { LIBRARY_LIMITS, echoableVarName, isLibraryId, type LibraryError, type LibraryKind } from "./schema.js";
 import { McpConfirmations, envNamesSet, mcpSummary, mcpVariables, type McpSummary } from "./mcp-mount.js";
 import { LIBRARY_MCP_BACKENDS, supportsLibraryMcp } from "./mcp-support.js";
 import { join } from "node:path";
@@ -104,7 +104,7 @@ export function handleLibraryRequest(h: LibraryWebHost): boolean {
   const send = (r: { ok: boolean }): void => {
     if (r.ok) { h.json(res, 200, r); return; }
     const e = r as LibraryError;
-    h.json(res, STATUS[e.error] ?? 400, { error: e.error, ...(e.path ? { path: e.path } : {}), ...(e.detail ? { detail: e.detail } : {}), ...(e.names ? { names: e.names } : {}), ...(e.findings ? { findings: e.findings } : {}) });
+    h.json(res, STATUS[e.error] ?? 400, { error: e.error, ...(e.path ? { path: e.path } : {}), ...(e.detail ? { detail: e.detail } : {}), ...(e.names ? { names: e.names.map(echoableVarName) } : {}), ...(e.findings ? { findings: e.findings } : {}) });
   };
   try {
     if (method === "GET") {
@@ -127,7 +127,7 @@ export function handleLibraryRequest(h: LibraryWebHost): boolean {
             // Each variable with whether it has a value in `.env` (never the value) and the name(s) the server sees it as.
             row.variables = summary.variables.map((name) => ({ name, set: set.has(name), as: summary.uses.filter((u) => u.variable === name).map((u) => ({ name: u.as, kind: u.kind })) }));
             row.confirmed = Object.hasOwn(confirmed, it.id) && confirmed[it.id] === got.sha256;
-          } else if (got.reason === "bad_vars") row.badVars = got.names;      // a hand-placed / older item whose variable names break the MCP_ rule
+          } else if (got.reason === "bad_vars") row.badVars = got.names.map(echoableVarName);      // a hand-placed / older item whose variable names break the MCP_ rule
           items.push(row);
         }
         h.json(res, 200, { agent, backend: def.backend, supported: supportsLibraryMcp(def.backend), backends: Object.keys(LIBRARY_MCP_BACKENDS), windows: def.runtime === "windows", items });

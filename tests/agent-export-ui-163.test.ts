@@ -65,7 +65,7 @@ behavior:
   hang_detector: { timeout_minutes: 15 }
   tool_progress: verbose
 library:
-  skills: [{ ref: ui-review, version: 1 }]
+  skills: []
   mcp: []
 `;
 
@@ -85,7 +85,7 @@ describe("Load template", () => {
     expect(calls).toEqual([{ url: "/ui/agent-export/parse", body: { text: FILE } }]);
     expect(f.$$("[data-fill]").map((e) => e.getAttribute("data-fill"))).toEqual(["description", "tags", "systemPrompt", "model", "tool_set", "hang_detector", "tool_progress"]);
     expect(f.$$("[data-skip]").map((e) => e.getAttribute("data-skip"))).toEqual(["agent.working_directory", "agent.channel_id", "agent.skipPermissions"]);
-    expect(f.$("[data-load-library]")).toBeTruthy();
+    expect(f.$("[data-load-library]")).toBeFalsy();        // no library entries: nothing to compare
     expect(f.patch()).toEqual({});
   });
   it("Fill the form writes the values into the form: the patch is what Save stages (the excluded ones never appear)", async () => {
@@ -129,14 +129,14 @@ describe("Export", () => {
   it("previews the file for the chosen groups and enables Copy and Download", async () => {
     const f = await basic(saved);
     await f.click("[data-template-export]");
-    expect(calls[0]).toEqual({ url: "/ui/agent-export/build", body: { instance: "coder", include: ["identity", "systemPrompt", "runtime", "behavior"] } });
+    expect(calls[0]).toEqual({ url: "/ui/agent-export/build", body: { instance: "coder", include: ["identity", "systemPrompt", "runtime", "behavior", "librarySkills", "libraryMcp"], embed: false } });
     const text: string = f.$("[data-export-preview]").value;
     expect(text).toContain("agend_export: 1");
     expect(text).toContain("model: claude-sonnet-5-5");
     expect(text).not.toContain("discord");
     expect(f.$("[data-export-download]").disabled).toBe(false);
     await f.toggle('[data-export-group="runtime"]');
-    expect(calls.at(-1)!.body.include).toEqual(["identity", "systemPrompt", "behavior"]);
+    expect(calls.at(-1)!.body.include).toEqual(["identity", "systemPrompt", "behavior", "librarySkills", "libraryMcp"]);
     expect(f.$("[data-export-preview]").value).not.toContain("model:");
   });
   it("a suspected secret blocks Copy and Download and names the field and line", async () => {

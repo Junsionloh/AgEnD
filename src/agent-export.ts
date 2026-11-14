@@ -10,6 +10,9 @@
  */
 import { parseDocument, stringify } from "yaml";
 import { systemPromptParts } from "./prompt-file-ref.js";
+import { scanForSecrets, type SecretFinding } from "./secret-scan.js";
+import { libraryBlockOf, readLibraryBlock, type ExportLibrary } from "./library/export-format.js";
+import type { LibraryExportResult, LibraryOmission } from "./library/agent-transfer.js";
 import type { InstanceConfig } from "./types.js";
 
 export const AGENT_EXPORT_VERSION = 1;
@@ -29,7 +32,7 @@ const ROLE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:/@+[\]-]*$/;
 
 /** What an export can carry, as the checkboxes of the export dialog. */
-export const EXPORT_GROUPS = ["identity", "systemPrompt", "runtime", "behavior"] as const;
+export const EXPORT_GROUPS = ["identity", "systemPrompt", "runtime", "behavior", "librarySkills", "libraryMcp"] as const;
 export type ExportGroup = (typeof EXPORT_GROUPS)[number];
 
 const TOOL_SETS = ["worker", "coordinator", "standard", "minimal", "full"];
@@ -59,36 +62,8 @@ const excludedReason = (key: string): SkipReason => (key.startsWith("native_") ?
 
 export interface Skipped { path: string; reason: SkipReason }
 
-// ── The secret scan ────────────────────────────────────────────────────
-
-const SECRET_PATTERNS: Array<[string, RegExp]> = [
-  ["private_key", /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
-  ["api_key", /\b(?:sk-[A-Za-z0-9_-]{16,}|[sr]k_(?:live|test)_[A-Za-z0-9]{16,}|hf_[A-Za-z0-9]{30,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{10,}|xapp-\d-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|npm_[A-Za-z0-9]{30,}|ya29\.[A-Za-z0-9._-]{20,})/],
-  ["bot_token", /\b\d{7,12}:[A-Za-z0-9_-]{30,}\b/],
-  // A Discord bot token has no label of its own: <base64 id>.<timestamp>.<hmac>. This fleet's own credential, so the shape most likely to be pasted.
-  ["discord_token", /\b[MNO][A-Za-z0-9_-]{23,27}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}/],
-  ["webhook", /\b(?:discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d+\/[A-Za-z0-9_-]{20,}|hooks\.slack\.com\/services\/T[A-Za-z0-9]+\/B[A-Za-z0-9]+\/[A-Za-z0-9]{16,})/i],
-  ["jwt", /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/],
-  ["bearer", /\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{20,}/],
-  ["assignment", /\b[\w.-]{0,40}(?:api[_-]?key|secret|token|passwd|password|credential)[\w.-]{0,20}["']?\s*[:=]\s*["']?(?![<{$]|your|xxx|changeme|example)[A-Za-z0-9/+_.~=-]{16,}/i],
-  ["url_password", /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:[^\s@/]{3,}@/i],
-];
-
-export interface SecretFinding { field: string; line: number; kind: string }
-
-/** Where a text looks like it holds a secret: the field, the line and the kind — never the secret itself. */
-export function scanForSecrets(field: string, text: string): SecretFinding[] {
-  const found: SecretFinding[] = [];
-  text.split(/\r?\n/).forEach((line, i) => {
-    // A very long line is read in overlapping pieces, so the patterns' cost stays small however long a line is.
-    for (let at = 0; at === 0 || at < line.length; at += 3000) {
-      const piece = line.slice(at, at + 4000);
-      const hit = SECRET_PATTERNS.find(([, re]) => re.test(piece));
-      if (hit) { found.push({ field, line: i + 1, kind: hit[0] }); break; }
-    }
-  });
-  return found;
-}
+// The secret scan lives in secret-scan.ts (the Library's rules use it too); re-exported here for the callers that always imported it from this file.
+export { scanForSecrets, type SecretFinding } from "./secret-scan.js";
 
 // ── Export ─────────────────────────────────────────────────────────────
 
@@ -102,12 +77,22 @@ export interface BuildResult {
   empty: boolean;
   /** A chosen setting this agent has but the file does not carry, and why (the dialog says so beside the preview). */
   omitted: Array<{ field: "systemPrompt"; reason: "fileRef" | "tooLong" }>;
+  /** AGEND-245: Library items the agent has assigned that the file does not carry (or carries without the definition), and why. */
+  libraryOmitted: LibraryOmission[];
+  /** How many Library skills / MCP servers the agent has assigned (on or paused), whatever was chosen: the dialog's counts. */
+  libraryAssigned: { skills: number; mcp: number };
+  /** What the `library` block holds: how many entries, and how many carry their definition. */
+  library: { skills: number; mcp: number; bundled: number };
 }
 
 const own = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
 
-/** Only what this agent itself sets (a field that follows the fleet's defaults is not written). */
-export function buildAgentExport(role: string, inst: Partial<InstanceConfig>, include: readonly string[]): BuildResult {
+/**
+ * Only what this agent itself sets (a field that follows the fleet's defaults is not written). `lib`: the agent's Library items already resolved by
+ * the caller (src/library/agent-transfer.ts `resolveLibraryExport`, which reads the Library) — this function stays a pure function of its input;
+ * without it, or without the Library groups chosen, the `library` block is the empty one every export has had.
+ */
+export function buildAgentExport(role: string, inst: Partial<InstanceConfig>, include: readonly string[], lib?: LibraryExportResult): BuildResult {
   const want = new Set(include.filter((g): g is ExportGroup => (EXPORT_GROUPS as readonly string[]).includes(g)));
   const agent: Record<string, unknown> = {};
   const behavior: Record<string, unknown> = {};
@@ -147,14 +132,22 @@ export function buildAgentExport(role: string, inst: Partial<InstanceConfig>, in
     }
   }
 
-  const empty = !Object.keys(agent).length && !Object.keys(behavior).length;
-  if (findings.length) return { text: null, findings, groups: [...want], empty, omitted };
+  const useLibrary = !!lib && (want.has("librarySkills") || want.has("libraryMcp"));
+  const library: ExportLibrary = useLibrary ? lib.library : { skills: [], mcp: [], paused: { skills: [], mcp: [] } };
+  const libraryInfo: Pick<BuildResult, "libraryOmitted" | "libraryAssigned" | "library"> = {
+    libraryOmitted: useLibrary ? lib.omitted : [],
+    libraryAssigned: lib ? lib.assigned : { skills: 0, mcp: 0 },
+    library: { skills: library.skills.length, mcp: library.mcp.length, bundled: library.skills.filter((x) => x.archive).length + library.mcp.filter((x) => x.definition).length },
+  };
+  if (useLibrary) findings.push(...lib.findings);
+  const empty = !Object.keys(agent).length && !Object.keys(behavior).length && !library.skills.length && !library.mcp.length;
+  if (findings.length) return { text: null, findings, groups: [...want], empty, omitted, ...libraryInfo };
   const doc: Record<string, unknown> = { agend_export: AGENT_EXPORT_VERSION, kind: "agent" };
   if (ROLE_RE.test(role)) doc.role = role;
   doc.agent = agent;
   if (Object.keys(behavior).length) doc.behavior = behavior;
-  doc.library = { skills: [], mcp: [] };
-  return { text: stringify(doc, { lineWidth: 0, blockQuote: "literal" }), findings: [], groups: [...want], empty, omitted };
+  doc.library = libraryBlockOf(library);
+  return { text: stringify(doc, { lineWidth: 0, blockQuote: "literal" }), findings: [], groups: [...want], empty, omitted, ...libraryInfo };
 }
 
 // ── Load ───────────────────────────────────────────────────────────────
@@ -169,8 +162,18 @@ export interface FillValues {
 export type FillKey = keyof FillValues;
 
 export type ParseResult =
-  | { ok: true; role?: string; fill: FillValues; skipped: Skipped[]; libraryUsed: boolean; extraFailover: boolean }
+  | { ok: true; role?: string; fill: FillValues; skipped: Skipped[]; libraryUsed: boolean; library: LibrarySummary; extraFailover: boolean }
   | { ok: false; error: "empty" | "too_large" | "invalid_yaml" | "not_export" | "unsupported_version" | "wrong_kind" };
+
+/** What the loader's dialog is told about a file's `library` entries (the bundled definitions stay on the server: the dialog asks for the comparison). */
+export interface LibrarySummary {
+  skills: Array<{ id: string; sha256: string; bundled: boolean; paused: boolean }>;
+  mcp: Array<{ id: string; sha256: string; vars: string[]; bundled: boolean; paused: boolean }>;
+}
+const summaryOf = (l: ExportLibrary): LibrarySummary => ({
+  skills: l.skills.map((x) => ({ id: x.id, sha256: x.sha256, bundled: !!x.archive, paused: l.paused.skills.includes(x.id) })),
+  mcp: l.mcp.map((x) => ({ id: x.id, sha256: x.sha256, vars: x.vars, bundled: !!x.definition, paused: l.paused.mcp.includes(x.id) })),
+});
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const str = (v: unknown, max: number): string | null => (typeof v === "string" && v.length <= max ? v : null);
@@ -178,22 +181,38 @@ const num = (v: unknown, min: number, max = 100_000): number | null => (typeof v
 
 /** Read a file: the allow-listed values that are fine, and for every other field why it was left out. */
 export function parseAgentExport(input: unknown): ParseResult {
-  if (typeof input !== "string" || input.trim() === "") return { ok: false, error: "empty" };
-  if (input.length > AGENT_EXPORT_MAX_CHARS) return { ok: false, error: "too_large" };
+  return readExport(input).result;
+}
+
+/**
+ * AGEND-245: the `library` entries of a file, in full (the bundled definitions included) — what the Library comparison and the import work from. The same
+ * reading as `parseAgentExport` (so the dialog's list and what is applied can never differ); null when the file is not a readable export at all.
+ */
+export function parseAgentLibrary(input: unknown): ExportLibrary | null {
+  const r = readExport(input);
+  return r.result.ok ? r.library : null;
+}
+
+function readExport(input: unknown): { result: ParseResult; library: ExportLibrary } {
+  const noLibrary = { skills: [], mcp: [], paused: { skills: [], mcp: [] } } as ExportLibrary;
+  const fail = (error: Extract<ParseResult, { ok: false }>["error"]): { result: ParseResult; library: ExportLibrary } => ({ result: { ok: false, error }, library: noLibrary });
+  if (typeof input !== "string" || input.trim() === "") return fail("empty");
+  if (input.length > AGENT_EXPORT_MAX_CHARS) return fail("too_large");
   // YAML 1.2 core schema, no aliases (nothing to expand), duplicate keys refused: plain data in, nothing else.
   const doc = parseDocument(input, { version: "1.2", schema: "core", uniqueKeys: true, prettyErrors: false });
-  if (doc.errors.length) return { ok: false, error: "invalid_yaml" };
+  if (doc.errors.length) return fail("invalid_yaml");
   let root: unknown;
-  try { root = doc.toJS({ maxAliasCount: 0 }); } catch { return { ok: false, error: "invalid_yaml" }; }
-  if (!isObj(root) || !own(root, "agend_export")) return { ok: false, error: "not_export" };
-  if (root.agend_export !== AGENT_EXPORT_VERSION) return { ok: false, error: "unsupported_version" };
-  if (own(root, "kind") && root.kind !== "agent") return { ok: false, error: "wrong_kind" };
+  try { root = doc.toJS({ maxAliasCount: 0 }); } catch { return fail("invalid_yaml"); }
+  if (!isObj(root) || !own(root, "agend_export")) return fail("not_export");
+  if (root.agend_export !== AGENT_EXPORT_VERSION) return fail("unsupported_version");
+  if (own(root, "kind") && root.kind !== "agent") return fail("wrong_kind");
 
   const fill: FillValues = {};
   const skipped: Skipped[] = [];
   const skip = (path: string, reason: SkipReason): void => { skipped.push({ path, reason }); };
   let role: string | undefined;
   let libraryUsed = false;
+  let library: ExportLibrary = { skills: [], mcp: [], paused: { skills: [], mcp: [] } };
   let extraFailover = false;
 
   for (const key of Object.keys(root)) {
@@ -260,16 +279,11 @@ export function parseAgentExport(input: unknown): ParseResult {
     }
   }
 
+  // AGEND-245: the `library` block (src/library/export-format.ts — provisional elements, pure reading). Nothing here touches the Library.
   function readLibrary(lib: unknown): void {
-    if (lib === undefined || lib === null) return;
-    if (!isObj(lib)) { skip("library", "badValue"); return; }
-    for (const key of Object.keys(lib)) {
-      if (key !== "skills" && key !== "mcp") { skip(`library.${key}`, "unknown"); continue; }
-      const list = lib[key];
-      if (!Array.isArray(list)) skip(`library.${key}`, "badValue");
-      else if (list.length) libraryUsed = true;
-    }
+    if (isObj(lib)) for (const key of ["skills", "mcp"]) if (Array.isArray(lib[key]) && (lib[key] as unknown[]).length) libraryUsed = true;
+    library = readLibraryBlock(lib, skip);
   }
 
-  return { ok: true, ...(role ? { role } : {}), fill, skipped, libraryUsed, extraFailover };
+  return { result: { ok: true, ...(role ? { role } : {}), fill, skipped, libraryUsed, library: summaryOf(library), extraFailover }, library };
 }
