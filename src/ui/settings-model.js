@@ -176,6 +176,10 @@ export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmoji
   const hang = inst.hang_detector || {};
   const next = {
     backend: form.backend, model: form.model.trim() || null,
+    // #3731: how it runs. "tmux" is the default, so it is sent as null (the key is removed from fleet.yaml), never written;
+    // approve-all only means something with ACP and is removed with it.
+    cli_adapter: form.cli_adapter === "acp" ? "acp" : null,
+    acp_always_approve: form.cli_adapter === "acp" && form.acp_always_approve ? true : null,
     working_directory: form.working_directory, channel_id: form.channel_id || undefined,
     description: form.description || undefined, systemPrompt: form.systemPrompt || undefined,
     tags: form.tags.length ? form.tags : undefined, general_topic: form.general_topic,
@@ -198,6 +202,8 @@ export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmoji
   return Object.assign(changedFields(next, {
     backend: inst.backend || defaults.backend || "claude-code",
     model: (inst.model && inst.model.trim()) || null,
+    cli_adapter: inst.cli_adapter === "acp" ? "acp" : null,
+    acp_always_approve: inst.acp_always_approve === true ? true : null,
     working_directory: inst.working_directory || "",
     channel_id: inst.channel_id || undefined,
     description: inst.description || undefined,
@@ -237,6 +243,7 @@ export function agentForm(inst, defaults, name = "") {
   return {
     backend: inst.backend || defaults.backend || "claude-code",
     model: inst.model || "", working_directory: inst.working_directory || "", channel_id: inst.channel_id || "",
+    cli_adapter: inst.cli_adapter === "acp" ? "acp" : "tmux", acp_always_approve: inst.acp_always_approve === true,
     description: inst.description || "", systemPrompt: inst.systemPrompt || "", tags: [...(inst.tags || [])],
     general_topic: !!inst.general_topic,
     auto_pause_after: String(inst.auto_pause_after ?? defaults.auto_pause_after ?? 0),
