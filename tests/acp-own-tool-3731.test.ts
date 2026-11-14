@@ -45,6 +45,17 @@ describe("a request for anything else is not one", () => {
     expect(ownToolName({ title: "Run mcp_agend_reply", kind: "execute", rawInput: { CommandLine: "mcp_agend_reply" } })).toBeNull();
   });
 
+  it("another server's tool whose name only contains agend's is not agend's (the whole name is matched)", () => {
+    for (const name of ["evil_agend__reply", "agend__reply extra", "x.agend__reply", "agend__Reply", "agend__"]) {
+      expect(ownToolName(grokUse({}, { tool_name: name }))).toBeNull();
+    }
+    for (const name of ["xmcp_agend_reply", "mcp_agend_reply extra", "mcp_agend_", "mcp_agend_Reply"]) {
+      expect(ownToolName(agyUse({ name }))).toBeNull();
+    }
+    expect(ownToolName(grokUse({}, { tool_name: "agend__reply" }))).toBe("reply");
+    expect(ownToolName(agyUse({ name: "mcp_agend_reply" }))).toBe("reply");
+  });
+
   it("the same spoofs on the real frames' own shape", () => {
     // grok: the model controls what is inside the arguments of a Bash or Write call, never the variant or the meta name
     expect(ownToolName(grokUse({ kind: "execute" }, { variant: "Bash", command: "rm -rf x" }, { name: "bash", kind: "bash" }))).toBeNull();
