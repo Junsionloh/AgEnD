@@ -226,9 +226,9 @@ export function loadFleetConfigSource(raw: string): FleetConfig {
 
   normalizeOfficeStorage(parsed);
   // #3731: an adapter that does not exist yet is refused at load, with the key named, rather than at launch.
-  for (const [where, value] of [["defaults", parsed.defaults?.cli_adapter] as const,
-    ...Object.entries(parsed.instances ?? {}).map(([n, i]) => [`instances.${n}`, i?.cli_adapter] as const)]) {
-    const problem = cliAdapterProblem(value);
+  for (const [where, value, backend] of [["defaults", parsed.defaults?.cli_adapter, undefined] as const,
+    ...Object.entries(parsed.instances ?? {}).map(([n, i]) => [`instances.${n}`, i?.cli_adapter, i?.backend ?? parsed.defaults?.backend ?? "claude-code"] as const)]) {
+    const problem = cliAdapterProblem(value, backend);
     if (problem) throw new Error(`${where}.cli_adapter: ${problem}`);
   }
   const fleetDefaults: FleetDefaults = parsed.defaults ?? {};

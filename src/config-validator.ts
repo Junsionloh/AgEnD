@@ -557,7 +557,7 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
     const b = config.defaults.backend;
     const problem = backendProblem(b);
     if (problem) err("defaults.backend", problem);
-    const adapterProblem = cliAdapterProblem(config.defaults.cli_adapter);
+    const adapterProblem = cliAdapterProblem(config.defaults.cli_adapter, undefined);
     if (adapterProblem) err("defaults.cli_adapter", adapterProblem);
     validateAutoPause(config.defaults.auto_pause_after, "defaults.auto_pause_after");
     validateDeliveryWorker(config.defaults.delivery_worker, "defaults.delivery_worker");
@@ -641,7 +641,7 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
       const b = inst.backend;
       const problem = backendProblem(b, name);
       if (problem) err(`instances.${name}.backend`, problem);
-      const adapterProblem = cliAdapterProblem(inst.cli_adapter);
+      const adapterProblem = cliAdapterProblem(inst.cli_adapter, (typeof inst.backend === "string" ? inst.backend : undefined) ?? (isObj(config.defaults) && typeof config.defaults.backend === "string" ? config.defaults.backend : undefined) ?? "claude-code");
       if (adapterProblem) err(`instances.${name}.cli_adapter`, adapterProblem);
       if (inst.working_directory !== undefined && typeof inst.working_directory !== "string") {
         err(`instances.${name}.working_directory`, "must be a string path");

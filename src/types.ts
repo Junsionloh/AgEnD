@@ -110,6 +110,11 @@ export interface InstanceConfig {
    * accepted yet; it is refused when the config loads.
    */
   cli_adapter?: import("./adapters/config.js").CliAdapterId;
+  /**
+   * `cli_adapter: acp` only (#3731). Off (the default): every permission request the CLI raises is shown in the chat
+   * and waits for a person. On: the runner answers each one with the CLI's "allow once" option itself.
+   */
+  acp_always_approve?: boolean;
   working_directory: string;
   /** Minutes an idle CLI may remain resident before auto-pause. 0 disables it. */
   auto_pause_after?: number;
