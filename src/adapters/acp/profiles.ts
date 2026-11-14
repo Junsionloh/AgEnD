@@ -63,7 +63,7 @@ export const AGY_PROFILE: AcpProfile = {
   backend: "antigravity",
   label: "agy",
   binary: "agy",
-  supportedVersions: ["1.5.8"],
+  supportedVersions: ["1.5.8", "1.5.9"],
   args: () => ["acp"],
   versionOf: result => {
     const v = obj(obj(result)?.agentInfo)?.version;

@@ -89,7 +89,7 @@ describe("frame decoding", () => {
 describe("profiles and the version gate", () => {
   it("lists exactly the versions that were checked", () => {
     expect(GROK_PROFILE.supportedVersions).toEqual(["1.0.77"]);
-    expect(AGY_PROFILE.supportedVersions).toEqual(["1.5.8"]);
+    expect(AGY_PROFILE.supportedVersions).toEqual(["1.5.8", "1.5.9"]);
   });
   it("refuses an unlisted or missing version with a message that says what to do and does not mention a fallback run", () => {
     const v = checkVersion(GROK_PROFILE, { _meta: { agentVersion: "1.0.99" } });
@@ -167,6 +167,12 @@ describe("recorded real captures", () => {
     expect(events).toContainEqual({ kind: "usage", used: 8740, size: 1048576 });
     expect(events.find(e => e.kind === "user")).toMatchObject({ text: expect.stringContaining("Think for a moment") });
     expect(events.filter(e => e.kind === "message")).toEqual([{ kind: "message", text: "OK" }]);
+  });
+
+  it.each(["short", "tool"])("agy 1.5.9, the %s capture replays as 1.5.8's does", async which => {
+    const { events, result } = await replay(`agy-1.5.9-${which}.jsonl`, AGY_PROFILE);
+    expect(result.stopReason).toBe("end_turn");
+    expect(events.filter(e => e.kind === "message").map(e => (e as any).text).join("")).toMatch(which === "short" ? /OK/ : /DONE/);
   });
 
   it("agy 1.5.8, a tool turn: thought chunk, permission id \"1\" (a string), completed write", async () => {

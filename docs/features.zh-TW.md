@@ -1604,6 +1604,6 @@ web:
 
 **安全。** 權限預設為詢問。`acp_always_approve: true` 會用「僅此一次允許」選項回答每個請求；AgEnD 絕不選「永遠允許」或「永遠拒絕」，因為那會改變 CLI 自己保存的狀態。取消、停止或當機都會把所有等待中的請求以「已取消」回答——絕不會變成允許。只有 fleet admin 能回答請求或看到思考文字。AgEnD 不宣告任何 `fs/*` 或 `terminal/*` capability，CLI 自己處理檔案與程序，agent 對這兩者的請求都會收到「method not found」。CLI 以不經 shell、明確指定環境變數的方式啟動（不含 fleet 或網頁的 token），並在 `session/new` 收到這個 instance 專屬的 `agend` MCP server（stdio），絕不與其他 instance 共用。
 
-**版本。** 每個 CLI 有一個 profile，內含經過測試的版本精確清單：grok `1.0.77`、agy `1.5.8`。其他版本會以訊息拒絕，instance 維持停止（不會改用 tmux 啟動）。grok 以 `--no-auto-update` 與 `--no-leader` 啟動。CLI 必須已登入；未登入的 CLI 會回報並讓 instance 維持停止。
+**版本。** 每個 CLI 有一個 profile，內含經過測試的版本精確清單：grok `1.0.77`、agy `1.5.8`、`1.5.9`。其他版本會以訊息拒絕，instance 維持停止（不會改用 tmux 啟動）。grok 以 `--no-auto-update` 與 `--no-leader` 啟動。CLI 必須已登入；未登入的 CLI 會回報並讓 instance 維持停止。
 
 **要知道的限制。** 在 tmux 模式建立的對話不會在 ACP 模式接續（儲存的 session id 是分開的），所以切換會開始新的對話。grok 與 agy 只有部分回合會送出思考；沒有時，時間軸就不顯示。ACP 模式下 agy 的模型尚不能選擇（grok 的 `model` 與 `effort` 以啟動參數傳入）。
