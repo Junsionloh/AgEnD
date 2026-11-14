@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dashboardAccessOf, dashboardFeaturesOff } from "../../dashboard-permissions.js";
@@ -99,5 +99,13 @@ export function buildAcpLaunch(input: AcpLaunchInput, serverJs = mcpServerPath()
       env: Object.entries(env).map(([n, value]) => ({ name: n, value })),
     }],
     preamble: `[fleet instructions for this session — follow them; they are not a message from the user]\n${preamble}\n[end of fleet instructions]`,
+  };
+}
+
+/** A debugging sink for `AGEND_ACP_TRACE=1`: one JSON line per frame, in the instance directory, readable by its owner only. */
+export function acpTraceSink(instanceDir: string): (direction: "in" | "out", line: string) => void {
+  const file = join(instanceDir, "acp-trace.jsonl");
+  return (direction, line) => {
+    try { appendFileSync(file, JSON.stringify({ t: Date.now(), dir: direction, line }) + "\n", { mode: 0o600 }); } catch { /* tracing never breaks a turn */ }
   };
 }

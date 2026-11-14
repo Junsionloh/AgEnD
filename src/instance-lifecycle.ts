@@ -15,7 +15,7 @@ type Daemon = InstanceType<typeof import("./daemon.js").Daemon>;
 import { AcpRunner } from "./adapters/acp/acp-runner.js";
 import { AcpAdapter } from "./adapters/acp/acp-adapter.js";
 import { acpProfileFor } from "./adapters/acp/profiles.js";
-import { buildAcpLaunch } from "./adapters/acp/launch.js";
+import { buildAcpLaunch, acpTraceSink } from "./adapters/acp/launch.js";
 import { adapterOf } from "./adapters/registry.js";
 import { selectAdapter } from "./adapters/select.js";
 import { REMOVED_BACKENDS, isRemovedBackend, removedBackendMessage } from "./backend/removed.js";
@@ -1969,6 +1969,8 @@ export class InstanceLifecycle {
       effort: (p.config as InstanceConfig & { effort?: string }).effort,
       mcpServers: [],
       logger: this.ctx.logger,
+      // AGEND_ACP_TRACE=1 writes every frame to acp-trace.jsonl in the instance directory (owner-only). A debugging aid.
+      ...(process.env.AGEND_ACP_TRACE === "1" ? { trace: acpTraceSink(p.instanceDir) } : {}),
       resolveLaunch: () => {
         const inputs = runner.launchInputs();
         const decisions = inputs.decisions

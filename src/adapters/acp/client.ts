@@ -49,6 +49,8 @@ export interface AcpClientOptions {
   readonly onNotification: (method: string, params: unknown) => void;
   readonly onPermissionRequest: (request: PermissionRequest) => void;
   readonly onWarning?: (message: string, detail?: Record<string, unknown>) => void;
+  /** Every frame in either direction, as it is on the wire (a debugging aid; off unless the adapter is given a sink). */
+  readonly trace?: (direction: "in" | "out", line: string) => void;
 }
 
 const STDERR_KEEP = 4096;
@@ -170,10 +172,13 @@ export class AcpClient extends EventEmitter {
   private write(message: Record<string, unknown>): void {
     const child = this.child;
     if (!child || this.exited || child.stdin.destroyed) return;
-    try { child.stdin.write(JSON.stringify(message) + "\n"); } catch { /* the exit handler reports it */ }
+    const line = JSON.stringify(message);
+    this.opts.trace?.("out", line);
+    try { child.stdin.write(line + "\n"); } catch { /* the exit handler reports it */ }
   }
 
   private handleLine(line: string): void {
+    this.opts.trace?.("in", line);
     const frame = decodeFrame(line);
     if (frame.kind === "invalid") { this.opts.onWarning?.("ignored an unusable frame from the agent", { reason: frame.reason }); return; }
     this.lastFrameAt = Date.now();

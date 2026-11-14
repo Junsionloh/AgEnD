@@ -628,10 +628,10 @@ export class AcpRunner extends EventEmitter {
    * Returns an error text, or null when it was applied.
    */
   answerPermissionByUser(rawId: string, decision: "allow" | "deny" | "cancel"): string | null {
-    // The page names the request by its step's id (`perm-<request id>`); the bare request id works as well.
-    const requestId = rawId.startsWith("perm-") ? rawId.slice(5) : rawId;
-    const pending = this.steps.pendingPermissions().find(p => p.requestId === requestId);
+    // The page names the request by its step's id; the agent's own request id works as well.
+    const pending = this.steps.pendingPermissions().find(p => p.stepId === rawId || p.requestId === rawId);
     if (!pending) return "no such permission request is waiting";
+    const requestId = pending.requestId;
     if (decision === "cancel") {
       void this.adapter.cancel();
       this.steps.resolvePermission(requestId, "cancelled");

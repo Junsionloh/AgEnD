@@ -48,6 +48,8 @@ export interface AcpAdapterOptions {
   readonly logger: { info(o: object, m?: string): void; warn(o: object, m?: string): void; error(o: object, m?: string): void; debug?(o: object, m?: string): void };
   /** Builds the runner this adapter is bound to (the fleet's per-instance object). */
   readonly makeRunner: (adapter: AcpAdapter) => InstanceRunner;
+  /** Receives every wire frame (debugging; the frames carry thinking text and file contents, so it is never on by default). */
+  readonly trace?: (direction: "in" | "out", line: string) => void;
   /** Test seam. */
   readonly spawn?: ConstructorParameters<typeof AcpClient>[0]["spawn"];
 }
@@ -118,6 +120,7 @@ export class AcpAdapter implements CliAdapter {
       spawn: this.opts.spawn,
       onNotification: (method, params) => this.onNotification(method, params),
       onPermissionRequest: request => this.onPermission(request),
+      trace: this.opts.trace,
       onWarning: (message, detail) => this.opts.logger.warn({ ...detail }, `acp: ${message}`),
     });
     this.client = client;

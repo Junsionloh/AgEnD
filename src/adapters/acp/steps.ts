@@ -19,6 +19,8 @@ const CAT: Record<string, StepCat> = {
 /** A step's answer slot for a permission request, as the page shows it. */
 export interface PermissionStepInfo {
   readonly requestId: string;
+  /** The timeline step that shows it (JSON-RPC ids restart at 0 with every agent process, so the step id is its own). */
+  readonly stepId: string;
   readonly options: readonly { id: string; name: string; kind: string }[];
   readonly tool: unknown;
 }
@@ -92,7 +94,7 @@ export class AcpStepStore {
 
   /** A permission step's outcome: its buttons are gone, `note` says what was chosen. */
   resolvePermission(requestId: string, note: string): void {
-    const step = this.byId.get(`perm-${requestId}`);
+    const step = this.byId.get(this.permissions.get(requestId)?.stepId ?? `perm-${requestId}`);
     this.permissions.delete(requestId);
     if (!step || step.status !== "running") return;
     step.status = note === "cancelled" ? "interrupted" : "done";
@@ -185,7 +187,8 @@ export class AcpStepStore {
     this.closeOpen();
     const tool = e.tool && typeof e.tool === "object" ? e.tool as Record<string, unknown> : {};
     const title = typeof tool.title === "string" ? tool.title : "tool";
-    const step: Mutable<LogStep> = { id: `perm-${e.requestId}`, turn: this.turn, ts: this.now(), kind: "permission", status: "running", tool: title.slice(0, 120) };
+    const stepId = `perm-${e.requestId}-${this.turn || "x"}-${++this.seq}`;
+    const step: Mutable<LogStep> = { id: stepId, turn: this.turn, ts: this.now(), kind: "permission", status: "running", tool: title.slice(0, 120) };
     const cat = typeof tool.kind === "string" ? CAT[tool.kind] : undefined;
     if (cat) step.cat = cat;
     const subject = stepSubject(subjectFromInput(tool.rawInput) ?? title);
@@ -194,7 +197,7 @@ export class AcpStepStore {
     stepBody(step, title, 600);
     // Never offer a choice that changes the CLI's own stored policy: only the one-shot answers reach the page.
     step.options = e.options.filter(o => o.kind === "allow_once" || o.kind === "reject_once").map(o => ({ id: o.id, name: o.name.slice(0, 80), kind: o.kind as "allow_once" | "reject_once" }));
-    this.permissions.set(e.requestId, { requestId: e.requestId, options: e.options, tool: e.tool });
+    this.permissions.set(e.requestId, { requestId: e.requestId, stepId, options: e.options, tool: e.tool });
     this.put(step, false);
   }
 
@@ -218,7 +221,10 @@ export class AcpStepStore {
   private settleRunning(status: "done" | "interrupted"): void {
     for (const step of this.steps) {
       if (step.turn !== this.turn || step.status !== "running") continue;
-      if (step.kind === "permission") { this.permissions.delete(step.id.slice(5)); step.note ??= "cancelled"; delete step.options; step.status = "interrupted"; }
+      if (step.kind === "permission") {
+        for (const [req, info] of this.permissions) if (info.stepId === step.id) this.permissions.delete(req);
+        step.note ??= "cancelled"; delete step.options; step.status = "interrupted";
+      }
       else if (step.kind === "tool") step.status = "interrupted";
       else step.status = status;
       this.put(step, true);
