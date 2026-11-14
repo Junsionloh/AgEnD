@@ -14,6 +14,7 @@ import type { InstanceRunner } from "./adapters/types.js";
 type Daemon = InstanceType<typeof import("./daemon.js").Daemon>;
 import { AcpRunner } from "./adapters/acp/acp-runner.js";
 import { AcpAdapter } from "./adapters/acp/acp-adapter.js";
+import { acpAccountProblem } from "./adapters/config.js";
 import { acpProfileFor } from "./adapters/acp/profiles.js";
 import { buildAcpLaunch, acpTraceSink } from "./adapters/acp/launch.js";
 import { adapterOf } from "./adapters/registry.js";
@@ -1958,6 +1959,8 @@ export class InstanceLifecycle {
     if (!p.resolvedBinary) {
       throw new Error(`cli_adapter: acp needs the ${profile.binary} binary, and it was not found in PATH. Install ${profile.label}, or set cli_adapter to tmux for this instance.`);
     }
+    const accountProblem = acpAccountProblem(p.config, p.backendName);
+    if (accountProblem) throw new Error(accountProblem);
     const identity = p.runtimeIdentity ?? { kind: "fleet-topic" as const, backend: p.backendName, model: p.config.model ?? "default" };
     let runner!: AcpRunner;
     return new AcpAdapter({

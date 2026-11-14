@@ -53,3 +53,16 @@ export function windowsAdapterProblem(inst: { cli_adapter?: unknown; acp_always_
   }
   return null;
 }
+
+/**
+ * An `acp` instance runs the CLI under its own sign-in (the one `agy acp --login` / the CLI's login writes): the
+ * adapter does not yet pass a named account (`backend_options.<cli>.credential_profile`) to the child, so naming one
+ * is refused instead of quietly running under the default login. Null when there is nothing to refuse.
+ */
+export function acpAccountProblem(inst: { cli_adapter?: unknown; backend_options?: unknown }, backend: string): string | null {
+  if (inst.cli_adapter !== "acp") return null;
+  const options = inst.backend_options && typeof inst.backend_options === "object" ? (inst.backend_options as Record<string, unknown>)[backend] : undefined;
+  const profile = options && typeof options === "object" ? (options as Record<string, unknown>).credential_profile : undefined;
+  if (profile === undefined || profile === null || profile === "") return null;
+  return `cli_adapter: acp runs under the CLI's own sign-in; a named account (backend_options.${backend}.credential_profile) is not supported with it yet`;
+}

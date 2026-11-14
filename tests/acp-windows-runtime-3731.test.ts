@@ -55,3 +55,14 @@ describe("a Windows runtime agent and the adapter keys", () => {
     expect(NativeInstanceCreateArgs.safeParse({ ...body, acp_always_approve: true }).success).toBe(false);
   });
 });
+
+describe("an acp instance and a named account", () => {
+  const acp = (extra: Record<string, unknown> = {}) => ({ working_directory: "/tmp/a", backend: "antigravity", cli_adapter: "acp", ...extra });
+  const paths = (inst: Record<string, unknown>) => validateFleetConfig({ instances: { a: inst } }).errors.map(e => e.path);
+  it("runs under the CLI's own sign-in; naming an account is refused rather than quietly ignored", () => {
+    expect(paths(acp())).toEqual([]);
+    expect(paths(acp({ backend_options: { antigravity: { credential_profile: "work" } } }))).toContain("instances.a.backend_options");
+    // The same account on a terminal instance is the feature it always was.
+    expect(paths({ working_directory: "/tmp/a", backend: "antigravity", backend_options: { antigravity: { credential_profile: "work" } } })).toEqual([]);
+  });
+});
