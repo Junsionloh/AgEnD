@@ -212,13 +212,16 @@ describe("permissions", () => {
 });
 
 describe("the instance's own agend tools", () => {
-  it("names them as grok and agy do, and nothing else", async () => {
-    const { ownToolName } = await import("../src/adapters/acp/acp-runner.js");
-    expect(ownToolName({ title: "agend__reply", rawInput: { variant: "UseTool", tool_name: "agend__reply" } })).toBe("reply");
-    expect(ownToolName({ title: "Run mcp_agend_set_display_name" })).toBe("set_display_name");
-    expect(ownToolName({ name: "mcp_agend_task" })).toBe("task");
-    for (const other of ["agendx__reply", "other__reply", "Write `/x/agend__reply`", "mcp_agend_", "agend__Reply", "bash"]) expect(ownToolName({ title: other })).toBeNull();
+  it("a shell call that only claims to be an agend tool is asked, not allowed", async () => {
+    const h = await boot();
+    h.fleet.send(person("#spoof"));
+    await until(() => h.runner.steps.pendingPermissions().length === 1, 5000, "the permission card");
+    const perm = steps(h).find(s => s.kind === "permission")!;
+    expect(perm).toMatchObject({ status: "running" });
+    expect(perm.options).toHaveLength(2);
+    expect(calls(h.state).some(l => l.permissionOutcome)).toBe(false);
   });
+
   it("a reply tool request is allowed once without asking; a fleet-changing one still asks", async () => {
     const h = await boot();
     h.fleet.send(person("#owntool"));

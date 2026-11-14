@@ -72,18 +72,32 @@ const UNSUPPORTED_TOOLS = new Set(["checkout_repo", "release_repo", "get_web_the
 const OWN_TOOLS_ASK: ReadonlySet<string> = new Set(["create_instance", "delete_instance", "replace_instance", "start_instance", "restart_instance", "checkout_repo", "release_repo"]);
 
 /**
- * The tool's name when the request is for a tool of this instance's own `agend` MCP server, else null. The CLIs name
- * it differently (grok `agend__reply`, agy `mcp_agend_reply`); anything that does not match exactly is not ours.
+ * The tool's name when the request is for a tool of this instance's own `agend` MCP server, else null — and null means
+ * "ask". Only fields the CLI itself sets are believed; `rawInput` (the model's arguments) and `title` (display text, and
+ * for a shell tool the command line) can both be made to say `agend__reply`, so neither is ever read on its own.
+ * Shapes, from real permission requests (grok 1.0.77, agy 1.5.9; tests/fixtures/acp/*agend-tool-permission*):
+ *  - grok: `kind: "other"`, `_meta["x.ai/tool"].name === "use_tool"`, `rawInput.variant === "UseTool"` (the CLI's own
+ *    discriminator; the model's arguments are nested under `tool_input`) and `rawInput.tool_name === "agend__<tool>"`.
+ *    A Bash or Write call has another variant and another `_meta` name, whatever extra keys the model puts in its input.
+ *  - agy: `kind: "other"` and the tool's registered name in `name` (`mcp_agend_<tool>`); its `rawInput` is the model's
+ *    arguments and its `title` is "Run <name>", so only `name` is read. A shell or file tool has its own name and kind.
  */
 export function ownToolName(tool: unknown): string | null {
-  const t = tool && typeof tool === "object" ? tool as Record<string, unknown> : {};
-  const input = t.rawInput && typeof t.rawInput === "object" ? t.rawInput as Record<string, unknown> : {};
-  for (const candidate of [input.tool_name, t.name, t.title]) {
-    if (typeof candidate !== "string") continue;
-    const m = /^(?:Run )?(?:agend__|mcp_agend_)([a-z][a-z0-9_]{0,63})$/.exec(candidate.trim());
-    if (m) return m[1]!;
+  const t = tool && typeof tool === "object" ? tool as Record<string, unknown> : null;
+  if (!t || t.kind !== "other") return null;
+  const input = t.rawInput && typeof t.rawInput === "object" ? t.rawInput as Record<string, unknown> : null;
+  const meta = t._meta && typeof t._meta === "object" ? (t._meta as Record<string, unknown>)["x.ai/tool"] : undefined;
+  const grokMeta = meta && typeof meta === "object" ? meta as Record<string, unknown> : null;
+  let candidate: unknown;
+  if (grokMeta) {
+    if (grokMeta.name !== "use_tool" || !input || input.variant !== "UseTool") return null;
+    candidate = input.tool_name;
+  } else {
+    candidate = t.name;
   }
-  return null;
+  if (typeof candidate !== "string") return null;
+  const m = (grokMeta ? /^agend__([a-z][a-z0-9_]{0,63})$/ : /^mcp_agend_([a-z][a-z0-9_]{0,63})$/).exec(candidate);
+  return m ? m[1]! : null;
 }
 
 const DEFAULT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];

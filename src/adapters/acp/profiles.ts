@@ -20,6 +20,8 @@ export interface AcpProfile {
   versionOf(initializeResult: unknown): string | null;
   /** Environment variables (besides the common ones) this CLI needs to reach its account or endpoint. */
   readonly passEnv: readonly (string | RegExp)[];
+  /** Variables always set on the child (after the allow-list). */
+  readonly fixedEnv?: Readonly<Record<string, string>>;
   /** What the instance can do under this profile. */
   readonly capabilities: AdapterCapabilities;
   /**
@@ -65,6 +67,9 @@ export const AGY_PROFILE: AcpProfile = {
   binary: "agy",
   supportedVersions: ["1.5.8", "1.5.9"],
   args: () => ["acp"],
+  // agy has no flag to stop its self-update, but the binary reads this variable (not exercised: no newer release was
+  // available to update to). Without it, an update moves the instance off the exact version list above.
+  fixedEnv: { AGY_CLI_DISABLE_AUTO_UPDATE: "1" },
   versionOf: result => {
     const v = obj(obj(result)?.agentInfo)?.version;
     return typeof v === "string" ? v : null;
@@ -113,5 +118,5 @@ export function buildChildEnv(profile: AcpProfile, source: NodeJS.ProcessEnv, ex
     if (wanted.some(w => (typeof w === "string" ? w === key : w.test(key)))) env[key] = value;
   }
   env.TERM = "dumb";
-  return { ...env, ...extra };
+  return { ...env, ...profile.fixedEnv, ...extra };
 }
