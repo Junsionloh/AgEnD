@@ -16,6 +16,7 @@ import type { WorkingStateObservation } from "../../working-state-journal.js";
 import type { RecoveryLive } from "../../working-recovery.js";
 import { AcpAuthRequiredError, AcpVersionRefusedError, type AcpAdapter } from "./acp-adapter.js";
 import { AcpStepStore } from "./steps.js";
+import type { LiveSteps } from "../../log-service.js";
 import type { AdapterEvent } from "../types.js";
 
 type Logger = { info(o: object, m?: string): void; warn(o: object, m?: string): void; error(o: object, m?: string): void; debug(o: object, m?: string): void };
@@ -140,6 +141,11 @@ export class AcpRunner extends EventEmitter {
     adapter.onExit(info => this.onAdapterExit(info));
     const stored = readPausedAt(opts.instanceDir);
     if (stored !== null) this.pausedAt = stored;
+  }
+
+  /** The chat timeline, for the Log's live source: this boot's own cursor space. */
+  get liveSteps(): LiveSteps {
+    return { key: `acp-${this.bootId}`, snapshot: (after, o) => this.steps.snapshot(after, o), subscribe: l => this.steps.onChange(l) };
   }
 
   private get log(): Logger { return this.opts.logger; }

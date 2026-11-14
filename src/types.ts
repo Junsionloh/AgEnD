@@ -427,6 +427,8 @@ export interface WebConfig {
    * admin's change, confirmed like any access change (Settings → Web).
    */
   log_tab?: boolean;
+  /** Admins may see an ACP instance's thinking text in the chat timeline (#3731). Off by default; it is never shown to anyone else. */
+  log_thinking?: boolean;
   /**
    * #2293: the dashboard's global search (Ctrl+K) over chat messages, cross-instance messages and Task Board tasks — an
    * index of its own (search.db; `retention_days` unset or 0 = no age limit, ROW_CAP 300,000 still applies;

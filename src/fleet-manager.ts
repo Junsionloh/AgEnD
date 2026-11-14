@@ -241,7 +241,7 @@ export function applyTaskListCap<T extends { updated_at: string }>(
   return tasks;
 }
 import { handleWebRequest, webPeerOf, broadcastSseEvent, broadcastToGuests, SSE_HEARTBEAT_MS, type PublicPreviewForUi } from "./web-api.js";
-import { LogService, type LogAnswer, type LogQuery, type LogSource } from "./log-service.js";
+import { LogService, type LiveSteps, type LogAnswer, type LogQuery, type LogSource } from "./log-service.js";
 import { viewHistory, type ViewHistoryAnswer, type ViewHistoryQuery } from "./view-history.js";
 import { WebChatHistory, WEB_CHAT_TEXT_MAX, isWebMessageId, newWebMessageId, webChatFrom, type WebChatAttachment, type WebChatPost } from "./web-chat-history.js";
 import { WEB_ECHO_COPIES_MAX, WEB_MIRROR_TIMEOUT_MS, webReactionEmoji, webReactionProblem, type WebEchoCopy } from "./web-reactions.js";
@@ -328,7 +328,7 @@ import { redactSecrets } from "./tool-progress.js";
 import { idleGateTimeoutLog } from "./idle-gate-log.js";
 import { DEFAULT_STUCK_TIMEOUT_MS, readLastInboundAt, type OwnSwitchOutcome } from "./daemon.js";
 import type { InstanceRunner } from "./adapters/types.js";
-import { cancelRunner, capabilitiesOf } from "./adapters/registry.js";
+import { adapterOf, cancelRunner, capabilitiesOf } from "./adapters/registry.js";
 import { clearPausedMarker, readPausedAt, readPauseReason, writePausedMarker } from "./pause-marker.js";
 import { readBackgroundWorkEndedMarker } from "./background-work-ended.js";
 import { DEFAULT_WARM_OVERFLOW, WakeCoordinator } from "./wake-coordinator.js";
@@ -4495,6 +4495,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   private get log(): LogService {
     return this.logService ??= new LogService({
       enabled: () => this.fleetConfig?.web?.log_tab === true,
+      thinking: () => this.fleetConfig?.web?.log_thinking === true,
       known: (name) => Object.prototype.hasOwnProperty.call(this.fleetConfig?.instances ?? {}, name) || this.classicRoomFor(name) !== null,
       source: (name) => this.logSource(name),
       events: (name, limit) => (this.eventLog?.query({ instance: name, limit }) ?? []) as Array<{ id: number; event_type: string; payload: unknown; created_at: string }>,
@@ -4532,6 +4533,14 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
 
   /** #1218: GET /ui/steps — an instance's steps, read on demand (null: no such instance). */
   logSteps(name: string, q: LogQuery): Promise<LogAnswer | null> { return this.log.steps(name, q); }
+
+  /** #3731: POST /ui/permission — a person answers an ACP instance's waiting permission request. Null: applied. */
+  answerAcpPermission(name: string, requestId: string, decision: "allow" | "deny" | "cancel"): string | null {
+    const runner = this.lifecycle.daemons.get(name);
+    const acp = runner && adapterOf(runner)?.id === "acp" ? runner as unknown as { answerPermissionByUser?: (id: string, d: "allow" | "deny" | "cancel") => string | null } : undefined;
+    if (!acp?.answerPermissionByUser) return `"${name}" is not running over ACP`;
+    return acp.answerPermissionByUser(requestId, decision);
+  }
   private subagentReader = new SubagentService(name => this.lifecycle.daemons.get(name)?.subagentSource() ?? null);
   subagentRuns(name: string) { return this.subagentReader.read(name); }
 
@@ -4546,7 +4555,11 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const instances = this.fleetConfig?.instances ?? {};
     const config = Object.prototype.hasOwnProperty.call(instances, name) ? instances[name] : undefined;
     const backend = config?.backend ?? (config ? null : this.classicRoomFor(name)?.backend) ?? this.fleetConfig?.defaults?.backend ?? "claude-code";
-    const live = this.lifecycle.daemons.get(name)?.logTranscriptPath() ?? null;
+    const runner = this.lifecycle.daemons.get(name);
+    // An instance that runs over ACP has no transcript file: its steps are built live, from the agent's own updates.
+    const acpSteps = runner && adapterOf(runner)?.id === "acp" ? (runner as unknown as { liveSteps?: LiveSteps }).liveSteps : undefined;
+    if (acpSteps) return { backend, path: null, format: null, live: acpSteps };
+    const live = runner?.logTranscriptPath() ?? null;
     if (backend === "claude-code") {
       let path = live;
       if (!path) {
