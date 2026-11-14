@@ -450,8 +450,8 @@ export function AgentFields({ m, cat, onDelete, idPrefix = "" }) {
       <${AgentTemplateTools} idPrefix=${idPrefix} name=${name} m=${m} /></${Card}>`}</div>`;
   if (cat === "runtime") return html`<div class="ap-grid">
     <${Card} title=${pt("cardRuntime")}>
-      <${ExecutionModeFields} id=${fieldId("ag-mode")} adapters=${adapters} mode=${f.cli_adapter} approve=${f.acp_always_approve}
-        onMode=${set("cli_adapter")} onApprove=${set("acp_always_approve")} impact=${html`<${Impact} schema=${schema} field="instance.cli_adapter" />`} />
+      ${windows ? null : html`<${ExecutionModeFields} id=${fieldId("ag-mode")} adapters=${adapters} mode=${f.cli_adapter} approve=${f.acp_always_approve}
+        onMode=${set("cli_adapter")} onApprove=${set("acp_always_approve")} impact=${html`<${Impact} schema=${schema} field="instance.cli_adapter" />`} />`}
       <${AgentRuntimeSettings} idPrefix=${idPrefix} name=${name} inst=${{ ...inst, backend: f.backend }} inherited=${inheritedBackend ? html`<${Inherited} ...${inh("backend", f.backend, "#g-be", "backend")} />` : null} disabled=${Object.keys(m.pending()).length > 0 || ctx.staged?.size > 0} onChanged=${() => { ctx.reload(); if (m.onChanged) m.onChanged(); }} />
       ${!windows && capsOf(acctBackend)?.namedAccounts ? html`<${AccountSelect} id=${fieldId("ag-account")} backend=${acctBackend} value=${acct} onChange=${setAcct} />` : null}
     </${Card}>

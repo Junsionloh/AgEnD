@@ -21,7 +21,7 @@ import { CROSS_INSTANCE_VISIBILITY_MODES, isCrossInstanceVisibility } from "./cr
 import { dashboardAccessProblem } from "./dashboard-permissions.js";
 import { validWindowsAgentId, validWindowsDirectory } from "./windows-cli-worker.js";
 import { isNativeProviderId, nativeProvider } from "./windows-cli-providers.js";
-import { cliAdapterProblem } from "./adapters/config.js";
+import { cliAdapterProblem, windowsAdapterProblem } from "./adapters/config.js";
 
 /**
  * Shared config validation for fleet.yaml and classicBot.yaml.
@@ -671,6 +671,8 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
       }
       if (inst.runtime !== undefined && inst.runtime !== "wsl" && inst.runtime !== "windows") err(`instances.${name}.runtime`, "must be wsl or windows");
       if (inst.runtime === "windows") {
+        const noAdapter = windowsAdapterProblem(inst);
+        if (noAdapter) err(`instances.${name}.${noAdapter.key}`, noAdapter.message);
         if (inst.native_adapter !== undefined && inst.native_adapter !== "exec" && inst.native_adapter !== "pane") err(`instances.${name}.native_adapter`, "must be exec or pane");
         if (inst.native_general_binding !== undefined && (!validWindowsAgentId(inst.native_general_binding) || inst.general_topic !== true || inst.native_adapter !== "pane" || !validWindowsAgentId(inst.machine_id))) err(`instances.${name}.native_general_binding`, "requires a paired persistent General pane and a binding UUID");
         if (inst.native_adapter === "pane" && inst.backend !== "codex" && inst.backend !== "claude-code") err(`instances.${name}.native_adapter`, "persistent panes require codex or claude-code");

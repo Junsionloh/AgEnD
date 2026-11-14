@@ -6,7 +6,7 @@ import yaml from "js-yaml";
 import { unshareParsed } from "./yaml-shared-nodes.js";
 import { getAgendHome, getTmuxSessionName, ensureWorkspaceGit } from "./paths.js";
 import { normalizeOfficeStorage, dashboardSwitches } from "./dashboard-permissions.js";
-import { cliAdapterProblem } from "./adapters/config.js";
+import { cliAdapterProblem, windowsAdapterProblem } from "./adapters/config.js";
 import type { CostGuardConfig, HangDetectorConfig, DailySummaryConfig, FleetConfig, FleetDefaults, FleetTemplate, InstanceConfig, RawFleetConfig } from "./types.js";
 
 export function deepMergeGeneric<T extends object>(target: T, source: Partial<T>): T {
@@ -231,6 +231,11 @@ export function loadFleetConfigSource(raw: string): FleetConfig {
     ...Object.entries(parsed.instances ?? {}).map(([n, i]) => [`instances.${n}`, i?.cli_adapter, i?.backend ?? parsed.defaults?.backend ?? "claude-code"] as const)]) {
     const problem = cliAdapterProblem(value, backend);
     if (problem) throw new Error(`${where}.cli_adapter: ${problem}`);
+  }
+  // …and a Windows runtime agent takes neither adapter key (its native_adapter is how it runs).
+  for (const [n, i] of Object.entries(parsed.instances ?? {})) {
+    const windows = i?.runtime === "windows" ? windowsAdapterProblem(i) : null;
+    if (windows) throw new Error(`instances.${n}.${windows.key}: ${windows.message}`);
   }
   const fleetDefaults: FleetDefaults = parsed.defaults ?? {};
   const rawInstances = parsed.instances ?? {};

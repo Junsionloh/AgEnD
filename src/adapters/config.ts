@@ -39,3 +39,17 @@ export function cliAdapterProblem(value: unknown, backend?: string): string | nu
   if (!allowed.includes(backend)) return `"${value}" is not supported yet for backend "${backend}" (only ${allowed.join(" / ")})`;
   return null;
 }
+
+/**
+ * Why a Windows runtime agent may not name an adapter, or null when it names none. A Windows agent runs through its own
+ * `native_adapter` (`exec` or `pane`); `cli_adapter` and `acp_always_approve` are for an agent on this host, so setting
+ * either on one is refused at config load instead of being quietly ignored. The one rule for the loader and the validator.
+ */
+export function windowsAdapterProblem(inst: { cli_adapter?: unknown; acp_always_approve?: unknown }): { key: "cli_adapter" | "acp_always_approve"; message: string } | null {
+  for (const key of ["cli_adapter", "acp_always_approve"] as const) {
+    if (inst[key] !== undefined && inst[key] !== null) {
+      return { key, message: `is not accepted for a Windows runtime agent (it runs through native_adapter: exec or pane, and its behaviour does not change)` };
+    }
+  }
+  return null;
+}

@@ -2086,7 +2086,8 @@ export class InstanceLifecycle {
         credentialHold.release(); credentialHold = null;          // a save changed its account while it waited: ask again
       }
     }
-    const adapter = selectAdapter(backendName, config, {
+    // A native Windows pane is always the tmux runner's feature set: it never takes another adapter, whatever the config says.
+    const adapter = selectAdapter(backendName, native ? { ...config, cli_adapter: undefined } : config, {
       tmux: () => {
         const backend = native?.backend ?? createBackend(backendName, instanceDir);
         const runner = new Daemon(
