@@ -68,6 +68,24 @@ const UNSUPPORTED_TOOLS = new Set(["checkout_repo", "release_repo", "get_web_the
   "set_web_widget", "remove_web_widget", "set_web_ambient", "clear_web_ambient", "office_view", "office_set", "office_pack_check", "office_pack_upload", "office_pack_delete",
   "office_pack_restore", "office_pack_list", "office_set_style"]);
 
+/** AgEnD's own MCP tools that still ask a person, whatever the policy for the rest of the server: they change the fleet. */
+const OWN_TOOLS_ASK: ReadonlySet<string> = new Set(["create_instance", "delete_instance", "replace_instance", "start_instance", "restart_instance", "checkout_repo", "release_repo"]);
+
+/**
+ * The tool's name when the request is for a tool of this instance's own `agend` MCP server, else null. The CLIs name
+ * it differently (grok `agend__reply`, agy `mcp_agend_reply`); anything that does not match exactly is not ours.
+ */
+export function ownToolName(tool: unknown): string | null {
+  const t = tool && typeof tool === "object" ? tool as Record<string, unknown> : {};
+  const input = t.rawInput && typeof t.rawInput === "object" ? t.rawInput as Record<string, unknown> : {};
+  for (const candidate of [input.tool_name, t.name, t.title]) {
+    if (typeof candidate !== "string") continue;
+    const m = /^(?:Run )?(?:agend__|mcp_agend_)([a-z][a-z0-9_]{0,63})$/.exec(candidate.trim());
+    if (m) return m[1]!;
+  }
+  return null;
+}
+
 const DEFAULT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
 const PROXY_TEXT_MAX = 12_000;
 
@@ -570,6 +588,13 @@ export class AcpRunner extends EventEmitter {
 
   private onPermission(e: Extract<AdapterEvent, { kind: "permission" }>): void {
     this.steps.apply(e);
+    const own = ownToolName(e.tool);
+    if (own && !OWN_TOOLS_ASK.has(own)) {
+      // The instance's own `agend` MCP server is how it talks to the fleet (replying is the point of the chat); asking
+      // for every `reply` would make the chat unusable. Tools that start, replace or remove instances still ask.
+      const allow = e.options.find(o => o.kind === "allow_once");
+      if (allow && this.adapter.answerPermission(e.requestId, { optionId: allow.id })) { this.steps.resolvePermission(e.requestId, `${allow.name} (agend tool)`); return; }
+    }
     if (this.config.acp_always_approve === true) {
       // The policy is AgEnD's: answer with the one-shot allow, never an "always" option (it changes state the CLI keeps).
       const allow = e.options.find(o => o.kind === "allow_once");
@@ -582,7 +607,9 @@ export class AcpRunner extends EventEmitter {
    * A person's answer, from the web. `allow` / `deny` choose the one-shot options only; `cancel` cancels the turn.
    * Returns an error text, or null when it was applied.
    */
-  answerPermissionByUser(requestId: string, decision: "allow" | "deny" | "cancel"): string | null {
+  answerPermissionByUser(rawId: string, decision: "allow" | "deny" | "cancel"): string | null {
+    // The page names the request by its step's id (`perm-<request id>`); the bare request id works as well.
+    const requestId = rawId.startsWith("perm-") ? rawId.slice(5) : rawId;
     const pending = this.steps.pendingPermissions().find(p => p.requestId === requestId);
     if (!pending) return "no such permission request is waiting";
     if (decision === "cancel") {

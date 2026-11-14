@@ -1,5 +1,5 @@
 // A small ACP agent for tests: speaks the protocol on stdio, driven by keywords in the prompt text.
-// Keywords in the prompt text (written with a leading #: #crash #split #ordering #fsprobe #tool #slow #linger) pick the behaviour.
+// Keywords in the prompt text (written with a leading #: #crash #split #ordering #fsprobe #tool #owntool #slow #linger) pick the behaviour.
 // Environment: FAKE_ACP_VERSION (agentInfo.version), FAKE_ACP_STATE (a directory: known sessions + a call log),
 // FAKE_ACP_AUTH=1 (session/new answers -32000).
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -52,6 +52,15 @@ async function turn(id, sessionId, text) {
     const t = await ask("terminal/create", { sessionId, command: "id" });
     log({ terminalprobe: t });
     update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "probed" } });
+  } else if (text.includes("#owntool")) {
+    for (const name of ["agend__reply", "agend__create_instance"]) {
+      update(sessionId, { sessionUpdate: "tool_call", toolCallId: name, title: name, rawInput: { variant: "UseTool", tool_name: name } });
+      const answer = await ask("session/request_permission", {
+        sessionId, toolCall: { toolCallId: name, kind: "other", title: name, rawInput: { variant: "UseTool", tool_name: name } },
+        options: [{ optionId: "allow-once", name: "Yes", kind: "allow_once" }, { optionId: "reject-once", name: "No", kind: "reject_once" }],
+      });
+      log({ permissionOutcome: answer?.result?.outcome });
+    }
   } else if (text.includes("#tool")) {
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "I should write a file." } });
     update(sessionId, { sessionUpdate: "tool_call", toolCallId: "w1", title: "write", rawInput: { file_path: "/work/hello.txt", content: "hi" } });
