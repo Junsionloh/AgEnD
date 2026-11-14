@@ -40,3 +40,11 @@ export function configuredCapabilities(backendName: string, config: { cli_adapte
   if (config.cli_adapter === "acp") return acpProfileFor(backendName)!.capabilities;
   return tmuxCapabilities(backendName);
 }
+
+/**
+ * The config `selectAdapter` judges. A native Windows pane is the tmux runner's own feature set: it never takes another
+ * adapter, whatever the config says (config load already refuses `cli_adapter` on a Windows agent; this is the backstop).
+ */
+export function adapterConfigOf<T extends { cli_adapter?: unknown }>(config: T, nativePane: boolean): T {
+  return nativePane ? { ...config, cli_adapter: undefined } : config;
+}

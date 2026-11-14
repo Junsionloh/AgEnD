@@ -7,6 +7,7 @@ import { validateFleetConfig } from "../src/config-validator.js";
 import { loadFleetConfigSource } from "../src/config.js";
 import { windowsAdapterProblem } from "../src/adapters/config.js";
 import { NativeInstanceCreateArgs } from "../src/native-instance-input.js";
+import { adapterConfigOf, selectAdapter } from "../src/adapters/select.js";
 
 const AGENT = "11111111-1111-4111-8111-111111111111";
 const win = (extra: Record<string, unknown> = {}) => ({
@@ -53,6 +54,19 @@ describe("a Windows runtime agent and the adapter keys", () => {
     expect(NativeInstanceCreateArgs.safeParse(body).success).toBe(true);
     expect(NativeInstanceCreateArgs.safeParse({ ...body, cli_adapter: "acp" }).success).toBe(false);
     expect(NativeInstanceCreateArgs.safeParse({ ...body, acp_always_approve: true }).success).toBe(false);
+  });
+});
+
+describe("a native Windows pane always builds the tmux adapter", () => {
+  const built = { runner: { on() {} } as never, backend: { getSessionId: () => null } };
+  const builders = { tmux: () => built, acp: () => { throw new Error("an ACP adapter was built for a native pane"); } };
+  it("whatever cli_adapter the config carries, the pane's config selects tmux", () => {
+    expect(adapterConfigOf({ cli_adapter: "acp" }, true).cli_adapter).toBeUndefined();
+    const adapter = selectAdapter("grok", adapterConfigOf({ cli_adapter: "acp" }, true), builders as never);
+    expect(adapter.id).toBe("tmux");
+  });
+  it("a host agent keeps its own choice", () => {
+    expect(adapterConfigOf({ cli_adapter: "acp" }, false).cli_adapter).toBe("acp");
   });
 });
 

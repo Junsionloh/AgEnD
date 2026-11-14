@@ -18,7 +18,7 @@ import { acpAccountProblem } from "./adapters/config.js";
 import { acpProfileFor } from "./adapters/acp/profiles.js";
 import { buildAcpLaunch, acpTraceSink } from "./adapters/acp/launch.js";
 import { adapterOf } from "./adapters/registry.js";
-import { selectAdapter } from "./adapters/select.js";
+import { adapterConfigOf, selectAdapter } from "./adapters/select.js";
 import { REMOVED_BACKENDS, isRemovedBackend, removedBackendMessage } from "./backend/removed.js";
 import { existsSync, readFileSync, mkdirSync, realpathSync, writeFileSync, statSync } from "node:fs";
 import { ensureInstanceDir } from "./private-dir.js";
@@ -2090,7 +2090,7 @@ export class InstanceLifecycle {
       }
     }
     // A native Windows pane is always the tmux runner's feature set: it never takes another adapter, whatever the config says.
-    const adapter = selectAdapter(backendName, native ? { ...config, cli_adapter: undefined } : config, {
+    const adapter = selectAdapter(backendName, adapterConfigOf(config, !!native), {
       tmux: () => {
         const backend = native?.backend ?? createBackend(backendName, instanceDir);
         const runner = new Daemon(
