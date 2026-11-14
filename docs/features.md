@@ -1697,3 +1697,43 @@ General, coordinators and full-profile instances can read and change Settings â†
 - **Restore defaults:** the host settings and that person's custom CSS. This device's custom-CSS switch is left to the person.
 
 What stays on the page: choosing a file from the person's computer (a mod, an effect folder, a CSS asset, a card picture), this browser's own switches (custom CSS off on this device, pausing playback), downloading an export, and the card upload limits. `get_web_settings` lists these as `page_only`. The `web-appearance` skill walks General through it.
+
+## ACP mode (`cli_adapter: acp`)
+
+An instance on **grok** or **antigravity** (`agy`) can run its CLI over the CLI's own [Agent Client Protocol](https://agentclientprotocol.com) server instead of a terminal pane (#3731). It is opt-in per instance; every other instance runs exactly as before, and tmux stays the default.
+
+```yaml
+instances:
+  grok-acp:
+    backend: grok            # or: antigravity
+    cli_adapter: acp
+    working_directory: /path/to/project
+    # acp_always_approve: true   # off by default: permission requests wait for a person
+web:
+  log_tab: true              # the chat timeline shows live steps
+  log_thinking: true         # optional: admins also see the thinking text
+```
+
+In the web app, the instance form has an **Execution mode** choice (Terminal / ACP) for those two backends; changing it asks first, because it restarts the instance and the terminal screen is lost.
+
+**What you get.** The chat timeline shows thinking (admins only, and only with `web.log_thinking`), tool calls with their progress and the agent's text as they happen. A permission request is a card in the chat with **Allow**, **Deny** and **Cancel turn**. **Cancel** interrupts the turn and answers any waiting permission request as cancelled. After a restart the instance resumes its stored conversation (`session/load`) and the chat still shows what happened before.
+
+**What changes.**
+
+| | tmux | acp |
+|---|---|---|
+| Terminal view, `agend attach`, typing into the CLI | yes | no (hidden and refused) |
+| Idle / busy | read from the screen | an outstanding `session/prompt` |
+| Hang | the screen stops changing | a running turn with no word from the agent for `hang_detector.timeout_minutes` (default 10; a request waiting for a person is not a hang) |
+| Permissions | dialogs answered with keys | structured requests; **ask by default** |
+| Message sent during a turn | steered (per backend) | waits for the turn to end (ACP has no mid-turn input) |
+| Context % and quota notices | from the screen | context % for agy only; none for grok |
+| Reply to the chat | the agent's `reply` tool | the same tool; if a turn that a person started ends without one, the agent's text is sent as the reply |
+| `checkout_repo`, `release_repo`, web theme / Office tools | yes | not yet (the tool answers with an error) |
+| Auto-pause after idle (`auto_pause_after`) | yes | not yet; pause and wake by hand work |
+
+**Safety.** Permissions default to asking. `acp_always_approve: true` answers each request with the one-time "allow" option; AgEnD never selects an "always allow" or "always reject" option, which would change state the CLI keeps. A cancel, a stop or a crash answers every waiting request as cancelled â€” never as allowed. Only fleet admins can answer a request or see thinking text. AgEnD declares no `fs/*` or `terminal/*` capability, so the CLI does its own file and process work, and an agent request for either gets "method not found". The CLI is started without a shell and with an explicit environment (no fleet or web tokens), and gets this instance's own `agend` MCP server in `session/new` (stdio), never one shared with another instance.
+
+**Versions.** Each CLI has a profile with an exact list of tested versions: grok `1.0.77`, agy `1.5.8`. Any other version is refused with a message and the instance stays stopped (it is not started in tmux instead). grok is started with `--no-auto-update` and `--no-leader`. The CLI must already be signed in; an instance whose CLI is not signed in reports it and stays stopped.
+
+**Limits to know.** Conversations created in tmux mode are not resumed in ACP mode (the stored session ids are separate), so switching starts a new conversation. grok and agy emit thinking only for some turns; when a turn has none, the timeline shows none. The agent's model for agy is not selectable in ACP mode yet (grok's `model` and `effort` are passed as launch flags).
