@@ -8,7 +8,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { h, page, settle, type AppPage } from "./helpers/app-harness.js";
 import { fire, installDom } from "./helpers/mini-dom.js";
 
-let A: any, appStore: any, logp: any, settings: any;
+let A: any, act: any, appStore: any, logp: any, settings: any;
 let calls: Array<{ method: string; url: string; body?: any }> = [];
 /** What POST /ui/permission answers. */
 let permissionAnswer: { status: number; body: unknown } = { status: 200, body: { ok: true } };
@@ -37,6 +37,8 @@ beforeAll(async () => {
   A = await import("/ui/js/adapter-mode.js");
   logp = await import("/ui/js/panel-log.js");
   settings = await import("/ui/js/settings-model.js");
+  await import("/ui/js/chat-strings.js");
+  act = await import("/ui/js/chat-activity.js");
   ({ appStore } = await import("/assets/app-store.js"));
   base.restore();
 });
@@ -276,6 +278,20 @@ describe("a permission request in the rows both pages share (log-row.js)", () =>
     expect(pg.root.querySelector(".log-item.compact.k-permission")).not.toBeNull();
     (pg.root.querySelector(".perm-allow") as any).click(); await settle(6);
     expect(calls).toEqual([{ method: "POST", url: "/ui/permission", body: { instance: "agy", request_id: "req-1", decision: "allow" } }]);
+  });
+  it("the chat's live block opens by itself while a request waits for a person, and a finished one stays shut", async () => {
+    const group = (over: Record<string, unknown>, items: unknown[]) => ({ key: "act:1:0", turn: "1", n: 0, level: "id", rowKey: null, items, trailing: [], ts: 1, from: 1, to: 2, ended: false, turnEnded: false, busy: true, ...over });
+    const ctx = { instance: "agy", paths: null, thinking: true };
+    const waiting = await mountOnly(h(act.ActivityBlock, { group: group({}, [pendingStep()]), ctx, now: 1000 }));
+    expect(text(waiting.root.querySelector(".act-title"))).toBe("Permission: rm -rf build");
+    expect(waiting.root.querySelector(".act-block")?.open).toBe(true);
+    expect(waiting.root.querySelector(".perm-allow")).not.toBeNull();
+    await release(waiting);
+    const done = await mountOnly(h(act.ActivityBlock, { group: group({ ended: true, turnEnded: true, busy: false }, [pendingStep({ status: "done", note: "Allow once" })]), ctx, now: 1000 }));
+    expect(done.root.querySelector(".act-block")?.open).toBe(false);
+    await release(done);
+    const quiet = await mountOnly(h(act.ActivityBlock, { group: group({}, [step("toolu_1", { kind: "tool", tool: "Read", cat: "read", subject: "a.ts", status: "running" })]), ctx, now: 1000 }));
+    expect(quiet.root.querySelector(".act-block")?.open).toBe(false);
   });
   it("its one-line words for the block's header name what it asks to run", () => {
     expect(R.stepLine(pendingStep(), null)).toBe("Permission: rm -rf build");
