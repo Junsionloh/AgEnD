@@ -16,7 +16,7 @@ import { open, stat } from "node:fs/promises";
 import { LINE_MAX_BYTES, LONG_HEAD_BYTES, lastLineBoundary, type LongLine } from "./transcript-jsonl.js";
 import { redactSecrets } from "./tool-progress.js";
 
-export type StepKind = "user" | "assistant" | "tool" | "error" | "turn_end" | "state";
+export type StepKind = "user" | "assistant" | "tool" | "error" | "turn_end" | "state" | "thought" | "permission";
 /** What a tool call does, for its icon and words on the page. */
 export type StepCat = "read" | "edit" | "search" | "run" | "web" | "mcp" | "agent" | "plan" | "message" | "other";
 export type StepStatus = "running" | "done" | "failed" | "interrupted";
@@ -51,6 +51,8 @@ export interface LogStep {
   bodyBytes?: number;
   /** state: what happened ("compacted"); error: a status code. */
   note?: string;
+  /** permission (#3731): the answers a person may give while it is pending; `note` names the one chosen afterwards. */
+  options?: { id: string; name: string; kind: "allow_once" | "allow_always" | "reject_once" | "reject_always" }[];
 }
 
 export const SUBJECT_MAX = 300;
@@ -802,3 +804,6 @@ export function stepsOf(parser: { push(item: string | LongLine, at?: number): Em
   for (const r of records) parser.push(r.record, r.at);
   return parser.steps.slice(-max);
 }
+
+/** The masking and bounding every step's strings go through, for a producer that is not a transcript parser (#3731). */
+export { subjectOf as stepSubject, inputOf as stepInput, bodyOf as stepBody };
