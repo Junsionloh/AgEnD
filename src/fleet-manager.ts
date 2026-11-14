@@ -377,7 +377,7 @@ import type { InstanceState, InstanceStateSnapshot, InteractionOwner, Interactio
 import type { RemoteCardAction, RemoteCardOutcome } from "./remote-card-answer.js";
 import { redactSecrets } from "./tool-progress.js";
 import { idleGateTimeoutLog } from "./idle-gate-log.js";
-import { DEFAULT_STUCK_TIMEOUT_MS, readLastInboundAt, type OwnSwitchOutcome } from "./daemon.js";
+import { DEFAULT_STUCK_TIMEOUT_MS, readLastInboundAt, type Daemon, type OwnSwitchOutcome } from "./daemon.js";
 import type { InstanceRunner } from "./adapters/types.js";
 import { cancelRunner, capabilitiesOf } from "./adapters/registry.js";
 import { clearPausedMarker, readPausedAt, readPauseReason, writePausedMarker } from "./pause-marker.js";
@@ -1631,7 +1631,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   }
   /** The local machine's inventory as last used to open its pane relay (status only; never a launch decision). */
   private localPaneInventory: import("./windows-cli.js").WindowsCliProbe | null = null;
-  private nativeCliStatus(cli: string | undefined, machineId: string | undefined, daemon?: Daemon): { native_cli_version?: string; native_cli_verification?: string } {
+  private nativeCliStatus(cli: string | undefined, machineId: string | undefined, daemon?: InstanceRunner): { native_cli_version?: string; native_cli_verification?: string } {
     if (cli !== "codex" && cli !== "claude-code") return {};
     // The version the running pane actually launched; only without one, the machine's last inventory.
     let running: string | undefined;
@@ -12382,7 +12382,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     if (!native && !existsSync(sockPath)) return;
 
     const ipc: InstanceClient = native
-      ? new NativeDaemonClient(daemon!, () => this.daemons.get(name) === daemon && (!this.instanceIpcClients.has(name) || this.instanceIpcClients.get(name) === ipc))
+      ? new NativeDaemonClient(daemon as Daemon /* a native pane is always the tmux runner, which is a Daemon */, () => this.daemons.get(name) === daemon && (!this.instanceIpcClients.has(name) || this.instanceIpcClients.get(name) === ipc))
       : new IpcClient(sockPath);
     try {
       await ipc.connect();

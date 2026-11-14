@@ -87,6 +87,11 @@ type RunnerMembers = Pick<Daemon,
   | "subagentSource" | "sendEscape" | "seedErrorPatternOccurrenceCount" | "noteLegacyRestartReminder"
   | "kiroMigrationIdle" | "kiroMigrationObservation" | "getPaneContextSource" | "compactPaneUi"
   | "confirmAuthFailure" | "clearSuspectedAuthFailure"
+  // Windows Runtime (native pane) and later callers: a native pane is a tmux-adapter feature, so these are all `tmux`.
+  | "usesNativePane" | "nativePaneCurrent" | "nativePaneHasExited" | "nativePauseReady" | "nativePauseStillReady"
+  | "nativePaneCliVersion" | "nativeDeliveryHold" | "reconcileNativeDeliveries"
+  | "getInstanceStateSnapshot" | "generalHostOwner" | "quotaPaused" | "modelObservation"
+  | "noteHumanReceiptSettlement" | "registerHumanReceiptPreparation"
 >;
 
 /** What the fleet holds per running instance. Events are the existing daemon events (`on`/`once`/`off`). */

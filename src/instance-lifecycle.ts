@@ -11,6 +11,7 @@ import type { ActiveDecisionRow } from "./daemon.js";
 import { measureSyncWork } from "./sync-work-attribution.js";
 import { hostFacts, hostIds } from "./cli-registry.js";
 import type { InstanceRunner } from "./adapters/types.js";
+type Daemon = InstanceType<typeof import("./daemon.js").Daemon>;
 import { adapterOf } from "./adapters/registry.js";
 import { selectAdapter } from "./adapters/select.js";
 import { REMOVED_BACKENDS, isRemovedBackend, removedBackendMessage } from "./backend/removed.js";
