@@ -136,6 +136,7 @@ export function instanceTooltip(it) {
   if (it.display_name && it.display_name !== name) lines.push(it.display_name, `(${name})`);
   else lines.push(name);
   lines.push(line("tooltipBackend", backendLabel(it.backend)));
+  if (it.cli_adapter === "acp") lines.push(line("tooltipMode", tn("modeAcpTooltip")));
   const src = (s) => (s === "instance" || s === "classic" ? tn("srcConfigured") : s === "fleet-default" ? tn("srcFleetDefault") : "");
   lines.push(line("tooltipModel", (modelText(it) || tn("tooltipUnavailable")) + src(it.model_source)));
   lines.push(line("tooltipStatus", status));
@@ -606,6 +607,7 @@ export function InstanceNav({ route, items, loaded = true, exec = {}, awaiting =
         aria-current=${on ? "page" : undefined} onClick=${onPick} ...${fav ? {} : dragProps({ type: "instance", name, group: g })}>
       <${InstanceAvatar} it=${it} state=${dotState(it, own(exec, name) ? exec[name] : null, waiting)} cli=${true} />
       <span class="inst-text"><span class="inst-line"><span class="inst-name" title=${label}>${label}</span>
+          ${it.cli_adapter === "acp" ? html`<span class="mode-badge" title=${tn("modeAcpTitle")}>${tn("modeAcp")}</span>` : null}
           <span class="v-meta">${it.context_pct != null ? `${Math.round(it.context_pct)}%` : ""}</span></span>
         ${two ? html`<span class="inst-line inst-line2"><span class="inst-alt" title=${secondary || undefined}>${secondary || ""}</span>
           ${mins != null ? html`<span class=${`inst-when${fade > 0 ? " fresh" : ""}`} title=${tn("replyTitle", { time: new Date(Date.parse(it.last_reply)).toLocaleString() })}>${replyText(mins)}</span>` : null}</span>` : null}

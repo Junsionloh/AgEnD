@@ -24,6 +24,7 @@ import { toast } from "/assets/ui-toast.js";
 import "./chat-strings.js";
 import { chatTime, chatTimeFull } from "./chat-time.js";
 import { confirmedWrite } from "./settings-confirm.js";
+import { PermissionCard, ThoughtBlock } from "./adapter-mode.js";
 
 register("log", {
   en: {
@@ -46,7 +47,7 @@ register("log", {
     empty: "Nothing here yet.", olderLoad: "Load older steps", olderStart: "The start of what can be read.", loading: "Loading…",
     olderTrimmed: "Older steps were let go to keep this page light. Open the Log again to read further back.",
     all: "All", tools: "Tools", errors: "Errors", filter: "Show", live: "Live", reset: "A new conversation began: showing it from its latest steps.",
-    user: "Asked", assistant: "Replied", error: "Error", errorCode: "Error {0}", turnEnd: "Turn ended", turnEndIn: "Turn ended · {0}",
+    user: "Asked", assistant: "Replied", thought: "Thinking", permission: "Permission", error: "Error", errorCode: "Error {0}", turnEnd: "Turn ended", turnEndIn: "Turn ended · {0}",
     compacted: "Conversation compacted", turn: "Turn",
     running: "running", done: "done", failed: "failed", interrupted: "interrupted", exit: "exit {0}",
     showScreen: "Show what was on screen", hideScreen: "Hide what was on screen",
@@ -85,7 +86,7 @@ register("log", {
     empty: "目前還沒有內容。", olderLoad: "載入更早的步驟", olderStart: "已經是能讀到的最早內容。", loading: "載入中…",
     olderTrimmed: "為了讓頁面保持輕快，較早的步驟已移出。重新開啟「紀錄」就能往前讀。",
     all: "全部", tools: "工具", errors: "錯誤", filter: "顯示", live: "即時", reset: "開始了新的對話：從它最新的步驟顯示。",
-    user: "收到要求", assistant: "回覆", error: "錯誤", errorCode: "錯誤 {0}", turnEnd: "回合結束", turnEndIn: "回合結束 · {0}",
+    user: "收到要求", assistant: "回覆", thought: "思考", permission: "權限", error: "錯誤", errorCode: "錯誤 {0}", turnEnd: "回合結束", turnEndIn: "回合結束 · {0}",
     compacted: "對話已壓縮", turn: "回合",
     running: "執行中", done: "完成", failed: "失敗", interrupted: "中斷", exit: "結束碼 {0}",
     showScreen: "顯示當時的畫面", hideScreen: "隱藏當時的畫面",
@@ -120,7 +121,7 @@ const FOLD_LINES = 8;
 
 // The app's own SVG icons (never emoji: a device without an emoji font shows boxes).
 const CAT_ICON = { read: "file", edit: "edit", search: "search", run: "code", web: "globe", mcp: "plug", agent: "team", plan: "tasks", message: "send", other: "sliders" };
-const KIND_ICON = { user: "user", assistant: "bot", error: "alert", turn_end: "stop", state: "info", event: "bell" };
+const KIND_ICON = { user: "user", assistant: "bot", error: "alert", turn_end: "stop", state: "info", event: "bell", thought: "eye", permission: "key" };
 
 function size(bytes) {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -230,6 +231,8 @@ function LogView({ name, inst, navKey, exec, awaiting }) {
   const overPublicLink = globalThis.document?.body?.dataset?.publicLink === "1";
   const polling = globalThis.document?.body?.dataset?.webTransport === "poll";
 
+  // The permission card's POST: under this page's lease, so a card left behind by a navigation sends nothing later.
+  const fetchWith = (url, init) => lease.fetch(url, init);
   const q = (params) => `/ui/steps?${new URLSearchParams({ instance: name, ...params })}`;
   const read = async (url) => {
     const r = await lease.fetch(url, { cache: "no-store" });
@@ -349,7 +352,7 @@ function LogView({ name, inst, navKey, exec, awaiting }) {
   const sub = html`<span class="status"><span class=${`dot ${cls}`} aria-hidden="true"></span>${statusLabel(inst, exec, awaiting)}</span>`;
   const items = useMemo(() => {
     const all = timeline(steps, events);
-    const shown = filter === "tools" ? all.filter((x) => x.kind === "tool") : filter === "errors" ? all.filter(isError) : all;
+    const shown = filter === "tools" ? all.filter((x) => x.kind === "tool" || x.kind === "permission") : filter === "errors" ? all.filter(isError) : all;
     return collapse(shown);
   }, [steps, events, filter]);
 
@@ -371,7 +374,7 @@ function LogView({ name, inst, navKey, exec, awaiting }) {
         ? html`<div class="log-older"><button type="button" class="btn btn-sm" disabled=${older.busy} onClick=${loadOlder}>${older.busy ? tl("loading") : tl("olderLoad")}</button></div>`
         : cursor.current.trimmed ? html`<p class="note log-start">${tl("olderTrimmed")}</p>`
         : steps.length ? html`<p class="note log-start">${tl("olderStart")}</p>` : null}
-      ${items.length ? html`<ol class="log-list" role="log" aria-label=${t("app.log")}>${items.map((x, i) => html`<${Row} key=${`${x.kind}:${x.id}`} x=${x} prev=${items[i - 1]} />`)}</ol>`
+      ${items.length ? html`<ol class="log-list" role="log" aria-label=${t("app.log")}>${items.map((x, i) => html`<${Row} key=${`${x.kind}:${x.id}`} x=${x} prev=${items[i - 1]} instance=${name} fetcher=${fetchWith} />`)}</ol>`
         : html`<p class="note log-empty">${tl("empty")}</p>`}`;
   }
   const tools = state.phase === "on" ? html`<div data-trust="panel-controls" class="log-bar" role="group" aria-label=${tl("filter")}>
@@ -385,7 +388,7 @@ function LogView({ name, inst, navKey, exec, awaiting }) {
 }
 
 /** One line of the Log. */
-function Row({ x, prev }) {
+function Row({ x, prev, instance, fetcher }) {
   const [open, setOpen] = useState(false);
   const [full, setFull] = useState(false);
   const time = x.ts ? chatTime(x.ts, { yesterday: (hm) => t("chat.yesterdayAt", hm) }) : "";
@@ -411,6 +414,13 @@ function Row({ x, prev }) {
       ${x.screen && open ? html`<div class="log-detail"><div class="log-text mono log-screen">${x.screen}</div></div>` : null}`;
   } else if (x.kind === "user" || x.kind === "assistant") {
     row = html`${head(KIND_ICON[x.kind], tl(x.kind))}${text(x.body, x.bodyCut)}`;
+  } else if (x.kind === "thought") {
+    // #3731: an ACP agent's thinking while it works — muted, folded when long (adapter-mode.js).
+    row = html`${head(KIND_ICON.thought, tl("thought"))}<${ThoughtBlock} step=${x} label=${false} />`;
+  } else if (x.kind === "permission") {
+    // #3731: a permission request an ACP agent waits on — Allow / Deny / Cancel turn answer it (POST /ui/permission).
+    row = html`${head(KIND_ICON.permission, tl("permission"), html`<span class=${`log-status ${x.status || "running"}`}>${x.status === "running" ? html`<span class="spinner" aria-hidden="true"></span>` : null}${tl(x.status || "running")}</span>`)}
+      <${PermissionCard} step=${x} instance=${instance} fetcher=${fetcher} />`;
   } else if (x.kind === "error") {
     row = html`${head(KIND_ICON.error, x.note ? tl("errorCode", x.note) : tl("error"))}${text(x.body, x.bodyCut)}`;
   } else if (x.kind === "turn_end") {

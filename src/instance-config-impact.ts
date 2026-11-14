@@ -75,7 +75,7 @@ const FLEET_SCOPED_INSTANCE_KEYS: ReadonlySet<string> = new Set([
 
 /** Instance-scoped fields the settings page renders. */
 const INSTANCE_FIELDS = [
-  "quota_notice", "display_name", "description", "backend", "model", "working_directory",
+  "quota_notice", "display_name", "description", "backend", "cli_adapter", "acp_always_approve", "model", "working_directory",
   "resume_interrupted_work", "auto_pause_after", "warm_cap", "topic_id", "channel_id", "general_topic",
   "tool_progress", "reply_completion_guard", "reply_triggers", "mcp_proxy_reply", "log_level",
   "systemPrompt", "tags", "hang_detector", "agent_mode", "tool_set",

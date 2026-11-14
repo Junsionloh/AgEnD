@@ -49,9 +49,12 @@ export interface LogStep {
   /** Characters cut from `body` (0 or absent: nothing), or the bytes of a result too long to read (`bodyBytes`). */
   bodyCut?: number;
   bodyBytes?: number;
-  /** state: what happened ("compacted"); error: a status code. */
+  /** state: what happened ("compacted"); error: a status code; permission: the chosen option's name once answered ("cancelled" when the turn was). */
   note?: string;
-  /** permission (#3731): the answers a person may give while it is pending; `note` names the one chosen afterwards. */
+  /**
+   * permission: the choices the CLI offered (#3731, `cli_adapter: acp`). The page offers Allow (the `allow_once` one) and
+   * Deny (`reject_once`), never an `*_always` choice; the step's `id` is the request id the answer names.
+   */
   options?: { id: string; name: string; kind: "allow_once" | "allow_always" | "reject_once" | "reject_always" }[];
 }
 

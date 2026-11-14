@@ -47,6 +47,8 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { LifecycleCreateArgs } from "./instance-lifecycle.js";
 import { CreateInstanceArgs, CreateScheduleArgs, UpdateScheduleArgs, validateArgs } from "./outbound-schemas.js";
+import { adaptersForBackend } from "./adapters/config.js";
+import { createInstanceAdapterFields } from "./adapters/create-fields.js";
 import { scheduleView } from "./web-schedules.js";
 import { DEFAULT_SCHEDULER_CONFIG } from "./scheduler/index.js";
 import type { Schedule, ScheduleRetry } from "./scheduler/types.js";
@@ -1792,7 +1794,7 @@ export function handleWebRequest(
       const binaryOf = new Map(BACKENDS.map(b => [b.name, b]));
       const backends = ctx.backendAvailabilityRows().filter(r => binaryOf.has(r.backend)).map(r => ({
         name: r.backend, binary: binaryOf.get(r.backend)!.binary, installed: r.state !== "not_installed" && r.path !== null, path: r.path ?? "",
-        deprecated: binaryOf.get(r.backend)!.deprecated ?? false, state: r.state, minVersion: r.minVersion, ...(r.state === "unknown" ? { unknown: true } : {}),
+        deprecated: binaryOf.get(r.backend)!.deprecated ?? false, state: r.state, minVersion: r.minVersion, adapters: adaptersForBackend(r.backend), ...(r.state === "unknown" ? { unknown: true } : {}),
       }));
       json(res, 200, { backends, defaultBackend });
       return true;
@@ -1803,7 +1805,7 @@ export function handleWebRequest(
     void Promise.all(BACKENDS.map(async (b) => {
       const found = await binaryProbe.probe(b.binary);
       const path = found.known ? found.path : null;
-      return { name: b.name, binary: b.binary, installed: path !== null, path: path ?? "", deprecated: b.deprecated ?? false,
+      return { name: b.name, binary: b.binary, installed: path !== null, path: path ?? "", deprecated: b.deprecated ?? false, adapters: adaptersForBackend(b.name),
         ...(found.known ? {} : { unknown: true }) };
     })).then(
       (backends) => { if (!res.headersSent) json(res, 200, { backends, defaultBackend }); },
@@ -2821,12 +2823,16 @@ export function handleWebRequest(
         if (!permitWebContinuation(req, res, ctx)) return;
         const v = validateArgs(CreateInstanceArgs, body, "create_instance");
         if (!v.ok) { json(res, 400, { error: v.error }); return; }
+        // How the new agent runs (#3731): `cli_adapter` / `acp_always_approve`, judged against the backend it will use.
+        const adapterFields = createInstanceAdapterFields(v.data, ctx.fleetConfig?.defaults?.backend);
+        if (!adapterFields.ok) { json(res, 400, { error: adapterFields.error }); return; }
+        const createArgs = adapterFields.args;
         let result: unknown = null;
         let error: string | undefined;
         const respond = (r: unknown, e?: string): void => { result = r; error = e; };
         const execution = settingsRequestExecution(req);
-        if (execution) await ctx.lifecycle.handleCreate(v.data, respond, undefined, execution);
-        else await ctx.lifecycle.handleCreate(v.data, respond);
+        if (execution) await ctx.lifecycle.handleCreate(createArgs, respond, undefined, execution);
+        else await ctx.lifecycle.handleCreate(createArgs, respond);
         if (error) {
           json(res, 400, { error });
         } else {
