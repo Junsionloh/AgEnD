@@ -1,6 +1,6 @@
 # #3731: per-instance CLI adapters: tmux (default), official ACP, and native protocols
 
-Status: **draft design for review after 2.5. Only phase 0 (§8) is implemented**, as fork PR [#77](https://github.com/Junsionloh/AgEnD/pull/77) at `337c2374f`; it changes no behaviour. Everything about the structured adapters is still a design.
+Status: **draft design for review after 2.5. Phases 0 and 1 (§8) are implemented**, as fork PR [#82](https://github.com/Junsionloh/AgEnD/pull/82) on the upstream `release/2.3.5-alpha` line (it replaces the earlier PRs [#77](https://github.com/Junsionloh/AgEnD/pull/77) and [#81](https://github.com/Junsionloh/AgEnD/pull/81), which were on `main`). Phase 0 changes no behaviour. Phases 2 and 3 are still a design.
 Direction (maintainer): **official ACP first, otherwise a native adapter.** One adapter per instance; `tmux` stays the default adapter.
 Issue: [#3731](https://github.com/songsid/AgEnD/issues/3731) (Step 2 of the plan in that issue). Related: #3648, #739, #1411, #1209, #2950, #1218.
 
@@ -22,7 +22,7 @@ AgEnD code references are `path:line`, relative to the repository root.
 
 - Unqualified references are at **`main` @ `43e570835`**.
 - References to the Step 1 spike are to fork PR [#68](https://github.com/Junsionloh/AgEnD/pull/68), branch `improve/grok-leader-observer-spike`. **The spike has been fixed to match this document** (§7.4, §9.5): code and tests at commit **`c4e8996e6`**, and the evidence write-up `docs/evidence/grok-leader-observer-236/README.md` (its head commit only adds that write-up and logs under `docs/`; `src/` and `tests/` are those of `c4e8996e6`). The measurements about grok's behaviour quoted in §7.4 and §9.5 (what a leader does, the permission copies, the socket limit) were taken at the earlier commit `fe36d3911`, which is **before** the fixes; the fixes were then re-checked on `c4e8996e6` with a new end-to-end run, a mutation check and tests, and the write-up says which log is from which commit. Where this document says "the spike" it means `c4e8996e6`; "the spike as first built" means `fe36d3911`. Line references to the spike's files (below) are to `fe36d3911` where they describe the first build.
-- References prefixed **`#77:`** are to the phase 0 implementation, fork PR [#77](https://github.com/Junsionloh/AgEnD/pull/77) at commit **`337c2374f`**. They are used only where the code exists only there (the lifecycle lines that changed, and `src/adapters/`).
+- References prefixed **`#82:`** are to the phases 0 and 1 implementation, fork PR [#82](https://github.com/Junsionloh/AgEnD/pull/82), branch `feat/acp-adapter-alpha`, on top of `release/2.3.5-alpha` @ **`3bd802fd8`** (`v2.4.0-beta.1`+1). They are used where the code exists only there (the lifecycle lines that changed, and `src/adapters/`). That PR is the move of phase 0 (#77, commit `337c2374f`) and phase 1 (#81, commit `00c18ec32`) from `main` onto the alpha line, so a `#77:` reference below names the same code as it had on the old base: `src/adapters/` is unchanged, and the lifecycle line numbers moved with the alpha line.
 - References prefixed **`alpha:`** are at `release/2.3.5-alpha` @ `aed5a074a`. The Windows runtime, and the #3648 chat timeline work, are on that line and are **not on `main` yet**. Line numbers will drift; the file and symbol names are the stable part.
 
 ### Terms
@@ -354,9 +354,13 @@ The Step 1 spike (fork PR #68, `c4e8996e6`) implements points 1–3 and 5 and ha
 | **2. `acp` for kiro + opencode** | Verify first (§9); then a profile each. | The same acceptance as phase 1 for each CLI, preceded by a one-day verification spike per CLI that fills in every [U] in §3. If a CLI turns out **not** to have official ACP, the rule in §3.1 applies: it needs its own native adapter (a separate design and estimate) or stays on `tmux`. It is not forced onto `acp`. | 1–2 weeks each |
 | **3. `claude-stream-json` and `codex-app-server`** | One adapter each, behind the same `AdapterEvent`s; Codex `steer` exposed through the capability flag. | Fixtures generated from the CLI's own schema where it offers one (Codex: `generate-json-schema`, [V]); real-CLI smoke runs; explicit handling of Codex's "experimental" label. Claude: a verification spike first for every Claude [U] in §3.2 (thinking deltas, the permission-prompt contract, interrupt). | 1–2 weeks each |
 
+### Phase 1: implemented
+
+Fork PR [#82](https://github.com/Junsionloh/AgEnD/pull/82) (the earlier fork PR [#81](https://github.com/Junsionloh/AgEnD/pull/81) at `00c18ec32` carries the same work on `main`): `acp` for grok 1.0.77 and agy 1.5.8 / 1.5.9, the version gate, the permission policy of §7, and the web switch. On the alpha line the live steps (thinking, tool calls, a waiting permission request) are fed to the chat's activity block as well as the Log tab, through the same `thinking` step kind, `tool_progress` cut and `web.log_thinking` switch as every backend. Its acceptance run, with a real grok and agy from the web page, is recorded on the fork PR.
+
 ### Phase 0: implemented
 
-Fork PR [#77](https://github.com/Junsionloh/AgEnD/pull/77), commit `337c2374f` (draft, base fork `main`, which was fast-forwarded to upstream `df9229b58`). It follows §5.3 to §5.5 with the differences recorded there. State of the acceptance criteria:
+Fork PR [#82](https://github.com/Junsionloh/AgEnD/pull/82) carries it on `release/2.3.5-alpha`; it was first written as fork PR [#77](https://github.com/Junsionloh/AgEnD/pull/77), commit `337c2374f`, on `main` (fast-forwarded to upstream `df9229b58`), and moved without change to its commits. It follows §5.3 to §5.5 with the differences recorded there. State of the acceptance criteria (as measured on `main`, #77):
 
 - **Existing tests pass unchanged.** No existing test file was modified. `tsc --noEmit` and `tsc --noEmit -p tsconfig.test.json` pass. The full run has 47 failures in 8 files, the same 47 that fail on `df9229b58` in a clean worktree (they need things the test machine lacks, such as a built `dist/`).
 - **A mutation check shows the interface is what the fleet uses.** Each mutation applied alone made new tests fail: `TmuxAdapter.cancel` doing nothing (2), `selectAdapter` building an adapter around a copy of the runner (9), `selectAdapter` not binding (6), lifecycle stop bypassing the adapter (1), `cancelInstance` bypassing the adapter (1), the context read ignoring `paneView` (1), `selectAdapter` accepting any `cli_adapter` (2), the `cli_adapter` rule accepting anything (10).
@@ -367,7 +371,7 @@ What `paneView` guards today (`#77`): the context read off the pane (`FleetManag
 Two things are deliberately left for later:
 
 1. **`start` does not go through `adapter.start` yet.** `adapter.start` is implemented and tested, but the lifecycle still calls `InstanceLifecycle.startOrDispose(daemon, …)`. Two existing tests that must pass unmodified depend on that call: one compares the lifecycle's source text for it, and one passes its first argument to a fake. Routing it changes those tests, so it is done together with the first adapter that needs it. `stop` and cancel do go through the adapter.
-2. **A Windows-runtime instance rejecting `cli_adapter` (§9.3) is not enforced.** `main` has no Windows exec runtime and no `native_adapter` field (they are on the alpha line, §0), so there is nothing to key the rule on. It is added when this work is rebased onto alpha.
+2. ~~A Windows-runtime instance rejecting `cli_adapter` (§9.3) is not enforced.~~ **Done on the alpha line (#82).** A `runtime: windows` instance that sets `cli_adapter` or `acp_always_approve` is refused when the config loads and by the validator, with the key named; its `native_adapter` behaviour is unchanged, and a native pane always builds the `tmux` adapter.
 
 Phase 0 is the only phase that touches shared code paths in a way existing users could notice, which is why it is separated and why it is the first thing to be reviewed if the maintainers agree with the direction. Each later phase is a separate PR and is opt-in per instance at runtime; none of them changes defaults.
 
