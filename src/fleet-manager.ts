@@ -380,6 +380,7 @@ import { idleGateTimeoutLog } from "./idle-gate-log.js";
 import { DEFAULT_STUCK_TIMEOUT_MS, readLastInboundAt, type Daemon, type OwnSwitchOutcome } from "./daemon.js";
 import type { InstanceRunner } from "./adapters/types.js";
 import { cancelRunner, capabilitiesOf } from "./adapters/registry.js";
+import { adapterUiView } from "./adapters/ui-view.js";
 import { clearPausedMarker, readPausedAt, readPauseReason, writePausedMarker } from "./pause-marker.js";
 import { readBackgroundWorkEndedMarker } from "./background-work-ended.js";
 import { DEFAULT_WARM_OVERFLOW, WakeCoordinator } from "./wake-coordinator.js";
@@ -29717,6 +29718,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         model_source,
         ...(backend === "claude-code" ? { model_observation: this.modelObservationForInstance(name) } : {}),
         backend,
+        // How it runs: the effective cli_adapter, whether it has a terminal pane, and (acp) the approve-all switch.
+        ...adapterUiView(this.daemons.get(name), classic ? undefined : this.fleetConfig?.instances[name], this.fleetConfig?.defaults),
         effort,
         effort_source,
         // Whether the chat header's effort chip is offered (shown as "auto" while none is set): the backend takes an
