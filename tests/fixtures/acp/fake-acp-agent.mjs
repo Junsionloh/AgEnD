@@ -1,4 +1,5 @@
 // A small ACP agent for tests: speaks the protocol on stdio, driven by keywords in the prompt text.
+// Keywords in the prompt text (written with a leading #: #crash #split #ordering #fsprobe #tool #slow #linger) pick the behaviour.
 // Environment: FAKE_ACP_VERSION (agentInfo.version), FAKE_ACP_STATE (a directory: known sessions + a call log),
 // FAKE_ACP_AUTH=1 (session/new answers -32000).
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -32,26 +33,26 @@ async function turn(id, sessionId, text) {
   const history = known()[sessionId] ?? [];
   history.push(text);
   remember(sessionId, history);
-  update(sessionId, { sessionUpdate: "user_message_chunk", content: { type: "text", text } });
-  if (text.includes("crash")) { update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "about to crash" } }); await sleep(30); process.exit(3); }
-  if (text.includes("split")) {
+  if (!process.env.FAKE_ACP_NO_ECHO) update(sessionId, { sessionUpdate: "user_message_chunk", content: { type: "text", text } });
+  if (text.includes("#crash")) { update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "about to crash" } }); await sleep(30); process.exit(3); }
+  if (text.includes("#split")) {
     const line = JSON.stringify({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "héllo wörld ✓" } } } }) + "\n";
     const bytes = Buffer.from(line);
     const cut = bytes.indexOf(Buffer.from("ö")) + 1; // inside a two-byte character
     process.stdout.write(bytes.subarray(0, cut)); await sleep(40); process.stdout.write(bytes.subarray(cut, cut + 20)); await sleep(40); process.stdout.write(bytes.subarray(cut + 20));
-  } else if (text.includes("ordering")) {
+  } else if (text.includes("#ordering")) {
     // updates out of order: the update of a call before the call, a completed call then a stale running update
     update(sessionId, { sessionUpdate: "tool_call_update", toolCallId: "t1", status: "completed", rawOutput: { ok: true } });
     update(sessionId, { sessionUpdate: "tool_call", toolCallId: "t1", title: "read", kind: "read", status: "in_progress" });
     update(sessionId, { sessionUpdate: "tool_call_update", toolCallId: "t1", status: "in_progress" });
     update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "done" } });
-  } else if (text.includes("fsprobe")) {
+  } else if (text.includes("#fsprobe")) {
     const r = await ask("fs/read_text_file", { sessionId, path: "/etc/hostname" });
     log({ fsprobe: r });
     const t = await ask("terminal/create", { sessionId, command: "id" });
     log({ terminalprobe: t });
     update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "probed" } });
-  } else if (text.includes("tool")) {
+  } else if (text.includes("#tool")) {
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "I should write a file." } });
     update(sessionId, { sessionUpdate: "tool_call", toolCallId: "w1", title: "write", rawInput: { file_path: "/work/hello.txt", content: "hi" } });
     const answer = await ask("session/request_permission", {
@@ -73,7 +74,7 @@ async function turn(id, sessionId, text) {
       update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "refused" } });
       if (outcome?.outcome === "cancelled") { out({ jsonrpc: "2.0", id, result: { stopReason: "cancelled" } }); return; }
     }
-  } else if (text.includes("slow")) {
+  } else if (text.includes("#slow")) {
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "thinking " } });
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "slowly" } });
     await new Promise(r => { cancelWake = r; setTimeout(r, 20000); });
@@ -81,6 +82,7 @@ async function turn(id, sessionId, text) {
   } else {
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "Let me " } });
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "think." } });
+    if (text.includes("#linger")) await sleep(700);
     update(sessionId, { sessionUpdate: "usage_update", used: 100, size: 1000 });
     update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "OK" } });
   }

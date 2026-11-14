@@ -466,6 +466,9 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
     if (config.web.office_levels !== undefined && typeof config.web.office_levels !== "boolean") {
       err("web.office_levels", "must be a boolean");
     }
+    if (config.web.log_thinking !== undefined && typeof config.web.log_thinking !== "boolean") {
+      err("web.log_thinking", "must be a boolean");
+    }
     if (config.web.log_tab !== undefined && typeof config.web.log_tab !== "boolean") {
       err("web.log_tab", "must be a boolean");
     }

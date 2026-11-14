@@ -9,13 +9,14 @@ import { formatCrossInstanceInboundMessage } from "../../cross-instance-envelope
 import { HangDetector } from "../../hang-detector.js";
 import { clearPausedMarker, readPausedAt, writePausedMarker, type PauseReason } from "../../pause-marker.js";
 import { turnExpectsPersonReply } from "../../turn-reply-guard.js";
-import type { InteractionSnapshot, InstanceState } from "../../backend/types.js";
+import type { InteractionSnapshot, InstanceState, InstanceStateSnapshot } from "../../backend/types.js";
 import type { DeliveryOutbox } from "../../delivery-outbox.js";
 import type { InstanceConfig } from "../../types.js";
 import type { WorkingStateObservation } from "../../working-state-journal.js";
 import type { RecoveryLive } from "../../working-recovery.js";
 import { AcpAuthRequiredError, AcpVersionRefusedError, type AcpAdapter } from "./acp-adapter.js";
 import { AcpStepStore } from "./steps.js";
+import type { LiveSteps } from "../../log-service.js";
 import type { AdapterEvent } from "../types.js";
 
 type Logger = { info(o: object, m?: string): void; warn(o: object, m?: string): void; error(o: object, m?: string): void; debug(o: object, m?: string): void };
@@ -142,6 +143,11 @@ export class AcpRunner extends EventEmitter {
     if (stored !== null) this.pausedAt = stored;
   }
 
+  /** The chat timeline, for the Log's live source: this boot's own cursor space. */
+  get liveSteps(): LiveSteps {
+    return { key: `acp-${this.bootId}`, snapshot: (after, o) => this.steps.snapshot(after, o), subscribe: l => this.steps.onChange(l) };
+  }
+
   private get log(): Logger { return this.opts.logger; }
   get name(): string { return this.opts.name; }
 
@@ -227,6 +233,26 @@ export class AcpRunner extends EventEmitter {
   compactPaneUi(): null { return null; }
   confirmAuthFailure(): boolean { return false; }
   clearSuspectedAuthFailure(): boolean { return false; }
+
+  /** A paused runner reads as `working`: a gate that waits for "idle" must not take a paused instance for a free one. */
+  getInstanceStateSnapshot(): InstanceStateSnapshot {
+    const at = this.now(), state = this.getInstanceState();
+    return { state: state === "paused" ? "working" : state, unchangedForMs: 0, observedAt: at, stateChangedAt: at, interaction: this.getInteractionSnapshot() };
+  }
+
+  // What only the tmux runner has (a native pane, the model the CLI reports, a General host pane): an ACP runner has none of it.
+  modelObservation(): null { return null; }
+  quotaPaused(): boolean { return false; }
+  usesNativePane(): boolean { return false; }
+  nativePaneCliVersion(): undefined { return undefined; }
+  nativePaneCurrent(): boolean { return false; }
+  nativePaneHasExited(): boolean { return false; }
+  async nativePauseReady(): Promise<boolean> { return false; }
+  nativePauseStillReady(): boolean { return false; }
+  nativeDeliveryHold(): null { return null; }
+  async reconcileNativeDeliveries(): Promise<boolean> { return false; }
+  async generalHostOwner(): Promise<never> { throw new Error("General host owner is unavailable: an ACP instance has no terminal pane"); }
+  noteHumanReceiptSettlement(): void { /* no human-receipt reminders for an ACP runner */ }
 
   getInteractionSnapshot(): InteractionSnapshot {
     const waiting = this.steps.pendingPermissions().length > 0;

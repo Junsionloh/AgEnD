@@ -93,11 +93,12 @@ type RunnerMembers = Pick<Daemon,
   | "usesNativePane" | "nativePaneCurrent" | "nativePaneHasExited" | "nativePauseReady" | "nativePauseStillReady"
   | "nativePaneCliVersion" | "nativeDeliveryHold" | "reconcileNativeDeliveries"
   | "getInstanceStateSnapshot" | "generalHostOwner" | "quotaPaused" | "modelObservation"
-  | "noteHumanReceiptSettlement" | "registerHumanReceiptPreparation"
+  | "noteHumanReceiptSettlement"
 >;
 
 /** What the fleet holds per running instance. Events are the existing daemon events (`on`/`once`/`off`). */
-export interface InstanceRunner extends RunnerMembers, EventEmitter {}
+/** `registerHumanReceiptPreparation` is the tmux runner's alone: the one caller checks for it. */
+export interface InstanceRunner extends RunnerMembers, Partial<Pick<Daemon, "registerHumanReceiptPreparation">>, EventEmitter {}
 
 /**
  * What `InstanceLifecycle.start` calls on a runner between building it and publishing it. The tmux `Daemon` has all of

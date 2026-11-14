@@ -208,12 +208,12 @@ describe("the adapter against the fake agent", () => {
     const state = tmp();
     const { adapter, events } = adapterFor(fakeProfile(), { env: fakeEnv(state) });
     await adapter.start();
-    await adapter.prompt("ordering");
+    await adapter.prompt("#ordering");
     const tools = events.filter(e => e.kind === "tool") as Extract<AdapterEvent, { kind: "tool" }>[];
     expect(tools.map(t => t.status)).toEqual(["completed", "completed", "completed"]);
     expect(tools.at(-1)).toMatchObject({ title: "read", toolKind: "read" });
     events.length = 0;
-    await adapter.prompt("split");
+    await adapter.prompt("#split");
     expect(events.find(e => e.kind === "message")).toEqual({ kind: "message", text: "héllo wörld ✓" });
   });
 
@@ -221,7 +221,7 @@ describe("the adapter against the fake agent", () => {
     const state = tmp();
     const { adapter } = adapterFor(fakeProfile(), { env: fakeEnv(state) });
     await adapter.start();
-    await adapter.prompt("fsprobe");
+    await adapter.prompt("#fsprobe");
     const log = calls(state);
     expect(log.find(l => l.fsprobe)?.fsprobe.error.code).toBe(-32601);
     expect(log.find(l => l.terminalprobe)?.terminalprobe.error.code).toBe(-32601);
@@ -234,7 +234,7 @@ describe("the adapter against the fake agent", () => {
     const { adapter, events } = adapterFor(fakeProfile(), { env: fakeEnv(state) });
     adapter.onEvent(e => { if (e.kind === "permission") expect(adapter.answerPermission(e.requestId, { optionId: "allow-once" })).toBe(true); });
     await adapter.start();
-    await adapter.prompt("use a tool");
+    await adapter.prompt("#tool");
     expect(calls(state).find(l => l.permissionOutcome)?.permissionOutcome).toEqual({ outcome: "selected", optionId: "allow-once" });
     expect(events.filter(e => e.kind === "tool").at(-1)).toMatchObject({ status: "completed" });
   });
@@ -245,7 +245,7 @@ describe("the adapter against the fake agent", () => {
     let first: boolean | null = null, second: boolean | null = null;
     adapter.onEvent(e => { if (e.kind === "permission") { first = adapter.answerPermission(e.requestId, { optionId: "reject-once" }); second = adapter.answerPermission(e.requestId, { optionId: "allow-once" }); } });
     await adapter.start();
-    await adapter.prompt("use a tool");
+    await adapter.prompt("#tool");
     expect([first, second]).toEqual([true, false]);
     expect(adapter.answerPermission("nope", { optionId: "x" })).toBe(false);
     expect(calls(state).find(l => l.permissionOutcome)?.permissionOutcome.optionId).toBe("reject-once");
@@ -256,7 +256,7 @@ describe("the adapter against the fake agent", () => {
     const { adapter } = adapterFor(fakeProfile(), { env: fakeEnv(state) });
     const waiting = new Promise<void>(resolve => adapter.onEvent(e => { if (e.kind === "permission") resolve(); }));
     await adapter.start();
-    const turn = adapter.prompt("use a tool");
+    const turn = adapter.prompt("#tool");
     await waiting;
     expect(adapter.pendingPermissionKeys).toHaveLength(1);
     await adapter.cancel();
@@ -269,7 +269,7 @@ describe("the adapter against the fake agent", () => {
     const state = tmp();
     const { adapter, events } = adapterFor(fakeProfile(), { env: fakeEnv(state) });
     await adapter.start();
-    const turn = adapter.prompt("slow please");
+    const turn = adapter.prompt("#slow");
     await new Promise(r => setTimeout(r, 150));
     expect(adapter.busy).toBe(true);
     await adapter.cancel();
@@ -285,7 +285,7 @@ describe("the adapter against the fake agent", () => {
     const exits: { code: number | null; expected: boolean }[] = [];
     adapter.onExit(i => exits.push(i));
     await adapter.start();
-    await expect(adapter.prompt("crash now")).rejects.toBeInstanceOf(AcpTransportError);
+    await expect(adapter.prompt("#crash")).rejects.toBeInstanceOf(AcpTransportError);
     expect(exits).toEqual([{ code: 3, signal: null, expected: false }]);
     expect(adapter.health().process).toBe("crashed");
     await expect(adapter.prompt("again")).rejects.toBeInstanceOf(AcpTransportError);
