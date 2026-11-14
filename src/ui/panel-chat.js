@@ -97,6 +97,7 @@ function CardMenu({ card, ownerKey }) {
 import "/assets/chat-strings.js";
 import { confirmedWrite, selfConfirmed } from "./settings-confirm.js";
 import { createChatStore } from "./chat-store.js";
+import { ModeBadge } from "./adapter-mode.js";
 import { createThread, msgKey } from "/assets/chat-thread.js";
 import { ComposerInput, WorkBarView, touchScreen } from "/assets/chat-composer.js";
 import { installMessageActions } from "./chat-msg-actions.js";
@@ -556,6 +557,7 @@ function ChatView({ name, inst, lease, navKey, exec, awaiting }) {
   const pick = (command) => store.runCommand(name, command, "", { alive: () => lease.current() });
   modelPickerStyles();
   const sub = html`<span class="status"><span class=${`dot ${cls}`} aria-hidden="true"></span>${statusLabel(inst, exec, awaiting)}</span>
+    <${ModeBadge} inst=${inst} className="hd-mode" />
     ${inst.runtime === "windows" ? html`<span class="tag">Windows</span>` : null}
     ${nativeCliTag(inst)}${inst.machine_id ? html`<span class="tag runtime-machine-tag" title=${t("chat.machineName",machineName(inst.machine_id,inst.machine_name))}>${machineName(inst.machine_id,inst.machine_name)}</span>${inst.machine_status !== "online" ? html`<span class="tag runtime-machine-offline">${t(inst.machine_status === "revoked" ? "chat.machineRevoked" : "chat.machineOffline")}</span>` : null}` : null}
     ${!guest && supportsInstanceFeature(inst,"commands") ? html`<button type="button" class="hd-chip chat-model-entry" title=${mw("backend")} aria-label=${mw("backend")} onClick=${() => inst.runtime === "windows" ? navigate(sectionPath("agents")) : pick("backend")}>${backendLabel(inst.backend)} ▾</button>

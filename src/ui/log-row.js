@@ -5,6 +5,7 @@ import { modelSwitchText, modelName, observationLabel } from "/assets/model-obse
 import { html, useState } from "/assets/app-html.js";
 import { register, t } from "/assets/app-i18n.js";
 import { Icon } from "/assets/ui-icons.js";
+import { PermissionCard } from "./adapter-mode.js";
 import "/assets/chat-strings.js";
 import { chatTime, chatTimeFull } from "/assets/chat-time.js";
 
@@ -19,6 +20,7 @@ register("log", {
     times: "×{0}", newer: "{0} new",
     cat_read: "Read", cat_edit: "Edit", cat_search: "Search", cat_run: "Run", cat_web: "Web", cat_mcp: "MCP", cat_agent: "Sub-agent",
     cat_plan: "Plan", cat_message: "Message", cat_other: "Tool", plan_items: "{0} items",
+    permission: "Permission",
     said: "Said", thinking: "Thinking", thinkingMore: "Show all thinking", thinkingLess: "Show less",
     expand: "Show details", collapse: "Hide details", command: "Command", removed: "Removed", added: "Added",
   },
@@ -32,6 +34,7 @@ register("log", {
     times: "×{0}", newer: "{0} 則新的",
     cat_read: "讀取", cat_edit: "編輯", cat_search: "搜尋", cat_run: "執行", cat_web: "網頁", cat_mcp: "MCP", cat_agent: "子 agent",
     cat_plan: "計畫", cat_message: "訊息", cat_other: "工具", plan_items: "{0} 項",
+    permission: "權限",
     said: "說了", thinking: "思考", thinkingMore: "顯示完整思考", thinkingLess: "收合",
     expand: "顯示細節", collapse: "隱藏細節", command: "指令", removed: "移除", added: "新增",
   },
@@ -120,7 +123,7 @@ export function shortenPaths(text, paths) {
 
 // The app's own SVG icons (never emoji: a device without an emoji font shows boxes).
 export const CAT_ICON = { read: "file", edit: "edit", search: "search", run: "code", web: "globe", mcp: "plug", agent: "team", plan: "tasks", message: "send", other: "sliders" };
-export const KIND_ICON = { user: "user", assistant: "bot", thinking: "wand", error: "alert", turn_end: "stop", state: "info", event: "bell" };
+export const KIND_ICON = { user: "user", assistant: "bot", thinking: "wand", permission: "key", error: "alert", turn_end: "stop", state: "info", event: "bell" };
 
 function size(bytes) {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -232,8 +235,9 @@ export function stepLine(x, paths) {
  * One line of the Log. `chat`: in the chat's activity block (an assistant line is "Said"). `compact` (the block's rows,
  * AGEND-197): no time column and no "done" word — a step line is its icon, its words, and only what is unusual about it
  * (running, failed, interrupted, a non-zero exit); `latest` marks the newest step of a block still running.
+ * `instance` / `fetcher`: where a permission row's buttons post their answer (#3731, `cli_adapter: acp`).
  */
-export function LogRow({ x, prev, paths, chat, compact, latest }) {
+export function LogRow({ x, prev, paths, chat, compact, latest, instance, fetcher }) {
   const [open, setOpen] = useState(false);
   const [full, setFull] = useState(false);
   const short = (v) => shortenPaths(v, paths);
@@ -292,6 +296,11 @@ export function LogRow({ x, prev, paths, chat, compact, latest }) {
         ${view && view.diff ? html`<div class="log-diff">${view.diff.old ? html`<pre class="log-code rm" aria-label=${tl("removed")}>${short(view.diff.old)}</pre>` : null}${view.diff.next ? html`<pre class="log-code add" aria-label=${tl("added")}>${short(view.diff.next)}</pre>` : null}</div>` : null}
         ${view && view.raw ? html`<div class="log-sec"><span class="log-sec-h">${tl("args")}</span><div class="log-text mono">${short(view.raw)}</div>${x.inputCut ? note(x.inputCut) : null}</div>` : null}
         ${x.body || x.bodyBytes ? html`<div class="log-sec"><span class="log-sec-h">${tl("output")}</span>${text(x.body, x.bodyCut, x.bodyBytes)}</div>` : null}</div>` : null}`;
+  } else if (x.kind === "permission") {
+    // #3731: a permission request an ACP agent waits on — Allow / Deny / Cancel turn answer it (POST /ui/permission).
+    const status = html`<span class=${`log-status ${x.status || "running"}`}>${x.status === "running" ? html`<span class="spinner" aria-hidden="true"></span>` : null}${tl(x.status || "running")}</span>`;
+    row = html`${compact ? line(KIND_ICON.permission, html`<span class="log-sum">${tl("permission")}</span>`, status, false) : head(KIND_ICON.permission, tl("permission"), status)}
+      <${PermissionCard} step=${x} instance=${instance} fetcher=${fetcher} />`;
   } else if (compact && x.kind === "error") {
     row = html`${line(KIND_ICON.error, html`<span class="log-sum">${x.note ? tl("errorCode", x.note) : tl("error")}</span>`, null, false)}${text(x.body, x.bodyCut)}`;
   } else if (x.kind === "event") {

@@ -50,6 +50,7 @@ import { SetupWizard } from "./settings-wizard.js";
 import { CreateInstanceDialog } from "./panel-fleet.js";
 import { RuntimesPanel } from "./panel-runtimes.js";
 import { NativeInstanceSettings } from "./native-instance-settings.js";
+import { ModeBadge } from "./adapter-mode.js";
 import { FirstRunCard, takeWizardRequest } from "./first-run.js";
 import { takeAgentRequest } from "./settings-request.js";
 // #1604: This device — the preview opt-in (one path: the app's confirm, then preview.js) and the tour, from the chat.
@@ -883,7 +884,8 @@ function Agents({ ctx, search, clearSearch, openDialog }) {
         return html`<div key=${name} class="s-row s-agent-row">
           <div class="s-agent-identity"><span class="s-name" title=${name}>${shortName(name, inst)}</span>
             <div class="s-agent-context">${inst.runtime !== "windows" || ctx.live[name]?.capabilities?.effort === true ? html`<span class="tag">${tn("effortTag", sum.effort)}</span>` : null}
-              ${ch ? html`<span class=${`tag${ch.includes("persona") ? " persona" : ""}`}>${ch}</span>` : null}</div>
+              <${ModeBadge} inst=${inst} />
+               ${ch ? html`<span class=${`tag${ch.includes("persona") ? " persona" : ""}`}>${ch}</span>` : null}</div>
           </div>
           <div class="s-agent-runtime"><span class=${`tag${runtimeTarget.gone ? " warn" : ""}`} title=${runtimeTarget.title || runtimeTarget.label}>${runtimeTarget.label}</span></div>
           <div class="s-agent-cli"><${CliProductMark} id=${sum.backend} size=${20} /><span><strong>${cliLabel(sum.backend)}</strong><span class="s-meta" title=${sum.model}>${sum.model}</span></span></div>
