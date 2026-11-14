@@ -15,7 +15,7 @@ import { settingsSummary, summaryLine, summaryMessage as message, type SettingsS
 export const SETTINGS_DIFF_RECORDS = 32;
 export const SETTINGS_DIFF_UNITS = 4096;
 const immediate = new Set([
-  "backend", "model", "effort", "thinking", "thinking_level", "display_name", "name", "description", "locale",
+  "backend", "cli_adapter", "model", "effort", "thinking", "thinking_level", "display_name", "name", "description", "locale",
   "notice_delivery", "notify_login", "tips", "tips_enabled", "auto_pause_after", "context_lines", "tool_progress", "reply_completion_guard", "web_echo",
   "echo_to_channel", "status_emojis", "persona", "emoji", "hang_detector", "guardian", "watchdog", "timeout_minutes",
   "enabled", "startup_concurrency", "spawn_concurrency", "spawn_stagger_ms", "warm_cap", "idle_timeout",
@@ -415,6 +415,15 @@ export function settingsChangeDiff(before: unknown, after: unknown, options: {
       const fleet = path[1] === "defaults";
       if ([old, next].every(v => v === undefined || v === null || !quotaNoticeProblem(v, fleet))) return;
       throw new SettingsConfirmationError(400, "unsupported_quota_notice");
+    }
+    // #3731: approve-all (acp_always_approve) is judged by direction, like the web switches above: turning it off applies
+    // directly; turning it on (or any value that is not a boolean) waits for the confirmation.
+    if (path.at(-1) === "acp_always_approve" && path.at(-3) === "instances") {
+      const off = (v: unknown) => v === undefined || v === null || v === false;
+      if (off(next)) return;
+      if (section !== "secret") section = "access";
+      add(changeLine(`${settingsDisplay(path.join("."))}: ${settingsDisplay(old ?? "default")} → ${settingsDisplay(next ?? "default")}`, [settingsDisplay(path.join("."))], old, next, true));
+      return;
     }
     if (ordinary(path, old, next) || plainList(path, old, next) || codexSpeedPath(path, old, next)) return;
     if (path.some(key => /access|permission|admin/i.test(key)) && section !== "secret") section = "access";

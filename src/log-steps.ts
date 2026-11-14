@@ -16,7 +16,7 @@ import { open, stat } from "node:fs/promises";
 import { LINE_MAX_BYTES, LONG_HEAD_BYTES, lastLineBoundary, type LongLine } from "./transcript-jsonl.js";
 import { redactSecrets } from "./tool-progress.js";
 
-export type StepKind = "user" | "assistant" | "tool" | "error" | "turn_end" | "state";
+export type StepKind = "user" | "assistant" | "tool" | "error" | "turn_end" | "state" | "thought" | "permission";
 /** What a tool call does, for its icon and words on the page. */
 export type StepCat = "read" | "edit" | "search" | "run" | "web" | "mcp" | "agent" | "plan" | "message" | "other";
 export type StepStatus = "running" | "done" | "failed" | "interrupted";
@@ -49,8 +49,13 @@ export interface LogStep {
   /** Characters cut from `body` (0 or absent: nothing), or the bytes of a result too long to read (`bodyBytes`). */
   bodyCut?: number;
   bodyBytes?: number;
-  /** state: what happened ("compacted"); error: a status code. */
+  /** state: what happened ("compacted"); error: a status code; permission: the chosen option's name once answered ("cancelled" when the turn was). */
   note?: string;
+  /**
+   * permission: the choices the CLI offered (#3731, `cli_adapter: acp`). The page offers Allow (the `allow_once` one) and
+   * Deny (`reject_once`), never an `*_always` choice; the step's `id` is the request id the answer names.
+   */
+  options?: { id: string; name: string; kind: "allow_once" | "allow_always" | "reject_once" | "reject_always" }[];
 }
 
 export const SUBJECT_MAX = 300;
