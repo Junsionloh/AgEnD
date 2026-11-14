@@ -30,11 +30,11 @@ afterEach(async () => {
 /** A profile that runs `script` under node, claiming to be `base` (same version rules, same events). */
 const profileFor = (base: AcpProfile, script: string, ...scriptArgs: string[]): AcpProfile => ({ ...base, args: () => [script, ...scriptArgs] });
 
-function adapterFor(profile: AcpProfile, opts: { instanceDir?: string; env?: NodeJS.ProcessEnv; mcpServers?: AcpMcpServer[]; preamble?: string } = {}) {
+function adapterFor(profile: AcpProfile, opts: { instanceDir?: string; env?: NodeJS.ProcessEnv; mcpServers?: AcpMcpServer[]; preamble?: string; trace?: (d: "in" | "out", line: string) => void } = {}) {
   const instanceDir = opts.instanceDir ?? tmp();
   const adapter = new AcpAdapter({
     profile, command: process.execPath, cwd: instanceDir, instanceDir, mcpServers: opts.mcpServers ?? [], preamble: opts.preamble, logger,
-    env: { PATH: process.env.PATH }, childEnv: opts.env as Record<string, string>, makeRunner: () => ({}) as InstanceRunner,
+    env: { PATH: process.env.PATH }, childEnv: opts.env as Record<string, string>, trace: opts.trace, makeRunner: () => ({}) as InstanceRunner,
   });
   adapters.push(adapter);
   const events: AdapterEvent[] = [];
@@ -269,6 +269,19 @@ describe("the adapter against the fake agent", () => {
     expect((await turn).stopReason).toBe("cancelled");
     expect(calls(state).find(l => l.permissionOutcome)?.permissionOutcome).toEqual({ outcome: "cancelled" });
     expect(adapter.pendingPermissionKeys).toHaveLength(0);
+  });
+
+  it("stopping with a permission request waiting answers it 'cancelled' on the wire before the process is ended", async () => {
+    const state = tmp();
+    const sent: string[] = [];
+    const { adapter } = adapterFor(fakeProfile(), { env: fakeEnv(state), trace: (d, line) => { if (d === "out") sent.push(line); } });
+    const waiting = new Promise<void>(resolve => adapter.onEvent(e => { if (e.kind === "permission") resolve(); }));
+    await adapter.start();
+    void adapter.prompt("#tool").catch(() => undefined);
+    await waiting;
+    await adapter.stop();
+    const answers = sent.map(l => JSON.parse(l)).filter(m => m.result?.outcome);
+    expect(answers).toEqual([{ jsonrpc: "2.0", id: 0, result: { outcome: { outcome: "cancelled" } } }]);
   });
 
   it("cancel interrupts a running turn through session/cancel", async () => {
