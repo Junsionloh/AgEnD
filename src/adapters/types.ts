@@ -61,6 +61,8 @@ export interface AdapterHealth {
 export type AdapterEvent =
   | { kind: "thought"; text: string }
   | { kind: "message"; text: string }
+  /** The user's own message echoed back by the CLI (also how a resumed session replays history). */
+  | { kind: "user"; text: string }
   | { kind: "tool"; id: string; title: string; toolKind: string; status: "pending" | "in_progress" | "completed" | "failed"; rawInput?: unknown; rawOutput?: unknown }
   | { kind: "plan"; entries: unknown[] }
   | { kind: "permission"; requestId: string; tool: unknown; options: { id: string; name: string; kind: string }[] }
