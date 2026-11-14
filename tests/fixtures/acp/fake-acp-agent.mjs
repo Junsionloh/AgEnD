@@ -142,4 +142,5 @@ process.stdin.on("data", d => {
     }
   }
 });
-process.stdin.on("end", () => process.exit(0));
+// A moment to finish what the last frames started (a stop answers waiting requests, then closes stdin).
+process.stdin.on("end", () => setTimeout(() => process.exit(0), 200));
