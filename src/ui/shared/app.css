@@ -351,6 +351,23 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .p-log .log-sec-h { font-size: var(--fs-xs); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
 .p-log .log-older, .p-log .log-start { text-align: center; margin: var(--s-2) 0; }
 .p-log .log-off { padding: var(--s-6) var(--s-4); }
+/* #3731: an ACP agent's thinking (muted, italic, folded when long) and its permission requests (a card with the buttons). */
+.p-log .log-item.k-thought { background: transparent; color: var(--text-3); padding-block: 2px; }
+.p-log .log-thought { min-width: 0; }
+.p-log .log-thought-label { font-size: var(--fs-xs); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.p-log .log-thought-text { font-style: italic; color: var(--text-3); }
+.p-log .log-item.k-permission { background: var(--warn-bg); border: 1px solid var(--warn-line); }
+.p-log .log-item.k-permission.s-done { background: var(--surface); border-color: var(--border); }
+.perm-card { display: flex; flex-direction: column; gap: var(--s-2); margin-top: var(--s-1); min-width: 0; }
+.perm-what { font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.perm-label { color: var(--text-3); }
+.perm-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.perm-card .err { color: var(--danger); }
+/* #3731: the mode marker of an agent that runs over ACP (sidebar row, chat header, details) and the form's warning. */
+.mode-badge { flex: none; font-size: var(--fs-xs); line-height: var(--lh-xs); font-weight: var(--fw-semibold); padding: 0 var(--s-1); border-radius: var(--r-full); border: 1px solid var(--border); color: var(--text-3); white-space: nowrap; }
+.mode-badge.hd-mode { margin-left: var(--s-2); align-self: center; }
+.exec-warn { color: var(--warn); }
+.v-nopane { padding: var(--s-6) var(--s-4); }
 .p-details .d-edit { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-2); }
 /* The header's controls are one height, the icon buttons' (36 px): its small buttons, and the instance tabs when they share
    its row (a phone puts them on a row of their own, under it). */
@@ -465,6 +482,7 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .seg-item { display: inline-flex; align-items: center; gap: var(--s-2); min-height: 34px; padding: 0 var(--s-3); border-radius: var(--r-full); color: var(--text-2); font-size: var(--fs-sm); white-space: nowrap; }
 .seg-item:hover { background: var(--surface); color: var(--text); }
 .seg-item.active { background: var(--surface-2); color: var(--text); font-weight: var(--fw-semibold); }
+.seg-item.disabled, .seg-item.disabled:hover { background: transparent; color: var(--text-3); cursor: not-allowed; opacity: 0.6; }
 /* #1629: Settings has eight sections (Appearance added): they wrap to a second row rather than hide behind a scroll. */
 .p-settings .seg { flex-wrap: wrap; row-gap: var(--s-1); overflow-x: visible; }
 /* #2347: the sections in two groups, "You" and "Fleet", each with its name; a column on the left on a wide screen. */

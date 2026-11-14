@@ -24,6 +24,7 @@ import { labelOf } from "/assets/instance-nav.js";
 import { CacheReport } from "./fleet-cache.js";
 import { UsageTab } from "./fleet-usage.js";
 import { BackendSelect, ModelSelect } from "./settings-dialogs.js";
+import { ExecutionModeFields, adaptersOf, effectiveMode } from "./adapter-mode.js";
 import { TaskBoardTab } from "./fleet-tasks.js";
 
 /** #2015: one of the largest processes as text: "python3 18.1 GB (dev-a)". */
@@ -484,7 +485,10 @@ export function CreateInstanceDialog({ onClose }) {
   const [backends, setBackends] = useState(null);
   // The backend "fleet default" means (#2098 review P3-3): its models are the ones the model list offers then.
   const [defaultBackend, setDefaultBackend] = useState("claude-code");
-  const [f, setF] = useState({ dir: "", topic: "", desc: "", backend: "", model: "", branch: "", tags: "", prompt: "" });
+  const [f, setF] = useState({ dir: "", topic: "", desc: "", backend: "", model: "", branch: "", tags: "", prompt: "", mode: "tmux", approve: false });
+  // #3731: the modes the chosen backend can run (the backend "fleet default" means counts as that backend).
+  const adapters = adaptersOf(backends, f.backend || defaultBackend);
+  const mode = effectiveMode(f.mode, adapters);
   useEffect(() => {
     (async () => {
       try {
@@ -513,6 +517,8 @@ export function CreateInstanceDialog({ onClose }) {
     if (f.branch.trim()) body.branch = f.branch.trim();
     const tags = f.tags.split(",").map(x => x.trim()).filter(Boolean); if (tags.length) body.tags = tags;
     if (f.prompt.trim()) body.systemPrompt = f.prompt.trim();
+    // The terminal is the default and is not sent; approve-all only goes with ACP.
+    if (mode === "acp") { body.cli_adapter = "acp"; if (f.approve) body.acp_always_approve = true; }
     return body;
   } };
   // Create waits for the backend list: a submission before it would go without a backend, and the list arriving
@@ -523,6 +529,8 @@ export function CreateInstanceDialog({ onClose }) {
     ${field(t("fleet.description"), html`<input value=${f.desc} onInput=${set("desc")} placeholder=${t("fleet.descriptionHint")} />`)}
     ${field(t("fleet.backend"), backends ? html`<select value=${f.backend} onChange=${set("backend")}><option value="">${t("fleet.fleetDefault")}</option>
       ${backends.map(b => html`<option key=${b.name} value=${b.name} disabled=${backendBlocked(b)}>${b.name}${b.deprecated ? ` ${t("fleet.deprecated")}` : ""}${backendNote(b)}</option>`)}</select>` : html`<${Skeleton} lines=${1} />`)}
+    <${ExecutionModeFields} id="ci-mode" adapters=${adapters} mode=${f.mode} approve=${f.approve}
+      onMode=${(v) => setF(x => ({ ...x, mode: v }))} onApprove=${(v) => setF(x => ({ ...x, approve: v }))} />
     ${field(t("fleet.model"), html`<${ModelSelect} value=${f.model} onChange=${(v) => setF(x => ({ ...x, model: v }))} backend=${f.backend || defaultBackend} inherit=${t("fleet.fleetDefault")} />`)}
     ${field(t("fleet.branch"), html`<input value=${f.branch} onInput=${set("branch")} placeholder=${t("fleet.branchHint")} />`)}
     ${field(t("fleet.tags"), html`<input value=${f.tags} onInput=${set("tags")} placeholder=${t("fleet.tagsHint")} />`)}

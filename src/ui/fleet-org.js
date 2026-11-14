@@ -127,6 +127,7 @@ function Node({ n, sending }) {
     ${n.info.description ? html`<p class="org-desc" title=${n.info.description}>${n.info.description}</p>` : null}
     ${sending && sending.length ? html`<${Sending} list=${sending} />` : null}
     ${n.i ? html`<div class="org-meta">${n.i.backend ? html`<span class="org-chip">${n.i.backend}</span>` : null}
+      ${n.i.cli_adapter === "acp" ? html`<span class="org-chip" title=${t("view.modeAcpTitle")}>${t("view.modeAcp")}</span>` : null}
       ${model ? html`<span class="org-model mono" title=${model}>${model}</span>` : null}
       ${n.info.classic ? html`<span class="org-chip">${to("classic")}</span>` : null}</div>` : null}
     ${n.i || thread ? html`<div class="org-links">

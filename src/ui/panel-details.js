@@ -27,6 +27,7 @@ import "./chat-strings.js";
 import { api } from "./settings-confirm.js";
 import { InstanceBoardWork } from "./fleet-task-work.js";
 import { requestAgentSettings } from "./settings-request.js";
+import { modeFieldLabel, modeText } from "./adapter-mode.js";
 
 export function DetailsPanel({ route, navKey }) {
   const app = useStore(appStore);
@@ -145,6 +146,7 @@ function DetailsView({ name, inst, navKey, exec, awaiting }) {
           <button type="button" class="btn btn-sm d-edit-settings" onClick=${editInSettings}>${t("chat.dEditInSettings")}</button></div></section>
       <section class="card"><h3>${t("chat.dRuntime")}</h3>
         ${row(t("chat.dBackend"), d.backend || "--")}
+        ${inst.cli_adapter === "acp" ? row(modeFieldLabel(), modeText(inst)) : null}
         ${row(t("chat.dModel"), `${(d.model && modelText(d)) || sl.model?.display_name || "--"}${d.model_source === "live" ? "" : src(d.model_source)}`)}
         ${d.effort ? row(t("chat.dEffort"), `${d.effort}${src(d.effort_source)}`) : null}
         ${row(t("chat.dCost"), `$${cost.toFixed(2)} ${t("chat.dCostNote")}`)}

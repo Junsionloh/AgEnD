@@ -41,6 +41,7 @@ import {
 import { QuotaNoticeSettings, quotaNoticeText } from "./settings-quota-notice.js";
 import { SetupWizard } from "./settings-wizard.js";
 import { CreateInstanceDialog } from "./panel-fleet.js";
+import { ModeBadge } from "./adapter-mode.js";
 import { FirstRunCard, takeWizardRequest } from "./first-run.js";
 import { takeAgentRequest } from "./settings-request.js";
 // #1604: This device — the preview opt-in (one path: the app's confirm, then preview.js) and the tour, from the chat.
@@ -809,6 +810,7 @@ function Agents({ ctx, search, openDialog }) {
           <span class="s-meta" title=${sum.backend}>${sum.model}</span>
           <span class="s-br" aria-hidden="true"></span>
           <span class="tag">${tn("effortTag", sum.effort)}</span>
+          <${ModeBadge} inst=${inst} />
           ${ch ? html`<span class=${`tag${ch.includes("persona") ? " persona" : ""}`}>${ch}</span>` : null}
           <span class="sr-only">${tn(STATUS_KEY[st] || "stStopped")}</span>
           <span class="s-actions">

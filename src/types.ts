@@ -110,6 +110,11 @@ export interface InstanceConfig {
    * accepted yet; it is refused when the config loads.
    */
   cli_adapter?: import("./adapters/config.js").CliAdapterId;
+  /**
+   * `cli_adapter: acp` only (#3731). Off (the default): every permission request the CLI raises is shown in the chat
+   * and waits for a person. On: the runner answers each one with the CLI's "allow once" option itself.
+   */
+  acp_always_approve?: boolean;
   working_directory: string;
   /** Minutes an idle CLI may remain resident before auto-pause. 0 disables it. */
   auto_pause_after?: number;
@@ -422,6 +427,8 @@ export interface WebConfig {
    * admin's change, confirmed like any access change (Settings → Web).
    */
   log_tab?: boolean;
+  /** Admins may see an ACP instance's thinking text in the chat timeline (#3731). Off by default; it is never shown to anyone else. */
+  log_thinking?: boolean;
   /**
    * #2293: the dashboard's global search (Ctrl+K) over chat messages, cross-instance messages and Task Board tasks — an
    * index of its own (search.db; `retention_days` unset or 0 = no age limit, ROW_CAP 300,000 still applies;

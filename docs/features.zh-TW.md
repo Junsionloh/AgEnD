@@ -1567,3 +1567,43 @@ General、coordinator 與 full 權限組合的 instance，可以用 `get_web_set
 - 還原預設值：主機設定與那個人的自訂 CSS（這台裝置上的自訂 CSS 開關留給本人決定）。
 
 只能在頁面上做的事：從那個人的電腦選檔案（mod、效果資料夾、CSS 素材、身分卡圖片）、這個瀏覽器自己的開關（只在這台裝置關閉自訂 CSS、暫停播放）、下載匯出檔，以及身分卡上傳限制。`get_web_settings` 會把這些列在 `page_only`。`web-appearance` skill 會帶 General 一步步完成。
+
+## ACP 模式（`cli_adapter: acp`）
+
+**grok** 或 **antigravity**（`agy`）的 instance 可以不開終端機 pane，改為透過 CLI 自己的 [Agent Client Protocol](https://agentclientprotocol.com) 伺服器執行（#3731）。這是每個 instance 自行選擇的功能；其他 instance 完全照舊，tmux 仍是預設。
+
+```yaml
+instances:
+  grok-acp:
+    backend: grok            # 或：antigravity
+    cli_adapter: acp
+    working_directory: /path/to/project
+    # acp_always_approve: true   # 預設關閉：權限請求會等人回答
+web:
+  log_tab: true              # 聊天時間軸顯示即時步驟
+  log_thinking: true         # 選填：admin 也能看到思考文字
+```
+
+在網頁上，這兩種 backend 的 instance 表單有 **執行方式**（終端機／ACP）可選；切換前會先確認，因為會重啟 instance、並失去終端機畫面。
+
+**你會得到什麼。** 聊天時間軸即時顯示思考（只有 admin，而且要開 `web.log_thinking`）、工具呼叫與進度、agent 的文字。權限請求是聊天裡的一張卡片，有 **允許**、**拒絕**、**取消這回合**。**取消** 會中斷這回合，並把所有等待中的權限請求以「已取消」回答。重啟之後 instance 會用儲存的對話繼續（`session/load`），聊天也還看得到之前的內容。
+
+**有什麼不同。**
+
+| | tmux | acp |
+|---|---|---|
+| 終端機畫面、`agend attach`、直接對 CLI 打字 | 有 | 沒有（隱藏並拒絕） |
+| 閒置／忙碌 | 讀畫面 | 有一個未完成的 `session/prompt` |
+| 卡住 | 畫面不再變動 | 回合進行中、超過 `hang_detector.timeout_minutes`（預設 10）沒有 agent 的任何訊息（等人回答權限請求不算卡住） |
+| 權限 | 用按鍵回答對話框 | 結構化請求；**預設詢問** |
+| 回合中途送訊息 | 可 steer（依 backend） | 等這回合結束（ACP 沒有回合中途輸入） |
+| context % 與額度通知 | 讀畫面 | 只有 agy 有 context %；grok 沒有 |
+| 回覆聊天 | agent 的 `reply` 工具 | 同一個工具；人發起的回合若沒用它就結束，agent 的文字會當作回覆送出 |
+| `checkout_repo`、`release_repo`、網頁主題／Office 工具 | 有 | 尚未支援（工具回傳錯誤） |
+| 閒置自動暫停（`auto_pause_after`） | 有 | 尚未支援；手動暫停與喚醒可用 |
+
+**安全。** 權限預設為詢問，但 instance 自己的 `agend` MCP 工具（`reply`、`react`、`task`、`send_to_instance`…）例外：沒有它們聊天就無法運作，所以每次都自動「僅此一次允許」。判斷只看 CLI 自己設定的欄位（grok：`UseTool` variant、`use_tool` meta 與 `agend__<tool>` 名稱；agy：種類為 `other` 的工具、其註冊名稱 `mcp_agend_<tool>`），絕不看模型寫的參數或標題文字，所以只是提到 agend 工具的 shell 或檔案呼叫仍會詢問；認不出來的一律詢問。會啟動、取代或移除 instance 的工具（`create_instance`、`delete_instance`、`replace_instance`、`start_instance`、`restart_instance`）以及 `checkout_repo`／`release_repo` 仍然詢問。`acp_always_approve: true` 會用「僅此一次允許」選項回答每個請求；AgEnD 絕不選「永遠允許」或「永遠拒絕」，因為那會改變 CLI 自己保存的狀態。取消、停止或當機都會把所有等待中的請求以「已取消」回答——絕不會變成允許。只有 fleet admin 能回答請求或看到思考文字。AgEnD 不宣告任何 `fs/*` 或 `terminal/*` capability，CLI 自己處理檔案與程序，agent 對這兩者的請求都會收到「method not found」。CLI 以不經 shell、明確指定環境變數的方式啟動（不含 fleet 或網頁的 token），並在 `session/new` 收到這個 instance 專屬的 `agend` MCP server（stdio），絕不與其他 instance 共用。
+
+**版本。** 每個 CLI 有一個 profile，內含經過測試的版本精確清單：grok `1.0.77`、agy `1.5.8`、`1.5.9`。其他版本會以訊息拒絕，instance 維持停止（不會改用 tmux 啟動）。grok 以 `--no-auto-update` 與 `--no-leader` 啟動。CLI 必須已登入；未登入的 CLI 會回報並讓 instance 維持停止。
+
+**要知道的限制。** 在 tmux 模式建立的對話不會在 ACP 模式接續（儲存的 session id 是分開的），所以切換會開始新的對話。grok 與 agy 只有部分回合會送出思考；沒有時，時間軸就不顯示。ACP 模式下 agy 的模型尚不能選擇（grok 的 `model` 與 `effort` 以啟動參數傳入）。

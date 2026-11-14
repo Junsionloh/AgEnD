@@ -180,6 +180,8 @@ export function ViewPanel({ route, navKey }) {
   const density = ts.viewFit ? "fit" : ts.size;
   const name = route.instance;
   const it = name ? v.roster.find((r) => r.instance_name === name) : null;
+  // #3731: an agent that runs over ACP has no terminal pane (the status frame's pane_view): nothing is read for it.
+  const noPane = !!name && (instances || []).some((i) => i.name === name && i.pane_view === false);
 
   useEffect(() => { viewStore.set({ current: name }); }, [name]);
   useEffect(() => { setTitle(it ? (it.display_name || it.instance_name) : tn("title")); }, [name, it && it.display_name, navKey]);
@@ -236,8 +238,8 @@ export function ViewPanel({ route, navKey }) {
   else if (!it) body = html`<div data-trust="panel-content" class="panel-body center"><${Empty} icon="alert" title=${tn("notFound", { name })} hint=${tn("notFoundHint")} /></div>`;
   else if (guest && !trusted) body = html`<div data-trust="panel-content" class="panel-body center"><${Empty} icon="view" title=${tn("guestNeedsTrusted")} hint=${tn("guestNeedsTrustedHint")} /></div>`;
   else if (guest) body = html`<p data-trust="panel-content" class="v-watching" role="note">${tn("guestWatching")}</p>
-    <${Terminal} key=${name} name=${name} lease=${lease} density=${density} every=${GUEST_PANE_MS} backend=${it.backend || ""} signedIn=${false} />`;
-  else body = html`<${Terminal} key=${name} name=${name} lease=${lease} density=${density} backend=${it.backend || ""} signedIn=${!viewOnly} />
+    ${noPane ? html`<${NoPane} name=${name} signedIn=${false} />` : html`<${Terminal} key=${name} name=${name} lease=${lease} density=${density} every=${GUEST_PANE_MS} backend=${it.backend || ""} signedIn=${false} />`}`;
+  else body = html`${noPane ? html`<${NoPane} name=${name} signedIn=${!viewOnly} />` : html`<${Terminal} key=${name} name=${name} lease=${lease} density=${density} backend=${it.backend || ""} signedIn=${!viewOnly} />`}
     <${ViewIdentity} it=${it} viewOnly=${viewOnly} onEdit=${() => setDialog("edit")} />`;
 
   return html`<div data-effect-panel="view" class="panel p-view">
@@ -248,6 +250,13 @@ export function ViewPanel({ route, navKey }) {
     ${open === "edit" && it ? html`<${EditProfile} key=${navKey} it=${it} onClose=${() => setDialog(null)} />` : null}
     ${open === "help" ? html`<${HelpDialog} onClose=${() => setDialog(null)} />` : null}
   </div>`;
+}
+
+/** #3731: View of an agent with no terminal (it runs over ACP): why, and where its work is (the Log, for a signed-in reader). */
+function NoPane({ name, signedIn }) {
+  const logOn = signedIn && typeof document !== "undefined" && document.body?.dataset?.logTab === "1";
+  return html`<div data-trust="panel-content" class="v-nopane center" role="note"><p class="note">${tn("noPaneBody")}</p>
+    ${signedIn ? html`<p><a class="btn btn-sm" href=${logOn ? logPath(name) : sectionPath("web-dashboard")}>${tn("noPaneLog")}</a></p>` : null}</div>`;
 }
 
 /** #2855: how often a guest's View reads the pane (the server allows it two reads a second). */

@@ -34,7 +34,7 @@ export interface ValidationIssue {
 }
 
 /** Every key `web:` takes (WebConfig, checked both ways at compile time): anything else is a typo or a guess, ignored. */
-const WEB_KEYS = ["experimental", "public_link", "echo_to_channel", "usage_panel", "usage_report_on_public_link", "log_tab", "provider_secrets", "allowed_hosts", "view_access",
+const WEB_KEYS = ["experimental", "public_link", "echo_to_channel", "usage_panel", "usage_report_on_public_link", "log_tab", "log_thinking", "provider_secrets", "allowed_hosts", "view_access",
   "notify_login", "notice_delivery", "session", "preview", "preview_port", "preview_origin", "preview_on_public_link", "preview_cdn", "themes", "appearance", "upload_max_file_mb", "upload_max_total_mb", "guests", "verified_authority", "search", "office_share", "page_share", "office_levels"] as const satisfies ReadonlyArray<keyof WebConfig>;
 const WEB_KEYS_COMPLETE: Exclude<keyof WebConfig, typeof WEB_KEYS[number]> extends never ? true : never = true;
 void WEB_KEYS_COMPLETE;
@@ -451,6 +451,9 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
     if (config.web.office_levels !== undefined && typeof config.web.office_levels !== "boolean") {
       err("web.office_levels", "must be a boolean");
     }
+    if (config.web.log_thinking !== undefined && typeof config.web.log_thinking !== "boolean") {
+      err("web.log_thinking", "must be a boolean");
+    }
     if (config.web.log_tab !== undefined && typeof config.web.log_tab !== "boolean") {
       err("web.log_tab", "must be a boolean");
     }
@@ -557,7 +560,7 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
     const b = config.defaults.backend;
     const problem = backendProblem(b);
     if (problem) err("defaults.backend", problem);
-    const adapterProblem = cliAdapterProblem(config.defaults.cli_adapter);
+    const adapterProblem = cliAdapterProblem(config.defaults.cli_adapter, undefined);
     if (adapterProblem) err("defaults.cli_adapter", adapterProblem);
     validateAutoPause(config.defaults.auto_pause_after, "defaults.auto_pause_after");
     validateDeliveryWorker(config.defaults.delivery_worker, "defaults.delivery_worker");
@@ -641,7 +644,7 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
       const b = inst.backend;
       const problem = backendProblem(b, name);
       if (problem) err(`instances.${name}.backend`, problem);
-      const adapterProblem = cliAdapterProblem(inst.cli_adapter);
+      const adapterProblem = cliAdapterProblem(inst.cli_adapter, (typeof inst.backend === "string" ? inst.backend : undefined) ?? (isObj(config.defaults) && typeof config.defaults.backend === "string" ? config.defaults.backend : undefined) ?? "claude-code");
       if (adapterProblem) err(`instances.${name}.cli_adapter`, adapterProblem);
       if (inst.working_directory !== undefined && typeof inst.working_directory !== "string") {
         err(`instances.${name}.working_directory`, "must be a string path");

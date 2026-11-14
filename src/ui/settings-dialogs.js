@@ -26,6 +26,7 @@ import {
   classicWebEchoEffective, toolSetDefault, worstImpact,
 } from "./settings-model.js";
 import { ModelRefresh, useRefreshableModels } from "./model-picker.js";
+import { ExecutionModeFields, adaptersOf, confirmModeSwitch, effectiveMode } from "./adapter-mode.js";
 import "./settings-codex-copy.js";   // M-2446: the Speed field's words (a retained old settings-strings lacks them)
 /** M-2446: Codex speed choices (backend_options.codex.speed); "" = unset. Local, not imported: a stale tab may keep an
  *  older settings-model.js, and a new named import would fail this module's load. */
@@ -297,10 +298,17 @@ export function AgentDialog({ name, inst, ctx, onClose }) {
   };
   const failoverWarn = !f.inherit.model_failover && !f.model_failover.trim() ? "failoverEmpty" : "";
   const ready = !errors.auto && !errors.hang;
-  const pending = () => agentPatch({ ...f, status_emojis: emojis.value }, inst, defaults, visibilityBaseline, emojis.baseline);
-  const stage = () => {
+  // #3731: the modes the chosen backend can run. Until the host's list is read, what the agent has now stays as it is (a
+  // staged change never turns an ACP agent back to the terminal because a list was slow).
+  const backendRows = useBackendRows();
+  const adapters = backendRows ? adaptersOf(backendRows, f.backend) : (f.cli_adapter === "acp" ? ["tmux", "acp"] : ["tmux"]);
+  const mode = effectiveMode(f.cli_adapter, adapters);
+  const pending = () => agentPatch({ ...f, cli_adapter: mode, status_emojis: emojis.value }, inst, defaults, visibilityBaseline, emojis.baseline);
+  const stage = async () => {
     if (!ready) return;
     const patch = pending();
+    // Either way the agent restarts and what the page shows changes (a terminal appears or goes): ask first.
+    if ("cli_adapter" in patch && !(await confirmModeSwitch(ctx.shortName(name, inst), mode))) return;
     if (Object.keys(patch).length) ctx.stageAgent(name, inst, patch);
     onClose();
   };
@@ -319,6 +327,8 @@ export function AgentDialog({ name, inst, ctx, onClose }) {
       <div class="field">${L(tn("description"), "instance.description", "ag-desc")}<input id="ag-desc" type="text" value=${f.description} onInput=${(e) => set("description")(e.target.value)} /></div>
       <div class="field">${L(tn("backend"), "instance.backend", "ag-be")}<${BackendSelect} id="ag-be" value=${f.backend} onChange=${set("backend")} />
         ${inheritedBackend ? html`<${Inherited} ...${inh("backend", f.backend, "#g-be", "backend")} />` : null}</div>
+      <${ExecutionModeFields} adapters=${adapters} mode=${f.cli_adapter} approve=${f.acp_always_approve}
+        onMode=${set("cli_adapter")} onApprove=${set("acp_always_approve")} impact=${html`<${Impact} schema=${schema} field="instance.cli_adapter" />`} />
       <div class="field">${L(tn("model"), "instance.model", "ag-model")}<${ModelSelect} id="ag-model" value=${f.model} onChange=${set("model")}
         backend=${f.backend || defaults.backend || "claude-code"} instance=${name} inherit=${tn("inheritValue", defaults.model || tn("modelCliDefault"))} /></div>
       ${(f.backend || defaults.backend || "claude-code") === "codex" ? html`<div class="field codex-speed">${L(tn("codexSpeed"), "instance.backend_options", "ag-speed")}

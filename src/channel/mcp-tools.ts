@@ -23,11 +23,19 @@ const ANNOTATIONS = new Set(["description", "title", "default", "examples"]);
  * zod 4.6 emits `.nullable()` as `type: [T, "null"]`; #2155 keeps tool schemas free of type lists, so each one goes
  * back to the `anyOf` zod 4.3 emitted, its non-annotation keywords on the non-null branch (#2670).
  */
+/**
+ * A `pattern` both a JavaScript engine and a Go (RE2) one accept: `\u00XX` is not RE2 syntax, and a client that checks
+ * the schema with it (antigravity's ACP server, #3731) refuses the whole tool. `\x00` means the same in both.
+ */
+export function portablePattern(pattern: string): string {
+  return pattern.replace(/\\u00([0-9a-fA-F]{2})/g, "\\x$1");
+}
+
 function withoutTypeLists(node: unknown): unknown {
   if (Array.isArray(node)) return node.map(withoutTypeLists);
   if (!node || typeof node !== "object") return node;
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(node)) out[k] = k === "enum" || k === "const" || ANNOTATIONS.has(k) ? v : withoutTypeLists(v);
+  for (const [k, v] of Object.entries(node)) out[k] = k === "enum" || k === "const" || ANNOTATIONS.has(k) ? v : k === "pattern" && typeof v === "string" ? portablePattern(v) : withoutTypeLists(v);
   if (!Array.isArray(out.type)) return out;
   const { type, ...rest } = out;
   const outer: Record<string, unknown> = {}, inner: Record<string, unknown> = {};

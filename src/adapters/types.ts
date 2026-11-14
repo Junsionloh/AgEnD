@@ -61,6 +61,8 @@ export interface AdapterHealth {
 export type AdapterEvent =
   | { kind: "thought"; text: string }
   | { kind: "message"; text: string }
+  /** The user's own message echoed back by the CLI (also how a resumed session replays history). */
+  | { kind: "user"; text: string }
   | { kind: "tool"; id: string; title: string; toolKind: string; status: "pending" | "in_progress" | "completed" | "failed"; rawInput?: unknown; rawOutput?: unknown }
   | { kind: "plan"; entries: unknown[] }
   | { kind: "permission"; requestId: string; tool: unknown; options: { id: string; name: string; kind: string }[] }
@@ -92,6 +94,16 @@ type RunnerMembers = Pick<Daemon,
 /** What the fleet holds per running instance. Events are the existing daemon events (`on`/`once`/`off`). */
 export interface InstanceRunner extends RunnerMembers, EventEmitter {}
 
+/**
+ * What `InstanceLifecycle.start` calls on a runner between building it and publishing it. The tmux `Daemon` has all of
+ * these; so does `AcpRunner` (most of them do nothing there). The lifecycle holds the runner as a `Daemon` for this
+ * part of its start-up; the check below is what makes that safe for the second adapter.
+ */
+export type LaunchSurface = Pick<Daemon,
+  | "start" | "abortStartup" | "setAgentCredentialIssuer" | "setDeliveryOutboxPort" | "setWorkLeaseCheck" | "seedActivityNow"
+  | "setDecisionTeams" | "setDecisionSource" | "setPeerWorkingDirectories" | "setStatusEmojiAvoidList" | "getHangDetector"
+>;
+
 /** The `tmux` runner is the daemon itself, with everything it has (the lifecycle still wires its tmux-specific hooks). */
 export type TmuxRunner = Daemon;
 
@@ -118,3 +130,7 @@ export interface CliAdapter {
   events(): AsyncIterable<AdapterEvent>;
   sessionId(): string | null;
 }
+
+/** Compile-time: the ACP runner satisfies the fleet's runner surface and the lifecycle's launch surface. */
+export type AcpRunnerIsARunner = import("./acp/acp-runner.js").AcpRunner extends InstanceRunner & LaunchSurface ? true : never;
+export const acpRunnerIsARunner: AcpRunnerIsARunner = true;

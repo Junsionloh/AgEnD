@@ -3,19 +3,39 @@
  * the runtime (the setup host must not be able to reach the daemon).
  */
 
-/** The adapters `cli_adapter` may name. Only `tmux` exists; a later phase adds ids here together with the code. */
-export type CliAdapterId = "tmux";
+/** The adapters `cli_adapter` may name. An id is added together with the code that implements it. */
+export type CliAdapterId = "tmux" | "acp";
 
-/** Adapters a `cli_adapter` value may name today. */
-export const SUPPORTED_CLI_ADAPTERS: readonly CliAdapterId[] = ["tmux"];
+/** Adapters a `cli_adapter` value may name. */
+export const SUPPORTED_CLI_ADAPTERS: readonly CliAdapterId[] = ["tmux", "acp"];
+
+/**
+ * Which backends each adapter may run (design §2.1). `tmux` runs every backend, so it is not listed. A backend that
+ * is not listed for an adapter is refused at config load, never at launch.
+ */
+export const ADAPTER_BACKENDS: Readonly<Record<Exclude<CliAdapterId, "tmux">, readonly string[]>> = {
+  acp: ["grok", "antigravity"],
+};
+
+/** The adapters the UI may offer for `backend` (always starts with `tmux`). */
+export function adaptersForBackend(backend: string): CliAdapterId[] {
+  return SUPPORTED_CLI_ADAPTERS.filter(id => id === "tmux" || ADAPTER_BACKENDS[id].includes(backend));
+}
 
 /**
  * Why a `cli_adapter` value is refused, or null when it is acceptable. Absent (or null) means `tmux`.
- * One rule for the config validator, the loader and `selectAdapter`.
+ * One rule for the config validator, the loader and `selectAdapter`. `backend` is the instance's effective backend;
+ * without one only `tmux` is acceptable (a structured adapter always runs one specific CLI).
  */
-export function cliAdapterProblem(value: unknown): string | null {
+export function cliAdapterProblem(value: unknown, backend?: string): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") return "must be a string";
-  if ((SUPPORTED_CLI_ADAPTERS as readonly string[]).includes(value)) return null;
-  return `"${value}" is not supported yet (only "tmux" is available; leave it unset for the default)`;
+  if (value === "tmux") return null;
+  if (!(SUPPORTED_CLI_ADAPTERS as readonly string[]).includes(value)) {
+    return `"${value}" is not supported yet (use "tmux", or "acp" for ${ADAPTER_BACKENDS.acp.join(" / ")}; leave it unset for the default)`;
+  }
+  const allowed = ADAPTER_BACKENDS[value as Exclude<CliAdapterId, "tmux">];
+  if (backend === undefined) return `"${value}" is not supported yet without a backend (it is set per instance, for ${allowed.join(" / ")})`;
+  if (!allowed.includes(backend)) return `"${value}" is not supported yet for backend "${backend}" (only ${allowed.join(" / ")})`;
+  return null;
 }

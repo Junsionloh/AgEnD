@@ -33,12 +33,27 @@ export interface LogSource {
   format: "claude" | "codex" | null;
   /** Why there is nothing to read: "not_running" (its transcript is found while it runs), "no_transcript", "unsupported". */
   reason?: string;
+  /** Set for an instance that produces its steps live (no file): they are served from here, `path` and `format` unused. */
+  live?: LiveSteps;
+}
+
+/**
+ * Steps an instance produces itself, live, instead of a transcript file (an `acp` instance, #3731). The cursor is a
+ * revision counter; `key` names this run's timeline, so a page holding a cursor of another run starts again.
+ */
+export interface LiveSteps {
+  readonly key: string;
+  snapshot(after: number | undefined, opts: { thoughts: boolean; limit?: number }): { steps: LogStep[]; rev: number; older: boolean };
+  /** Told when a step is added or changed; returns the way to stop being told. */
+  subscribe(listener: () => void): () => void;
 }
 
 export interface LogEventRow { id: number; event_type: string; payload: unknown; created_at: string }
 
 export interface LogServiceDeps {
   enabled(): boolean;
+  /** `web.log_thinking`: whether an admin may be shown thought text (it is never shown to anyone else). */
+  thinking?(): boolean;
   /** An instance the Log may show (a fleet instance or a ClassicBot room). */
   known(name: string): boolean;
   source(name: string): LogSource;
@@ -51,7 +66,9 @@ export interface LogServiceDeps {
   clearInterval?(handle: unknown): void;
 }
 
-export interface LogQuery { after?: number; before?: number; key?: string; skip?: boolean; limit?: number; watch?: boolean; ev?: number }
+export interface LogQuery { after?: number; before?: number; key?: string; skip?: boolean; limit?: number; watch?: boolean; ev?: number;
+  /** The reader is an admin of this fleet (not a guest, not the public link): the only reader thought text and permission buttons are for. */
+  admin?: boolean }
 
 /** A fleet event as the page shows it: its type (the page words it) and its details, masked. */
 export interface LogEvent { id: number; ts: number; type: string; detail?: string;
@@ -109,11 +126,21 @@ export class LogService {
 
   /** GET /ui/steps — null: no such instance. */
   async steps(name: string, q: LogQuery): Promise<LogAnswer | null> {
-    if (!this.deps.enabled()) { this.unwatchAll(); return { enabled: false }; }
+    if (!this.deps.enabled()) {
+      this.unwatchAll();
+      // An ACP instance's permission request is a step a person has to answer, so it reaches an admin's page even
+      // with the Log switched off — and nothing else of the Log does.
+      if (q.admin === true && this.deps.known(name)) {
+        const live = this.deps.source(name).live;
+        if (live) return this.liveAnswer(name, live, q, { enabled: true, instance: name, backend: this.deps.source(name).backend, events: [], ev: q.ev ?? 0 }, { only: "permission" });
+      }
+      return { enabled: false };
+    }
     if (!this.deps.known(name)) return null;
     const src = this.deps.source(name);
     const evs = this.eventsFor(name, q.ev);
     const base = { enabled: true as const, instance: name, backend: src.backend, events: evs.events, ev: evs.ev };
+    if (src.live) return this.liveAnswer(name, src.live, q, base);
     if (!src.format || !src.path) {
       return { ...base, supported: !!src.format, reason: src.reason ?? (src.format ? "no_transcript" : "unsupported"), steps: [], before: null, after: null };
     }
@@ -128,6 +155,54 @@ export class LogService {
     if (q.before !== undefined && !fresh) return { ...answer, ...(await this.backward(src.path, src.format, q.before, Math.min(q.limit ?? LOG_OLDER_LIMIT, LOG_OLDER_LIMIT))), after: null };
     const back = await this.backward(src.path, src.format, undefined, Math.min(q.limit ?? LOG_STEPS_LIMIT, LOG_STEPS_LIMIT));
     return { ...answer, ...back, ...((fresh || past) && (q.after !== undefined || q.before !== undefined) ? { reset: true } : {}) };
+  }
+
+  private readonly liveWatches = new Map<string, { until: number; stop: () => void; timer: unknown }>();
+
+  /** An instance's own live steps: only what changed since the page's cursor, thought text and answer buttons for an admin alone. */
+  private liveAnswer(name: string, live: LiveSteps, q: LogQuery, base: { enabled: true; instance: string; backend: string; events: LogEvent[]; ev: number }, only?: { only: "permission" }): LogAnswer {
+    if (q.watch) this.watchLive(name, live, !!only);
+    const admin = q.admin === true;
+    const thoughts = admin && this.deps.thinking?.() === true;
+    const stale = (q.key !== undefined && q.key !== live.key) || (q.after !== undefined && q.after > live.snapshot(undefined, { thoughts, limit: 1 }).rev);
+    const after = stale ? undefined : q.after;
+    const got = live.snapshot(after, { thoughts, ...(q.limit !== undefined ? { limit: Math.min(q.limit, LOG_STEPS_LIMIT) } : {}) });
+    // A person who is not an admin sees that a request is waiting, and never its answer buttons.
+    const wanted = only ? got.steps.filter(s => s.kind === only.only) : got.steps;
+    const steps = admin ? wanted : wanted.map(s => { if (s.kind !== "permission" || !s.options) return s; const { options: _options, ...rest } = s; return rest; });
+    return {
+      ...base, supported: true, key: live.key, steps: fitBytes(steps), before: null, after: got.rev,
+      ...(stale && (q.after !== undefined || q.before !== undefined) ? { reset: true } : {}),
+    };
+  }
+
+  /** Tell the page (`steps_tick`) when the live timeline moved, while it holds a watch lease. */
+  private watchLive(name: string, live: LiveSteps, limited: boolean): void {
+    const until = this.now() + WATCH_LEASE_MS;
+    const held = this.liveWatches.get(name);
+    if (held) { held.until = until; return; }
+    const setT = this.deps.setInterval ?? ((fn: () => void, ms: number) => { const t = setInterval(fn, ms); (t as { unref?: () => void }).unref?.(); return t; });
+    const entry = { until, stop: () => undefined as void, timer: null as unknown };
+    let queued = false;
+    const unsubscribe = live.subscribe(() => {
+      if (this.now() > entry.until || (!limited && !this.deps.enabled())) { this.stopLive(name); return; }
+      if (queued) return;
+      queued = true;
+      // Coalesce a burst of chunks into one tick: the page fetches what changed after it.
+      setTimeout(() => { queued = false; this.deps.emit("steps_tick", { instance: name }); }, 200).unref?.();
+    });
+    entry.stop = unsubscribe;
+    // A lease that nobody renews ends even when the timeline is quiet.
+    entry.timer = setT(() => { if (this.now() > entry.until) this.stopLive(name); }, WATCH_POLL_MS);
+    this.liveWatches.set(name, entry);
+  }
+
+  private stopLive(name: string): void {
+    const w = this.liveWatches.get(name);
+    if (!w) return;
+    w.stop();
+    (this.deps.clearInterval ?? ((h: unknown) => clearInterval(h as ReturnType<typeof setInterval>)))(w.timer);
+    this.liveWatches.delete(name);
   }
 
   /**
@@ -270,10 +345,13 @@ export class LogService {
   }
 
   /** Every watch ends (the Log was turned off, the fleet stops). */
-  unwatchAll(): void { for (const name of [...this.watches.keys()]) this.unwatch(name); }
+  unwatchAll(): void {
+    for (const name of [...this.watches.keys()]) this.unwatch(name);
+    for (const name of [...this.liveWatches.keys()]) this.stopLive(name);
+  }
 
   /** How many instances are watched now (for tests and diagnostics). */
-  watched(): number { return this.watches.size; }
+  watched(): number { return this.watches.size + this.liveWatches.size; }
 }
 
 /** The newest steps whose JSON fits LOG_RESPONSE_MAX_BYTES (each step is already bounded; this bounds their number). */
