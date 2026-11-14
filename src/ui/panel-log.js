@@ -136,6 +136,8 @@ function LogView({ name, inst, navKey, exec, awaiting }) {
   const overPublicLink = globalThis.document?.body?.dataset?.publicLink === "1";
   const polling = globalThis.document?.body?.dataset?.webTransport === "poll";
 
+  // The permission card's POST: under this page's lease, so a card left behind by a navigation sends nothing later.
+  const fetchWith = (url, init) => lease.fetch(url, init);
   const q = (params) => `/ui/steps?${new URLSearchParams({ instance: name, ...params })}`;
   const read = async (url) => {
     const r = await lease.fetch(url, { cache: "no-store" });
@@ -255,7 +257,7 @@ function LogView({ name, inst, navKey, exec, awaiting }) {
   const sub = html`<span class="status"><span class=${`dot ${cls}`} aria-hidden="true"></span>${statusLabel(inst, exec, awaiting)}</span>`;
   const items = useMemo(() => {
     const all = timeline(steps, events);
-    const shown = filter === "tools" ? all.filter((x) => x.kind === "tool") : filter === "errors" ? all.filter(isError) : all;
+    const shown = filter === "tools" ? all.filter((x) => x.kind === "tool" || x.kind === "permission") : filter === "errors" ? all.filter(isError) : all;
     return collapse(shown);
   }, [steps, events, filter]);
 
@@ -277,7 +279,7 @@ function LogView({ name, inst, navKey, exec, awaiting }) {
         ? html`<div class="log-older"><button type="button" class="btn btn-sm" disabled=${older.busy} onClick=${loadOlder}>${older.busy ? tl("loading") : tl("olderLoad")}</button></div>`
         : cursor.current.trimmed ? html`<p class="note log-start">${tl("olderTrimmed")}</p>`
         : steps.length ? html`<p class="note log-start">${tl("olderStart")}</p>` : null}
-      ${items.length ? html`<ol class="log-list" role="log" aria-label=${t("app.log")}>${items.map((x, i) => html`<${LogRow} key=${`${x.kind}:${x.id}`} x=${x} prev=${items[i - 1]} />`)}</ol>`
+      ${items.length ? html`<ol class="log-list" role="log" aria-label=${t("app.log")}>${items.map((x, i) => html`<${LogRow} key=${`${x.kind}:${x.id}`} x=${x} prev=${items[i - 1]} instance=${name} fetcher=${fetchWith} />`)}</ol>`
         : html`<p class="note log-empty">${tl("empty")}</p>`}`;
   }
   const tools = state.phase === "on" ? html`<div data-trust="panel-controls" class="log-bar" role="group" aria-label=${tl("filter")}>

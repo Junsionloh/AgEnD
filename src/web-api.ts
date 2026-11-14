@@ -57,6 +57,8 @@ import { fileURLToPath } from "node:url";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import type { LifecycleCreateArgs } from "./instance-lifecycle.js";
 import { CreateInstanceArgs, CreateScheduleArgs, UpdateScheduleArgs, validateArgs } from "./outbound-schemas.js";
+import { adaptersForBackend } from "./adapters/config.js";
+import { createInstanceAdapterFields } from "./adapters/create-fields.js";
 import { scheduleView } from "./web-schedules.js";
 import { DEFAULT_SCHEDULER_CONFIG } from "./scheduler/index.js";
 import type { Schedule, ScheduleRetry } from "./scheduler/types.js";
@@ -556,6 +558,10 @@ export interface WebApiContext {
   /** #1218: an instance's Log steps, read on demand (null: no such instance; `{ enabled: false }`: the Log is off). */
   subagentRuns?(name: string): Promise<import("./subagent-service.js").SubagentAnswer>;
   logSteps?(name: string, q: import("./log-service.js").LogQuery): Promise<unknown>;
+  /** #3731: the same read for a fleet admin: an ACP instance's thought text (when `web.log_thinking`) and answer buttons come with it. */
+  logStepsAsAdmin?(name: string, q: import("./log-service.js").LogQuery): Promise<unknown>;
+  /** #3731: a person's answer to an ACP instance's permission request; an error text, or null when applied. */
+  answerAcpPermission?(instance: string, requestId: string, decision: "allow" | "deny" | "cancel"): string | null;
   /** #1468: the prompt-cache expiry analysis for a window ("24h" | "7d" | "30d"); absent: not offered. */
   cacheReport?(window: string): Promise<unknown>;
   /** #2661: every instance's Office level (office-levels.ts), reused for a minute; null: web.office_levels is off. Absent: not offered. */
@@ -2293,7 +2299,7 @@ export function handleWebRequest(
       const binaryOf = new Map(BACKENDS.map(b => [b.name, b]));
       const backends = ctx.backendAvailabilityRows().filter(r => binaryOf.has(r.backend)).map(r => ({
         name: r.backend, binary: binaryOf.get(r.backend)!.binary, installed: r.state !== "not_installed" && r.path !== null, path: r.path ?? "",
-        deprecated: binaryOf.get(r.backend)!.deprecated ?? false, state: r.state, minVersion: r.minVersion, ...(r.state === "unknown" ? { unknown: true } : {}),
+        deprecated: binaryOf.get(r.backend)!.deprecated ?? false, state: r.state, minVersion: r.minVersion, adapters: adaptersForBackend(r.backend), ...(r.state === "unknown" ? { unknown: true } : {}),
       }));
       json(res, 200, { backends, defaultBackend });
       return true;
@@ -2304,7 +2310,7 @@ export function handleWebRequest(
     void Promise.all(BACKENDS.map(async (b) => {
       const found = await binaryProbe.probe(b.binary);
       const path = found.known ? found.path : null;
-      return { name: b.name, binary: b.binary, installed: path !== null, path: path ?? "", deprecated: b.deprecated ?? false,
+      return { name: b.name, binary: b.binary, installed: path !== null, path: path ?? "", deprecated: b.deprecated ?? false, adapters: adaptersForBackend(b.name),
         ...(found.known ? {} : { unknown: true }) };
     })).then(
       (backends) => { if (!res.headersSent) json(res, 200, { backends, defaultBackend }); },
@@ -2608,7 +2614,9 @@ export function handleWebRequest(
     const chat = p.get("chat") === "1";
     if (chat && !admin) { json(res, 403, { error: "admin_only" }); return true; }
     const thinking = p.get("thinking") === "1" && admin;
-    ctx.logSteps(instance, {
+    // The answer buttons of an ACP permission request are an admin's alone: the service learns that from this call, never from the query.
+    const read = admin && ctx.logStepsAsAdmin ? ctx.logStepsAsAdmin.bind(ctx) : ctx.logSteps.bind(ctx);
+    read(instance, {
       ...(chat ? { chat: true } : {}),
       ...(thinking ? { thinking: true } : {}),
       ...(after !== undefined ? { after } : {}), ...(before !== undefined ? { before } : {}), ...(ev !== undefined ? { ev } : {}),
@@ -2628,6 +2636,32 @@ export function handleWebRequest(
       ctx.logger.error({ err: (err as Error).message, instance }, "Log steps read failed");
       json(res, 500, { error: "could not read the steps" });
     });
+    return true;
+  }
+
+  // ── #3731: answer an ACP instance's permission request (chat button) ──
+
+  if (method === "POST" && path === "/ui/permission") {
+    (async () => {
+      try {
+        const body = await parseBody(req);
+        if (!permitWebContinuation(req, res, ctx)) return;
+        if (adminAdmissionOf(req, url, ctx) === null || gatewayRequestContext(req) || guestRequestOf(req)) { json(res, 403, { error: "admin_only" }); return; }
+        const instance = typeof body.instance === "string" ? body.instance : "";
+        const requestId = typeof body.request_id === "string" ? body.request_id : "";
+        const decision = body.decision;
+        if (!instance || instance.length > 128 || !requestId || requestId.length > 64 || (decision !== "allow" && decision !== "deny" && decision !== "cancel")) {
+          json(res, 400, { error: "instance, request_id and decision (allow | deny | cancel) are required" });
+          return;
+        }
+        if (!ctx.answerAcpPermission) { json(res, 404, { error: "not available" }); return; }
+        const problem = ctx.answerAcpPermission(instance, requestId, decision);
+        if (problem) { json(res, 409, { error: problem }); return; }
+        json(res, 200, { ok: true });
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+    })();
     return true;
   }
 
@@ -3583,12 +3617,16 @@ export function handleWebRequest(
         if (!account.ok) { const { ok: _ok, status, ...rest } = account; json(res, status, rest); return; }
         delete (v.data as Record<string, unknown>).credentialProfile;
         if (account.backendOptions) v.data.backend_options = account.backendOptions;
+        // How the new agent runs (#3731): `cli_adapter` / `acp_always_approve`, judged against the backend it will use.
+        const adapterFields = createInstanceAdapterFields(v.data, ctx.fleetConfig?.defaults?.backend);
+        if (!adapterFields.ok) { json(res, 400, { error: adapterFields.error }); return; }
+        const createArgs = adapterFields.args;
         let result: unknown = null;
         let error: string | undefined;
         const respond = (r: unknown, e?: string): void => { result = r; error = e; };
         const execution = settingsRequestExecution(req);
-        if (execution) await ctx.lifecycle.handleCreate(v.data, respond, undefined, execution);
-        else await ctx.lifecycle.handleCreate(v.data, respond);
+        if (execution) await ctx.lifecycle.handleCreate(createArgs, respond, undefined, execution);
+        else await ctx.lifecycle.handleCreate(createArgs, respond);
         if (error) {
           json(res, 400, { error });
         } else {

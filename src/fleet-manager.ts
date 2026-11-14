@@ -285,7 +285,7 @@ import { shapeWebModelCatalog } from "./web-model-groups.js";
 import { isWindowsInstance, isNativePaneInstance, isNativeExecInstance, WINDOWS_CONFIG_REFUSED, nativeCredentialProfile } from "./native-instance-registry.js";
 import { createNativeWindowsInstance, updateNativeWindowsInstance } from "./native-instance-api.js";
 import { NativeInstanceConfigEdit, parseNativeInstanceCreate, type NativeInstanceCreateInput } from "./native-instance-input.js";
-import { LogService, thinkingOn, type LogAnswer, type LogQuery, type LogSource } from "./log-service.js";
+import { LogService, thinkingOn, type LiveSteps, type LogAnswer, type LogQuery, type LogSource } from "./log-service.js";
 import { viewHistory, type ViewHistoryAnswer, type ViewHistoryQuery } from "./view-history.js";
 import { WebChatHistory, WEB_CHAT_TEXT_MAX, isWebMessageId, newWebMessageId, webChatFrom, type WebChatAttachment, type WebChatPost } from "./web-chat-history.js";
 import { WEB_ECHO_COPIES_MAX, WEB_MIRROR_TIMEOUT_MS, webReactionEmoji, webReactionProblem, type WebEchoCopy } from "./web-reactions.js";
@@ -378,6 +378,9 @@ import type { RemoteCardAction, RemoteCardOutcome } from "./remote-card-answer.j
 import { redactSecrets } from "./tool-progress.js";
 import { idleGateTimeoutLog } from "./idle-gate-log.js";
 import { DEFAULT_STUCK_TIMEOUT_MS, readLastInboundAt, type Daemon, type OwnSwitchOutcome } from "./daemon.js";
+import type { InstanceRunner } from "./adapters/types.js";
+import { adapterOf, cancelRunner, capabilitiesOf } from "./adapters/registry.js";
+import { adapterUiView } from "./adapters/ui-view.js";
 import { clearPausedMarker, readPausedAt, readPauseReason, writePausedMarker } from "./pause-marker.js";
 import { readBackgroundWorkEndedMarker } from "./background-work-ended.js";
 import { DEFAULT_WARM_OVERFLOW, WakeCoordinator } from "./wake-coordinator.js";
@@ -1629,7 +1632,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   }
   /** The local machine's inventory as last used to open its pane relay (status only; never a launch decision). */
   private localPaneInventory: import("./windows-cli.js").WindowsCliProbe | null = null;
-  private nativeCliStatus(cli: string | undefined, machineId: string | undefined, daemon?: Daemon): { native_cli_version?: string; native_cli_verification?: string } {
+  private nativeCliStatus(cli: string | undefined, machineId: string | undefined, daemon?: InstanceRunner): { native_cli_version?: string; native_cli_verification?: string } {
     if (cli !== "codex" && cli !== "claude-code") return {};
     // The version the running pane actually launched; only without one, the machine's last inventory.
     let running: string | undefined;
@@ -4983,11 +4986,11 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     this.scheduleDeliveryOutboxPump();
   }
 
-  private workingStateListeners?: WeakSet<Daemon>;
+  private workingStateListeners?: WeakSet<InstanceRunner>;
   private workingStateErrors?: Set<string>;
 
   /** Attach only to the published owner. Nothing here sends or resumes work. */
-  private listenForWorkingState(name: string, daemon: Daemon): void {
+  private listenForWorkingState(name: string, daemon: InstanceRunner): void {
     if (typeof daemon.getWorkingStateObservation !== "function") return;
     this.workingStateListeners ??= new WeakSet();
     if (this.workingStateListeners.has(daemon)) return;
@@ -5786,7 +5789,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   /** Capture the current daemon and delivery owner for a background context read. */
   getPaneContextSource(name: string): import("./pane-context-cache.js").PaneContextSource | null {
     const daemon = this.daemons.get(name);
-    const source = daemon?.getPaneContextSource?.();
+    // Reading context off the screen needs a pane.
+    const source = capabilitiesOf(daemon).paneView ? daemon?.getPaneContextSource?.() : null;
     if (!daemon || !source || this.shuttingDown) return null;
     const epoch = this.getDeliveryEpoch(name);
     return { ...source, generation: `${source.generation}:${epoch}`, isCurrent: () => !this.shuttingDown
@@ -6691,7 +6695,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         try { return daemon ? launchIdentity(daemon.getInteractionSnapshot().owner) : null; } catch { return null; }
       },
       paneFollow: (name) => {
-        try { return this.lifecycle.daemons.get(name)?.compactPaneUi() != null; } catch { return false; }
+        try {
+          const daemon = this.lifecycle.daemons.get(name);
+          return capabilitiesOf(daemon).paneView && daemon?.compactPaneUi() != null;
+        } catch { return false; }
       },
       changed: () => this.emitSseEvent("status", this.getUiStatus()),
     });
@@ -6707,6 +6714,16 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
 
   /** #1218: GET /ui/steps — an instance's steps, read on demand (null: no such instance). */
   logSteps(name: string, q: LogQuery): Promise<LogAnswer | null> { return this.log.steps(name, q); }
+
+  logStepsAsAdmin(name: string, q: LogQuery): Promise<LogAnswer | null> { return this.log.steps(name, { ...q, admin: true }); }
+
+  /** #3731: POST /ui/permission — a person answers an ACP instance's waiting permission request. Null: applied. */
+  answerAcpPermission(name: string, requestId: string, decision: "allow" | "deny" | "cancel"): string | null {
+    const runner = this.lifecycle.daemons.get(name);
+    const acp = runner && adapterOf(runner)?.id === "acp" ? runner as unknown as { answerPermissionByUser?: (id: string, d: "allow" | "deny" | "cancel") => string | null } : undefined;
+    if (!acp?.answerPermissionByUser) return `"${name}" is not running over ACP`;
+    return acp.answerPermissionByUser(requestId, decision);
+  }
   private subagentReader = new SubagentService(name => this.lifecycle.daemons.get(name)?.subagentSource() ?? null);
   subagentRuns(name: string) { return this.subagentReader.read(name); }
 
@@ -6721,7 +6738,11 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const instances = this.fleetConfig?.instances ?? {};
     const config = Object.prototype.hasOwnProperty.call(instances, name) ? instances[name] : undefined;
     const backend = config?.backend ?? (config ? null : this.classicRoomFor(name)?.backend) ?? this.fleetConfig?.defaults?.backend ?? "claude-code";
-    const live = this.lifecycle.daemons.get(name)?.logTranscriptPath() ?? null;
+    const runner = this.lifecycle.daemons.get(name);
+    // An instance that runs over ACP has no transcript file: its steps are built live, from the agent's own updates.
+    const acpSteps = runner && adapterOf(runner)?.id === "acp" ? (runner as unknown as { liveSteps?: LiveSteps }).liveSteps : undefined;
+    if (acpSteps) return { backend, path: null, format: null, live: acpSteps };
+    const live = runner?.logTranscriptPath() ?? null;
     if (backend === "claude-code") {
       let path = live;
       if (!path) {
@@ -7394,7 +7415,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     return this.daemons.get(instanceName)?.launchSupportsSteer();
   }
 
-  private humanReceiptDaemons = new WeakSet<Daemon>();
+  private humanReceiptDaemons = new WeakSet<InstanceRunner>();
 
   /** Cached FM + lifecycle + Daemon + tmux owner; unknown ownership grants nothing. */
   private humanReceiptOwner(instanceName: string, daemon = this.daemons.get(instanceName)): string | null {
@@ -7407,9 +7428,9 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     } catch { return null; }
   }
 
-  private listenForHumanReceipt(instanceName: string, daemon: Daemon): void {
+  private listenForHumanReceipt(instanceName: string, daemon: InstanceRunner): void {
     // Lazy initialization also supports narrow prototype-based integration fixtures.
-    this.humanReceiptDaemons ??= new WeakSet<Daemon>();
+    this.humanReceiptDaemons ??= new WeakSet<InstanceRunner>();
     if (this.humanReceiptDaemons.has(daemon)) return;
     this.humanReceiptDaemons.add(daemon);
     daemon.on("human_receipt_result", (result: { receipt_id: string; owner_key: string; proof: unknown }) => {
@@ -12376,7 +12397,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     if (!native && !existsSync(sockPath)) return;
 
     const ipc: InstanceClient = native
-      ? new NativeDaemonClient(daemon!, () => this.daemons.get(name) === daemon && (!this.instanceIpcClients.has(name) || this.instanceIpcClients.get(name) === ipc))
+      ? new NativeDaemonClient(daemon as Daemon /* a native pane is always the tmux runner, which is a Daemon */, () => this.daemons.get(name) === daemon && (!this.instanceIpcClients.has(name) || this.instanceIpcClients.get(name) === ipc))
       : new IpcClient(sockPath);
     try {
       await ipc.connect();
@@ -21273,7 +21294,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     if (!daemon) return false;
     const deliveryEpoch = this.cancelPendingDeliveries(instanceName);
     daemon.clearPendingDeliveries?.(deliveryEpoch);
-    daemon.sendEscape().catch(e => this.logger.warn({ err: e, instanceName }, "sendEscape failed"));
+    cancelRunner(daemon).catch(e => this.logger.warn({ err: e, instanceName }, "sendEscape failed"));
     this.lastInboundMsg.delete(instanceName);
     this.clearCancelButton(instanceName);
     // The queued web messages were just dropped with the rest: their ticks say so, on every page.
@@ -29711,6 +29732,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         model_source,
         ...(backend === "claude-code" ? { model_observation: this.modelObservationForInstance(name) } : {}),
         backend,
+        // How it runs: the effective cli_adapter, whether it has a terminal pane, and (acp) the approve-all switch.
+        ...adapterUiView(this.daemons.get(name), classic ? undefined : this.fleetConfig?.instances[name], this.fleetConfig?.defaults),
         effort,
         effort_source,
         // Whether the chat header's effort chip is offered (shown as "auto" while none is set): the backend takes an

@@ -34,6 +34,7 @@ import {
   classicWebEchoEffective, toolSetDefault, worstImpact,
 } from "./settings-model.js";
 import { ModelRefresh, useRefreshableModels, mw } from "./model-picker.js";
+import { ExecutionModeFields, adaptersOf, effectiveMode } from "./adapter-mode.js";
 import "./settings-codex-copy.js";   // M-2446: the Speed field's words (a retained old settings-strings lacks them)
 import { AccountSelect } from "./accounts-view.js";   // #3212: the Account field (a new module: never a stale named import)
 import { capsOf } from "./cli-caps.js";
@@ -386,8 +387,13 @@ export function useAgentForm({ name, inst, ctx }) {
   const acctBackend = f.backend || defaults.backend || "claude-code";
   const ownAccount = (inst.backend_options && inst.backend_options[acctBackend] && inst.backend_options[acctBackend].credential_profile) || "";
   const [acct, setAcct] = state("account", ownAccount);
+  // #3731: the modes the chosen backend can run. Until the host's list is read, what the agent has now stays as it is (a
+  // staged change never turns an ACP agent back to the terminal because a list was slow).
+  const backendRows = useBackendRows();
+  const adapters = backendRows ? adaptersOf(backendRows, f.backend) : (f.cli_adapter === "acp" ? ["tmux", "acp"] : ["tmux"]);
+  const mode = effectiveMode(f.cli_adapter, adapters);
   const pending = () => {
-    const patch = agentPatch({ ...f, status_emojis: emojis.value }, inst, defaults, visibilityBaseline, emojis.baseline);
+    const patch = agentPatch({ ...f, cli_adapter: mode, status_emojis: emojis.value }, inst, defaults, visibilityBaseline, emojis.baseline);
     if (inst.runtime === "windows" || acct === ownAccount) return patch;
     const opts = { ...(patch.backend_options || {}) };
     opts[acctBackend] = { ...(opts[acctBackend] || {}), credential_profile: acct || null };
@@ -396,6 +402,7 @@ export function useAgentForm({ name, inst, ctx }) {
   const stage = (done) => {
     if (!ready) return;
     const patch = pending();
+    // A mode change restarts the agent (a terminal appears or goes): the Save asks (stageAgent adds the question), once, for every way in.
     if (Object.keys(patch).length) ctx.stageAgent(name, inst, patch);
     if (done) done();
   };
@@ -407,7 +414,7 @@ export function useAgentForm({ name, inst, ctx }) {
   const inheritedBackend = !inst.backend && f.backend === (defaults.backend || "claude-code");
   const L = (text, field, id, tip) => html`<${Label} text=${text} schema=${schema} field=${field} htmlFor=${id} tip=${tip} />`;
   return { name, inst, ctx, fleet, schema, defaults, f, setF, set, setInherit, emojis, setEmojis, ids, kiroUi, errors, generalError, failoverWarn, ready,
-    acctBackend, acct, setAcct, pending, stage, shown, dh, inh, inheritedBackend, L };
+    acctBackend, acct, setAcct, adapters, mode, pending, stage, shown, dh, inh, inheritedBackend, L };
 }
 
 /** The agent dialog's categories, in order (the Details & settings page lists the same ones, with Overview before them). */
@@ -423,7 +430,7 @@ const Info = ({ children }) => html`<p class="s-info"><span aria-hidden="true">�
  * do and each with its ⓘ). `m`: useAgentForm's result. `onDelete`: the page's "Delete agent…" (the dialog has none).
  */
 export function AgentFields({ m, cat, onDelete, idPrefix = "" }) {
-  const { f, set, setInherit, schema, defaults, inst, name, ctx, errors, shown, inh, L: originalLabel, ids, kiroUi, acct, acctBackend, setAcct, inheritedBackend, generalError, failoverWarn, setF, emojis, setEmojis } = m;
+  const { f, set, setInherit, schema, defaults, inst, name, ctx, errors, shown, inh, L: originalLabel, ids, kiroUi, acct, acctBackend, setAcct, adapters, inheritedBackend, generalError, failoverWarn, setF, emojis, setEmojis } = m;
   const fieldId = key => key == null ? key : `${idPrefix}${key}`;
   const L = (text, field, key, tip) => originalLabel(text, field, fieldId(key), tip);
   const windows = inst.runtime === "windows";
@@ -442,6 +449,8 @@ export function AgentFields({ m, cat, onDelete, idPrefix = "" }) {
       <${AgentTemplateTools} idPrefix=${idPrefix} name=${name} m=${m} /></${Card}>`}</div>`;
   if (cat === "runtime") return html`<div class="ap-grid">
     <${Card} title=${pt("cardRuntime")}>
+      ${windows ? null : html`<${ExecutionModeFields} id=${fieldId("ag-mode")} adapters=${adapters} mode=${f.cli_adapter} approve=${f.acp_always_approve}
+        onMode=${set("cli_adapter")} onApprove=${set("acp_always_approve")} impact=${html`<${Impact} schema=${schema} field="instance.cli_adapter" />`} />`}
       <${AgentRuntimeSettings} idPrefix=${idPrefix} name=${name} inst=${{ ...inst, backend: f.backend }} inherited=${inheritedBackend ? html`<${Inherited} ...${inh("backend", f.backend, "#g-be", "backend")} />` : null} disabled=${Object.keys(m.pending()).length > 0 || ctx.staged?.size > 0} onChanged=${() => { ctx.reload(); if (m.onChanged) m.onChanged(); }} />
       ${!windows && capsOf(acctBackend)?.namedAccounts ? html`<${AccountSelect} id=${fieldId("ag-account")} backend=${acctBackend} value=${acct} onChange=${setAcct} />` : null}
     </${Card}>

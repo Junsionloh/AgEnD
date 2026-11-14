@@ -1,0 +1,4 @@
+---
+section: Added
+---
+- **grok and antigravity instances can run over ACP instead of a terminal (#3731).** Set `cli_adapter: acp` on an instance (or choose **ACP** in its form): the CLI runs as its own Agent Client Protocol server, with no tmux pane. The chat's activity block shows tool progress and, for admins with `web.log_thinking`, the thinking text as it happens (cut to the agent's `tool_progress`, as for any CLI); a permission request is a card in it with Allow / Deny / Cancel turn, and asks by default (`acp_always_approve: true` allows once on its own, never "always"). Cancel, crash respawn, hang detection and resuming the stored conversation after a restart all work; a CLI version that is not on the tested list (grok 1.0.77, agy 1.5.8 and 1.5.9) is refused with a message instead of started. The terminal view and `agend attach` are not available for these instances. Every other instance runs as before.

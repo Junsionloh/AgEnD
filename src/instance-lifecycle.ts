@@ -10,6 +10,15 @@ import { classifyInstanceChange } from "./instance-config-impact.js";
 import type { ActiveDecisionRow } from "./daemon.js";
 import { measureSyncWork } from "./sync-work-attribution.js";
 import { hostFacts, hostIds } from "./cli-registry.js";
+import type { InstanceRunner } from "./adapters/types.js";
+type Daemon = InstanceType<typeof import("./daemon.js").Daemon>;
+import { AcpRunner } from "./adapters/acp/acp-runner.js";
+import { AcpAdapter } from "./adapters/acp/acp-adapter.js";
+import { acpAccountProblem } from "./adapters/config.js";
+import { acpProfileFor } from "./adapters/acp/profiles.js";
+import { buildAcpLaunch, acpTraceSink } from "./adapters/acp/launch.js";
+import { adapterOf } from "./adapters/registry.js";
+import { adapterConfigOf, selectAdapter } from "./adapters/select.js";
 import { REMOVED_BACKENDS, isRemovedBackend, removedBackendMessage } from "./backend/removed.js";
 import { existsSync, readFileSync, mkdirSync, realpathSync, writeFileSync, statSync } from "node:fs";
 import { ensureInstanceDir } from "./private-dir.js";
@@ -378,7 +387,6 @@ export class SupersededStartError extends Error {
  */
 export const PRECLAIM_LEASE_MS = 120_000;
 
-type Daemon = InstanceType<typeof import("./daemon.js").Daemon>;
 
 /**
  * Working directories of the fleet's other instances on `backendName` (#984):
@@ -590,7 +598,7 @@ export async function verifyClaudeQuotaStatus(
 
 export class InstanceLifecycle {
   /** Active daemon processes: instanceName → Daemon */
-  readonly daemons = new Map<string, Daemon>();
+  readonly daemons = new Map<string, InstanceRunner>();
   /**
    * Phase 2a: one transition (start / stop / wake / restart) at a time per
    * instance. A call that passes the current transition's handle runs inline;
@@ -667,7 +675,7 @@ export class InstanceLifecycle {
   }
 
   /** Seed only the Codex daemon replacing a scheduled capacity retry. */
-  private applyCapacityBackoffBaseline(name: string, backendName: string, daemon: Daemon): void {
+  private applyCapacityBackoffBaseline(name: string, backendName: string, daemon: InstanceRunner): void {
     if (backendName !== "codex") return;
     const baseline = this.capacityBackoffBaselines.get(name);
     if (baseline) daemon.seedErrorPatternOccurrenceCount("model_error", baseline.pattern, baseline.count);
@@ -1931,9 +1939,57 @@ export class InstanceLifecycle {
     runtimeIdentity?: FleetInstructionsParams["runtimeIdentity"],
     transition?: TransitionHandle,
     execution?: SettingsExecution,
-    published?: (daemon: Daemon) => void,
+    published?: (daemon: InstanceRunner) => void,
   ): Promise<void> {
     return this.runTransition(name, () => this.startInTransition(name, config, topicMode, runtimeIdentity, execution, published), transition);
+  }
+
+  /**
+   * An `acp` instance's adapter: the CLI's ACP profile, this instance's own MCP server and instructions (read at each
+   * start, so a respawn sees the current decisions), and the runner that hosts it. No backend binary, no tmux.
+   */
+  private buildAcpAdapter(p: {
+    name: string; config: InstanceConfig; instanceDir: string; topicMode: boolean; backendName: string;
+    runtimeIdentity?: FleetInstructionsParams["runtimeIdentity"]; resolvedBinary: string | null;
+    capActiveDecisions: <T extends { scope?: string }>(rows: readonly T[]) => T[];
+    selectRelevantDecisions: <T extends { scope?: string; project_root?: string; team?: string | null; title: string }>(rows: T[], workDir: string, general: boolean, teams: string[]) => T[];
+  }): AcpAdapter {
+    const profile = acpProfileFor(p.backendName);
+    if (!profile) throw new Error(`cli_adapter acp has no profile for backend "${p.backendName}"`);
+    if (!p.resolvedBinary) {
+      throw new Error(`cli_adapter: acp needs the ${profile.binary} binary, and it was not found in PATH. Install ${profile.label}, or set cli_adapter to tmux for this instance.`);
+    }
+    const accountProblem = acpAccountProblem(p.config, p.backendName);
+    if (accountProblem) throw new Error(accountProblem);
+    const identity = p.runtimeIdentity ?? { kind: "fleet-topic" as const, backend: p.backendName, model: p.config.model ?? "default" };
+    let runner!: AcpRunner;
+    return new AcpAdapter({
+      profile,
+      command: p.resolvedBinary,
+      cwd: p.config.working_directory,
+      instanceDir: p.instanceDir,
+      model: p.config.model,
+      effort: (p.config as InstanceConfig & { effort?: string }).effort,
+      mcpServers: [],
+      logger: this.ctx.logger,
+      // AGEND_ACP_TRACE=1 writes every frame to acp-trace.jsonl in the instance directory (owner-only). A debugging aid.
+      ...(process.env.AGEND_ACP_TRACE === "1" ? { trace: acpTraceSink(p.instanceDir) } : {}),
+      resolveLaunch: () => {
+        const inputs = runner.launchInputs();
+        const decisions = inputs.decisions
+          ? p.capActiveDecisions(p.selectRelevantDecisions([...inputs.decisions] as { title: string; content: string; scope?: string }[], p.config.working_directory, p.config.general_topic === true, inputs.teams))
+          : undefined;
+        decisions?.sort((a, b) => a.title.localeCompare(b.title));
+        return buildAcpLaunch({
+          name: p.name, config: inputs.config, instanceDir: p.instanceDir, runtimeIdentity: identity,
+          decisions: decisions?.map(d => ({ title: d.title, content: d.content })), statusEmojis: inputs.statusEmojis,
+        });
+      },
+      makeRunner: adapter => {
+        runner = new AcpRunner(adapter, { name: p.name, config: p.config, instanceDir: p.instanceDir, topicMode: p.topicMode, backend: p.backendName, logger: this.ctx.logger });
+        return runner;
+      },
+    });
   }
 
   private async startInTransition(
@@ -1942,7 +1998,7 @@ export class InstanceLifecycle {
     topicMode: boolean,
     runtimeIdentity?: FleetInstructionsParams["runtimeIdentity"],
     execution?: SettingsExecution,
-    published?: (daemon: Daemon) => void,
+    published?: (daemon: InstanceRunner) => void,
   ): Promise<void> {
     const epoch = this.epochOf(name);
     const check = (): void => { execution?.assert(); if (this.epochOf(name) !== epoch) throw new SupersededStartError(name); };
@@ -1978,7 +2034,7 @@ export class InstanceLifecycle {
     // Daemon.start consumes the recovery marker after reading it. A start
     // that fails before reaching the daemon must leave that intent intact.
 
-    const { Daemon } = await import("./daemon.js");
+    const { Daemon, capActiveDecisions, selectRelevantDecisions } = await import("./daemon.js");
     const { createBackend } = await import("./backend/factory.js");
     check();
 
@@ -1998,10 +2054,12 @@ export class InstanceLifecycle {
     // hint so createBackend's resolveBinary does not run synchronous `which`
     // (#1490 row 67). Missing still only logs; start continues.
     const installation = BACKEND_INSTALLATION_INFO[backendName];
+    let resolvedBinary: string | null = null;
     // alpha: a native Windows pane's CLI is on that PC — nothing to look for on this one.
     if (!native && installation) {
       const { resolveBackendBinary } = await import("./backend-availability.js");
       const path = await resolveBackendBinary(backendName);
+      resolvedBinary = path ?? null;
       noteResolvedBinary(installation.binary, path ?? installation.binary);
       check();
       if (!path) {
@@ -2031,24 +2089,33 @@ export class InstanceLifecycle {
         credentialHold.release(); credentialHold = null;          // a save changed its account while it waited: ask again
       }
     }
-    const backend = native?.backend ?? createBackend(backendName, instanceDir);
-    const daemon = new Daemon(
-      name,
-      config,
-      instanceDir,
-      topicMode,
-      backend,
-      this.ctx.controlClient ?? undefined,
-      this.ctx.logger,
-      runtimeIdentity ?? {
-        kind: "fleet-topic",
-        backend: backendName,
-        model: config.model ?? "default",
+    // A native Windows pane is always the tmux runner's feature set: it never takes another adapter, whatever the config says.
+    const adapter = selectAdapter(backendName, adapterConfigOf(config, !!native), {
+      tmux: () => {
+        const backend = native?.backend ?? createBackend(backendName, instanceDir);
+        const runner = new Daemon(
+          name,
+          config,
+          instanceDir,
+          topicMode,
+          backend,
+          this.ctx.controlClient ?? undefined,
+          this.ctx.logger,
+          runtimeIdentity ?? {
+            kind: "fleet-topic",
+            backend: backendName,
+            model: config.model ?? "default",
+          },
+          this.ctx.spawnGate,
+          this.ctx.stormWindow,
+          this.ctx.backendOutage,
+        );
+        return { runner, backend };
       },
-      this.ctx.spawnGate,
-      this.ctx.stormWindow,
-      this.ctx.backendOutage,
-    );
+      acp: () => this.buildAcpAdapter({ name, config, instanceDir, topicMode, backendName, runtimeIdentity, resolvedBinary, capActiveDecisions, selectRelevantDecisions }),
+    });
+    // The tmux Daemon or an AcpRunner: both have the whole start-up surface used below (see `LaunchSurface`).
+    const daemon = adapter.runner as Daemon;
     launched = daemon;
     if (native) { daemon.setNativePaneLifecycle(native); native.bindDaemon?.(daemon); }
     // Register before start: a pre-launch refusal has no published daemon or later incident handlers.
@@ -2445,7 +2512,10 @@ export class InstanceLifecycle {
       let stopped = false;
       try {
         if (daemon.usesNativePane?.()) await daemon.stop({ nativePane: "close" });
-        else await daemon.stop();
+        else {
+          const adapter = adapterOf(daemon);
+          if (adapter) await adapter.stop(); else await daemon.stop();
+        }
         stopped = true;
       } finally {
         if (captured && this.ctx.deliveryOutbox) {
@@ -2932,6 +3002,9 @@ export class InstanceLifecycle {
         ...(args.model ? { model: args.model } : {}),
         ...(args.backend ? { backend: args.backend } : {}),
         ...(args.backend_options ? { backend_options: args.backend_options } : {}),
+        // #3731: only "acp" is ever stored (tmux is the default); the web handler validated it against the backend.
+        ...(args.cli_adapter === "acp" ? { cli_adapter: "acp" as const } : {}),
+        ...(args.cli_adapter === "acp" && args.acp_always_approve === true ? { acp_always_approve: true } : {}),
         ...(args.model_failover ? { model_failover: args.model_failover } : {}),
         ...(args.tool_set ? { tool_set: args.tool_set } : {}),
         ...(args.skipPermissions != null ? { skipPermissions: args.skipPermissions } : {}),

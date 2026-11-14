@@ -50,6 +50,7 @@ const FAMILIES: ReadonlyArray<{ why: string; files: Readonly<Record<string, numb
     // AGEND-119: a keep-alive run per CLI (the switch is checked by the compiler against `host.keepAlive`'s ids) and the words that say what the switch does for each.
     "src/signin-keepalive.ts": 1, "src/ui/accounts-keepalive.js": 1,
   } },
+  { why: "execution modes (#3731): which backends can run over ACP, one table keyed by CLI id that the config loader reads (that file imports nothing, so it cannot ask the registry)", files: { "src/adapters/config.ts": 2 } },
   { why: "web-api.ts: the backend names in a request schema, and which CLIs have a workspace follow", files: { "src/web-api.ts": 4 } },
 ];
 const ALLOWED: Record<string, number> = Object.assign({}, ...FAMILIES.map(f => f.files));

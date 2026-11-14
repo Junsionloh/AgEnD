@@ -1951,6 +1951,11 @@ const createInstance: Handler = async (ctx, rawArgs, respond, meta) => {
     respond(null, "tool_set and skipPermissions can only be changed by an administrator via Settings or fleet.yaml (privilege boundary, #804/#814)");
     return;
   }
+  // Approving every tool permission without asking is the same kind of switch as skipPermissions: a person sets it.
+  if ((rawArgs as any)?.acp_always_approve !== undefined) {
+    respond(null, "acp_always_approve can only be changed by an administrator via Settings or fleet.yaml (privilege boundary)");
+    return;
+  }
   // #2942: a Windows agent from an agent's request is only ever held as a pending change for a fleet admin's General card.
   if ((rawArgs as any)?.runtime === "windows") {
     if ((rawArgs as any)?.tool_set !== undefined) { respond(null, WINDOWS_TOOL_SET_REFUSED); return; }

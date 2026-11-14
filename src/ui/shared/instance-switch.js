@@ -9,6 +9,7 @@ import { openSearch } from "./app-shell.js";
 import { t } from "./app-i18n.js";
 import { chatPath, detailsPath, logPath, viewPath } from "./app-route.js";
 import { supportsInstanceFeature } from "./instance-nav.js";
+import { appStore, useStore } from "./app-store.js";
 
 /**
  * current: "chat" | "view" | "log" | "details". #1218: Log sits between View and Details. `data-label`: each tab is as
@@ -20,7 +21,12 @@ export function InstanceSwitch({ name, current, guest = false, instance }) {
     if (!pane?.navigate || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
     e.preventDefault(); pane.navigate(href);
   };
-  const seg = (key, href, label) => pane?.visibleTabs && !pane.visibleTabs.includes(key) ? null : html`<a key=${key} class=${`seg-item${current === key ? " active" : ""}`} href=${href} onClick=${pane?.navigate ? (e) => follow(e, href) : undefined}
+  // #3731: an agent with no terminal pane (it runs over ACP) has nothing to show in View: the tab is off, and says why.
+  const { instances } = useStore(appStore);
+  const noPane = (instances || []).some((i) => i.name === name && i.pane_view === false);
+  const seg = (key, href, label) => pane?.visibleTabs && !pane.visibleTabs.includes(key) ? null : key === "view" && noPane && current !== "view"
+    ? html`<span key=${key} class="seg-item disabled" role="link" aria-disabled="true" title=${t("view.noPaneTitle")} data-label=${label}>${label}</span>`
+    : html`<a key=${key} class=${`seg-item${current === key ? " active" : ""}`} href=${href} onClick=${pane?.navigate ? (e) => follow(e, href) : undefined}
     aria-current=${current === key ? "page" : undefined} data-label=${label}>${label}</a>`;
   if (guest) return html`<nav class="inst-switch seg" aria-label=${t("app.instanceViews", name)}>
     ${seg("chat", chatPath(name), t("app.chat"))}${supportsInstanceFeature(instance,"view") ? seg("view", viewPath(name), t("app.view")) : null}<button key="search" type="button" class="seg-item"
