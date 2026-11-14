@@ -176,10 +176,6 @@ export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmoji
   const hang = inst.hang_detector || {};
   const next = {
     backend: form.backend, model: form.model.trim() || null,
-    // #3731: how it runs. "tmux" is the default, so it is sent as null (the key is removed from fleet.yaml), never written;
-    // approve-all only means something with ACP and is removed with it.
-    cli_adapter: form.cli_adapter === "acp" ? "acp" : null,
-    acp_always_approve: form.cli_adapter === "acp" && form.acp_always_approve ? true : null,
     working_directory: form.working_directory, channel_id: form.channel_id || undefined,
     description: form.description || undefined, systemPrompt: form.systemPrompt || undefined,
     tags: form.tags.length ? form.tags : undefined, general_topic: form.general_topic,
@@ -202,8 +198,6 @@ export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmoji
   return Object.assign(changedFields(next, {
     backend: inst.backend || defaults.backend || "claude-code",
     model: (inst.model && inst.model.trim()) || null,
-    cli_adapter: inst.cli_adapter === "acp" ? "acp" : null,
-    acp_always_approve: inst.acp_always_approve === true ? true : null,
     working_directory: inst.working_directory || "",
     channel_id: inst.channel_id || undefined,
     description: inst.description || undefined,
@@ -225,7 +219,18 @@ export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmoji
     dashboard: dashboardPatchValue(dashboardForm(inst)),
     office_access: separateChoice(dashboardForm(inst).office),
     office_pack_access: separateChoice(dashboardForm(inst).office_packs),
-  }), codexSpeedPatch(form, inst));
+  }), codexSpeedPatch(form, inst), executionModePatch(form, inst));
+}
+/**
+ * #3731: how the agent runs. "tmux" is the default, so going back to it sends null (the key is removed from fleet.yaml),
+ * never a written default; approve-all only means something with ACP and goes with it. Only what changed is named.
+ */
+function executionModePatch(form, inst) {
+  const mode = form.cli_adapter === "acp" ? "acp" : null, approve = mode === "acp" && form.acp_always_approve ? true : null;
+  const out = {};
+  if (mode !== (inst.cli_adapter === "acp" ? "acp" : null)) out.cli_adapter = mode;
+  if (approve !== (inst.acp_always_approve === true ? true : null)) out.acp_always_approve = approve;
+  return out;
 }
 /**
  * M-2446: only the Codex speed key, merged per backend by the server (settings-instance-patch.ts), so the agent's other

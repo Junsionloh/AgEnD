@@ -3,7 +3,7 @@
 // One module for what the pages share: the execution-mode fields of the create and edit forms, the confirmation before
 // a switch, the mode badge, the terminal gating (`pane_view`), and the Log's two new rows — a thought and a permission
 // request with its Allow / Deny / Cancel turn buttons. Behind the session gate (/ui/js/).
-import { html, useState } from "/assets/app-html.js";
+import { html, useRef, useState } from "/assets/app-html.js";
 import { register, t } from "/assets/app-i18n.js";
 import { confirmDialog } from "/assets/ui-confirm.js";
 
@@ -155,10 +155,14 @@ export function PermissionCard({ step, instance, fetcher }) {
   const pending = permissionPending(step);
   const choices = permissionChoices(step);
   const busy = sent !== null;
+  // A second press before the page has redrawn must not send a second answer.
+  const inFlight = useRef(false);
   const answer = async (decision) => {
-    if (!pending || busy) return;
+    if (!pending || busy || inFlight.current) return;
+    inFlight.current = true;
     setError(""); setSent(decision);
     const problem = await sendPermission(fetcher || ((u, o) => fetch(u, o)), instance, step.id, decision);
+    inFlight.current = false;
     if (problem) { setSent(null); setError(ta("sendFailed", problem)); }
   };
   const button = (decision, label, enabled, why) => html`<button type="button" class=${`btn btn-sm perm-${decision}${decision === "allow" ? " btn-primary" : ""}`}
