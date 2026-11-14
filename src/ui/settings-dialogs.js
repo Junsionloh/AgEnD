@@ -431,7 +431,7 @@ const Info = ({ children }) => html`<p class="s-info"><span aria-hidden="true">�
  * do and each with its ⓘ). `m`: useAgentForm's result. `onDelete`: the page's "Delete agent…" (the dialog has none).
  */
 export function AgentFields({ m, cat, onDelete, idPrefix = "" }) {
-  const { f, set, setInherit, schema, defaults, inst, name, ctx, errors, shown, inh, L: originalLabel, ids, kiroUi, acct, acctBackend, setAcct, inheritedBackend, generalError, failoverWarn, setF, emojis, setEmojis } = m;
+  const { f, set, setInherit, schema, defaults, inst, name, ctx, errors, shown, inh, L: originalLabel, ids, kiroUi, acct, acctBackend, setAcct, adapters, inheritedBackend, generalError, failoverWarn, setF, emojis, setEmojis } = m;
   const fieldId = key => key == null ? key : `${idPrefix}${key}`;
   const L = (text, field, key, tip) => originalLabel(text, field, fieldId(key), tip);
   const windows = inst.runtime === "windows";
