@@ -12,6 +12,10 @@ import { measureSyncWork } from "./sync-work-attribution.js";
 import { hostFacts, hostIds } from "./cli-registry.js";
 import type { InstanceRunner } from "./adapters/types.js";
 type Daemon = InstanceType<typeof import("./daemon.js").Daemon>;
+import { AcpRunner } from "./adapters/acp/acp-runner.js";
+import { AcpAdapter } from "./adapters/acp/acp-adapter.js";
+import { acpProfileFor } from "./adapters/acp/profiles.js";
+import { buildAcpLaunch } from "./adapters/acp/launch.js";
 import { adapterOf } from "./adapters/registry.js";
 import { selectAdapter } from "./adapters/select.js";
 import { REMOVED_BACKENDS, isRemovedBackend, removedBackendMessage } from "./backend/removed.js";
@@ -1939,6 +1943,50 @@ export class InstanceLifecycle {
     return this.runTransition(name, () => this.startInTransition(name, config, topicMode, runtimeIdentity, execution, published), transition);
   }
 
+  /**
+   * An `acp` instance's adapter: the CLI's ACP profile, this instance's own MCP server and instructions (read at each
+   * start, so a respawn sees the current decisions), and the runner that hosts it. No backend binary, no tmux.
+   */
+  private buildAcpAdapter(p: {
+    name: string; config: InstanceConfig; instanceDir: string; topicMode: boolean; backendName: string;
+    runtimeIdentity?: FleetInstructionsParams["runtimeIdentity"]; resolvedBinary: string | null;
+    capActiveDecisions: <T extends { scope?: string }>(rows: readonly T[]) => T[];
+    selectRelevantDecisions: <T extends { scope?: string; project_root?: string; team?: string | null; title: string }>(rows: T[], workDir: string, general: boolean, teams: string[]) => T[];
+  }): AcpAdapter {
+    const profile = acpProfileFor(p.backendName);
+    if (!profile) throw new Error(`cli_adapter acp has no profile for backend "${p.backendName}"`);
+    if (!p.resolvedBinary) {
+      throw new Error(`cli_adapter: acp needs the ${profile.binary} binary, and it was not found in PATH. Install ${profile.label}, or set cli_adapter to tmux for this instance.`);
+    }
+    const identity = p.runtimeIdentity ?? { kind: "fleet-topic" as const, backend: p.backendName, model: p.config.model ?? "default" };
+    let runner!: AcpRunner;
+    return new AcpAdapter({
+      profile,
+      command: p.resolvedBinary,
+      cwd: p.config.working_directory,
+      instanceDir: p.instanceDir,
+      model: p.config.model,
+      effort: (p.config as InstanceConfig & { effort?: string }).effort,
+      mcpServers: [],
+      logger: this.ctx.logger,
+      resolveLaunch: () => {
+        const inputs = runner.launchInputs();
+        const decisions = inputs.decisions
+          ? p.capActiveDecisions(p.selectRelevantDecisions([...inputs.decisions] as { title: string; content: string; scope?: string }[], p.config.working_directory, p.config.general_topic === true, inputs.teams))
+          : undefined;
+        decisions?.sort((a, b) => a.title.localeCompare(b.title));
+        return buildAcpLaunch({
+          name: p.name, config: inputs.config, instanceDir: p.instanceDir, runtimeIdentity: identity,
+          decisions: decisions?.map(d => ({ title: d.title, content: d.content })), statusEmojis: inputs.statusEmojis,
+        });
+      },
+      makeRunner: adapter => {
+        runner = new AcpRunner(adapter, { name: p.name, config: p.config, instanceDir: p.instanceDir, topicMode: p.topicMode, backend: p.backendName, logger: this.ctx.logger });
+        return runner;
+      },
+    });
+  }
+
   private async startInTransition(
     name: string,
     config: InstanceConfig,
@@ -1981,7 +2029,7 @@ export class InstanceLifecycle {
     // Daemon.start consumes the recovery marker after reading it. A start
     // that fails before reaching the daemon must leave that intent intact.
 
-    const { Daemon } = await import("./daemon.js");
+    const { Daemon, capActiveDecisions, selectRelevantDecisions } = await import("./daemon.js");
     const { createBackend } = await import("./backend/factory.js");
     check();
 
@@ -2001,10 +2049,12 @@ export class InstanceLifecycle {
     // hint so createBackend's resolveBinary does not run synchronous `which`
     // (#1490 row 67). Missing still only logs; start continues.
     const installation = BACKEND_INSTALLATION_INFO[backendName];
+    let resolvedBinary: string | null = null;
     // alpha: a native Windows pane's CLI is on that PC — nothing to look for on this one.
     if (!native && installation) {
       const { resolveBackendBinary } = await import("./backend-availability.js");
       const path = await resolveBackendBinary(backendName);
+      resolvedBinary = path ?? null;
       noteResolvedBinary(installation.binary, path ?? installation.binary);
       check();
       if (!path) {
@@ -2056,8 +2106,10 @@ export class InstanceLifecycle {
         );
         return { runner, backend };
       },
+      acp: () => this.buildAcpAdapter({ name, config, instanceDir, topicMode, backendName, runtimeIdentity, resolvedBinary, capActiveDecisions, selectRelevantDecisions }),
     });
-    const daemon = adapter.runner;
+    // The tmux Daemon or an AcpRunner: both have the whole start-up surface used below (see `LaunchSurface`).
+    const daemon = adapter.runner as Daemon;
     launched = daemon;
     if (native) { daemon.setNativePaneLifecycle(native); native.bindDaemon?.(daemon); }
     // Register before start: a pre-launch refusal has no published daemon or later incident handlers.

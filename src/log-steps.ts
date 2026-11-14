@@ -1152,3 +1152,6 @@ export function chatStep(step: LogStep, level: Exclude<ToolProgressLevel, "off">
   }
   return { ...rest, ...(keep ? { subject: keep } : {}) };
 }
+
+/** The masking and bounding every step's strings go through, for a producer that is not a transcript parser (#3731). */
+export { subjectOf as stepSubject, inputOf as stepInput, bodyOf as stepBody };

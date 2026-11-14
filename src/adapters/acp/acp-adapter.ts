@@ -39,6 +39,8 @@ export interface AcpAdapterOptions {
   readonly mcpServers: readonly AcpMcpServer[];
   /** Text put in front of the first prompt of a new session (fleet instructions). Not repeated after a resume. */
   readonly preamble?: string;
+  /** Read at each start instead of `mcpServers` / `preamble` when given (a respawn sees current decisions). */
+  readonly resolveLaunch?: () => { mcpServers: readonly AcpMcpServer[]; preamble?: string };
   /** Where the child's allow-listed environment is taken from (default: this process's). */
   readonly env?: NodeJS.ProcessEnv;
   /** Variables set on the child on top of the allow-listed ones. */
@@ -78,6 +80,7 @@ export class AcpAdapter implements CliAdapter {
   private lastEvent: number | null = null;
   private stopping = false;
   private preambleSent = true;
+  private preamble: string | undefined;
   private _newSession = true;
   private _agentVersion: string | null = null;
 
@@ -150,7 +153,9 @@ export class AcpAdapter implements CliAdapter {
 
   private async openSession(client: AcpClient, init: Record<string, unknown>): Promise<void> {
     const caps = (init.agentCapabilities ?? {}) as Record<string, unknown>;
-    const mcpServers = this.opts.mcpServers.map(s => ({ name: s.name, command: s.command, args: [...s.args], env: s.env.map(e => ({ ...e })) }));
+    const launch = this.opts.resolveLaunch?.() ?? { mcpServers: this.opts.mcpServers, preamble: this.opts.preamble };
+    this.preamble = launch.preamble;
+    const mcpServers = launch.mcpServers.map(s => ({ name: s.name, command: s.command, args: [...s.args], env: s.env.map(e => ({ ...e })) }));
     const params = { cwd: this.opts.cwd, mcpServers };
     if (this.session && (caps.loadSession === true || caps.load_session === true)) {
       this.replaying = true;
@@ -174,7 +179,7 @@ export class AcpAdapter implements CliAdapter {
     if (typeof created?.sessionId !== "string" || !created.sessionId) throw new Error("session/new did not return a session id");
     this.session = created.sessionId;
     this._newSession = true;
-    this.preambleSent = !this.opts.preamble;
+    this.preambleSent = !this.preamble;
     this.storeSession(this.session);
   }
 
@@ -198,7 +203,7 @@ export class AcpAdapter implements CliAdapter {
     const client = this.client;
     if (!client?.isRunning || !this.session) return Promise.reject(new AcpTransportError("the agent is not running"));
     if (this.turn) return Promise.reject(new Error("a turn is already running"));
-    const text = !this.preambleSent && this.opts.preamble ? `${this.opts.preamble}\n\n${content}` : content;
+    const text = !this.preambleSent && this.preamble ? `${this.preamble}\n\n${content}` : content;
     this.preambleSent = true;
     const sessionId = this.session;
     this.translator.reset();
