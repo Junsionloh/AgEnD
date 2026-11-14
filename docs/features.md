@@ -1730,15 +1730,16 @@ instances:
     backend: grok            # or: antigravity
     cli_adapter: acp
     working_directory: /path/to/project
+    tool_progress: standard      # the chat's activity block follows each agent's tool_progress (off: no block)
     # acp_always_approve: true   # off by default: permission requests wait for a person
 web:
-  log_tab: true              # the chat timeline shows live steps
-  log_thinking: true         # optional: admins also see the thinking text
+  log_thinking: true         # optional: admins also see the thinking text (in the chat block, as for any backend)
+  log_tab: true              # optional: the Log tab shows the same steps and the permission cards
 ```
 
 In the web app, the instance form has an **Execution mode** choice (Terminal / ACP) for those two backends; changing it asks first, because it restarts the instance and the terminal screen is lost.
 
-**What you get.** The chat timeline shows thinking (admins only, and only with `web.log_thinking`), tool calls with their progress and the agent's text as they happen. A permission request is a card in the chat with **Allow**, **Deny** and **Cancel turn**. **Cancel** interrupts the turn and answers any waiting permission request as cancelled. After a restart the instance resumes its stored conversation (`session/load`) and the chat still shows what happened before.
+**What you get.** The chat's activity block above each reply (#3648) shows thinking (admins only, and only with `web.log_thinking`), tool calls with their progress and the agent's text as they happen, cut to the agent's `tool_progress` like any backend's. A permission request is a card in that block with **Allow**, **Deny** and **Cancel turn**; the block opens by itself while one waits (an agent's own `agend` tools that AgEnD allows by itself are not shown there). Both pages ask for the steps of an ACP instance live, not from a transcript file. **Cancel** interrupts the turn and answers any waiting permission request as cancelled. After a restart the instance resumes its stored conversation (`session/load`) and the chat still shows what happened before.
 
 **What changes.**
 

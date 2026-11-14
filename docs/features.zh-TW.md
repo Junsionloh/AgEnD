@@ -1603,15 +1603,16 @@ instances:
     backend: grok            # 或：antigravity
     cli_adapter: acp
     working_directory: /path/to/project
+    tool_progress: standard      # 聊天的活動區塊依各 agent 的 tool_progress 顯示（off：沒有區塊）
     # acp_always_approve: true   # 預設關閉：權限請求會等人回答
 web:
-  log_tab: true              # 聊天時間軸顯示即時步驟
-  log_thinking: true         # 選填：admin 也能看到思考文字
+  log_thinking: true         # 選填：admin 也能看到思考文字（和任何 backend 一樣，顯示在聊天區塊）
+  log_tab: true              # 選填：Log 分頁也顯示同樣的步驟和權限卡片
 ```
 
 在網頁上，這兩種 backend 的 instance 表單有 **執行方式**（終端機／ACP）可選；切換前會先確認，因為會重啟 instance、並失去終端機畫面。
 
-**你會得到什麼。** 聊天時間軸即時顯示思考（只有 admin，而且要開 `web.log_thinking`）、工具呼叫與進度、agent 的文字。權限請求是聊天裡的一張卡片，有 **允許**、**拒絕**、**取消這回合**。**取消** 會中斷這回合，並把所有等待中的權限請求以「已取消」回答。重啟之後 instance 會用儲存的對話繼續（`session/load`），聊天也還看得到之前的內容。
+**你會得到什麼。** 每則回覆上方的聊天活動區塊（#3648）即時顯示思考（只有 admin，而且要開 `web.log_thinking`）、工具呼叫與進度、agent 的文字，內容依該 agent 的 `tool_progress` 裁切，和任何 backend 一樣。權限請求是區塊裡的一張卡片，有 **允許**、**拒絕**、**取消這回合**；有請求在等的時候區塊會自己展開（AgEnD 自己放行的 agent 內建 `agend` 工具不會顯示在這裡）。兩個頁面都是即時取得 ACP instance 的步驟，不是從逐字稿檔案讀。**取消** 會中斷這回合，並把所有等待中的權限請求以「已取消」回答。重啟之後 instance 會用儲存的對話繼續（`session/load`），聊天也還看得到之前的內容。
 
 **有什麼不同。**
 
