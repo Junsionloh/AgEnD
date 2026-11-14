@@ -558,6 +558,8 @@ export interface WebApiContext {
   /** #1218: an instance's Log steps, read on demand (null: no such instance; `{ enabled: false }`: the Log is off). */
   subagentRuns?(name: string): Promise<import("./subagent-service.js").SubagentAnswer>;
   logSteps?(name: string, q: import("./log-service.js").LogQuery): Promise<unknown>;
+  /** #3731: the same read for a fleet admin: an ACP instance's thought text (when `web.log_thinking`) and answer buttons come with it. */
+  logStepsAsAdmin?(name: string, q: import("./log-service.js").LogQuery): Promise<unknown>;
   /** #3731: a person's answer to an ACP instance's permission request; an error text, or null when applied. */
   answerAcpPermission?(instance: string, requestId: string, decision: "allow" | "deny" | "cancel"): string | null;
   /** #1468: the prompt-cache expiry analysis for a window ("24h" | "7d" | "30d"); absent: not offered. */
@@ -2612,8 +2614,9 @@ export function handleWebRequest(
     const chat = p.get("chat") === "1";
     if (chat && !admin) { json(res, 403, { error: "admin_only" }); return true; }
     const thinking = p.get("thinking") === "1" && admin;
-    ctx.logSteps(instance, {
-      admin,
+    // The answer buttons of an ACP permission request are an admin's alone: the service learns that from this call, never from the query.
+    const read = admin && ctx.logStepsAsAdmin ? ctx.logStepsAsAdmin.bind(ctx) : ctx.logSteps.bind(ctx);
+    read(instance, {
       ...(chat ? { chat: true } : {}),
       ...(thinking ? { thinking: true } : {}),
       ...(after !== undefined ? { after } : {}), ...(before !== undefined ? { before } : {}), ...(ev !== undefined ? { ev } : {}),
