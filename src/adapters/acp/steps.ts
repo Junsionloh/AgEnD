@@ -108,12 +108,13 @@ export class AcpStepStore {
   }
 
   /** A permission step's outcome: its buttons are gone, `note` says what was chosen. */
-  resolvePermission(requestId: string, note: string): void {
+  resolvePermission(requestId: string, note: string, auto = false): void {
     const step = this.byId.get(this.permissions.get(requestId)?.stepId ?? `perm-${requestId}`);
     this.permissions.delete(requestId);
     if (!step || step.status !== "running") return;
     step.status = note === "cancelled" ? "interrupted" : "done";
     step.note = note;
+    if (auto) step.auto = true;
     delete step.options;
     this.put(step, true);
   }
@@ -319,11 +320,21 @@ function subjectFromInput(input: unknown): string | undefined {
   return undefined;
 }
 
-function outputText(out: unknown): string {
-  if (!out || typeof out !== "object") return "";
+const OUTPUT_KEYS = ["tool_output_for_prompt_concise", "tool_output_for_prompt", "OkayOutput", "output", "stdout", "text"];
+/**
+ * The text of a tool's result, wherever the CLI nests it: grok puts an MCP result in `output.OkayOutput`, a shell result in
+ * `output` / `stdout`. The first string found under a known key, looking a few objects deep.
+ */
+function outputText(out: unknown, depth = 0): string {
+  if (!out || typeof out !== "object" || depth > 3) return "";
   const r = out as Record<string, unknown>;
-  for (const k of ["tool_output_for_prompt_concise", "output", "stdout", "text"]) if (typeof r[k] === "string") return r[k] as string;
-  const nested = Object.values(r).find(v => v && typeof v === "object") as Record<string, unknown> | undefined;
-  const inner = nested && ["tool_output_for_prompt_concise", "tool_output_for_prompt", "output"].map(k => nested[k]).find(v => typeof v === "string");
-  return typeof inner === "string" ? inner : "";
+  for (const k of OUTPUT_KEYS) if (typeof r[k] === "string") return r[k] as string;
+  for (const k of OUTPUT_KEYS) {
+    const v = r[k];
+    if (v && typeof v === "object") { const inner = outputText(v, depth + 1); if (inner) return inner; }
+  }
+  for (const v of Object.values(r)) {
+    if (v && typeof v === "object") { const inner = outputText(v, depth + 1); if (inner) return inner; }
+  }
+  return "";
 }

@@ -52,6 +52,8 @@ export interface LogStep {
   bodyBytes?: number;
   /** state: what happened ("compacted"); error: a status code; permission: the chosen option's name once answered ("cancelled" when the turn was). */
   note?: string;
+  /** permission (#3731): answered by AgEnD's own policy (its own agend tools, or approve-all), not by a person: the chat's block leaves it out. */
+  auto?: boolean;
   /** AGEND-181: what ties this step to a row of the chat ledger (see StepAnchor). Only user steps and `reply` calls carry one. */
   anchor?: StepAnchor;
   modelSwitch?: ModelSwitch;

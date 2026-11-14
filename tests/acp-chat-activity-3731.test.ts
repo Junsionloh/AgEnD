@@ -40,6 +40,16 @@ describe("an ACP turn in the chat's timeline", () => {
     }
   });
 
+  it("grok's MCP result nests the reply's message id in output.OkayOutput; it still anchors the call by id", () => {
+    const s = store();
+    s.beginTurn("1", "hello", undefined, WIRE);
+    s.apply({ kind: "tool", id: "c2", title: "agend__reply", toolKind: "other", status: "completed",
+      rawInput: { variant: "UseTool", tool_name: "agend__reply", tool_input: { text: "OK", reply_to: "web-m1" } },
+      rawOutput: { type: "MCP", tool_name: "reply", server_name: "agend", output: { OkayOutput: "{\"chatId\":\"web\",\"messageId\":\"web-r9\"}" } } });
+    const call = s.snapshot(undefined, { thoughts: true }).steps.find(x => x.kind === "tool")!;
+    expect(call.anchor).toEqual({ replyText: "OK", messageId: "web-r9" });
+  });
+
   it("another server's reply-looking tool is not taken for AgEnD's", () => {
     const s = store();
     s.beginTurn("1", "hello", undefined, WIRE);
@@ -80,5 +90,20 @@ describe("an ACP turn in the chat's timeline", () => {
     expect(perm).toBeDefined();
     expect(perm.status).toBe("running");
     expect(perm.options.map((o: any) => o.kind)).toEqual(["allow_once", "reject_once"]);   // never an *_always choice
+  });
+
+  it("a request AgEnD's own policy answered is left out of the block; one a person has to answer is not", () => {
+    const s = store();
+    s.beginTurn("1", "hello", undefined, WIRE);
+    const opts = [{ id: "once", name: "allow once", kind: "allow_once" as const }, { id: "no", name: "reject once", kind: "reject_once" as const }];
+    s.apply({ kind: "permission", requestId: "1", tool: { title: "agend__reply", kind: "other" }, options: opts });
+    s.resolvePermission("1", "allow once (agend tool)", true);
+    s.apply({ kind: "permission", requestId: "2", tool: { title: "Bash rm x", kind: "execute" }, options: opts });
+    const steps = s.snapshot(undefined, { thoughts: false }).steps;
+    expect(steps.filter(x => x.kind === "permission").map(x => x.auto === true)).toEqual([true, false]);
+    const rows = [{ boot: "b", id: 1, role: "user", anchor: "web-m1", text: "hello", ts: new Date(1_000).toISOString() }];
+    const { live } = groupSteps(rows, steps, { now: 1_100 });
+    expect(live.items.filter((x: any) => x.kind === "permission")).toHaveLength(1);
+    expect(live.items.find((x: any) => x.kind === "permission").auto).toBeUndefined();
   });
 });

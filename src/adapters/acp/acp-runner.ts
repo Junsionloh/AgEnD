@@ -627,12 +627,12 @@ export class AcpRunner extends EventEmitter {
       // The instance's own `agend` MCP server is how it talks to the fleet (replying is the point of the chat); asking
       // for every `reply` would make the chat unusable. Tools that start, replace or remove instances still ask.
       const allow = e.options.find(o => o.kind === "allow_once");
-      if (allow && this.adapter.answerPermission(e.requestId, { optionId: allow.id })) { this.steps.resolvePermission(e.requestId, `${allow.name} (agend tool)`); return; }
+      if (allow && this.adapter.answerPermission(e.requestId, { optionId: allow.id })) { this.steps.resolvePermission(e.requestId, `${allow.name} (agend tool)`, true); return; }
     }
     if (this.config.acp_always_approve === true) {
       // The policy is AgEnD's: answer with the one-shot allow, never an "always" option (it changes state the CLI keeps).
       const allow = e.options.find(o => o.kind === "allow_once");
-      if (allow && this.adapter.answerPermission(e.requestId, { optionId: allow.id })) { this.steps.resolvePermission(e.requestId, `${allow.name} (auto)`); return; }
+      if (allow && this.adapter.answerPermission(e.requestId, { optionId: allow.id })) { this.steps.resolvePermission(e.requestId, `${allow.name} (auto)`, true); return; }
     }
     this.emit("steps_changed");
   }
