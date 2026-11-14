@@ -850,7 +850,20 @@ export class AcpRunner extends EventEmitter {
     this.touchState();
     if (!busy) this.wakeIdleWaiters();
   }
-  private touchState(): void { this.stateChangedAt = this.now(); }
+  private touchState(): void { this.stateChangedAt = this.now(); this.publishState(); }
+
+  /**
+   * Tell the fleet a state change when it happens, as the tmux daemon does (`instance_state` over the instance socket): the
+   * dashboard's status, the idle gates and "needs you" read the fleet's cache of it, which a query alone only seeds.
+   */
+  private publishState(): void {
+    if (!this.ipc || this.isPaused) return;
+    const at = this.now();
+    this.ipc.broadcast({
+      type: "instance_state", name: this.name, state: this.stuck ? "stuck" : this.busy ? "working" : "idle",
+      unchangedForMs: 0, observedAt: at, stateChangedAt: this.stateChangedAt, interaction: this.getInteractionSnapshot(),
+    });
+  }
   private wakeIdleWaiters(): void { for (const w of [...this.idleWaiters]) w(); }
 
   private updateLastChat(chatId: string | undefined, threadId: string | undefined, adapterId: string | undefined): void {

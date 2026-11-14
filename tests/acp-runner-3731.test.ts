@@ -144,6 +144,18 @@ describe("a turn through the IPC socket", () => {
   });
 });
 
+describe("state changes reach the fleet as they happen", () => {
+  it("a turn is reported working, then idle, over the instance socket (the dashboard's status follows)", async () => {
+    const h = await boot();
+    const got: string[] = [];
+    h.fleet.on("message", (m: any) => { if (m.type === "instance_state") got.push(m.state); });
+    h.fleet.send(person("hello"));
+    await idle(h);
+    await until(() => got.includes("idle") && got.includes("working"), 3000, "both states to be reported");
+    expect(got.indexOf("working")).toBeLessThan(got.lastIndexOf("idle"));
+  });
+});
+
 describe("permissions", () => {
   it("asks by default: the request waits as a step with only the one-shot choices, and the instance reports waiting", async () => {
     const h = await boot();
