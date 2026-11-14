@@ -372,6 +372,29 @@ describe("what survives a restart", () => {
   });
 });
 
+describe("request ids restart with every agent process", () => {
+  it("a permission request after a restart is its own step, not the earlier boot's (both asked as id 0)", async () => {
+    const h = await boot();
+    h.fleet.send(person("#tool"));
+    await until(() => h.runner.steps.pendingPermissions().length === 1);
+    h.runner.clearPendingDeliveries();
+    await h.adapter.cancel();
+    await until(() => steps(h).some(s => s.kind === "turn_end"));
+    await h.runner.stop();
+    const h2 = await boot({ dir: h.dir, state: h.state });
+    h2.fleet.send(person("#tool", "m-9"));
+    await until(() => h2.runner.steps.pendingPermissions().length === 1, 5000, "the new request");
+    const perms = steps(h2).filter(s => s.kind === "permission");
+    expect(perms).toHaveLength(2);
+    expect(new Set(perms.map(p => p.id)).size).toBe(2);
+    expect(perms[0]).toMatchObject({ status: "interrupted" });
+    expect(perms[1]).toMatchObject({ status: "running" });
+    expect(perms[1]!.options).toHaveLength(2);
+    expect(h2.runner.answerPermissionByUser(perms[1]!.id, "allow")).toBeNull();
+    await until(() => steps(h2).filter(s => s.kind === "turn_end").length === 2);
+  });
+});
+
 describe("the Log's view of an ACP instance", () => {
   const view = async (h: Harness, q: { admin?: boolean }, thinking: boolean) => {
     const live = h.runner.liveSteps;
