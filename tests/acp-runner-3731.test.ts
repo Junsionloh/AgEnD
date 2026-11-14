@@ -169,6 +169,17 @@ describe("permissions", () => {
     expect(h.runner.answerPermissionByUser(id, "allow")).toMatch(/no such permission request/);
   });
 
+  it("the page names a request by its step's id (perm-<id>); that answers it too", async () => {
+    const h = await boot();
+    h.fleet.send(person("#tool"));
+    await until(() => h.runner.steps.pendingPermissions().length === 1);
+    const stepId = steps(h).find(s => s.kind === "permission")!.id;
+    expect(stepId).toMatch(/^perm-/);
+    expect(h.runner.answerPermissionByUser(stepId, "allow")).toBeNull();
+    await idle(h);
+    expect(calls(h.state).find(l => l.permissionOutcome)?.permissionOutcome).toEqual({ outcome: "selected", optionId: "allow-once" });
+  });
+
   it("deny answers the one-shot refusal", async () => {
     const h = await boot();
     h.fleet.send(person("#tool"));
@@ -197,6 +208,25 @@ describe("permissions", () => {
       await until(() => steps(h).filter(s => s.kind === "turn_end").length === n, 5000, `turn ${n}`);
     }
     expect(calls(h.state).filter(l => l.permissionOutcome)).toHaveLength(2);
+  });
+});
+
+describe("the instance's own agend tools", () => {
+  it("names them as grok and agy do, and nothing else", async () => {
+    const { ownToolName } = await import("../src/adapters/acp/acp-runner.js");
+    expect(ownToolName({ title: "agend__reply", rawInput: { variant: "UseTool", tool_name: "agend__reply" } })).toBe("reply");
+    expect(ownToolName({ title: "Run mcp_agend_set_display_name" })).toBe("set_display_name");
+    expect(ownToolName({ name: "mcp_agend_task" })).toBe("task");
+    for (const other of ["agendx__reply", "other__reply", "Write `/x/agend__reply`", "mcp_agend_", "agend__Reply", "bash"]) expect(ownToolName({ title: other })).toBeNull();
+  });
+  it("a reply tool request is allowed once without asking; a fleet-changing one still asks", async () => {
+    const h = await boot();
+    h.fleet.send(person("#owntool"));
+    await until(() => steps(h).some(s => s.kind === "turn_end" && false) || h.runner.steps.pendingPermissions().length === 1, 5000, "the create_instance request");
+    const perms = steps(h).filter(s => s.kind === "permission");
+    expect(perms.find(s => s.subject === "agend__reply")).toMatchObject({ status: "done", note: "Yes (agend tool)" });
+    expect(perms.find(s => s.subject === "agend__create_instance")).toMatchObject({ status: "running" });
+    expect(calls(h.state).filter(l => l.permissionOutcome)).toHaveLength(1); // only the reply was answered
   });
 });
 
