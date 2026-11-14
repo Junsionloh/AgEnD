@@ -490,6 +490,8 @@ export interface WebApiContext {
   /** #1218: an instance's Log steps, read on demand (null: no such instance; `{ enabled: false }`: the Log is off). */
   subagentRuns?(name: string): Promise<import("./subagent-service.js").SubagentAnswer>;
   logSteps?(name: string, q: import("./log-service.js").LogQuery): Promise<unknown>;
+  /** #3731: the same read for a fleet admin: an ACP instance's thought text (when `web.log_thinking`) and answer buttons come with it. */
+  logStepsAsAdmin?(name: string, q: import("./log-service.js").LogQuery): Promise<unknown>;
   /** #3731: a person's answer to an ACP instance's permission request; an error text, or null when applied. */
   answerAcpPermission?(instance: string, requestId: string, decision: "allow" | "deny" | "cancel"): string | null;
   /** #1468: the prompt-cache expiry analysis for a window ("24h" | "7d" | "30d"); absent: not offered. */
@@ -2000,8 +2002,8 @@ export function handleWebRequest(
     if (!ctx.logSteps) { json(res, 404, { error: "not available" }); return true; }
     // Thought text and the answer buttons of a permission request are for an admin alone (not a guest, not the public link).
     const admin = adminAdmissionOf(req, url, ctx) !== null && !gatewayRequestContext(req) && !guestRequestOf(req);
-    ctx.logSteps(instance, {
-      admin,
+    const read = admin && ctx.logStepsAsAdmin ? ctx.logStepsAsAdmin.bind(ctx) : ctx.logSteps.bind(ctx);
+    read(instance, {
       ...(after !== undefined ? { after } : {}), ...(before !== undefined ? { before } : {}), ...(ev !== undefined ? { ev } : {}),
       ...(limit !== undefined ? { limit } : {}), ...(key !== null ? { key } : {}),
       skip: p.get("skip") === "1", watch: p.get("watch") === "1",

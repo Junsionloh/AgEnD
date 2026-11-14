@@ -1,8 +1,12 @@
-import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
+import { spawn as nodeSpawn } from "../../child-process.js";
 import { EventEmitter } from "node:events";
 import { LineFramer, decodeFrame, type JsonRpcId } from "./frames.js";
 
 /** A JSON-RPC error answered by the agent (the request was understood and refused). */
+/** A child spawned with all three stdio pipes. */
+type ChildProcessPipes = ChildProcess & { stdin: NonNullable<ChildProcess["stdin"]>; stdout: NonNullable<ChildProcess["stdout"]>; stderr: NonNullable<ChildProcess["stderr"]> };
+
 export class AcpRpcError extends Error {
   constructor(readonly code: number, message: string, readonly data?: unknown) {
     super(message);
@@ -62,7 +66,7 @@ const DEFAULT_MAX_PERMISSIONS = 16;
  * Events: `exit` ({ code, signal }) once, when the process is gone and every pending request has been failed.
  */
 export class AcpClient extends EventEmitter {
-  private child: ChildProcessWithoutNullStreams | null = null;
+  private child: ChildProcessPipes | null = null;
   private readonly framer: LineFramer;
   private nextId = 1;
   private readonly pending = new Map<JsonRpcId, { resolve: (v: unknown) => void; reject: (e: Error) => void; method: string; timer: NodeJS.Timeout | null }>();
@@ -94,7 +98,7 @@ export class AcpClient extends EventEmitter {
     return new Promise((resolve, reject) => {
       const child = spawnFn(this.opts.command, [...this.opts.args], {
         cwd: this.opts.cwd, env: { ...this.opts.env }, stdio: ["pipe", "pipe", "pipe"], shell: false, windowsHide: true,
-      }) as ChildProcessWithoutNullStreams;
+      }) as ChildProcessPipes;
       this.child = child;
       let settled = false;
       child.once("error", err => {

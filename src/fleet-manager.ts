@@ -4534,6 +4534,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   /** #1218: GET /ui/steps — an instance's steps, read on demand (null: no such instance). */
   logSteps(name: string, q: LogQuery): Promise<LogAnswer | null> { return this.log.steps(name, q); }
 
+  logStepsAsAdmin(name: string, q: LogQuery): Promise<LogAnswer | null> { return this.log.steps(name, { ...q, admin: true }); }
+
   /** #3731: POST /ui/permission — a person answers an ACP instance's waiting permission request. Null: applied. */
   answerAcpPermission(name: string, requestId: string, decision: "allow" | "deny" | "cancel"): string | null {
     const runner = this.lifecycle.daemons.get(name);
