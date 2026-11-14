@@ -94,6 +94,20 @@ export function confirmModeSwitch(name, to) {
   return confirmDialog({ title: ta("switchTitle"), message: ta(to === "acp" ? "switchToAcp" : "switchToTmux", name), confirmLabel: ta("switchConfirm") });
 }
 
+/**
+ * The confirmation a staged change owes for the agent's execution mode: `[{ modeSwitch: true, name, to }]` when `patch` changes
+ * `cli_adapter` (either way: the agent restarts and its terminal appears or goes), else none. Every place that stages an agent's
+ * change adds these to the change's `confirms`; the pages' Save asks each one (`askConfirm`) before anything is written.
+ */
+export function modeConfirms(name, patch) {
+  if (!patch || !("cli_adapter" in patch)) return [];
+  return [{ modeSwitch: true, name, to: patch.cli_adapter === "acp" ? "acp" : "tmux" }];
+}
+
+/** Ask one entry of a change's `confirms` that is a mode switch; resolves true to go ahead. Other entries are the page's own words. */
+export const isModeConfirm = (entry) => !!entry && typeof entry === "object" && entry.modeSwitch === true;
+export const askModeConfirm = (entry) => confirmModeSwitch(entry.name, entry.to);
+
 // ── The badge ──
 
 /** A small "ACP" marker for an agent that runs over ACP; nothing for a terminal agent (the default). */

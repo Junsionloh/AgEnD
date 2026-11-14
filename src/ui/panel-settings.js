@@ -50,7 +50,7 @@ import { SetupWizard } from "./settings-wizard.js";
 import { CreateInstanceDialog } from "./panel-fleet.js";
 import { RuntimesPanel } from "./panel-runtimes.js";
 import { NativeInstanceSettings } from "./native-instance-settings.js";
-import { ModeBadge } from "./adapter-mode.js";
+import { ModeBadge, askModeConfirm, isModeConfirm, modeConfirms } from "./adapter-mode.js";
 import { FirstRunCard, takeWizardRequest } from "./first-run.js";
 import { takeAgentRequest } from "./settings-request.js";
 // #1604: This device — the preview opt-in (one path: the app's confirm, then preview.js) and the tour, from the chat.
@@ -349,7 +349,7 @@ export function SettingsPanel({ route, navKey }) {
       // A panel that went while a question was open asks nothing more, and says nothing.
       for (const c of [...stagedRef.current.values()]) {
         for (const k of c.confirms || []) {
-          const yes = await ask(k.includes(".") ? t(k) : tn(k));
+          const yes = isModeConfirm(k) ? await askModeConfirm(k) : await ask(k.includes(".") ? t(k) : tn(k));
           if (!mount.current()) return;
           if (!yes) { toast(tn("accessChangeCancelled"), false); return; }
         }
@@ -784,7 +784,8 @@ export function makeCtx(data, setData, stage, unstage, reload, reloadLive, alive
       stage(`agent:${name}`, {
         label: tn("updateAgent", shortName(name, { ...inst, ...patch })),
         // turning the MCP proxy reply on is asked about first (agent-page-strings.js).
-        ...(patch.mcp_proxy_reply === true ? { confirms: ["agentPage.confirmMcpProxy"] } : {}),
+        ...(patch.mcp_proxy_reply === true || "cli_adapter" in patch
+          ? { confirms: [...(patch.mcp_proxy_reply === true ? ["agentPage.confirmMcpProxy"] : []), ...modeConfirms(shortName(name, inst), patch)] } : {}),
         impact: inst.runtime === "windows" ? "now" : batchImpact(schema, Object.keys(patch), (k) => impactOf(schema, `instance.${k}`)),
         request: { method: "PATCH", url: inst.runtime === "windows" ? `/ui/instances/${encodeURIComponent(name)}` : `/api/settings/fleet/instances/${encodeURIComponent(name)}`, body: patch },
       });

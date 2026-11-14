@@ -34,7 +34,7 @@ import {
   classicWebEchoEffective, toolSetDefault, worstImpact,
 } from "./settings-model.js";
 import { ModelRefresh, useRefreshableModels, mw } from "./model-picker.js";
-import { ExecutionModeFields, adaptersOf, confirmModeSwitch, effectiveMode } from "./adapter-mode.js";
+import { ExecutionModeFields, adaptersOf, effectiveMode } from "./adapter-mode.js";
 import "./settings-codex-copy.js";   // M-2446: the Speed field's words (a retained old settings-strings lacks them)
 import { AccountSelect } from "./accounts-view.js";   // #3212: the Account field (a new module: never a stale named import)
 import { capsOf } from "./cli-caps.js";
@@ -399,11 +399,10 @@ export function useAgentForm({ name, inst, ctx }) {
     opts[acctBackend] = { ...(opts[acctBackend] || {}), credential_profile: acct || null };
     return { ...patch, backend_options: opts };
   };
-  const stage = async (done) => {
+  const stage = (done) => {
     if (!ready) return;
     const patch = pending();
-    // Either way the agent restarts and what the page shows changes (a terminal appears or goes): ask first.
-    if ("cli_adapter" in patch && !(await confirmModeSwitch(ctx.shortName(name, inst), mode))) return;
+    // A mode change restarts the agent (a terminal appears or goes): the Save asks (stageAgent adds the question), once, for every way in.
     if (Object.keys(patch).length) ctx.stageAgent(name, inst, patch);
     if (done) done();
   };
