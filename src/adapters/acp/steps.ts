@@ -67,7 +67,12 @@ export class AcpStepStore {
   private readonly listeners = new Set<() => void>();
   private readonly permissions = new Map<string, PermissionStepInfo>();
 
-  constructor(private readonly dir: string, private readonly now: () => number = Date.now) {
+  /**
+   * True while the instance skips permissions (`skipPermissions`, on unless false): the CLI was started with its own
+   * auto-approve flag, so it runs its tools without ever asking AgEnD, and every tool call says so (`auto`) instead of
+   * showing a card. Read per call: a settings change is seen by the next tool.
+   */
+  constructor(private readonly dir: string, private readonly now: () => number = Date.now, private readonly skipping: () => boolean = () => false) {
     this.load();
   }
 
@@ -186,7 +191,6 @@ export class AcpStepStore {
     if (!step) { step = { id, turn: this.turn, ts: this.now(), kind: "tool" }; }
     step.tool = e.title.slice(0, 120);
     step.cat = CAT[e.toolKind] ?? "other";
-    if (this.autoIds.has(e.id)) step.auto = true;
     // AgEnD's own `reply` tool, by whatever name the CLI gives it: the chat joins a timeline to its bubbles by this call
     // (log-steps.ts: replyAnchor / replyResult), so it carries the canonical name and the same anchor as a transcript's.
     const named = replyCall(e);
@@ -196,6 +200,8 @@ export class AcpStepStore {
       const anchor = replyAnchor(named.input);
       if (anchor) step.anchor = anchor;
     }
+    // The plan and AgEnD's own `reply` are the agent talking, not a tool that would have asked.
+    if (this.autoIds.has(e.id) || (this.skipping() && step.cat !== "plan" && step.cat !== "message")) step.auto = true;
     const subject = subjectFromInput(e.rawInput) ?? e.title;
     const s = stepSubject(subject);
     if (s) step.subject = s;

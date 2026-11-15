@@ -166,7 +166,7 @@ export class AcpRunner extends EventEmitter {
     this.config = opts.config;
     this.now = opts.now ?? Date.now;
     this.stateChangedAt = this.now();
-    this.steps = new AcpStepStore(opts.instanceDir, this.now);
+    this.steps = new AcpStepStore(opts.instanceDir, this.now, () => this.config.skipPermissions !== false);
     this.steps.onChange(() => this.emit("steps_changed"));
     this.restoreLastChat();
     adapter.onEvent(e => this.onAdapterEvent(e));

@@ -122,4 +122,19 @@ describe("an ACP turn in the chat's timeline", () => {
     expect(live.items.filter((x: any) => x.kind === "permission")).toHaveLength(1);
     expect(live.items.find((x: any) => x.kind === "tool").auto).toBe(true);
   });
+
+  it("while permissions are skipped the CLI never asks, so every tool call is marked auto — except the plan and AgEnD's reply, which are the agent talking", () => {
+    const d = mkdtempSync(join(tmpdir(), "acp-chat-")); dirs.push(d);
+    let skipping = true;
+    const s = new AcpStepStore(d, () => 1_000, () => skipping);
+    s.beginTurn("1", "hello", undefined, WIRE);
+    s.apply({ kind: "tool", id: "e1", title: "write", toolKind: "edit", status: "completed", rawInput: { file_path: "a" } });
+    s.apply({ kind: "tool", id: "x1", title: "agend__set_display_name", toolKind: "other", status: "completed" });
+    s.apply({ ...replyCall('{"chatId":"web","messageId":"web-r1"}') });
+    s.apply({ kind: "plan", entries: [{ content: "do it", status: "pending" }] });
+    skipping = false;                                   // a settings change is seen by the next tool
+    s.apply({ kind: "tool", id: "e2", title: "write", toolKind: "edit", status: "completed", rawInput: { file_path: "b" } });
+    const by = Object.fromEntries(s.snapshot(undefined, { thoughts: false }).steps.filter(x => x.kind === "tool").map(x => [x.id, x.auto === true]));
+    expect(by).toEqual({ "t-e1": true, "t-x1": true, "t-c2": false, "p-1": false, "t-e2": false });
+  });
 });
