@@ -513,7 +513,7 @@ export function settingsChangeDiff(before: unknown, after: unknown, options: {
       return;
     }
     // #3731: skipPermissions (the agent runs its tools without asking; unset means yes) is judged by direction, like the web
-    // switches above: asking for permissions again (false) applies directly; skipping them (true, unset or any value that is
+    // switches above: asking for permissions again (false) applies directly; skipping them (true, or any value that is
     // not a boolean) waits for the confirmation.
     if (path.at(-1) === "skipPermissions" && path.at(-3) === "instances") {
       if (next === false) return;

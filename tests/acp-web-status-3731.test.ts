@@ -43,6 +43,9 @@ describe("adapterUiView", () => {
   it("acp without a running adapter has no pane and reports whether permissions are skipped (the default) as a boolean", () => {
     expect(adapterUiView(undefined, { cli_adapter: "acp" })).toEqual({ cli_adapter: "acp", pane_view: false, skip_permissions: true });
     expect(adapterUiView(undefined, { cli_adapter: "acp", skipPermissions: false })).toEqual({ cli_adapter: "acp", pane_view: false, skip_permissions: false });
+    // an agent with no setting of its own follows the fleet default
+    expect(adapterUiView(undefined, { cli_adapter: "acp" }, { skipPermissions: false })).toEqual({ cli_adapter: "acp", pane_view: false, skip_permissions: false });
+    expect(adapterUiView(undefined, { cli_adapter: "acp", skipPermissions: true }, { skipPermissions: false })).toEqual({ cli_adapter: "acp", pane_view: false, skip_permissions: true });
   });
   it("a running instance answers with its bound adapter's capabilities", () => {
     expect(adapterUiView(boundRunner(false), { cli_adapter: "acp" }).pane_view).toBe(false);

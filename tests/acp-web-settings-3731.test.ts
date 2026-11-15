@@ -20,17 +20,18 @@ describe("the instance patch", () => {
     const next = normalizeSettingsInstancePatch({ working_directory: "/w", backend: "grok" }, { cli_adapter: "acp", skipPermissions: false });
     expect(next).toMatchObject({ backend: "grok", cli_adapter: "acp", skipPermissions: false });
   });
-  it("null and tmux remove cli_adapter; null and true (the default) remove skipPermissions instead of writing a default", () => {
+  it("null and tmux remove cli_adapter; skipPermissions is never removed: true is written as true (an unset one follows the fleet default)", () => {
     const base = { working_directory: "/w", backend: "grok", cli_adapter: "acp", skipPermissions: false };
-    for (const patch of [{ cli_adapter: null, skipPermissions: null }, { cli_adapter: "tmux", skipPermissions: true }]) {
+    for (const patch of [{ cli_adapter: null }, { cli_adapter: "tmux" }]) {
       const next = normalizeSettingsInstancePatch(base, patch);
       expect(next).not.toHaveProperty("cli_adapter");
-      expect(next).not.toHaveProperty("skipPermissions");
-      expect(next).toMatchObject({ working_directory: "/w", backend: "grok" });
+      expect(next).toMatchObject({ working_directory: "/w", backend: "grok", skipPermissions: false });
     }
+    expect(normalizeSettingsInstancePatch(base, { skipPermissions: true })).toMatchObject({ skipPermissions: true });
+    expect(() => normalizeSettingsInstancePatch(base, { skipPermissions: null })).toThrow();   // a null would hand the permission to the fleet default
     expect(removesInstanceOverride("cli_adapter", "tmux")).toBe(true);
     expect(removesInstanceOverride("cli_adapter", "acp")).toBe(false);
-    expect(removesInstanceOverride("skipPermissions", true)).toBe(true);
+    expect(removesInstanceOverride("skipPermissions", true)).toBe(false);
     expect(removesInstanceOverride("skipPermissions", false)).toBe(false);
   });
 });
@@ -54,12 +55,9 @@ describe("what a change costs", () => {
     expect(diff({ backend: "grok" }, { backend: "grok", cli_adapter: "acp" })).toBeNull();
     expect(diff({ backend: "grok", cli_adapter: "acp" }, { backend: "grok" })).toBeNull();
   });
-  it("asking for permissions again (skipPermissions: false) applies at once; skipping them again waits for an admin", () => {
+  it("asking for permissions (skipPermissions: false) applies at once; skipping them (true) waits for an admin", () => {
     const acp = { backend: "grok", cli_adapter: "acp" };
     expect(diff(acp, { ...acp, skipPermissions: false })).toBeNull();
-    const back = diff({ ...acp, skipPermissions: false }, acp);                         // key removed: skipping is the default again
-    expect(back).not.toBeNull();
-    expect(back!.section).toBe("access");
     const on = diff({ ...acp, skipPermissions: false }, { ...acp, skipPermissions: true });
     expect(on).not.toBeNull();
     expect(on!.section).toBe("access");
@@ -130,15 +128,18 @@ describe("PATCH /api/settings/fleet/instances/:name", () => {
     expect((await h.patch({ cli_adapter: "ssh" })).status).toBe(400);
     expect(h.save).not.toHaveBeenCalled();
   });
-  it("switching back to tmux (null or tmux) removes cli_adapter from fleet.yaml; skipPermissions null or true removes that key", async () => {
-    for (const body of [{ cli_adapter: null, skipPermissions: null }, { cli_adapter: "tmux", skipPermissions: true }]) {
+  it("switching back to tmux (null or tmux) removes cli_adapter from fleet.yaml and leaves skipPermissions as it is", async () => {
+    for (const body of [{ cli_adapter: null }, { cli_adapter: "tmux" }]) {
       const h = harness({ backend: "grok", cli_adapter: "acp", skipPermissions: false });
       const r = await h.patch(body);
       expect(r.status).toBe(200);
       expect(h.config.instances.worker).not.toHaveProperty("cli_adapter");
-      expect(h.config.instances.worker).not.toHaveProperty("skipPermissions");
-      expect(h.written()).toEqual({ working_directory: h.config.instances.worker.working_directory, backend: "grok" });
+      expect(h.config.instances.worker).toMatchObject({ skipPermissions: false });
     }
+  });
+  it("skipPermissions: null is refused (it would hand the permission to the fleet default)", async () => {
+    const h = harness({ backend: "grok", cli_adapter: "acp", skipPermissions: false });
+    expect((await h.patch({ skipPermissions: null })).status).toBe(400);
   });
   it("skipPermissions: false is written as it is", async () => {
     const h = harness({ backend: "grok", cli_adapter: "acp" });

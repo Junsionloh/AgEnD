@@ -180,13 +180,22 @@ describe("the settings form patch", () => {
     expect(settings.agentPatch({ ...form, cli_adapter: "acp", skipPermissions: false }, grok, {}, null, null)).toEqual({ cli_adapter: "acp", skipPermissions: false });
     expect(settings.agentPatch({ ...form, cli_adapter: "tmux", skipPermissions: false }, grok, {}, null, null)).toEqual({});
   });
-  it("switching back removes cli_adapter (null); skipping again removes the key; an untouched acp form sends nothing", () => {
+  it("switching back removes cli_adapter (null); skipping again is written as true; an untouched acp form sends nothing", () => {
     const acp = { ...grok, cli_adapter: "acp", skipPermissions: false };
     const form = settings.agentForm(acp, {});
     expect(form).toMatchObject({ cli_adapter: "acp", skipPermissions: false });
     expect(settings.agentPatch(form, acp, {}, null, null)).toEqual({});
     expect(settings.agentPatch({ ...form, cli_adapter: "tmux" }, acp, {}, null, null)).toEqual({ cli_adapter: null });
-    expect(settings.agentPatch({ ...form, skipPermissions: true }, acp, {}, null, null)).toEqual({ skipPermissions: null });
+    expect(settings.agentPatch({ ...form, skipPermissions: true }, acp, {}, null, null)).toEqual({ skipPermissions: true });
+  });
+  it("an agent with no setting of its own follows the fleet default: the form shows it, and only a change from it is sent", () => {
+    const acp = { ...grok, cli_adapter: "acp" };
+    const defaults = { skipPermissions: false };
+    const form = settings.agentForm(acp, defaults);
+    expect(form.skipPermissions).toBe(false);                                             // the fleet asks, so the box is off
+    expect(settings.agentPatch(form, acp, defaults, null, null)).toEqual({});
+    expect(settings.agentPatch({ ...form, skipPermissions: true }, acp, defaults, null, null)).toEqual({ skipPermissions: true });
+    expect(settings.agentForm(acp, {}).skipPermissions).toBe(true);
   });
 });
 

@@ -19,11 +19,11 @@ export interface AdapterUiView {
 export function adapterUiView(
   runner: InstanceRunner | undefined,
   config: { cli_adapter?: unknown; skipPermissions?: unknown } | undefined,
-  defaults?: { cli_adapter?: unknown },
+  defaults?: { cli_adapter?: unknown; skipPermissions?: unknown },
 ): AdapterUiView {
   const configured = config?.cli_adapter ?? defaults?.cli_adapter;
   const cli_adapter: CliAdapterId = configured === "acp" ? "acp" : "tmux";
   const bound = runner ? adapterOf(runner) : undefined;
   const pane_view = bound ? bound.capabilities.paneView : cli_adapter === "tmux";
-  return { cli_adapter, pane_view, ...(cli_adapter === "acp" ? { skip_permissions: config?.skipPermissions !== false } : {}) };
+  return { cli_adapter, pane_view, ...(cli_adapter === "acp" ? { skip_permissions: (config?.skipPermissions ?? defaults?.skipPermissions) !== false } : {}) };
 }
