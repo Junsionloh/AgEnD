@@ -35,6 +35,8 @@ export interface AcpAdapterOptions {
   readonly instanceDir: string;
   readonly model?: string;
   readonly effort?: string;
+  /** `skipPermissions` of the instance (unset = true): the CLI is started with its own auto-approve flag. */
+  readonly skipPermissions?: boolean;
   /** This instance's own MCP servers, passed in `session/new` / `session/load` (never shared with another instance). */
   readonly mcpServers: readonly AcpMcpServer[];
   /** Text put in front of the first prompt of a new session (fleet instructions). Not repeated after a resume. */
@@ -114,7 +116,7 @@ export class AcpAdapter implements CliAdapter {
     const { profile } = this.opts;
     const client = new AcpClient({
       command: this.opts.command,
-      args: profile.args({ model: this.opts.model, effort: this.opts.effort }),
+      args: profile.args({ model: this.opts.model, effort: this.opts.effort, skipPermissions: this.opts.skipPermissions }),
       env: buildChildEnv(profile, this.opts.env ?? process.env, this.opts.childEnv),
       cwd: this.opts.cwd,
       spawn: this.opts.spawn,

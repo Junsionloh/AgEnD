@@ -244,13 +244,14 @@ export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmoji
 }
 /**
  * #3731: how the agent runs. "tmux" is the default, so going back to it sends null (the key is removed from fleet.yaml),
- * never a written default; approve-all only means something with ACP and goes with it. Only what changed is named.
+ * never a written default; skipPermissions (on unless it says false) only matters to an ACP agent here and goes with it: back on
+ * removes the key. Only what changed is named.
  */
 function executionModePatch(form, inst) {
-  const mode = form.cli_adapter === "acp" ? "acp" : null, approve = mode === "acp" && form.acp_always_approve ? true : null;
+  const mode = form.cli_adapter === "acp" ? "acp" : null;
   const out = {};
   if (mode !== (inst.cli_adapter === "acp" ? "acp" : null)) out.cli_adapter = mode;
-  if (approve !== (inst.acp_always_approve === true ? true : null)) out.acp_always_approve = approve;
+  if (mode === "acp" && (form.skipPermissions !== false) !== (inst.skipPermissions !== false)) out.skipPermissions = form.skipPermissions === false ? false : null;
   return out;
 }
 /**
@@ -269,7 +270,7 @@ export function agentForm(inst, defaults, name = "") {
   return {
     backend: inst.backend || defaults.backend || "claude-code",
     model: inst.model || "", working_directory: inst.working_directory || "", channel_id: inst.channel_id || "",
-    cli_adapter: inst.cli_adapter === "acp" ? "acp" : "tmux", acp_always_approve: inst.acp_always_approve === true,
+    cli_adapter: inst.cli_adapter === "acp" ? "acp" : "tmux", skipPermissions: inst.skipPermissions !== false,
     description: inst.description || "", systemPrompt: inst.systemPrompt || "", tags: [...(inst.tags || [])],
     general_topic: !!inst.general_topic,
     auto_pause_after: String(inst.auto_pause_after ?? defaults.auto_pause_after ?? 0),

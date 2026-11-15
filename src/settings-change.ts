@@ -512,11 +512,11 @@ export function settingsChangeDiff(before: unknown, after: unknown, options: {
       { const was = longTextSummary(old), now = longTextSummary(next); add(summaryLine(`${settingsDisplay(path.join("."))}: ${was.text} → ${now.text}`, settingsDisplay(path.join(".")), ": ", ...was.parts, " → ", ...now.parts)); }
       return;
     }
-    // #3731: approve-all (acp_always_approve) is judged by direction, like the web switches above: turning it off applies
-    // directly; turning it on (or any value that is not a boolean) waits for the confirmation.
-    if (path.at(-1) === "acp_always_approve" && path.at(-3) === "instances") {
-      const off = (v: unknown) => v === undefined || v === null || v === false;
-      if (off(next)) return;
+    // #3731: skipPermissions (the agent runs its tools without asking; unset means yes) is judged by direction, like the web
+    // switches above: asking for permissions again (false) applies directly; skipping them (true, unset or any value that is
+    // not a boolean) waits for the confirmation.
+    if (path.at(-1) === "skipPermissions" && path.at(-3) === "instances") {
+      if (next === false) return;
       if (section !== "secret") section = "access";
       add(changeLine(`${settingsDisplay(path.join("."))}: ${settingsDisplay(old ?? "default")} → ${settingsDisplay(next ?? "default")}`, [settingsDisplay(path.join("."))], old, next, true));
       return;

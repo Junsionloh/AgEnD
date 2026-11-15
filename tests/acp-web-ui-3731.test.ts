@@ -91,7 +91,7 @@ describe("what a status row says", () => {
 });
 
 describe("the execution-mode fields", () => {
-  const fields = (props: Record<string, unknown>) => h(A.ExecutionModeFields, { adapters: ["tmux", "acp"], mode: "tmux", approve: false, onMode() {}, onApprove() {}, ...props });
+  const fields = (props: Record<string, unknown>) => h(A.ExecutionModeFields, { adapters: ["tmux", "acp"], mode: "tmux", skip: true, onMode() {}, onSkip() {}, ...props });
   it("nothing for a backend that only runs in a terminal", async () => {
     const pg = await mountOnly(fields({ adapters: ["tmux"] }));
     expect(pg.root.querySelector(".exec-mode")).toBeNull();
@@ -101,8 +101,8 @@ describe("the execution-mode fields", () => {
     const pg = await mountOnly(fields({}));
     expect(text(pg.root.querySelector("label"))).toBe("Execution mode");
     expect(pg.root.querySelectorAll("select option").map((o: any) => [o.value, text(o)])).toEqual([["tmux", "Terminal (tmux)"], ["acp", "ACP (no terminal)"]]);
-    expect(text(pg.root.querySelector(".exec-mode .note"))).toMatch(/live thinking and tool progress in chat.*permission in chat.*no terminal view and no attach/);
-    expect(pg.root.querySelector(".exec-approve")).toBeNull();
+    expect(text(pg.root.querySelector(".exec-mode .note"))).toMatch(/live thinking and tool progress in chat.*permission card when permissions are not skipped.*no terminal view and no attach/);
+    expect(pg.root.querySelector(".exec-skip")).toBeNull();
   });
   it("choosing a mode reports it", async () => {
     const seen: string[] = [];
@@ -111,30 +111,33 @@ describe("the execution-mode fields", () => {
     select.value = "acp"; fire(select, "change"); await settle();
     expect(seen).toEqual(["acp"]);
   });
-  it("with acp: the approve-all checkbox, off by default, with a warning-styled hint", async () => {
+  it("with acp: the skip-permissions checkbox, on by default (as in a terminal), with a hint", async () => {
     const seen: boolean[] = [];
-    const pg = await mountOnly(fields({ mode: "acp", onApprove: (v: boolean) => seen.push(v) }));
-    const box = pg.root.querySelector(".exec-approve input[type=checkbox]") as any;
+    const pg = await mountOnly(fields({ mode: "acp", onSkip: (v: boolean) => seen.push(v) }));
+    const box = pg.root.querySelector(".exec-skip input[type=checkbox]") as any;
     expect(box).not.toBeNull();
-    expect(!!box.checked).toBe(false);
-    expect(text(pg.root.querySelector(".exec-approve label"))).toBe("Always approve tool permissions");
-    const hint = pg.root.querySelector(".exec-approve .exec-warn");
-    expect(text(hint)).toMatch(/^Warning: .*without asking you/);
-    box.checked = true; fire(box, "change"); await settle();
-    expect(seen).toEqual([true]);
+    expect(!!box.checked).toBe(true);
+    expect(text(pg.root.querySelector(".exec-skip label"))).toBe("Skip tool permission prompts");
+    expect(text(pg.root.querySelector(".exec-skip .note"))).toMatch(/^On \(the default, as in a terminal\): .*marked auto.*Off: each request waits in the chat/);
+    box.checked = false; fire(box, "change"); await settle();
+    expect(seen).toEqual([false]);
   });
-  it("a mode the backend no longer offers reads as the terminal, with no approve-all", async () => {
+  it("a mode the backend no longer offers reads as the terminal, with no skip-permissions row", async () => {
     const pg = await mountOnly(fields({ adapters: ["tmux", "acp"], mode: "acp" }));
-    expect(pg.root.querySelector(".exec-approve")).not.toBeNull();
+    expect(pg.root.querySelector(".exec-skip")).not.toBeNull();
     await release(pg);
+    // A form that offers no switch (the create wizard: permissions are not a create-time choice) shows none.
+    const noSwitch = await mountOnly(h(A.ExecutionModeFields, { adapters: ["tmux", "acp"], mode: "acp", onMode() {} }));
+    expect(noSwitch.root.querySelector(".exec-skip")).toBeNull();
+    await release(noSwitch);
     const pg2 = await mountOnly(fields({ adapters: ["tmux"], mode: "acp" }));
-    expect(pg2.root.querySelector(".exec-approve")).toBeNull();
+    expect(pg2.root.querySelector(".exec-skip")).toBeNull();
   });
   it("in Traditional Chinese", async () => {
     const pg = await mountOnly(fields({ mode: "acp" }), "zh-TW");
     expect(text(pg.root.querySelector("label"))).toBe("執行模式");
     expect(pg.root.querySelectorAll("select option").map((o: any) => text(o))).toEqual(["終端機（tmux）", "ACP（沒有終端機）"]);
-    expect(text(pg.root.querySelector(".exec-approve label"))).toBe("一律允許工具權限");
+    expect(text(pg.root.querySelector(".exec-skip label"))).toBe("跳過工具權限詢問");
   });
 });
 
@@ -168,22 +171,22 @@ describe("the settings form patch", () => {
   const grok = { backend: "grok", working_directory: "/w" };
   it("a terminal agent's form carries tmux and sends nothing for it", () => {
     const form = settings.agentForm(grok, {});
-    expect(form).toMatchObject({ cli_adapter: "tmux", acp_always_approve: false });
+    expect(form).toMatchObject({ cli_adapter: "tmux", skipPermissions: true });
     expect(settings.agentPatch(form, grok, {}, null, null)).toEqual({});
   });
-  it("switching to acp sends cli_adapter; approve-all only with it", () => {
+  it("switching to acp sends cli_adapter; skipPermissions: false only with it", () => {
     const form = settings.agentForm(grok, {});
     expect(settings.agentPatch({ ...form, cli_adapter: "acp" }, grok, {}, null, null)).toEqual({ cli_adapter: "acp" });
-    expect(settings.agentPatch({ ...form, cli_adapter: "acp", acp_always_approve: true }, grok, {}, null, null)).toEqual({ cli_adapter: "acp", acp_always_approve: true });
-    expect(settings.agentPatch({ ...form, cli_adapter: "tmux", acp_always_approve: true }, grok, {}, null, null)).toEqual({});
+    expect(settings.agentPatch({ ...form, cli_adapter: "acp", skipPermissions: false }, grok, {}, null, null)).toEqual({ cli_adapter: "acp", skipPermissions: false });
+    expect(settings.agentPatch({ ...form, cli_adapter: "tmux", skipPermissions: false }, grok, {}, null, null)).toEqual({});
   });
-  it("switching back removes both (null), and an untouched acp form sends nothing", () => {
-    const acp = { ...grok, cli_adapter: "acp", acp_always_approve: true };
+  it("switching back removes cli_adapter (null); skipping again removes the key; an untouched acp form sends nothing", () => {
+    const acp = { ...grok, cli_adapter: "acp", skipPermissions: false };
     const form = settings.agentForm(acp, {});
-    expect(form).toMatchObject({ cli_adapter: "acp", acp_always_approve: true });
+    expect(form).toMatchObject({ cli_adapter: "acp", skipPermissions: false });
     expect(settings.agentPatch(form, acp, {}, null, null)).toEqual({});
-    expect(settings.agentPatch({ ...form, cli_adapter: "tmux" }, acp, {}, null, null)).toEqual({ cli_adapter: null, acp_always_approve: null });
-    expect(settings.agentPatch({ ...form, acp_always_approve: false }, acp, {}, null, null)).toEqual({ acp_always_approve: null });
+    expect(settings.agentPatch({ ...form, cli_adapter: "tmux" }, acp, {}, null, null)).toEqual({ cli_adapter: null });
+    expect(settings.agentPatch({ ...form, skipPermissions: true }, acp, {}, null, null)).toEqual({ skipPermissions: null });
   });
 });
 
@@ -292,6 +295,19 @@ describe("a permission request in the rows both pages share (log-row.js)", () =>
     await release(done);
     const quiet = await mountOnly(h(act.ActivityBlock, { group: group({}, [step("toolu_1", { kind: "tool", tool: "Read", cat: "read", subject: "a.ts", status: "running" })]), ctx, now: 1000 }));
     expect(quiet.root.querySelector(".act-block")?.open).toBe(false);
+  });
+  it("a tool call AgEnD's policy allowed without asking is marked auto, in the chat block's line and the Log's row; one a person decided is not", async () => {
+    const tool = (extra: Record<string, unknown>) => step("w1", { kind: "tool", tool: "write", cat: "edit", subject: "a.txt", status: "done", ...extra });
+    for (const compact of [true, false]) {
+      const auto = await mountOnly(h(R.LogRow, { x: tool({ auto: true }), chat: compact, compact }));
+      expect(text(auto.root.querySelector(".log-auto"))).toBe("auto");
+      expect(auto.root.querySelector(".log-auto")?.getAttribute("title")).toMatch(/Allowed without asking/);
+      expect(auto.root.querySelector(".perm-card")).toBeNull();                      // no card
+      await release(auto);
+      const plain = await mountOnly(h(R.LogRow, { x: tool({}), chat: compact, compact }));
+      expect(plain.root.querySelector(".log-auto")).toBeNull();
+      await release(plain);
+    }
   });
   it("its one-line words for the block's header name what it asks to run", () => {
     expect(R.stepLine(pendingStep(), null)).toBe("Permission: rm -rf build");

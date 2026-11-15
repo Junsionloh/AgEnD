@@ -1,6 +1,6 @@
 /**
  * #3731 phase 1 (web half): what the page is told about how each agent runs — `cli_adapter`, `pane_view` and
- * `acp_always_approve` in the status frame, `adapters` on /ui/backends — and the create-instance request's adapter
+ * `skip_permissions` in the status frame, `adapters` on /ui/backends — and the create-instance request's adapter
  * fields. Real FleetManager.getUiStatus and the real web handler on a scratch data dir; nothing forks.
  */
 import { EventEmitter } from "node:events";
@@ -35,14 +35,14 @@ function boundRunner(paneView: boolean) {
 }
 
 describe("adapterUiView", () => {
-  it("an unset cli_adapter is tmux with a pane, and says nothing of approve-all", () => {
+  it("an unset cli_adapter is tmux with a pane, and says nothing of skipping permissions", () => {
     expect(adapterUiView(undefined, {})).toEqual({ cli_adapter: "tmux", pane_view: true });
     expect(adapterUiView(undefined, undefined)).toEqual({ cli_adapter: "tmux", pane_view: true });
-    expect(adapterUiView(undefined, { cli_adapter: "tmux", acp_always_approve: true })).toEqual({ cli_adapter: "tmux", pane_view: true });
+    expect(adapterUiView(undefined, { cli_adapter: "tmux", skipPermissions: false })).toEqual({ cli_adapter: "tmux", pane_view: true });
   });
-  it("acp without a running adapter has no pane and reports approve-all as a boolean", () => {
-    expect(adapterUiView(undefined, { cli_adapter: "acp" })).toEqual({ cli_adapter: "acp", pane_view: false, acp_always_approve: false });
-    expect(adapterUiView(undefined, { cli_adapter: "acp", acp_always_approve: true })).toEqual({ cli_adapter: "acp", pane_view: false, acp_always_approve: true });
+  it("acp without a running adapter has no pane and reports whether permissions are skipped (the default) as a boolean", () => {
+    expect(adapterUiView(undefined, { cli_adapter: "acp" })).toEqual({ cli_adapter: "acp", pane_view: false, skip_permissions: true });
+    expect(adapterUiView(undefined, { cli_adapter: "acp", skipPermissions: false })).toEqual({ cli_adapter: "acp", pane_view: false, skip_permissions: false });
   });
   it("a running instance answers with its bound adapter's capabilities", () => {
     expect(adapterUiView(boundRunner(false), { cli_adapter: "acp" }).pane_view).toBe(false);
@@ -53,23 +53,23 @@ describe("adapterUiView", () => {
 });
 
 describe("getUiStatus", () => {
-  it("every instance carries cli_adapter and pane_view; acp ones also acp_always_approve", () => {
+  it("every instance carries cli_adapter and pane_view; acp ones also skip_permissions", () => {
     const dir = mkdtempSync(join(tmpdir(), "agend-3731-status-")); dirs.push(dir);
     const fm = new FleetManager(dir);
     fm.fleetConfig = { defaults: { backend: "claude-code" }, instances: {
       plain: { working_directory: dir },
       agy: { working_directory: dir, backend: "antigravity", cli_adapter: "acp" },
-      grok: { working_directory: dir, backend: "grok", cli_adapter: "acp", acp_always_approve: true },
+      grok: { working_directory: dir, backend: "grok", cli_adapter: "acp", skipPermissions: false },
       pinned: { working_directory: dir, backend: "grok", cli_adapter: "tmux" },
     } } as never;
     fm.classicChannels = { getAll: () => [], getChannelIdByInstance: () => undefined, getBackendByInstance: () => "claude-code", getModel: () => undefined } as never;
     vi.spyOn(fm, "getInstanceStatus").mockReturnValue("running");
     const rows = new Map((fm.getUiStatus() as { instances: Array<Record<string, unknown>> }).instances.map(i => [i.name as string, i]));
-    const pick = (n: string) => { const r = rows.get(n)!; return { cli_adapter: r.cli_adapter, pane_view: r.pane_view, ...("acp_always_approve" in r ? { acp_always_approve: r.acp_always_approve } : {}) }; };
+    const pick = (n: string) => { const r = rows.get(n)!; return { cli_adapter: r.cli_adapter, pane_view: r.pane_view, ...("skip_permissions" in r ? { skip_permissions: r.skip_permissions } : {}) }; };
     expect(pick("plain")).toEqual({ cli_adapter: "tmux", pane_view: true });
     expect(pick("pinned")).toEqual({ cli_adapter: "tmux", pane_view: true });
-    expect(pick("agy")).toEqual({ cli_adapter: "acp", pane_view: false, acp_always_approve: false });
-    expect(pick("grok")).toEqual({ cli_adapter: "acp", pane_view: false, acp_always_approve: true });
+    expect(pick("agy")).toEqual({ cli_adapter: "acp", pane_view: false, skip_permissions: true });
+    expect(pick("grok")).toEqual({ cli_adapter: "acp", pane_view: false, skip_permissions: false });
   });
   it("a ClassicBot room is a terminal agent", () => {
     const dir = mkdtempSync(join(tmpdir(), "agend-3731-classic-")); dirs.push(dir);
@@ -117,8 +117,8 @@ describe("createInstanceAdapterFields", () => {
   });
   it("accepts acp for grok and antigravity, from the request's backend or the fleet default", () => {
     expect(createInstanceAdapterFields({ backend: "grok", cli_adapter: "acp" }, undefined)).toEqual({ ok: true, args: { backend: "grok", cli_adapter: "acp" } });
-    expect(createInstanceAdapterFields({ backend: "antigravity", cli_adapter: "acp", acp_always_approve: true }, "codex"))
-      .toEqual({ ok: true, args: { backend: "antigravity", cli_adapter: "acp", acp_always_approve: true } });
+    expect(createInstanceAdapterFields({ backend: "antigravity", cli_adapter: "acp" }, "codex"))
+      .toEqual({ ok: true, args: { backend: "antigravity", cli_adapter: "acp" } });
     expect(createInstanceAdapterFields({ cli_adapter: "acp" }, "grok")).toEqual({ ok: true, args: { cli_adapter: "acp" } });
   });
   it("refuses acp on any other backend, including the implicit claude-code", () => {
@@ -128,14 +128,11 @@ describe("createInstanceAdapterFields", () => {
       expect((r as { error: string }).error).toMatch(/cli_adapter.*not supported yet/);
     }
   });
-  it("refuses an unknown value, a non-boolean approve-all, and approve-all without acp", () => {
+  it("refuses an unknown value", () => {
     expect(createInstanceAdapterFields({ backend: "grok", cli_adapter: "ssh" }, undefined).ok).toBe(false);
-    expect(createInstanceAdapterFields({ backend: "grok", cli_adapter: "acp", acp_always_approve: "yes" }, undefined)).toEqual({ ok: false, error: "acp_always_approve must be a boolean" });
-    expect(createInstanceAdapterFields({ backend: "grok", acp_always_approve: true }, undefined).ok).toBe(false);
   });
-  it("writes nothing for the defaults: tmux and approve-all off are dropped", () => {
-    expect(createInstanceAdapterFields({ backend: "grok", cli_adapter: "tmux", acp_always_approve: false }, undefined)).toEqual({ ok: true, args: { backend: "grok" } });
-    expect(createInstanceAdapterFields({ backend: "grok", cli_adapter: "acp", acp_always_approve: false }, undefined)).toEqual({ ok: true, args: { backend: "grok", cli_adapter: "acp" } });
+  it("writes nothing for the default: tmux is dropped (permissions are not a create-time choice: skipPermissions is on, as in a terminal)", () => {
+    expect(createInstanceAdapterFields({ backend: "grok", cli_adapter: "tmux" }, undefined)).toEqual({ ok: true, args: { backend: "grok" } });
   });
 });
 
@@ -145,9 +142,9 @@ describe("POST /ui/instances", () => {
   });
   it("hands the adapter fields to the lifecycle for grok", async () => {
     const handleCreate = vi.fn(async (_args: unknown, respond: (r: unknown) => void) => respond({ success: true, name: "g" }));
-    const r = await call("POST", "/ui/instances", ctx(handleCreate), { topic_name: "g", backend: "grok", cli_adapter: "acp", acp_always_approve: true });
+    const r = await call("POST", "/ui/instances", ctx(handleCreate), { topic_name: "g", backend: "grok", cli_adapter: "acp" });
     expect(r.status).toBe(200);
-    expect(handleCreate.mock.calls[0]![0]).toMatchObject({ topic_name: "g", backend: "grok", cli_adapter: "acp", acp_always_approve: true });
+    expect(handleCreate.mock.calls[0]![0]).toMatchObject({ topic_name: "g", backend: "grok", cli_adapter: "acp" });
   });
   it("refuses acp on claude-code with a 400 and never calls the lifecycle", async () => {
     const handleCreate = vi.fn();

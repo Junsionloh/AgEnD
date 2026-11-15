@@ -49,7 +49,9 @@ class FakeOutbox {
 async function boot(opts: { dir?: string; state?: string; config?: Partial<InstanceConfig>; runner?: Partial<AcpRunnerOptions>; env?: Record<string, string> } = {}): Promise<Harness> {
   const dir = opts.dir ?? tmp();
   const state = opts.state ?? tmp();
-  const config = { working_directory: dir, backend: "antigravity", cli_adapter: "acp", ...opts.config } as InstanceConfig;
+  // The harness asks by default (`skipPermissions: false`) so the permission tests keep their meaning; the product's default
+  // (skip) is tested with `config: { skipPermissions: undefined }`.
+  const config = { working_directory: dir, backend: "antigravity", cli_adapter: "acp", skipPermissions: false, ...opts.config } as InstanceConfig;
   const profile = { ...AGY_PROFILE, supportedVersions: ["1.5.8"], args: () => [FAKE] };
   const holder: { runner?: AcpRunner } = {};
   const adapter = new AcpAdapter({
@@ -157,7 +159,7 @@ describe("state changes reach the fleet as they happen", () => {
 });
 
 describe("permissions", () => {
-  it("asks by default: the request waits as a step with only the one-shot choices, and the instance reports waiting", async () => {
+  it("with skipPermissions: false it asks: the request waits as a step with only the one-shot choices, and the instance reports waiting", async () => {
     const h = await boot();
     h.fleet.send(person("#tool"));
     await until(() => h.runner.steps.pendingPermissions().length === 1, 4000, "the permission request");
@@ -202,13 +204,39 @@ describe("permissions", () => {
     expect(steps(h).find(s => s.kind === "tool")).toMatchObject({ status: "failed" });
   });
 
-  it("with acp_always_approve it answers allow-once itself and never an 'always' option", async () => {
-    const h = await boot({ config: { acp_always_approve: true } });
+  const written = (h: Harness) => calls(h.state).filter(l => l.permissionOutcome).map(l => l.permissionOutcome);
+  for (const [label, config] of [["by default (skipPermissions unset)", { skipPermissions: undefined }], ["with skipPermissions: true", { skipPermissions: true }]] as const) {
+    it(`${label} the runner answers allow-once itself, never an 'always' option, and shows no card`, async () => {
+      const h = await boot({ config });
+      h.fleet.send(person("#tool"));
+      await idle(h);
+      expect(written(h)).toEqual([{ outcome: "selected", optionId: "allow-once" }]);
+      expect(steps(h).filter(s => s.kind === "permission")).toHaveLength(0);
+      expect(h.runner.steps.pendingPermissions()).toHaveLength(0);
+      // The tool call it was for says so.
+      expect(steps(h).find(s => s.kind === "tool")).toMatchObject({ status: "done", auto: true });
+    });
+  }
+
+  it("with skipPermissions: false the same tool call waits, shows a card, and is not marked auto", async () => {
+    const h = await boot({ config: { skipPermissions: false } });
     h.fleet.send(person("#tool"));
+    await until(() => h.runner.steps.pendingPermissions().length === 1, 4000, "the permission card");
+    expect(steps(h).filter(s => s.kind === "permission")).toHaveLength(1);
+    expect(steps(h).find(s => s.kind === "tool")?.auto).toBeUndefined();
+    expect(written(h)).toEqual([]);
+  });
+
+  it("with no allow-once on offer (only 'always' and a refusal) it asks, even when skipping: no other option is picked", async () => {
+    const h = await boot({ config: { skipPermissions: true } });
+    h.fleet.send(person("#tool #onlyalways"));
+    await until(() => h.runner.steps.pendingPermissions().length === 1, 4000, "the permission card");
+    expect(steps(h).find(s => s.kind === "permission")).toMatchObject({ status: "running" });
+    expect(steps(h).find(s => s.kind === "permission")!.options!.map(o => o.kind)).toEqual(["reject_once"]);   // never an *_always on the page
+    expect(written(h)).toEqual([]);
+    expect(h.runner.answerPermissionByUser(h.runner.steps.pendingPermissions()[0]!.requestId, "deny")).toBeNull();
     await idle(h);
-    expect(calls(h.state).find(l => l.permissionOutcome)?.permissionOutcome).toEqual({ outcome: "selected", optionId: "allow-once" });
-    expect(steps(h).find(s => s.kind === "permission")).toMatchObject({ status: "done", note: "Yes (auto)" });
-    expect(h.runner.steps.pendingPermissions()).toHaveLength(0);
+    expect(written(h)).toEqual([{ outcome: "selected", optionId: "reject-once" }]);
   });
 
   it("is asked again for the next request: approval is not remembered", async () => {
@@ -234,14 +262,22 @@ describe("the instance's own agend tools", () => {
     expect(calls(h.state).some(l => l.permissionOutcome)).toBe(false);
   });
 
-  it("a reply tool request is allowed once without asking; a fleet-changing one still asks", async () => {
-    const h = await boot();
+  it("with skipPermissions: false a reply tool request is allowed once without asking; a fleet-changing one still asks", async () => {
+    const h = await boot({ config: { skipPermissions: false } });
     h.fleet.send(person("#owntool"));
-    await until(() => steps(h).some(s => s.kind === "turn_end" && false) || h.runner.steps.pendingPermissions().length === 1, 5000, "the create_instance request");
+    await until(() => h.runner.steps.pendingPermissions().length === 1, 5000, "the create_instance request");
     const perms = steps(h).filter(s => s.kind === "permission");
-    expect(perms.find(s => s.subject === "agend__reply")).toMatchObject({ status: "done", note: "Yes (agend tool)" });
-    expect(perms.find(s => s.subject === "agend__create_instance")).toMatchObject({ status: "running" });
-    expect(calls(h.state).filter(l => l.permissionOutcome)).toHaveLength(1); // only the reply was answered
+    expect(perms.map(s => s.subject)).toEqual(["agend__create_instance"]);        // the reply left no card
+    expect(perms[0]).toMatchObject({ status: "running" });
+    expect(calls(h.state).filter(l => l.permissionOutcome)).toHaveLength(1);        // only the reply was answered
+  });
+
+  it("with skipPermissions (the default) the fleet-changing tools are allowed too, as in a terminal, and no card appears", async () => {
+    const h = await boot({ config: { skipPermissions: undefined } });
+    h.fleet.send(person("#owntool"));
+    await until(() => calls(h.state).filter(l => l.permissionOutcome).length === 2, 5000, "both requests answered");
+    expect(steps(h).filter(s => s.kind === "permission")).toHaveLength(0);
+    expect(h.runner.steps.pendingPermissions()).toHaveLength(0);
   });
 });
 

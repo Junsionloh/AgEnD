@@ -10,9 +10,9 @@ import { confirmDialog } from "/assets/ui-confirm.js";
 register("adapter", {
   en: {
     modeLabel: "Execution mode", modeTmux: "Terminal (tmux)", modeAcp: "ACP (no terminal)",
-    modeHint: "ACP shows live thinking and tool progress in chat and asks for permission in chat. There is no terminal view and no attach.",
-    approveLabel: "Always approve tool permissions",
-    approveHint: "Warning: every tool the agent asks to use is allowed without asking you, including commands and file changes. Leave it off to approve each request in chat.",
+    modeHint: "ACP shows live thinking and tool progress in chat (and a permission card when permissions are not skipped). There is no terminal view and no attach.",
+    skipLabel: "Skip tool permission prompts",
+    skipHint: "On (the default, as in a terminal): the agent runs its tools without asking, including commands and file changes; a tool call it ran this way is marked auto in the chat. Off: each request waits in the chat for you to allow or deny.",
     badge: "ACP", badgeTitle: "Runs over ACP: no terminal. Live thinking and permission requests show in the Log.",
     switchTitle: "Switch execution mode?",
     switchToAcp: "{0} will restart in ACP mode. Its terminal screen will be lost: ACP has no terminal view and no attach. Whether the conversation carries over depends on the CLI.",
@@ -26,9 +26,9 @@ register("adapter", {
   },
   "zh-TW": {
     modeLabel: "執行模式", modeTmux: "終端機（tmux）", modeAcp: "ACP（沒有終端機）",
-    modeHint: "ACP 會在聊天裡即時顯示思考與工具進度，並在聊天裡詢問權限。沒有終端畫面，也不能 attach。",
-    approveLabel: "一律允許工具權限",
-    approveHint: "警告：Agent 要求使用的每個工具都會直接放行、不會詢問你，包括執行指令與修改檔案。關閉時，每個要求都會在聊天裡等你決定。",
+    modeHint: "ACP 會在聊天裡即時顯示思考與工具進度（不跳過權限時，也會顯示權限卡片）。沒有終端畫面，也不能 attach。",
+    skipLabel: "跳過工具權限詢問",
+    skipHint: "開啟（預設，和終端機模式一樣）：Agent 直接執行它的工具、不會詢問你，包括執行指令與修改檔案；這樣執行的工具呼叫會在聊天裡標「auto」。關閉：每個要求都會在聊天裡等你允許或拒絕。",
     badge: "ACP", badgeTitle: "以 ACP 執行：沒有終端機。即時思考與權限要求顯示在「紀錄」。",
     switchTitle: "切換執行模式？",
     switchToAcp: "{0} 會以 ACP 模式重新啟動，目前的終端畫面會消失：ACP 沒有終端畫面，也不能 attach。對話是否延續取決於這個 CLI。",
@@ -68,11 +68,11 @@ export const noPaneReason = (inst) => (paneViewOf(inst) ? undefined : ta("noPane
 // ── The form fields (create and edit) ──
 
 /**
- * The "Execution mode" select and, with ACP chosen, the approve-all checkbox. Shown only when `adapters` offers more than
- * the terminal (the selected backend's own list). `mode` / `approve` are the form's values; a mode the backend does not
+ * The "Execution mode" select and, with ACP chosen and an `onSkip` given, the skip-permissions checkbox. Shown only when `adapters` offers more than
+ * the terminal (the selected backend's own list). `mode` / `skip` (`skipPermissions`) are the form's values; a mode the backend does not
  * offer reads as the terminal (a backend change never leaves ACP chosen on one that cannot run it).
  */
-export function ExecutionModeFields({ adapters, mode, approve, onMode, onApprove, id = "ag-mode", disabled = false, impact = null }) {
+export function ExecutionModeFields({ adapters, mode, skip, onMode, onSkip, id = "ag-mode", disabled = false, impact = null }) {
   if (!adapters.includes("acp")) return null;
   const shown = effectiveMode(mode, adapters);
   return html`<div class="field exec-mode">
@@ -83,9 +83,9 @@ export function ExecutionModeFields({ adapters, mode, approve, onMode, onApprove
       </select>
       <p class="note">${ta("modeHint")}</p>
     </div>
-    ${shown === "acp" ? html`<div class="field exec-approve">
-      <label class="check"><input id=${`${id}-approve`} type="checkbox" checked=${!!approve} disabled=${disabled} onChange=${(e) => onApprove(e.target.checked)} /><span>${ta("approveLabel")}</span></label>
-      <p class="note exec-warn" role="note">${ta("approveHint")}</p>
+    ${shown === "acp" && onSkip ? html`<div class="field exec-skip">
+      <label class="check"><input id=${`${id}-skip`} type="checkbox" checked=${skip !== false} disabled=${disabled} onChange=${(e) => onSkip(e.target.checked)} /><span>${ta("skipLabel")}</span></label>
+      <p class="note" role="note">${ta("skipHint")}</p>
     </div>` : null}`;
 }
 

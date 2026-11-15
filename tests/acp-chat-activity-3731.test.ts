@@ -92,18 +92,34 @@ describe("an ACP turn in the chat's timeline", () => {
     expect(perm.options.map((o: any) => o.kind)).toEqual(["allow_once", "reject_once"]);   // never an *_always choice
   });
 
-  it("a request AgEnD's own policy answered is left out of the block; one a person has to answer is not", () => {
+  it("a request AgEnD's policy allowed (skipPermissions) is no step: its tool call carries auto, whichever of the two came first", () => {
+    for (const first of ["tool", "permission"] as const) {
+      const s = store();
+      s.beginTurn("1", "hello", undefined, WIRE);
+      const tool = { kind: "tool" as const, id: "w1", title: "write", toolKind: "edit", status: "in_progress" as const, rawInput: { file_path: "a" } };
+      if (first === "tool") s.apply(tool);
+      s.noteAuto("w1");                                  // what the runner does after answering allow-once
+      if (first === "permission") s.apply(tool);
+      s.apply({ ...tool, status: "completed" });
+      const steps = s.snapshot(undefined, { thoughts: false }).steps;
+      expect(steps.filter(x => x.kind === "permission")).toHaveLength(0);
+      expect(steps.find(x => x.kind === "tool")).toMatchObject({ status: "done", auto: true });
+      // chat's `standard` cut keeps the mark
+      expect(chatStep(steps.find(x => x.kind === "tool")!, "standard").auto).toBe(true);
+    }
+  });
+
+  it("a request a person has to answer is a step of the live block, and an auto-allowed tool is not mistaken for one", () => {
     const s = store();
     s.beginTurn("1", "hello", undefined, WIRE);
     const opts = [{ id: "once", name: "allow once", kind: "allow_once" as const }, { id: "no", name: "reject once", kind: "reject_once" as const }];
-    s.apply({ kind: "permission", requestId: "1", tool: { title: "agend__reply", kind: "other" }, options: opts });
-    s.resolvePermission("1", "allow once (agend tool)", true);
-    s.apply({ kind: "permission", requestId: "2", tool: { title: "Bash rm x", kind: "execute" }, options: opts });
+    s.apply({ kind: "tool", id: "w1", title: "write", toolKind: "edit", status: "in_progress" });
+    s.noteAuto("w1");
+    s.apply({ kind: "permission", requestId: "2", tool: { toolCallId: "b1", title: "Bash rm x", kind: "execute" }, options: opts });
     const steps = s.snapshot(undefined, { thoughts: false }).steps;
-    expect(steps.filter(x => x.kind === "permission").map(x => x.auto === true)).toEqual([true, false]);
     const rows = [{ boot: "b", id: 1, role: "user", anchor: "web-m1", text: "hello", ts: new Date(1_000).toISOString() }];
     const { live } = groupSteps(rows, steps, { now: 1_100 });
     expect(live.items.filter((x: any) => x.kind === "permission")).toHaveLength(1);
-    expect(live.items.find((x: any) => x.kind === "permission").auto).toBeUndefined();
+    expect(live.items.find((x: any) => x.kind === "tool").auto).toBe(true);
   });
 });

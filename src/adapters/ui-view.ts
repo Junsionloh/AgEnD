@@ -8,8 +8,8 @@ export interface AdapterUiView {
   cli_adapter: CliAdapterId;
   /** There is a terminal pane: attach, pane capture, raw keys and the web terminal make sense. */
   pane_view: boolean;
-  /** `acp` only: every permission request is approved without asking. */
-  acp_always_approve?: boolean;
+  /** `acp` only: `skipPermissions` (unset = true): every permission request is allowed once without asking. */
+  skip_permissions?: boolean;
 }
 
 /**
@@ -18,12 +18,12 @@ export interface AdapterUiView {
  */
 export function adapterUiView(
   runner: InstanceRunner | undefined,
-  config: { cli_adapter?: unknown; acp_always_approve?: unknown } | undefined,
+  config: { cli_adapter?: unknown; skipPermissions?: unknown } | undefined,
   defaults?: { cli_adapter?: unknown },
 ): AdapterUiView {
   const configured = config?.cli_adapter ?? defaults?.cli_adapter;
   const cli_adapter: CliAdapterId = configured === "acp" ? "acp" : "tmux";
   const bound = runner ? adapterOf(runner) : undefined;
   const pane_view = bound ? bound.capabilities.paneView : cli_adapter === "tmux";
-  return { cli_adapter, pane_view, ...(cli_adapter === "acp" ? { acp_always_approve: config?.acp_always_approve === true } : {}) };
+  return { cli_adapter, pane_view, ...(cli_adapter === "acp" ? { skip_permissions: config?.skipPermissions !== false } : {}) };
 }

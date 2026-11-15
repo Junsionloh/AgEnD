@@ -15,7 +15,7 @@ export interface AcpProfile {
   /** Exact versions this profile has been checked against (an allow-list, not a range). Others are refused. */
   readonly supportedVersions: readonly string[];
   /** Arguments after the binary. */
-  args(options: { model?: string; effort?: string }): string[];
+  args(options: { model?: string; effort?: string; skipPermissions?: boolean }): string[];
   /** The agent's version as it reports it in the `initialize` result, or null when it does not. */
   versionOf(initializeResult: unknown): string | null;
   /** Environment variables (besides the common ones) this CLI needs to reach its account or endpoint. */
@@ -50,7 +50,8 @@ export const GROK_PROFILE: AcpProfile = {
   supportedVersions: ["1.0.77"],
   // --no-auto-update: the allow-list above is exact, so the CLI must not move to another version by itself.
   // --no-leader: this process is the only client and owns its own MCP children (no shared leader to leak identity).
-  args: ({ model, effort }) => ["--no-auto-update", "agent", "--no-leader", ...(model ? ["--model", model] : []), ...(effort ? ["--reasoning-effort", effort] : []), "stdio"],
+  // --always-approve: `skipPermissions` (default on, as for the tmux backend, src/backend/grok.ts). The runner's own answer is the backstop.
+  args: ({ model, effort, skipPermissions }) => ["--no-auto-update", "agent", "--no-leader", ...(skipPermissions !== false ? ["--always-approve"] : []), ...(model ? ["--model", model] : []), ...(effort ? ["--reasoning-effort", effort] : []), "stdio"],
   versionOf: result => {
     const v = obj(obj(result)?._meta)?.agentVersion;
     return typeof v === "string" ? v : null;
@@ -66,7 +67,8 @@ export const AGY_PROFILE: AcpProfile = {
   label: "agy",
   binary: "agy",
   supportedVersions: ["1.5.8", "1.5.9"],
-  args: () => ["acp"],
+  // --dangerously-skip-permissions: listed by `agy acp --help` ("Auto-approve all tool permission requests"); `skipPermissions`, as for the tmux backend.
+  args: ({ skipPermissions }) => ["acp", ...(skipPermissions !== false ? ["--dangerously-skip-permissions"] : [])],
   // agy has no flag to stop its self-update, but the binary reads this variable (not exercised: no newer release was
   // available to update to). Without it, an update moves the instance off the exact version list above.
   fixedEnv: { AGY_CLI_DISABLE_AUTO_UPDATE: "1" },

@@ -20,7 +20,7 @@ register("log", {
     times: "×{0}", newer: "{0} new",
     cat_read: "Read", cat_edit: "Edit", cat_search: "Search", cat_run: "Run", cat_web: "Web", cat_mcp: "MCP", cat_agent: "Sub-agent",
     cat_plan: "Plan", cat_message: "Message", cat_other: "Tool", plan_items: "{0} items",
-    permission: "Permission",
+    permission: "Permission", auto: "auto", autoTitle: "Allowed without asking (skip permissions is on)",
     said: "Said", thinking: "Thinking", thinkingMore: "Show all thinking", thinkingLess: "Show less",
     expand: "Show details", collapse: "Hide details", command: "Command", removed: "Removed", added: "Added",
   },
@@ -34,7 +34,7 @@ register("log", {
     times: "×{0}", newer: "{0} 則新的",
     cat_read: "讀取", cat_edit: "編輯", cat_search: "搜尋", cat_run: "執行", cat_web: "網頁", cat_mcp: "MCP", cat_agent: "子 agent",
     cat_plan: "計畫", cat_message: "訊息", cat_other: "工具", plan_items: "{0} 項",
-    permission: "權限",
+    permission: "權限", auto: "auto", autoTitle: "自動允許，沒有詢問（已跳過權限詢問）",
     said: "說了", thinking: "思考", thinkingMore: "顯示完整思考", thinkingLess: "收合",
     expand: "顯示細節", collapse: "隱藏細節", command: "指令", removed: "移除", added: "新增",
   },
@@ -267,6 +267,8 @@ export function LogRow({ x, prev, paths, chat, compact, latest, instance, fetche
       ? html`<button type="button" class=${`log-head log-fold log-toggle${cls ? ` ${cls}` : ""}`} aria-expanded=${open ? "true" : "false"} onClick=${() => setOpen(!open)}>${inner}</button>`
       : html`<div class="log-head">${inner}</div>`;
   };
+  // #3731: a tool call AgEnD's policy allowed without asking (`skipPermissions`): there is no card, so the call says so.
+  const autoMark = x.auto ? html`<span class="log-auto" title=${tl("autoTitle")}>${tl("auto")}</span>` : null;
   const note = (cut, bytes) => html`${cut ? html`<p class="note">${tl("cut", cut.toLocaleString())}</p>` : null}${bytes ? html`<p class="note">${tl("tooLarge", size(bytes))}</p>` : null}`;
   let row;
   if (compact && (x.kind === "thinking" || (x.kind === "assistant" && chat))) {
@@ -290,7 +292,7 @@ export function LogRow({ x, prev, paths, chat, compact, latest, instance, fetche
     const middle = subject || x.tool || tl(`cat_${cat}`);
     const kind = cat === "other" && x.tool ? (subject ? x.tool : "") : tl(`cat_${cat}`);
     const label = html`<span class="log-sum"><span class="log-subject mono" title=${raw && subject !== raw ? raw : null}>${middle}</span>${x.repeat ? html` <span class="log-repeat">${tl("times", x.repeat)}</span>` : null}</span>`;
-    const tail = html`${kind ? html`<span class="log-cat">${kind}</span>` : null}${mark}`;
+    const tail = html`${autoMark}${kind ? html`<span class="log-cat">${kind}</span>` : null}${mark}`;
     row = html`${line(CAT_ICON[cat] || CAT_ICON.other, label, tail, has)}
       ${has && open ? html`<div class="log-detail">
         ${view && view.code ? html`<pre class="log-code"><span class="log-prompt" aria-hidden="true">$ </span>${short(view.code)}</pre>${x.inputCut ? note(x.inputCut) : null}` : null}
@@ -336,7 +338,7 @@ export function LogRow({ x, prev, paths, chat, compact, latest, instance, fetche
     const status = quiet ? null : html`<span class=${`log-status ${x.status || "done"}`}>${x.status === "running" ? html`<span class="spinner" aria-hidden="true"></span>` : null}${tl(x.status || "done")}${typeof x.exitCode === "number" && x.exitCode !== 0 ? ` · ${tl("exit", x.exitCode)}` : ""}${x.durationMs ? ` · ${duration(x.durationMs)}` : ""}</span>`;
     const label = html`<span class="log-cat">${tl(`cat_${cat}`)}</span>${subject ? html` <span class="log-subject mono" title=${x.subject && subject !== x.subject ? x.subject : null}>${subject}</span>` : null}${x.tool && !subject ? html` <span class="log-tool mono muted">${x.tool}</span>` : null}`;
     const has = !!(x.body || x.input || x.bodyBytes);
-    row = html`${head(CAT_ICON[cat] || CAT_ICON.other, label, html`${x.repeat ? html`<span class="log-repeat">${tl("times", x.repeat)}</span>` : null}${status}`)}
+    row = html`${head(CAT_ICON[cat] || CAT_ICON.other, label, html`${x.repeat ? html`<span class="log-repeat">${tl("times", x.repeat)}</span>` : null}${autoMark}${status}`)}
       ${has ? html`<button type="button" class="link-btn log-toggle" aria-expanded=${open ? "true" : "false"} onClick=${() => setOpen(!open)}>${open ? tl("hideOutput") : tl("showOutput")}</button>` : null}
       ${open ? html`<div class="log-detail">
         ${x.input ? html`<div class="log-sec"><span class="log-sec-h">${tl("args")}</span><div class="log-text mono">${short(x.input)}</div>${x.inputCut ? html`<p class="note">${tl("cut", x.inputCut.toLocaleString())}</p>` : null}</div>` : null}

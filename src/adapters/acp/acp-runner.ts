@@ -620,20 +620,24 @@ export class AcpRunner extends EventEmitter {
 
   // ───────────────────────────────────────────────────────────────── permissions
 
+  /**
+   * The permission policy. `skipPermissions` (unset = true, as for the tmux backends): every request is answered here with the
+   * CLI's one-shot "allow once" — never an "always" option (it changes state the CLI keeps), and never another option when
+   * there is no "allow once": that request waits for a person. The tool call it was for is marked `auto` in the timeline; no
+   * permission card appears. `skipPermissions: false`: requests wait for a person in the chat, except those for this instance's
+   * own `agend` tools (found only by fields the CLI sets, `ownToolName`) other than the ones that change the fleet.
+   */
   private onPermission(e: Extract<AdapterEvent, { kind: "permission" }>): void {
-    this.steps.apply(e);
     const own = ownToolName(e.tool);
-    if (own && !OWN_TOOLS_ASK.has(own)) {
-      // The instance's own `agend` MCP server is how it talks to the fleet (replying is the point of the chat); asking
-      // for every `reply` would make the chat unusable. Tools that start, replace or remove instances still ask.
-      const allow = e.options.find(o => o.kind === "allow_once");
-      if (allow && this.adapter.answerPermission(e.requestId, { optionId: allow.id })) { this.steps.resolvePermission(e.requestId, `${allow.name} (agend tool)`, true); return; }
+    const auto = this.config.skipPermissions !== false || (own !== null && !OWN_TOOLS_ASK.has(own));
+    const allow = auto ? e.options.find(o => o.kind === "allow_once") : undefined;
+    if (allow && this.adapter.answerPermission(e.requestId, { optionId: allow.id })) {
+      const tool = e.tool && typeof e.tool === "object" ? e.tool as Record<string, unknown> : {};
+      if (typeof tool.toolCallId === "string") this.steps.noteAuto(tool.toolCallId);
+      this.emit("steps_changed");
+      return;
     }
-    if (this.config.acp_always_approve === true) {
-      // The policy is AgEnD's: answer with the one-shot allow, never an "always" option (it changes state the CLI keeps).
-      const allow = e.options.find(o => o.kind === "allow_once");
-      if (allow && this.adapter.answerPermission(e.requestId, { optionId: allow.id })) { this.steps.resolvePermission(e.requestId, `${allow.name} (auto)`, true); return; }
-    }
+    this.steps.apply(e);
     this.emit("steps_changed");
   }
 

@@ -108,15 +108,27 @@ export class AcpStepStore {
   }
 
   /** A permission step's outcome: its buttons are gone, `note` says what was chosen. */
-  resolvePermission(requestId: string, note: string, auto = false): void {
+  resolvePermission(requestId: string, note: string): void {
     const step = this.byId.get(this.permissions.get(requestId)?.stepId ?? `perm-${requestId}`);
     this.permissions.delete(requestId);
     if (!step || step.status !== "running") return;
     step.status = note === "cancelled" ? "interrupted" : "done";
     step.note = note;
-    if (auto) step.auto = true;
     delete step.options;
     this.put(step, true);
+  }
+
+  private readonly autoIds = new Set<string>();
+  /**
+   * The CLI asked to run this tool call and AgEnD's policy allowed it (`skipPermissions`): the tool step says so (`auto`). The
+   * request may come before or after the call's own update, so an id seen first is remembered.
+   */
+  noteAuto(toolCallId: string): void {
+    const step = this.byId.get(`t-${toolCallId}`);
+    if (!step) { this.autoIds.add(toolCallId); if (this.autoIds.size > 500) this.autoIds.delete(this.autoIds.values().next().value as string); return; }
+    if (step.auto) return;
+    step.auto = true;
+    this.put(step, step.status !== "running");
   }
 
   /** Pending permission requests (what the page may answer). */
@@ -174,6 +186,7 @@ export class AcpStepStore {
     if (!step) { step = { id, turn: this.turn, ts: this.now(), kind: "tool" }; }
     step.tool = e.title.slice(0, 120);
     step.cat = CAT[e.toolKind] ?? "other";
+    if (this.autoIds.has(e.id)) step.auto = true;
     // AgEnD's own `reply` tool, by whatever name the CLI gives it: the chat joins a timeline to its bubbles by this call
     // (log-steps.ts: replyAnchor / replyResult), so it carries the canonical name and the same anchor as a transcript's.
     const named = replyCall(e);

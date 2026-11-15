@@ -1,5 +1,5 @@
 // A small ACP agent for tests: speaks the protocol on stdio, driven by keywords in the prompt text.
-// Keywords in the prompt text (written with a leading #: #crash #split #ordering #fsprobe #tool #owntool #spoof #slow #linger) pick the behaviour.
+// Keywords in the prompt text (written with a leading #: #crash #split #ordering #fsprobe #tool #onlyalways #owntool #spoof #slow #linger) pick the behaviour.
 // Environment: FAKE_ACP_VERSION (agentInfo.version), FAKE_ACP_STATE (a directory: known sessions + a call log),
 // FAKE_ACP_AUTH=1 (session/new answers -32000).
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -77,7 +77,11 @@ async function turn(id, sessionId, text) {
     const answer = await ask("session/request_permission", {
       sessionId,
       toolCall: { toolCallId: "w1", kind: "edit", title: "Write `/work/hello.txt`", rawInput: { file_path: "/work/hello.txt", content: "hi" } },
-      options: [
+      // #onlyalways: the CLI offers no one-shot allow (only "always" and a refusal).
+      options: text.includes("#onlyalways") ? [
+        { optionId: "allow-always", name: "Always", kind: "allow_always" },
+        { optionId: "reject-once", name: "No", kind: "reject_once" },
+      ] : [
         { optionId: "allow-always", name: "Always", kind: "allow_always" },
         { optionId: "allow-once", name: "Yes", kind: "allow_once" },
         { optionId: "reject-once", name: "No", kind: "reject_once" },

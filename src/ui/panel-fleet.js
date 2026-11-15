@@ -511,7 +511,7 @@ export function CreateInstanceDialog({ onClose }) {
   const windows = runtime === "windows";
   // The backend "fleet default" means (#2098 review P3-3): its models are the ones the model list offers then.
   const [defaultBackend, setDefaultBackend] = useState("claude-code");
-  const [f, setF] = useState({ dir: "", topic: "", desc: "", backend: "", model: "", branch: "", tags: "", prompt: "", mode: "tmux", approve: false });
+  const [f, setF] = useState({ dir: "", topic: "", desc: "", backend: "", model: "", branch: "", tags: "", prompt: "", mode: "tmux" });
   // #3731: the modes the chosen backend can run (the backend "fleet default" means counts as that backend).
   const adapters = adaptersOf(backends, f.backend || defaultBackend);
   const mode = effectiveMode(f.mode, adapters);
@@ -579,7 +579,7 @@ export function CreateInstanceDialog({ onClose }) {
     const tags = f.tags.split(",").map(x => x.trim()).filter(Boolean); if (tags.length) body.tags = tags;
     if (f.prompt.trim()) body.systemPrompt = f.prompt.trim();
     if (hostAccount && credentialProfile) body.credentialProfile = credentialProfile;
-    if (mode === "acp") { body.cli_adapter = "acp"; if (f.approve) body.acp_always_approve = true; }
+    if (mode === "acp") body.cli_adapter = "acp";
     return body;
   } };
   const canNext = !!runtime && (!machineId || machine?.status === "online") && (windows ? nativeCli?.runnable === true : backends !== null);
@@ -618,8 +618,8 @@ export function CreateInstanceDialog({ onClose }) {
     ${field(`${t("fleet.topic")}${f.dir.trim() ? "" : " *"}`, html`<input value=${f.topic} onInput=${set("topic")} placeholder=${windows ? tr("nameHint") : t("fleet.topicHint")} />`)}
     ${field(t("fleet.description"), html`<input value=${f.desc} onInput=${set("desc")} placeholder=${t("fleet.descriptionHint")} />`)}
     ${windows ? html`${field(tr("adapter"),html`<select id="native-create-adapter" value=${nativeAdapter} onChange=${e=>setNativeAdapter(e.target.value)}><option value="exec">${tr("adapterExec")}</option><option value="pane" disabled=${!["codex","claude-code"].includes(f.backend)}>${tr("adapterPane")}</option></select>`)}<p class="note">${tr(nativeAdapter==="pane"?"paneTopic":"execTopic")}</p>${field(t("fleet.model"),html`<${ModelSelect} key=${`${targetKey}:${f.backend}`} value=${f.model} onChange=${value => setF(x => ({...x,model:value}))} backend=${f.backend} runtime="windows" machineId=${machineId} profile=${credentialProfile} inherit=${tr("model")} />`)}${field(tr("access"),html`<select id="native-create-sandbox" value=${sandbox} onChange=${e => setSandbox(e.target.value)}><option value="read-only" disabled=${nativeCli?.readOnlySupport === false}>${tr("read")}</option><option value="workspace-write">${tr("write")}</option></select>`)}<p class="note">${!permissionReady ? tr("noReadOnly") : sandbox === "workspace-write" ? tr(nativeAdapter==="pane"?"panePolicy":nativeCli?.id === "claude-code" ? "nativePolicyClaude" : "nativePolicy") : ""}</p><${NativeAgendToolsHint} cli=${nativeCli} sandbox=${sandbox} />` : html`
-      <${ExecutionModeFields} id="ci-mode" adapters=${adapters} mode=${f.mode} approve=${f.approve}
-        onMode=${(v) => setF(x => ({ ...x, mode: v }))} onApprove=${(v) => setF(x => ({ ...x, approve: v }))} />
+      <${ExecutionModeFields} id="ci-mode" adapters=${adapters} mode=${f.mode} 
+        onMode=${(v) => setF(x => ({ ...x, mode: v }))} />
       ${field(t("fleet.model"), html`<${ModelSelect} value=${f.model} onChange=${(v) => setF(x => ({ ...x, model: v }))} backend=${f.backend || defaultBackend} inherit=${t("fleet.fleetDefault")} />`)}
       ${field(t("fleet.branch"), html`<input value=${f.branch} onInput=${set("branch")} placeholder=${t("fleet.branchHint")} />`)}
       ${field(t("fleet.tags"), html`<input value=${f.tags} onInput=${set("tags")} placeholder=${t("fleet.tagsHint")} />`)}

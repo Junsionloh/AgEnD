@@ -1970,6 +1970,7 @@ export class InstanceLifecycle {
       instanceDir: p.instanceDir,
       model: p.config.model,
       effort: (p.config as InstanceConfig & { effort?: string }).effort,
+      skipPermissions: p.config.skipPermissions !== false,
       mcpServers: [],
       logger: this.ctx.logger,
       // AGEND_ACP_TRACE=1 writes every frame to acp-trace.jsonl in the instance directory (owner-only). A debugging aid.
@@ -3004,7 +3005,6 @@ export class InstanceLifecycle {
         ...(args.backend_options ? { backend_options: args.backend_options } : {}),
         // #3731: only "acp" is ever stored (tmux is the default); the web handler validated it against the backend.
         ...(args.cli_adapter === "acp" ? { cli_adapter: "acp" as const } : {}),
-        ...(args.cli_adapter === "acp" && args.acp_always_approve === true ? { acp_always_approve: true } : {}),
         ...(args.model_failover ? { model_failover: args.model_failover } : {}),
         ...(args.tool_set ? { tool_set: args.tool_set } : {}),
         ...(args.skipPermissions != null ? { skipPermissions: args.skipPermissions } : {}),

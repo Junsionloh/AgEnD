@@ -3617,7 +3617,7 @@ export function handleWebRequest(
         if (!account.ok) { const { ok: _ok, status, ...rest } = account; json(res, status, rest); return; }
         delete (v.data as Record<string, unknown>).credentialProfile;
         if (account.backendOptions) v.data.backend_options = account.backendOptions;
-        // How the new agent runs (#3731): `cli_adapter` / `acp_always_approve`, judged against the backend it will use.
+        // How the new agent runs (#3731): `cli_adapter`, judged against the backend it will use.
         const adapterFields = createInstanceAdapterFields(v.data, ctx.fleetConfig?.defaults?.backend);
         if (!adapterFields.ok) { json(res, 400, { error: adapterFields.error }); return; }
         const createArgs = adapterFields.args;

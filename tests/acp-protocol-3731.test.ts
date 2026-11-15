@@ -99,8 +99,15 @@ describe("profiles and the version gate", () => {
     expect(checkVersion(AGY_PROFILE, { agentInfo: { version: "1.5.8" } })).toEqual({ ok: true, version: "1.5.8" });
   });
   it("starts grok without auto-update and without a shared leader, and passes effort and model", () => {
-    expect(GROK_PROFILE.args({ model: "m", effort: "high" })).toEqual(["--no-auto-update", "agent", "--no-leader", "--model", "m", "--reasoning-effort", "high", "stdio"]);
-    expect(AGY_PROFILE.args({})).toEqual(["acp"]);
+    expect(GROK_PROFILE.args({ model: "m", effort: "high", skipPermissions: false })).toEqual(["--no-auto-update", "agent", "--no-leader", "--model", "m", "--reasoning-effort", "high", "stdio"]);
+    expect(AGY_PROFILE.args({ skipPermissions: false })).toEqual(["acp"]);
+  });
+  it("skipPermissions (the default) starts each CLI with its own auto-approve flag: grok `agent --always-approve stdio`, agy `acp --dangerously-skip-permissions`", () => {
+    for (const options of [{}, { skipPermissions: true }, { skipPermissions: undefined }]) {
+      expect(GROK_PROFILE.args(options)).toEqual(["--no-auto-update", "agent", "--no-leader", "--always-approve", "stdio"]);
+      expect(AGY_PROFILE.args(options)).toEqual(["acp", "--dangerously-skip-permissions"]);
+    }
+    expect(GROK_PROFILE.args({ model: "m", skipPermissions: true })).toEqual(["--no-auto-update", "agent", "--no-leader", "--always-approve", "--model", "m", "stdio"]);
   });
   it("builds the child's environment from an allow-list: no fleet or web secrets", () => {
     const env = buildChildEnv(GROK_PROFILE, { PATH: "/bin", HOME: "/h", XAI_API_KEY: "k", AGEND_TOKEN: "secret", AGEND_WEB_SECRET: "s", DISCORD_TOKEN: "d", OPENAI_API_KEY: "o", LC_ALL: "C" });
