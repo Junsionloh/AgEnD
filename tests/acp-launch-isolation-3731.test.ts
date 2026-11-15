@@ -33,3 +33,22 @@ describe("the agend MCP server of an ACP instance", () => {
     expect(launch("alpha").parts.mcpServers[0]!.command).toBe(process.execPath);
   });
 });
+
+describe("the lifecycle hands skipPermissions to the ACP adapter, which starts the CLI with its flag or without it", () => {
+  const adapterFor = async (backendName: string, config: Record<string, unknown>) => {
+    const { InstanceLifecycle } = await import("../src/instance-lifecycle.js");
+    const root = mkdtempSync(join(tmpdir(), "acp-lifecycle-")); dirs.push(root);
+    const lc = new InstanceLifecycle({ logger: { info() {}, warn() {}, error() {}, debug() {}, child() { return this; } } } as never) as unknown as {
+      buildAcpAdapter(p: Record<string, unknown>): { opts: { skipPermissions?: boolean } };
+    };
+    return lc.buildAcpAdapter({ name: "w", config: { working_directory: root, backend: backendName, cli_adapter: "acp", ...config }, instanceDir: root, topicMode: true, backendName,
+      resolvedBinary: "/bin/x", capActiveDecisions: (r: unknown[]) => r, selectRelevantDecisions: (r: unknown[]) => r });
+  };
+  it("unset or true: the flag; false: none", async () => {
+    for (const backend of ["grok", "antigravity"]) {
+      expect((await adapterFor(backend, {})).opts.skipPermissions).toBe(true);
+      expect((await adapterFor(backend, { skipPermissions: true })).opts.skipPermissions).toBe(true);
+      expect((await adapterFor(backend, { skipPermissions: false })).opts.skipPermissions).toBe(false);
+    }
+  });
+});
