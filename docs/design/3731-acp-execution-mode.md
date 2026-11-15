@@ -297,7 +297,7 @@ Environment is also per-process in this mode: the runner builds the child's envi
 
 ### 7.1 Permissions: default and policy
 
-- **Default to asking, not approving.** On the `tmux` adapter the fleet launches with the CLI's skip-permissions switch unless configured otherwise (`src/backend/types.ts:114`, `skipPermissions`). In structured mode, permission requests are first-class, so the default policy for a *new* structured instance should be **ask** (forward to the operator), with the existing `skipPermissions` setting mapped to an **auto-approve-once** policy for those who want the old behaviour. This is a deliberate change of default and is called out in §9.
+- **Default to skipping, as `tmux` does; `skipPermissions: false` asks.** On the `tmux` adapter the fleet launches with the CLI's skip-permissions switch unless configured otherwise (`src/backend/types.ts:114`, `skipPermissions`: unset means skip). The structured adapters use the **same setting with the same default** (decision of the user, after comparing the fleet's own `tmux` backends and two reference implementations, both of which skip by default). Skipping means: the CLI is started with its own switch where it has one (grok `agent --always-approve`, agy `acp --dangerously-skip-permissions`, verified in `--help`), and the runner answers every `session/request_permission` itself with the one-shot **allow once**, as the backstop. It never selects `allow_always` (it changes CLI-side state), and when a request offers no `allow_once` it picks nothing else: that request waits for a person. The tool call is marked **auto** in the timeline and no card is shown. `skipPermissions: false` asks: a card in the chat, answered by an admin, with only the instance's own `agend` tools (not the ones that create, restart or delete instances) allowed unasked so the chat can work. The earlier draft of this section proposed asking by default; that proposal and its separate `acp_always_approve` switch are withdrawn.
 - **Policy lives in AgEnD, not the CLI.** The runner answers `session/request_permission` from a policy table (tool `kind` and path/command class → allow / ask / reject). `allow_always` and `reject_always` options are **never** chosen automatically; they change CLI-side state AgEnD cannot see.
 - **Timeouts fail closed.** An unanswered request is answered with the cancelled outcome [S] when the turn is cancelled or the instance stops, never with an allow.
 - **Who can answer.** Only users who can act on the instance today (admins, and the same authority checks the dashboard already uses; `src/dashboard-permissions.ts`, `src/slash-authz.ts`). A guest or public-link viewer never answers a permission request, and sees at most a "waiting for approval" state.
@@ -371,7 +371,7 @@ What `paneView` guards today (`#77`): the context read off the pane (`FleetManag
 Two things are deliberately left for later:
 
 1. **`start` does not go through `adapter.start` yet.** `adapter.start` is implemented and tested, but the lifecycle still calls `InstanceLifecycle.startOrDispose(daemon, …)`. Two existing tests that must pass unmodified depend on that call: one compares the lifecycle's source text for it, and one passes its first argument to a fake. Routing it changes those tests, so it is done together with the first adapter that needs it. `stop` and cancel do go through the adapter.
-2. ~~A Windows-runtime instance rejecting `cli_adapter` (§9.3) is not enforced.~~ **Done on the alpha line (#82).** A `runtime: windows` instance that sets `cli_adapter` or `acp_always_approve` is refused when the config loads and by the validator, with the key named; its `native_adapter` behaviour is unchanged, and a native pane always builds the `tmux` adapter.
+2. ~~A Windows-runtime instance rejecting `cli_adapter` (§9.3) is not enforced.~~ **Done on the alpha line (#82).** A `runtime: windows` instance that sets `cli_adapter` is refused when the config loads and by the validator, with the key named; its `native_adapter` behaviour is unchanged, and a native pane always builds the `tmux` adapter.
 
 Phase 0 is the only phase that touches shared code paths in a way existing users could notice, which is why it is separated and why it is the first thing to be reviewed if the maintainers agree with the direction. Each later phase is a separate PR and is opt-in per instance at runtime; none of them changes defaults.
 
@@ -396,7 +396,7 @@ The following are all [U] in §3/§4 and must be confirmed before building the p
 - **Hang semantics change.** "No `session/update` for N seconds" is a different, arguably better, but different signal from "pane unchanged" (§4). Thresholds need re-tuning, not copying.
 - **Support burden.** Four adapters multiply the matrix. Mitigation: the `CliAdapter` / `InstanceRunner` seam keeps it small (three translators into one event type), and the fakes keep the daemon-side tests independent of real CLIs.
 - **Loss of the pane.** The mode removes AgEnD's most distinctive affordance for those instances. The opt-in rule and §2.2 are the mitigation; a maintainer may reasonably decide the trade is not worth it for a given adapter.
-- **Default permission change** (§7.1). A structured instance that asks by default is a different experience from the always-approve default today. This needs an explicit maintainer decision.
+- **Permission default** (§7.1). A structured instance skips permissions by default, like every `tmux` instance; asking is the opt-in (`skipPermissions: false`). A maintainer may still prefer the reverse for structured modes.
 
 ### 9.3 Config key naming
 
@@ -485,7 +485,7 @@ Still open:
 1. Is an opt-in structured adapter acceptable in principle, given #739's earlier "not ACP" decision? (Same question as in #3731; this document is the detail behind it.)
 2. **Config key** (§9.3): `cli_adapter` is recommended; is a bare `adapter` preferred despite the existing channel-adapter meaning?
 3. Should **phase 0** (the adapter interface, with `tmux` as its first implementation) be proposed on its own first, since it is behaviour-neutral and useful regardless?
-4. **Default permission policy** for a new structured instance: ask (proposed in §7.1) or inherit today's always-approve?
+4. **Default permission policy** for a new structured instance: it inherits today's skip (§7.1, decided); is that acceptable upstream, or should structured modes ask by default?
 5. If Kiro or OpenCode turn out **not** to have official ACP, is a dedicated native adapter per CLI wanted, or should they stay on `tmux`?
 6. Where should the adapter be selectable (create form only, or editable later)? Editing implies the conversation-continuity question in §9.1 (7).
 7. Is a recorded-fixture + fake-CLI test strategy (no real CLI in CI) acceptable, with real-CLI smoke runs left to a manual step?
