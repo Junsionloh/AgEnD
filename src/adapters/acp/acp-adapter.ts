@@ -49,6 +49,11 @@ export interface AcpAdapterOptions {
   readonly env?: NodeJS.ProcessEnv;
   /** Variables set on the child on top of the allow-listed ones. */
   readonly childEnv?: Readonly<Record<string, string>>;
+  /**
+   * A named account's launch (`profile.accountLaunch` of its folder): its variables, and the arguments put right after the
+   * binary. Given, the child is a NAMED account's: the daemon's own account variables are not passed on (`buildChildEnv`).
+   */
+  readonly account?: { readonly env: Readonly<Record<string, string>>; readonly args: readonly string[] };
   readonly logger: { info(o: object, m?: string): void; warn(o: object, m?: string): void; error(o: object, m?: string): void; debug?(o: object, m?: string): void };
   /** Builds the runner this adapter is bound to (the fleet's per-instance object). */
   readonly makeRunner: (adapter: AcpAdapter) => InstanceRunner;
@@ -150,8 +155,8 @@ export class AcpAdapter implements CliAdapter {
     const { profile } = this.opts;
     const client = new AcpClient({
       command: this.opts.command,
-      args: profile.args({ model: this.opts.model, effort: this.opts.effort, skipPermissions: this.opts.skipPermissions }),
-      env: buildChildEnv(profile, this.opts.env ?? process.env, this.opts.childEnv),
+      args: [...(this.opts.account?.args ?? []), ...profile.args({ model: this.opts.model, effort: this.opts.effort, skipPermissions: this.opts.skipPermissions })],
+      env: buildChildEnv(profile, this.opts.env ?? process.env, { ...this.opts.childEnv, ...this.opts.account?.env }, !!this.opts.account),
       cwd: this.opts.cwd,
       spawn: this.opts.spawn,
       onNotification: (method, params) => this.onNotification(method, params),

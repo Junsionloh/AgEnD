@@ -1,3 +1,4 @@
+import { credentialProfileLaunchAt } from "../../backend/credential-profile.js";
 import type { AdapterCapabilities } from "../types.js";
 
 /**
@@ -32,6 +33,12 @@ export interface AcpProfile {
   readonly passEnv: readonly (string | RegExp)[];
   /** Variables always set on the child (after the allow-list). */
   readonly fixedEnv?: Readonly<Record<string, string>>;
+  /**
+   * How a NAMED account (`backend_options.<cli>.credential_profile`) is told to the CLI, given the account's own folder: the
+   * variables it is started with and the arguments that go right after the binary. Everything the CLI keeps for that sign-in
+   * (login, sessions) lives in that folder. A profile without it cannot run a named account.
+   */
+  accountLaunch?(folder: string): { env: Record<string, string>; args: string[] } | null;
   /** What the instance can do under this profile. */
   readonly capabilities: AdapterCapabilities;
   /**
@@ -73,6 +80,8 @@ export const GROK_PROFILE: AcpProfile = {
     return typeof v === "string" ? v : null;
   },
   passEnv: ["XAI_API_KEY", /^GROK_/],
+  // grok keeps its login (`auth.json`), sessions and settings under GROK_HOME (default ~/.grok); checked with grok 1.0.77: a fresh GROK_HOME answers "You are not authenticated".
+  accountLaunch: folder => ({ env: { GROK_HOME: folder }, args: [] }),
   capabilities: { ...COMMON, contextUsage: false },
   mcpTransport: "stdio",
   mcpConnects: "with_session",
@@ -94,6 +103,8 @@ export const AGY_PROFILE: AcpProfile = {
     return typeof v === "string" ? v : null;
   },
   passEnv: ["GEMINI_API_KEY", "GOOGLE_API_KEY", /^GOOGLE_/, /^ANTIGRAVITY_/],
+  // The same launch the terminal backend gives a named agy account (`--app_data_dir <folder relative to ~/.gemini>` right after the binary, and the registry's pin that keeps the sign-in in the folder's file).
+  accountLaunch: folder => credentialProfileLaunchAt("antigravity", folder),
   capabilities: { ...COMMON, contextUsage: true },
   mcpTransport: "stdio",
   mcpConnects: "first_prompt",
@@ -130,9 +141,10 @@ const COMMON_ENV: readonly (string | RegExp)[] = [
  * The child's whole environment, built from an allow-list: common process basics plus what this CLI needs for its
  * account. Fleet tokens, web secrets and other instances' variables are not passed on.
  */
-export function buildChildEnv(profile: AcpProfile, source: NodeJS.ProcessEnv, extra: Readonly<Record<string, string>> = {}): Record<string, string> {
+export function buildChildEnv(profile: AcpProfile, source: NodeJS.ProcessEnv, extra: Readonly<Record<string, string>> = {}, named = false): Record<string, string> {
   const env: Record<string, string> = {};
-  const wanted = [...COMMON_ENV, ...profile.passEnv];
+  // A NAMED account is its own sign-in: the variables that reach the default account (an API key, the CLI's home) are not passed on, so it can never run under them.
+  const wanted = [...COMMON_ENV, ...(named ? [] : profile.passEnv)];
   for (const [key, value] of Object.entries(source)) {
     if (value === undefined) continue;
     if (wanted.some(w => (typeof w === "string" ? w === key : w.test(key)))) env[key] = value;

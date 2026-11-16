@@ -88,12 +88,16 @@ describe("a switch whose result would not load is refused before anything is sto
  it.each([
   ["a Windows agent that still names an adapter",{runtime:"windows",cli_adapter:"acp"},/cli_adapter is not accepted for a Windows runtime agent/],
   ["an adapter its backend cannot run",{backend:"claude-code",cli_adapter:"acp"},/cli_adapter "acp" is not supported yet for backend "claude-code"/],
-  ["a named account with acp",{backend:"grok",cli_adapter:"acp",backend_options:{grok:{credential_profile:"work"}}},/named account/],
  ])("%s",async(_why,prepared,message)=>{
   const h=host(prepared);
   await expect(h.service.change("agent-1",h.input(),()=>true)).rejects.toThrow(message);
   await expect(h.service.change("agent-1",h.input(),()=>true)).rejects.toThrow(/nothing was changed/);
   expect(h.save).not.toHaveBeenCalled();expect(h.stopped).not.toHaveBeenCalled();expect(h.discard).toHaveBeenCalled();
+ });
+ it("a named account with acp is no longer refused (AGEND-279)",async()=>{
+  const h=host({backend:"grok",cli_adapter:"acp",backend_options:{grok:{credential_profile:"work"}}});
+  await h.service.change("agent-1",h.input(),()=>true);
+  expect(h.save).toHaveBeenCalledOnce();
  });
  it("a result that loads is saved",async()=>{
   const h=host({backend:"antigravity"});

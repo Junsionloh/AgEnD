@@ -67,10 +67,12 @@ describe("a native Windows pane always builds the tmux adapter", () => {
 describe("an acp instance and a named account", () => {
   const acp = (extra: Record<string, unknown> = {}) => ({ working_directory: "/tmp/a", backend: "antigravity", cli_adapter: "acp", ...extra });
   const paths = (inst: Record<string, unknown>) => validateFleetConfig({ instances: { a: inst } }).errors.map(e => e.path);
-  it("runs under the CLI's own sign-in; naming an account is refused rather than quietly ignored", () => {
+  // AGEND-279: a named account is accepted with acp (adapters/acp/account.ts runs it); see acp-account-279.test.ts for what the child is given.
+  it("is accepted for grok and antigravity; a bad profile name is still refused", () => {
     expect(paths(acp())).toEqual([]);
-    expect(paths(acp({ backend_options: { antigravity: { credential_profile: "work" } } }))).toContain("instances.a.backend_options");
-    // The same account on a terminal instance is the feature it always was.
+    expect(paths(acp({ backend_options: { antigravity: { credential_profile: "work" } } }))).toEqual([]);
+    expect(paths(acp({ backend: "grok", backend_options: { grok: { credential_profile: "work" } } }))).toEqual([]);
+    expect(paths(acp({ backend_options: { antigravity: { credential_profile: "../x" } } }))).toContain("instances.a.backend_options.antigravity.credential_profile");
     expect(paths({ working_directory: "/tmp/a", backend: "antigravity", backend_options: { antigravity: { credential_profile: "work" } } })).toEqual([]);
   });
 });

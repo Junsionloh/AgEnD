@@ -53,19 +53,6 @@ export function windowsAdapterProblem(inst: { cli_adapter?: unknown }): { key: "
 }
 
 /**
- * An `acp` instance runs the CLI under its own sign-in (the one `agy acp --login` / the CLI's login writes): the
- * adapter does not yet pass a named account (`backend_options.<cli>.credential_profile`) to the child, so naming one
- * is refused instead of quietly running under the default login. Null when there is nothing to refuse.
- */
-export function acpAccountProblem(inst: { cli_adapter?: unknown; backend_options?: unknown }, backend: string): string | null {
-  if (inst.cli_adapter !== "acp") return null;
-  const options = inst.backend_options && typeof inst.backend_options === "object" ? (inst.backend_options as Record<string, unknown>)[backend] : undefined;
-  const profile = options && typeof options === "object" ? (options as Record<string, unknown>).credential_profile : undefined;
-  if (profile === undefined || profile === null || profile === "") return null;
-  return `cli_adapter: acp runs under the CLI's own sign-in; a named account (backend_options.${backend}.credential_profile) is not supported with it yet`;
-}
-
-/**
  * What `cli_adapter` becomes when an agent's Runtime or CLI is switched (`config` is the new configuration, runtime and backend
  * already set). A Windows agent never takes one, and a backend that cannot run it drops it, so the agent goes back to the
  * terminal / native way of running; a backend that can still run it (grok ↔ antigravity) keeps it. `skipPermissions` is not touched.
@@ -79,16 +66,15 @@ export function adapterAfterRuntimeChange<T extends { cli_adapter?: unknown; run
 
 /**
  * The same rules the config loader and validator apply to an instance, judged on a configuration about to be saved by a Runtime
- * switch: a Windows agent with an adapter, an adapter its backend cannot run, a named account with `acp`. A switch that gives one is
+ * switch: a Windows agent with an adapter, an adapter its backend cannot run. A switch that gives one is
  * refused, so a `fleet.yaml` that would not load again is never written. Null: fine.
  */
-export function runtimeConfigProblem(config: { cli_adapter?: unknown; runtime?: unknown; backend?: unknown; backend_options?: unknown }, defaultBackend?: string): string | null {
+export function runtimeConfigProblem(config: { cli_adapter?: unknown; runtime?: unknown; backend?: unknown }, defaultBackend?: string): string | null {
   const backend = (typeof config.backend === "string" ? config.backend : undefined) ?? defaultBackend ?? "claude-code";
   if (config.runtime === "windows") {
     const windows = windowsAdapterProblem(config);
     if (windows) return `${windows.key} ${windows.message}`;
   }
   const adapter = cliAdapterProblem(config.cli_adapter, backend);
-  if (adapter) return `cli_adapter ${adapter}`;
-  return acpAccountProblem(config, backend);
+  return adapter ? `cli_adapter ${adapter}` : null;
 }

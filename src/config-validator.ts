@@ -21,7 +21,7 @@ import { CROSS_INSTANCE_VISIBILITY_MODES, isCrossInstanceVisibility } from "./cr
 import { dashboardAccessProblem } from "./dashboard-permissions.js";
 import { validWindowsAgentId, validWindowsDirectory } from "./windows-cli-worker.js";
 import { isNativeProviderId, nativeProvider } from "./windows-cli-providers.js";
-import { acpAccountProblem, cliAdapterProblem, windowsAdapterProblem } from "./adapters/config.js";
+import { ADAPTER_BACKENDS, cliAdapterProblem, windowsAdapterProblem } from "./adapters/config.js";
 
 /**
  * Shared config validation for fleet.yaml and classicBot.yaml.
@@ -198,7 +198,8 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
               } catch (error) {
                 err(`${optionPath}.credential_profile`, error instanceof Error ? error.message : String(error));
               }
-              if (!credentialHomeSpec(backendName)) {
+              // An `acp` instance of grok / antigravity runs a named account itself (adapters/acp/account.ts), with no credential home of the terminal backends.
+              if (!credentialHomeSpec(backendName) && !(value.cli_adapter === "acp" && ADAPTER_BACKENDS.acp.includes(backendName))) {
                 warn(`${optionPath}.credential_profile`,
                   `${backendName} has no credential home yet — the profile will be ignored`);
               }
@@ -666,10 +667,6 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
       if (problem) err(`instances.${name}.backend`, problem);
       const adapterProblem = cliAdapterProblem(inst.cli_adapter, (typeof inst.backend === "string" ? inst.backend : undefined) ?? (isObj(config.defaults) && typeof config.defaults.backend === "string" ? config.defaults.backend : undefined) ?? "claude-code");
       if (adapterProblem) err(`instances.${name}.cli_adapter`, adapterProblem);
-      else {
-        const accountProblem = acpAccountProblem(inst, (typeof inst.backend === "string" ? inst.backend : undefined) ?? (isObj(config.defaults) && typeof config.defaults.backend === "string" ? config.defaults.backend : undefined) ?? "claude-code");
-        if (accountProblem) err(`instances.${name}.backend_options`, accountProblem);
-      }
       if (inst.working_directory !== undefined && typeof inst.working_directory !== "string") {
         err(`instances.${name}.working_directory`, "must be a string path");
       }
