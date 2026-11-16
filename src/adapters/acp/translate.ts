@@ -52,6 +52,21 @@ export class UpdateTranslator {
     }
   }
 
+  /**
+   * grok's own notification (`_x.ai/session_notification`, not part of ACP): each model call ends with a `response_completed` carrying
+   * that call's token counts. The context in use is the size of the prompt it sent: the tokens it paid for plus the ones read from the
+   * cache (measured on grok 1.0.77: input 14877 + cache read 2176 = the 17053 the turn's own usage reports as its input).
+   */
+  translateGrokNotification(params: unknown): AdapterEvent[] {
+    const update = asObject(asObject(params)?.update);
+    if (update?.sessionUpdate !== "response_completed") return [];
+    const usage = asObject(update.usage);
+    if (!usage) return [];
+    const n = (k: string): number => (typeof usage[k] === "number" && Number.isFinite(usage[k]) && (usage[k] as number) >= 0 ? usage[k] as number : 0);
+    const used = n("input_tokens") + n("cache_read_input_tokens") + n("cache_creation_input_tokens");
+    return used > 0 ? [{ kind: "usage", used }] : [];
+  }
+
   private tool(u: Record<string, unknown>, first: boolean): AdapterEvent[] {
     const id = typeof u.toolCallId === "string" ? u.toolCallId : null;
     if (!id) return [];

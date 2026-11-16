@@ -470,6 +470,8 @@ export interface WebApiContext {
   getUiStatus(): unknown;
   /** Current owned pane reader shared with status; absent means context is unavailable. */
   getPaneContextSource?(name: string): PaneContextSource | null;
+  /** The context an ACP agent reports itself (no screen to read), or null. */
+  reportedContext?(name: string): { context: number; tokenRatio: import("./context-percent.js").TokenContextRatio | null } | null;
   /** #1306: which preview origin this /ui load may frame (Host and the TLS signal only); absent: previews off. */
   previewForUi?(hostHeader: string | undefined, secure: boolean): PreviewAvailability & { boot: string | null };
   /** #1723: the same for a page of the public link (exposure `exposureId`, at `dashboardOrigin`); absent: none there. */
@@ -3543,7 +3545,7 @@ export function handleWebRequest(
     // Backend: instance → fleet default → claude-code
     const backend = config.backend ?? ctx.fleetConfig?.defaults?.backend ?? "claude-code";
     // Context: aligned with /ctx — resolveInstanceContext, not statusline
-    const { context } = resolveInstanceContext(ctx.dataDir, name, backend, { source: ctx.getPaneContextSource?.(name) });
+    const { context } = resolveInstanceContext(ctx.dataDir, name, backend, { source: ctx.getPaneContextSource?.(name), reported: ctx.reportedContext?.(name) });
     const context_pct = context; // null when unavailable, not 0
     // Model: Claude Code has live statusline, others use the effective resolver (aligned with /ctx).
     const statuslineModel = backend === "claude-code" ? readStatuslineModel(ctx.dataDir, name) : null;

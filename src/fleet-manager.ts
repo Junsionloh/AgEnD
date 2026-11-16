@@ -5811,6 +5811,12 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     return this.lastActivity.get(name) ?? 0;
   }
 
+  /** The context an ACP agent reports itself, for the places that otherwise read it off a screen (/ctx, /status, the dashboard). */
+  reportedContext(name: string): { context: number; tokenRatio: import("./context-percent.js").TokenContextRatio | null } | null {
+    const runner = this.daemons.get(name);
+    return runner && adapterOf(runner)?.id === "acp" ? (runner as unknown as { contextReport?(): { context: number; tokenRatio: import("./context-percent.js").TokenContextRatio | null } | null }).contextReport?.() ?? null : null;
+  }
+
   /** Capture the current daemon and delivery owner for a background context read. */
   getPaneContextSource(name: string): import("./pane-context-cache.js").PaneContextSource | null {
     const daemon = this.daemons.get(name);
@@ -29388,7 +29394,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
           const backend = this.fleetConfig?.instances[name]?.backend
             ?? this.fleetConfig?.defaults?.backend
             ?? "claude-code";
-          const { context } = resolveInstanceContext(this.dataDir, name, backend, { source: this.getPaneContextSource(name) });
+          const { context } = resolveInstanceContext(this.dataDir, name, backend, { source: this.getPaneContextSource(name), reported: this.reportedContext(name) });
           return {
             name,
             status: this.getInstanceStatus(name),
@@ -29888,7 +29894,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         : (this.fleetConfig?.instances[name]?.backend
           ?? this.fleetConfig?.defaults?.backend
           ?? "claude-code");
-      const { context } = isNativePaneInstance(nativeConfig) ? { context: null } : resolveInstanceContext(this.dataDir, name, backend, { source: this.getPaneContextSource(name), statusline });
+      const { context } = isNativePaneInstance(nativeConfig) ? { context: null } : resolveInstanceContext(this.dataDir, name, backend, { source: this.getPaneContextSource(name), statusline, reported: this.reportedContext(name) });
       // context_pct: null when unavailable, not 0
       const context_pct = context ?? null;
       // Model: Only Claude Code has live statusline; others use the effective resolver.

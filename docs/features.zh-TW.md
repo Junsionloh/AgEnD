@@ -1627,7 +1627,8 @@ web:
 | 卡住 | 畫面不再變動 | 回合進行中、超過 `hang_detector.timeout_minutes`（預設 10）沒有 agent 的任何訊息（等人回答權限請求不算卡住） |
 | 權限 | 預設跳過（`skipPermissions`，用 CLI 自己的旗標） | 預設跳過，同一個設定；`skipPermissions: false` 才在聊天裡詢問 |
 | 回合中途送訊息 | 排隊到回合結束；`/steer` 可插入（grok） | 排隊到回合結束、依序送出，進行中的回合絕不會被取消；`/steer` 同樣排隊並如實說明（ACP 沒有回合中途輸入） |
-| context % 與額度通知 | 讀畫面 | 只有 agy 有 context %；grok 沒有 |
+| context % | 讀畫面 | 依 CLI 自己回報的內容：agy 的 `usage_update`，grok 則是它每次模型呼叫的 token 回報，除以該模型的視窗（顯示在儀表板、`/ctx`、`/status`；第一次模型呼叫之前是空的） |
+| 額度通知 | 讀畫面上的額度上限訊息 | 不支援：ACP 沒有額度或上限事件（grok 的 `usage` 是另一個指令，`/usage` 仍然讀得到）；失敗的回合會在聊天裡顯示成一行錯誤 |
 | 回覆聊天 | agent 的 `reply` 工具 | 同一個工具；人發起的回合若沒用它就結束，agent 的文字會當作回覆送出 |
 | `checkout_repo`、`release_repo`、網頁主題／Office 工具 | 有 | 尚未支援（工具回傳錯誤） |
 | 閒置自動暫停（`auto_pause_after`） | 有 | 有：同一個計時（距離上次有工作送到 agent 的分鐘數，重啟後仍保留），閒置改由回合狀態判斷、不看畫面；回合進行中或有權限請求在等人時不會暫停，General 也不會。暫停時 agent 行程會停止，下一則訊息會再啟動並接續對話 |

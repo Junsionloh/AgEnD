@@ -514,8 +514,11 @@ export function resolveInstanceContext(
   dataDir: string,
   instanceName: string,
   backend: string,
-  opts?: { bypassCache?: boolean; source?: import("./pane-context-cache.js").PaneContextSource | null; statusline?: unknown },
+  opts?: { bypassCache?: boolean; source?: import("./pane-context-cache.js").PaneContextSource | null; statusline?: unknown;
+    /** What the instance itself reports (an ACP agent has no screen to read): used as it is, before anything else is tried. */
+    reported?: { context: number; tokenRatio: TokenContextRatio | null } | null },
 ): { context: number | null; tokenRatio: TokenContextRatio | null } {
+  if (opts?.reported) return opts.reported;
   if (backend === "claude-code") {
     // #1956: a caller that already read the statusline passes it (`statusline` present, even undefined: no file).
     const fromFile = opts && "statusline" in opts ? statuslineContextPct(opts.statusline) : readStatuslineContextPct(dataDir, instanceName);
@@ -1125,7 +1128,7 @@ export class TopicCommands {
       this.ctx.dataDir,
       instanceName,
       backend,
-      { bypassCache: true, source: this.ctx.getPaneContextSource?.(instanceName) },
+      { bypassCache: true, source: this.ctx.getPaneContextSource?.(instanceName), reported: this.ctx.reportedContext?.(instanceName) },
     );
     const contextLine = context == null ? null : formatContextUsageLine(context, tokenRatio);
     // Effective model (resolves per-instance → fleet default → classic channel →
@@ -1596,7 +1599,7 @@ export class TopicCommands {
       // Without this, kiro/grok/codex always showed "-" in the Ctx column.
       const { context } = backend === "-"
         ? { context: null as number | null }
-        : resolveInstanceContext(this.ctx.dataDir, name, backend, { source: this.ctx.getPaneContextSource?.(name) });
+        : resolveInstanceContext(this.ctx.dataDir, name, backend, { source: this.ctx.getPaneContextSource?.(name), reported: this.ctx.reportedContext?.(name) });
       const contextStr = context == null ? "-" : `${Math.round(context)}%`;
 
       const costCents = this.ctx.costGuard?.getDailyCostCents(name) ?? 0;

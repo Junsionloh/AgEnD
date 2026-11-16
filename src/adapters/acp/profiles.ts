@@ -42,6 +42,12 @@ export interface AcpProfile {
   /** What the instance can do under this profile. */
   readonly capabilities: AdapterCapabilities;
   /**
+   * The context window (tokens) of the session's current model, read from what the CLI sends when it opens a session and when its
+   * models change (grok: `models` of `session/new`, and `_x.ai/models/update`), for a CLI whose usage reports carry no window of their
+   * own. Absent: the usage report carries its own (`usage_update.size`).
+   */
+  contextWindowOf?(models: unknown): number | null;
+  /**
    * How the per-instance `agend` MCP server may be declared in `session/new`: stdio always works; http / sse only
    * when the agent advertised `mcpCapabilities` for it (agy advertises none, so only stdio).
    */
@@ -80,9 +86,18 @@ export const GROK_PROFILE: AcpProfile = {
     return typeof v === "string" ? v : null;
   },
   passEnv: ["XAI_API_KEY", /^GROK_/],
+  // grok reports each model call's tokens in its own `_x.ai/session_notification`, and the current model's window in `models` (`_meta.totalContextTokens`).
+  contextWindowOf: models => {
+    const m = obj(models);
+    const current = typeof m?.currentModelId === "string" ? m.currentModelId : null;
+    const list = Array.isArray(m?.availableModels) ? m.availableModels : [];
+    const entry = list.map(obj).find(e => e && e.modelId === current);
+    const size = obj(entry?._meta)?.totalContextTokens;
+    return typeof size === "number" && Number.isFinite(size) && size > 0 ? size : null;
+  },
   // grok keeps its login (`auth.json`), sessions and settings under GROK_HOME (default ~/.grok); checked with grok 1.0.77: a fresh GROK_HOME answers "You are not authenticated".
   accountLaunch: folder => ({ env: { GROK_HOME: folder }, args: [] }),
-  capabilities: { ...COMMON, contextUsage: false },
+  capabilities: { ...COMMON, contextUsage: true },
   mcpTransport: "stdio",
   mcpConnects: "with_session",
 };

@@ -1,6 +1,7 @@
 // A small ACP agent for tests: speaks the protocol on stdio, driven by keywords in the prompt text.
 // Keywords in the prompt text (written with a leading #: #crash #split #ordering #fsprobe #tool #onlyalways #owntool #spoof #slow #linger) pick the behaviour.
 // Environment: FAKE_ACP_VERSION (agentInfo.version), FAKE_ACP_STATE (a directory: known sessions + a call log),
+// FAKE_ACP_GROK_CONTEXT=<a grok-1.0.77-context.json>: session/new also answers grok's `models`, and each turn ends its model call with grok's `response_completed` notification (the real one, for the session).
 // FAKE_ACP_AUTH=1 (session/new answers -32000), FAKE_ACP_CONFIG=1 (session/new and session/load list `configOptions`: a `model` and a
 // `thought_level` select, as grok and agy do (FAKE_ACP_MODELS=a,b lists those models instead of m1,m2: agy offers `gemini-4-hydrogen`, never a slug with a level), and session/set_config_option changes them or answers -32602 for a value not listed).
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -13,6 +14,7 @@ const knownFile = state && join(state, "sessions.json");
 const known = () => (knownFile && existsSync(knownFile) ? JSON.parse(readFileSync(knownFile, "utf8")) : {});
 const remember = (id, history) => { if (knownFile) writeFileSync(knownFile, JSON.stringify({ ...known(), [id]: history })); };
 
+const grokContext = process.env.FAKE_ACP_GROK_CONTEXT ? JSON.parse(readFileSync(process.env.FAKE_ACP_GROK_CONTEXT, "utf8")) : null;
 const out = obj => process.stdout.write(JSON.stringify(obj) + "\n");
 const update = (sessionId, u) => out({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update: u } });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -116,6 +118,7 @@ async function turn(id, sessionId, text) {
     update(sessionId, { sessionUpdate: "usage_update", used: 100, size: 1000 });
     update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "OK" } });
   }
+  if (grokContext) out({ ...grokContext.response_completed, params: { ...grokContext.response_completed.params, sessionId } });
   out({ jsonrpc: "2.0", id, result: { stopReason: "end_turn" } });
 }
 
@@ -138,7 +141,7 @@ process.stdin.on("data", d => {
         if (process.env.FAKE_ACP_AUTH) { out({ jsonrpc: "2.0", id: m.id, error: { code: -32000, message: "Authentication required" } }); break; }
         const sessionId = `fake-${process.pid}-${++counter}`;
         remember(sessionId, []);
-        out({ jsonrpc: "2.0", id: m.id, result: withConfig({ sessionId }) });
+        out({ jsonrpc: "2.0", id: m.id, result: withConfig({ sessionId, ...(grokContext ? { models: grokContext.models } : {}) }) });
         break;
       }
       case "session/set_config_option": {

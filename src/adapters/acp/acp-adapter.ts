@@ -126,6 +126,8 @@ export class AcpAdapter implements CliAdapter {
   private _newSession = true;
   private _agentVersion: string | null = null;
   private configOptions: AcpConfigOption[] = [];
+  /** The session's context window when the CLI names it apart from its usage reports (`profile.contextWindowOf`). */
+  private contextWindow: number | null = null;
 
   constructor(private readonly opts: AcpAdapterOptions) {
     this.capabilities = opts.profile.capabilities;
@@ -206,6 +208,7 @@ export class AcpAdapter implements CliAdapter {
       try {
         const loaded = await client.request<Record<string, unknown> | null>("session/load", { sessionId: this.session, ...params }, { timeoutMs: SESSION_TIMEOUT_MS });
         this.configOptions = parseConfigOptions(loaded?.configOptions);
+        this.readContextWindow(loaded?.models);
         this._newSession = false;
         this.preambleSent = true;
         this.opts.logger.info({ sessionId: this.session }, "acp: resumed the stored session");
@@ -224,6 +227,7 @@ export class AcpAdapter implements CliAdapter {
     if (typeof created?.sessionId !== "string" || !created.sessionId) throw new Error("session/new did not return a session id");
     this.session = created.sessionId;
     this.configOptions = parseConfigOptions(created.configOptions);
+    this.readContextWindow(created.models);
     this._newSession = true;
     this.preambleSent = !this.preamble;
     this.storeSession(this.session);
@@ -348,11 +352,24 @@ export class AcpAdapter implements CliAdapter {
   private onNotification(method: string, params: unknown): void {
     // Any frame is proof of life for the hang timer, even those that carry nothing we show.
     this.lastEvent = Date.now();
+    if (method === "_x.ai/models/update") { this.readContextWindow(params); return; }
+    if (method === "_x.ai/session_notification" && this.opts.profile.id === "grok") {
+      if (this.replaying) return;
+      const p = params && typeof params === "object" ? params as Record<string, unknown> : null;
+      if (!p || (typeof p.sessionId === "string" && this.session && p.sessionId !== this.session)) return;
+      for (const event of this.translator.translateGrokNotification(params)) this.emit(event.kind === "usage" && event.size === undefined && this.contextWindow ? { ...event, size: this.contextWindow } : event);
+      return;
+    }
     if (method !== "session/update") return;
     if (this.replaying) return; // session/load replays the old conversation: it is history, not live work
     const p = params && typeof params === "object" ? params as Record<string, unknown> : null;
     if (!p || (typeof p.sessionId === "string" && this.session && p.sessionId !== this.session)) return;
     for (const event of this.translator.translate(p.update)) this.emit(event);
+  }
+
+  private readContextWindow(models: unknown): void {
+    const size = this.opts.profile.contextWindowOf?.(models);
+    if (size) this.contextWindow = size;
   }
 
   private onPermission(request: PermissionRequest): void {

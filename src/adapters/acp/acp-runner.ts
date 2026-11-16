@@ -8,6 +8,7 @@ import { formatHumanInboundMessage } from "../../human-delivery-receipts.js";
 import { formatCrossInstanceInboundMessage } from "../../cross-instance-envelope.js";
 import { AutoPauseController, readLastInboundAt, writeLastInboundAt } from "../../auto-pause.js";
 import { generalByName } from "../../general-instance.js";
+import { clampContextPercent, type TokenContextRatio } from "../../context-percent.js";
 import { HangDetector } from "../../hang-detector.js";
 import { clearPausedMarker, readPausedAt, writePausedMarker, type PauseReason } from "../../pause-marker.js";
 import { turnExpectsPersonReply } from "../../turn-reply-guard.js";
@@ -112,6 +113,13 @@ const DEFAULT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
 /** Both CLIs start the declared MCP server while the session opens, so seconds are enough; a loaded host needs room for a Node cold start. */
 const MCP_GRACE_MS = 45_000;
 const PROXY_TEXT_MAX = 12_000;
+
+/** A token count as grok's own screen writes it: `850`, `14.9K`, `256K`, `1.2M`. */
+export function tokenLabel(n: number): string {
+  if (n < 1000) return String(Math.round(n));
+  const fmt = (v: number, unit: string): string => `${(Math.round(v * 10) / 10).toString().replace(/\.0$/, "")}${unit}`;
+  return Math.round(n / 100) < 10_000 ? fmt(n / 1000, "K") : fmt(n / 1_000_000, "M");
+}
 
 /**
  * The fleet-facing side of an ACP instance: what `Daemon` is for a tmux instance, written once for every ACP CLI.
@@ -818,6 +826,28 @@ export class AcpRunner extends EventEmitter {
     else this.log.info({ name: this.name }, "acp: the agent's text was sent as the reply (it used no reply tool)");
   }
 
+  /** The latest context reading the agent reported (tokens in use, and the window when it is known). */
+  private contextReading: { used: number; size: number | null } | null = null;
+  private noteUsage(e: { used?: number; size?: number }): void {
+    const prev = this.contextReading;
+    const used = e.used ?? prev?.used;
+    if (used === undefined) return;
+    this.contextReading = { used, size: e.size ?? prev?.size ?? null };
+  }
+
+  /**
+   * What the dashboard's context figure and `/ctx` show for this agent (an ACP agent has no screen to read it from): tokens in use over the
+   * window, as a percentage (and, for grok, as the used / total pair its screen shows). Null until the agent has reported one, and for a CLI
+   * that reports none; the figure never comes from a guess.
+   */
+  contextReport(): { context: number; tokenRatio: TokenContextRatio | null } | null {
+    const r = this.contextReading;
+    if (!this.adapter.capabilities.contextUsage || !r || !r.size || r.size <= 0) return null;
+    const context = clampContextPercent(r.used / r.size * 100);
+    if (context === null) return null;
+    return { context, tokenRatio: this.opts.backend === "grok" ? { usedLabel: tokenLabel(r.used), totalLabel: tokenLabel(r.size), percentage: context } : null };
+  }
+
   private onAdapterEvent(e: AdapterEvent): void {
     this.lastActivityAt = this.now();
     this.cancelHangEpisode();
@@ -828,7 +858,8 @@ export class AcpRunner extends EventEmitter {
     }
     if (e.kind === "permission") { this.onPermission(e); return; }
     if (e.kind === "auth_required") { this.lastError = "auth"; this.errorCause = "error_detected"; return; }
-    if (e.kind === "usage" || e.kind === "user" || e.kind === "turn_end") return;
+    if (e.kind === "usage") { this.noteUsage(e); return; }
+    if (e.kind === "user" || e.kind === "turn_end") return;
     this.steps.apply(e);
   }
 

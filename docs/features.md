@@ -1750,7 +1750,8 @@ In the web app, the instance form has an **Execution mode** choice (Terminal / A
 | Hang | the screen stops changing | a running turn with no word from the agent for `hang_detector.timeout_minutes` (default 10; a request waiting for a person is not a hang) |
 | Permissions | skipped by default (`skipPermissions`, the CLI's own flag) | skipped by default, the same setting; `skipPermissions: false` asks in the chat |
 | Message sent during a turn | queued until the turn ends; `/steer` interjects (grok) | queued until the turn ends, in order, and the running turn is never cancelled; `/steer` is queued the same way and says so (ACP has no mid-turn input) |
-| Context % and quota notices | from the screen | context % for agy only; none for grok |
+| Context % | from the screen | from what the CLI reports: agy `usage_update`, grok's own per-call token report over its model's window (shown in the dashboard, `/ctx` and `/status`; empty until the first model call) |
+| Quota notices | from the screen's limit message | not supported: ACP has no quota or limit event (grok's `usage` is a separate command, which `/usage` still reads); a turn that fails shows as an error line in the chat |
 | Reply to the chat | the agent's `reply` tool | the same tool; if a turn that a person started ends without one, the agent's text is sent as the reply |
 | `checkout_repo`, `release_repo`, web theme / Office tools | yes | not yet (the tool answers with an error) |
 | Auto-pause after idle (`auto_pause_after`) | yes | yes: the same clock (minutes since work last reached the agent, kept across a restart), idle taken from the turn state instead of the screen; never while a turn runs or a permission request waits, and never for General. The agent process is stopped; the next message starts it again and resumes its conversation |
