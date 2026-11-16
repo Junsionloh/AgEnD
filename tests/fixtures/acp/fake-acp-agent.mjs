@@ -191,10 +191,10 @@ process.stdin.on("data", d => {
         break;
       case "_x.ai/interject": {
         if (process.env.FAKE_ACP_INTERJECT === "reject") { out({ jsonrpc: "2.0", id: m.id, error: { code: -32601, message: "Method not found" } }); break; }
-        if (process.env.FAKE_ACP_INTERJECT === "refuse") { out({ jsonrpc: "2.0", id: m.id, result: { status: "rejected" } }); break; }
+        if (process.env.FAKE_ACP_INTERJECT === "refuse") { out({ jsonrpc: "2.0", id: m.id, result: { result: { status: "rejected" } } }); break; }
         log({ interject: m.params.text, active: turnActive });
         if (turnActive) { interjections.push(m.params.text); cancelWake?.(); }
-        out({ jsonrpc: "2.0", id: m.id, result: { status: "queued" } });
+        out({ jsonrpc: "2.0", id: m.id, result: { result: { status: "queued" } } });   // the envelope real grok 1.0.77 answers with
         break;
       }
       case "session/cancel":

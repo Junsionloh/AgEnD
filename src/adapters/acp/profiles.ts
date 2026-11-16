@@ -99,9 +99,9 @@ export const GROK_PROFILE: AcpProfile = {
     const v = obj(obj(result)?._meta)?.agentVersion;
     return typeof v === "string" ? v : null;
   },
-  // grok's `_x.ai/interject` {sessionId, text} → {status: "queued"}: the message joins the running turn at its next safe point, the tool call that was
+  // grok's `_x.ai/interject` {sessionId, text} → {"result": {"status": "queued"}}: the message joins the running turn at its next safe point, the tool call that was
   // running is not cancelled (measured on 1.0.77: one turn, one `end_turn`, the answer covers both messages). Not announced in `initialize` (grok 1.0.14+).
-  interject: { via: "method", method: "_x.ai/interject", params: (sessionId, text) => ({ sessionId, text }), accepted: result => obj(result)?.status === "queued" },
+  interject: { via: "method", method: "_x.ai/interject", params: (sessionId, text) => ({ sessionId, text }), accepted: result => (obj(obj(result)?.result) ?? obj(result))?.status === "queued" },   // grok wraps the answer: `{"result":{"status":"queued"}}` (1.0.77)
   passEnv: ["XAI_API_KEY", /^GROK_/],
   // grok reports each model call's tokens in its own `_x.ai/session_notification`, and the current model's window in `models` (`_meta.totalContextTokens`).
   contextWindowOf: models => {
