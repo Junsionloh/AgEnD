@@ -1630,7 +1630,7 @@ web:
 | context % 與額度通知 | 讀畫面 | 只有 agy 有 context %；grok 沒有 |
 | 回覆聊天 | agent 的 `reply` 工具 | 同一個工具；人發起的回合若沒用它就結束，agent 的文字會當作回覆送出 |
 | `checkout_repo`、`release_repo`、網頁主題／Office 工具 | 有 | 尚未支援（工具回傳錯誤） |
-| 閒置自動暫停（`auto_pause_after`） | 有 | 尚未支援；手動暫停與喚醒可用 |
+| 閒置自動暫停（`auto_pause_after`） | 有 | 有：同一個計時（距離上次有工作送到 agent 的分鐘數，重啟後仍保留），閒置改由回合狀態判斷、不看畫面；回合進行中或有權限請求在等人時不會暫停，General 也不會。暫停時 agent 行程會停止，下一則訊息會再啟動並接續對話 |
 
 **安全。** 權限用和終端機模式同一個設定 `skipPermissions`，**沒設成 `false` 就是跳過**。跳過時：CLI 以它自己的開關啟動（grok `agent --always-approve`、agy `acp --dangerously-skip-permissions`），AgEnD 另外把每個 `session/request_permission` 都自己用「僅此一次允許」回答，當作保底。它絕不選「永遠允許」或「永遠拒絕」（那會改變 CLI 自己保存的狀態）；請求裡沒有「僅此一次允許」時也不會改選別的，那個請求和沒跳過時一樣等人回答。不會有權限卡片；這樣執行的每個工具呼叫（CLI 帶了旗標會自己放行，所以不會來問）都會在聊天區塊與 Log 上標 **auto**，計畫與 AgEnD 自己的 `reply` 除外。`skipPermissions: false`（設定 → 該 agent → Runtime & model → **跳過工具權限詢問**）：請求會以卡片停在聊天裡，有 **允許**、**拒絕**、**取消這回合**；但 instance 自己的 `agend` MCP 工具（`reply`、`react`、`task`、`send_to_instance`…）會直接「僅此一次允許」，不然聊天無法運作。判斷只看 CLI 自己設定的欄位（grok：`UseTool` variant、`use_tool` meta 與 `agend__<tool>` 名稱；agy：種類為 `other` 的工具、其註冊名稱 `mcp_agend_<tool>`），絕不看模型寫的參數或標題文字，所以只是提到 agend 工具的 shell 或檔案呼叫仍會詢問；認不出來的一律詢問。會啟動、取代或移除 instance 的工具（`create_instance`、`delete_instance`、`replace_instance`、`start_instance`、`restart_instance`）以及 `checkout_repo`／`release_repo` 也一樣會詢問，只有 `skipPermissions` 會放行，和終端機模式相同。取消、停止或當機都會把所有等待中的請求以「已取消」回答——絕不會變成允許。只有 fleet admin 能回答請求或看到思考文字。AgEnD 不宣告任何 `fs/*` 或 `terminal/*` capability，CLI 自己處理檔案與程序，agent 對這兩者的請求都會收到「method not found」。CLI 以不經 shell、明確指定環境變數的方式啟動（不含 fleet 或網頁的 token），並在 `session/new` 收到這個 instance 專屬的 `agend` MCP server（stdio），絕不與其他 instance 共用。
 

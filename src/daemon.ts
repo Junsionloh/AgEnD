@@ -1,3 +1,5 @@
+import { AutoPauseController, readLastInboundAt, writeLastInboundAt } from "./auto-pause.js";
+export { AutoPauseController, readLastInboundAt, writeLastInboundAt };
 import { checkpointGrokDelivery, type GrokDeliveryProof } from "./grok-delivery-proof.js";
 import { nativePaneToolRefusal } from "./native-pane-tools.js";
 import { generalByName } from "./general-instance.js";
@@ -219,7 +221,6 @@ export const STATE_EDGE_LOG_WINDOW_MS = 60_000;
 export const UNKNOWN_LAYOUT_STABLE_MS = 10_000;
 /** A foreground server/port-forward should hand control back or be acknowledged. */
 export const DEFAULT_BLOCKING_PROCESS_GRACE_MS = 2 * 60_000;
-const LAST_INBOUND_FILE = "last-inbound-at";
 
 /** Minimum gap between "health check is failing" notifications for one instance. */
 const HEALTH_ERROR_NOTIFY_INTERVAL_MS = 10 * 60_000;
@@ -290,25 +291,6 @@ export function selectRelevantDecisions<T extends { scope?: string; project_root
   });
 }
 
-/** Read the last real channel inbound timestamp persisted across daemon restarts. */
-export function readLastInboundAt(instanceDir: string, now = Date.now()): number | null {
-  try {
-    const value = Number(readFileSync(join(instanceDir, LAST_INBOUND_FILE), "utf-8").trim());
-    return Number.isFinite(value) && value >= 0 && value <= now ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Atomically persist the last real channel inbound timestamp. */
-export function writeLastInboundAt(instanceDir: string, timestamp: number): void {
-  ensureInstanceDir(instanceDir);
-  const target = join(instanceDir, LAST_INBOUND_FILE);
-  const temp = `${target}.${process.pid}.tmp`;
-  writeFileSync(temp, String(timestamp));
-  renameSync(temp, target);
-}
-
 /**
  * Render the handoff/routing metadata that rides along with an inbound message
  * into the block actually pasted into the agent's pane.
@@ -330,54 +312,6 @@ export function writeLastInboundAt(instanceDir: string, timestamp: number): void
  */
 export function renderHandoffMetadata(meta: Record<string, string>): string {
   return renderCrossInstanceHandoffMetadata(meta);
-}
-
-/** Headless inactivity timer used by the daemon and unit tests. */
-export class AutoPauseController {
-  private pausedAt: number | null = null;
-
-  constructor(
-    private thresholdMs: number,
-    private lastActivityAt = Date.now(),
-  ) {}
-
-  recordActivity(now = Date.now()): void {
-    this.lastActivityAt = now;
-  }
-
-  /** Apply a new idle threshold and start a fresh countdown from this update. */
-  reconfigure(thresholdMs: number, now = Date.now()): void {
-    this.thresholdMs = Math.max(0, thresholdMs);
-    this.lastActivityAt = now;
-  }
-
-  observe(state: InstanceState, now = Date.now()): boolean {
-    if (this.pausedAt !== null || this.thresholdMs <= 0) return false;
-    // Inactivity is based on the last user inbound, not on how long this daemon
-    // has observed the idle pane. This preserves pause eligibility across fleet
-    // restarts while still ensuring an actively working instance is never paused.
-    return state === "idle" && now - this.lastActivityAt >= this.thresholdMs;
-  }
-
-  markPaused(now = Date.now()): void {
-    this.pausedAt = now;
-  }
-
-  markAwake(now = Date.now()): void {
-    this.pausedAt = null;
-    // A deliberate wake is activity in its own right and must provide a fresh
-    // window for the wake-before-deliver facade to enqueue its inbound message.
-    this.lastActivityAt = now;
-  }
-
-  async wakeOnDeliver(wake: () => Promise<void>): Promise<void> {
-    if (this.pausedAt === null) return;
-    await wake();
-    this.markAwake();
-  }
-
-  get isPaused(): boolean { return this.pausedAt !== null; }
-  get lastPausedAt(): number | null { return this.pausedAt; }
 }
 
 /**

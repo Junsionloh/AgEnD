@@ -6,6 +6,8 @@ import { IpcServer } from "../../channel/ipc-bridge.js";
 import { daemonBudgetMs } from "../../channel/ipc-timeouts.js";
 import { formatHumanInboundMessage } from "../../human-delivery-receipts.js";
 import { formatCrossInstanceInboundMessage } from "../../cross-instance-envelope.js";
+import { AutoPauseController, readLastInboundAt, writeLastInboundAt } from "../../auto-pause.js";
+import { generalByName } from "../../general-instance.js";
 import { HangDetector } from "../../hang-detector.js";
 import { clearPausedMarker, readPausedAt, writePausedMarker, type PauseReason } from "../../pause-marker.js";
 import { turnExpectsPersonReply } from "../../turn-reply-guard.js";
@@ -166,6 +168,10 @@ export class AcpRunner extends EventEmitter {
   private stuck = false;
   private stateChangedAt: number;
   private lastActivityAt = 0;
+  // idle auto-pause (`auto_pause_after`): the terminal daemon's own clock, fed by ACP's busy / idle instead of the pane
+  private readonly autoPause: AutoPauseController;
+  private autoPauseRequested = false;
+  private workLease: (() => boolean) | null = null;
   private turn: { item: InboundItem; startedAt: number; text: string; outbound: boolean; consumed: boolean; deliveryId: string | null; attemptNo: number; cancelled: boolean } | null = null;
   private turnSeq = 0;
   private readonly idleWaiters = new Set<() => void>();
@@ -183,13 +189,21 @@ export class AcpRunner extends EventEmitter {
     this.config = opts.config;
     this.now = opts.now ?? Date.now;
     this.stateChangedAt = this.now();
+    this.autoPause = new AutoPauseController(this.autoPauseMs(this.config), readLastInboundAt(opts.instanceDir) ?? this.now());
     this.steps = new AcpStepStore(opts.instanceDir, this.now, () => this.config.skipPermissions !== false);
     this.steps.onChange(() => this.emit("steps_changed"));
     this.restoreLastChat();
     adapter.onEvent(e => this.onAdapterEvent(e));
     adapter.onExit(info => this.onAdapterExit(info));
     const stored = readPausedAt(opts.instanceDir);
-    if (stored !== null) this.pausedAt = stored;
+    if (stored !== null) { this.pausedAt = stored; this.autoPause.markPaused(stored); }
+  }
+
+  /** The idle threshold in ms (`auto_pause_after` minutes; unset or 0: never). General is the dispatcher and is never auto-paused, as in a terminal. */
+  private autoPauseMs(config: InstanceConfig): number {
+    const general = config.general_topic === true || generalByName(this.opts.name, config);
+    const minutes = typeof config.auto_pause_after === "number" && Number.isFinite(config.auto_pause_after) ? config.auto_pause_after : 0;
+    return general ? 0 : Math.max(0, minutes) * 60_000;
   }
 
   /** The chat timeline, for the Log's live source: this boot's own cursor space. */
@@ -230,8 +244,8 @@ export class AcpRunner extends EventEmitter {
 
   setAgentCredentialIssuer(_issue?: (token: string) => void): void { /* the agent authenticates with its own CLI credentials */ }
   setDeliveryOutboxPort(outbox: DeliveryOutbox | undefined): void { this.outbox = outbox; }
-  setWorkLeaseCheck(_check?: () => boolean): void { /* no auto-pause timer to guard */ }
-  seedActivityNow(): void { this.lastActivityAt = this.now(); }
+  setWorkLeaseCheck(check?: () => boolean): void { this.workLease = check ?? null; }
+  seedActivityNow(): void { this.lastActivityAt = this.now(); this.autoPause.recordActivity(this.now()); }
   setDecisionTeams(teams?: () => string[]): void { this.decisionTeams = teams; }
   setDecisionSource(source?: () => readonly { title: string; content: string }[]): void { this.decisionSource = source; }
   setPeerWorkingDirectories(_peers?: () => string[]): void { /* a tmux/kiro matter */ }
@@ -258,7 +272,14 @@ export class AcpRunner extends EventEmitter {
   get lastErrorType(): string | null { return this.lastError; }
   getConfigSnapshot(): InstanceConfig { return this.config; }
   applyConfigUpdate(value: unknown): void {
-    if (value && typeof value === "object") this.config = { ...this.config, ...(value as Partial<InstanceConfig>) };
+    if (!value || typeof value !== "object") return;
+    const update = value as Partial<InstanceConfig> & { auto_pause_after?: unknown };
+    const before = this.autoPauseMs(this.config);
+    this.config = { ...this.config, ...(update as Partial<InstanceConfig>) };
+    // null drops the setting (as the terminal daemon reads it); a new threshold starts a fresh countdown.
+    if (update.auto_pause_after === null) delete (this.config as { auto_pause_after?: number }).auto_pause_after;
+    const after = this.autoPauseMs(this.config);
+    if (after !== before) this.autoPause.reconfigure(after, this.now());
   }
   getInstanceState(): InstanceState | "paused" { return this.isPaused ? "paused" : this.stuck ? "stuck" : this.busy ? "working" : "idle"; }
   getProcessStatus(): "running" | "crashed" | "stopped" { return this.adapter.health().process; }
@@ -378,6 +399,7 @@ export class AcpRunner extends EventEmitter {
       this.clearMcpTimer();
       await this.adapter.stop().catch(() => undefined);
       this.pauseWake = "paused";
+      this.autoPause.markPaused(this.pausedAt);
       this.emit("auto_paused", { pausedAt: this.pausedAt });
     })().finally(() => { this.pauseTransition = null; });
     await this.pauseTransition;
@@ -396,6 +418,8 @@ export class AcpRunner extends EventEmitter {
       clearPausedMarker(this.opts.instanceDir);
       this.pausedAt = null;
       this.pauseWake = "active";
+      this.autoPauseRequested = false;
+      this.autoPause.markAwake(this.now());
       this.emit("auto_woke");
     })().catch(err => { this.pauseWake = "paused"; throw err; }).finally(() => { this.pauseTransition = null; });
     await this.pauseTransition;
@@ -498,7 +522,7 @@ export class AcpRunner extends EventEmitter {
 
   private startHangTimer(): void {
     const every = this.opts.hangCheckEveryMs ?? 15_000;
-    this.hangTimer = setInterval(() => this.checkHang(), every);
+    this.hangTimer = setInterval(() => { this.checkHang(); this.checkAutoPause(); }, every);
     this.hangTimer.unref?.();
   }
 
@@ -514,6 +538,27 @@ export class AcpRunner extends EventEmitter {
       this.hangEmitted = true;
       if ((this.config as { hang_detector?: { enabled?: boolean } }).hang_detector?.enabled !== false) this.hang.emit("hang", { unchangedForMs: quiet });
     }
+  }
+
+  /**
+   * Idle auto-pause: the same rule as a terminal agent (daemon.ts), with ACP's own idle. Nothing is running or waiting, no permission
+   * request waits for a person, the agent was last given work longer than `auto_pause_after` minutes ago, and no work lease holds it.
+   * The fleet pauses it (the agent process is stopped; the next message wakes it and resumes its conversation).
+   */
+  checkAutoPause(): void {
+    if (this.autoPauseRequested || this.pauseWake !== "active" || this.stopping || !this.started) return;
+    if (this.busy || this.queued > 0 || this.steps.pendingPermissions().length > 0 || this.getInstanceState() !== "idle") return;
+    if (!this.autoPause.observe("idle", this.now())) return;
+    try { if (this.workLease?.() === true) return; } catch { return; }
+    this.autoPauseRequested = true;
+    this.emit("auto_pause_requested", { name: this.name, idleSince: this.stateChangedAt, reason: "idle" satisfies PauseReason });
+  }
+
+  /** Work reached the agent (a delivery, a person's message): the idle clock restarts, and survives a restart like a terminal's. */
+  private noteWorkActivity(): void {
+    const at = this.now();
+    this.autoPause.recordActivity(at);
+    try { writeLastInboundAt(this.opts.instanceDir, at); } catch (err) { this.log.warn({ error: (err as Error).message }, "acp: could not persist the last activity time"); }
   }
 
   private cancelHangEpisode(): void {
@@ -674,6 +719,7 @@ export class AcpRunner extends EventEmitter {
     }
     if (!this.started && !this.adapter.health().process) return;
     this.updateLastChat(meta.chat_id, meta.thread_id, meta.adapter_id);
+    if (meta.chat_id) this.noteWorkActivity();
     const item: InboundItem = { content, meta, epoch: deliveryEpoch, turnId: `${this.bootId.slice(0, 8)}-${++this.turnSeq}`, ...(raw ? { raw: true } : {}) };
     if (this.queued > 0) { const status = statusOf(meta); if (status) this.emit("message_queued", status); }
     this.queued++;
@@ -713,6 +759,7 @@ export class AcpRunner extends EventEmitter {
     const wire = item.raw ? content : this.format(content, meta);
     const t = { item, startedAt: this.now(), text: "", outbound: false, consumed: false, deliveryId: attempt ? attempt.deliveryId : null, attemptNo: attempt ? attempt.attemptNo : 0, cancelled: false };
     this.turn = t;
+    this.noteWorkActivity();
     this.steps.beginTurn(item.turnId, content, undefined, wire);
     this.setBusy(true);
     if (meta.chat_id) this.lastActivityAt = this.now();
@@ -1019,6 +1066,7 @@ export class AcpRunner extends EventEmitter {
   private setBusy(busy: boolean): void {
     if (this.busy === busy) return;
     this.busy = busy;
+    if (busy) this.autoPauseRequested = false;
     if (!busy) this.stuck = false;
     this.touchState();
     if (!busy) this.wakeIdleWaiters();
