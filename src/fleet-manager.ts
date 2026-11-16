@@ -381,6 +381,7 @@ import { DEFAULT_STUCK_TIMEOUT_MS, readLastInboundAt, type Daemon, type OwnSwitc
 import type { InstanceRunner } from "./adapters/types.js";
 import { adapterOf, cancelRunner, capabilitiesOf } from "./adapters/registry.js";
 import type { AcpRunner } from "./adapters/acp/acp-runner.js";
+import { splitAcpModel } from "./adapters/acp/model-id.js";
 import { adapterAfterRuntimeChange } from "./adapters/config.js";
 import { adapterUiView } from "./adapters/ui-view.js";
 import { clearPausedMarker, readPausedAt, readPauseReason, writePausedMarker } from "./pause-marker.js";
@@ -25576,7 +25577,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       if (!applied) return t("effort.no_canonical", backendName);
       if (applied !== value) warn = t("effort.clamped", applied, value, backendName);
       value = applied;
-    } else if (live.length && !live.includes(value)) {
+    } else if (live.length && !splitAcpModel(value, live)) {
       return t("model.unknown_name", value, live.join(", "));
     }
     if (runner) {

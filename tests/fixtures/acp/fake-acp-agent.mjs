@@ -2,7 +2,7 @@
 // Keywords in the prompt text (written with a leading #: #crash #split #ordering #fsprobe #tool #onlyalways #owntool #spoof #slow #linger) pick the behaviour.
 // Environment: FAKE_ACP_VERSION (agentInfo.version), FAKE_ACP_STATE (a directory: known sessions + a call log),
 // FAKE_ACP_AUTH=1 (session/new answers -32000), FAKE_ACP_CONFIG=1 (session/new and session/load list `configOptions`: a `model` and a
-// `thought_level` select, as grok and agy do, and session/set_config_option changes them or answers -32602 for a value not listed).
+// `thought_level` select, as grok and agy do (FAKE_ACP_MODELS=a,b lists those models instead of m1,m2: agy offers `gemini-4-hydrogen`, never a slug with a level), and session/set_config_option changes them or answers -32602 for a value not listed).
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -18,10 +18,10 @@ const update = (sessionId, u) => out({ jsonrpc: "2.0", method: "session/update",
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const configOptions = () => [
-  { id: "model", name: "Model", category: "model", type: "select", currentValue: current.model, options: [{ value: "m1", name: "M1" }, { value: "m2", name: "M2" }] },
+  { id: "model", name: "Model", category: "model", type: "select", currentValue: current.model, options: (process.env.FAKE_ACP_MODELS ?? "m1,m2").split(",").map(v => ({ value: v, name: v })) },
   { id: "effort", name: "Effort", category: "thought_level", type: "select", currentValue: current.effort, options: [{ value: "low", name: "Low" }, { value: "medium", name: "Medium" }, { value: "high", name: "High" }] },
 ];
-const current = { model: "m1", effort: "medium" };
+const current = { model: (process.env.FAKE_ACP_MODELS ?? "m1").split(",")[0], effort: "medium" };
 const withConfig = result => (process.env.FAKE_ACP_CONFIG ? { ...result, configOptions: configOptions() } : result);
 let counter = 0;
 const waiting = new Map(); // request id -> resolve

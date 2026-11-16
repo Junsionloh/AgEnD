@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { IpcClient } from "../src/channel/ipc-bridge.js";
 import { AcpAdapter } from "../src/adapters/acp/acp-adapter.js";
+import { AcpStepStore } from "../src/adapters/acp/steps.js";
 import { AcpRunner, type AcpRunnerOptions } from "../src/adapters/acp/acp-runner.js";
 import { ACP_MCP_SERVER_NAME, buildAcpLaunch, toolNameHint } from "../src/adapters/acp/launch.js";
 import { AGY_PROFILE, GROK_PROFILE, buildChildEnv } from "../src/adapters/acp/profiles.js";
@@ -94,10 +95,11 @@ class FakeOutbox {
   abort() { return true; }
 }
 
-async function boot(opts: { config?: Partial<InstanceConfig>; runner?: Partial<AcpRunnerOptions>; env?: Record<string, string> } = {}): Promise<Harness> {
+async function boot(opts: { config?: Partial<InstanceConfig>; runner?: Partial<AcpRunnerOptions>; env?: Record<string, string>; mcpConnects?: "with_session" | "first_prompt" } = {}): Promise<Harness> {
   const dir = tmp(), state = tmp();
   const config = { working_directory: dir, backend: "antigravity", cli_adapter: "acp", skipPermissions: false, ...opts.config } as InstanceConfig;
-  const profile = { ...AGY_PROFILE, supportedVersions: ["1.5.8"], args: () => [FAKE] };
+  // The MCP tests below are about a CLI that starts its server with the session (grok) unless a test says it starts with the first prompt (agy).
+  const profile = { ...AGY_PROFILE, supportedVersions: ["1.5.8"], args: () => [FAKE], mcpConnects: opts.mcpConnects ?? "with_session" };
   const holder: { runner?: AcpRunner } = {};
   const adapter = new AcpAdapter({
     profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger,
@@ -192,6 +194,112 @@ describe("an ACP agent whose agend MCP server never connects is reported", () =>
     await h.runner.wake();
     expect(h.runner.mcpConnected).toBe(false);
     await until(() => (h.events.mcp_died?.length ?? 0) === 1, 3000, "the second launch's report");
+  });
+});
+
+describe("an agent that starts its MCP server with the first prompt (agy) is not reported before one", () => {
+  const send = (h: Harness, text: string) => h.fleet.send({ type: "fleet_inbound", content: text, meta: { chat_id: "c1", message_id: `m-${text}`, user: "alice", source: "web" } });
+  const turnEnded = (h: Harness) => until(() => h.runner.getInstanceState() === "idle" && h.runner.steps.snapshot(undefined, { thoughts: false }).steps.some(s => s.kind === "turn_end"), 5000, "the turn to end");
+  const errors = (h: Harness) => h.runner.steps.snapshot(undefined, { thoughts: false }).steps.filter(s => s.kind === "error");
+
+  it("an idle instance past the grace period is not reported: nobody has written to it", async () => {
+    const h = await boot({ mcpConnects: "first_prompt", runner: { mcpGraceMs: 60 } });
+    await sleep(300);
+    expect(h.events.mcp_died).toBeUndefined();
+    expect(h.runner.isErrorState).toBe(false);
+    expect(errors(h)).toHaveLength(0);
+  });
+
+  it("the server that connects with the first prompt means nothing is ever reported", async () => {
+    const h = await boot({ mcpConnects: "first_prompt", runner: { mcpGraceMs: 80 } });
+    await sleep(200);
+    send(h, "hello");
+    await mcpClient(h);                       // agy starts the server for the turn
+    await turnEnded(h);
+    await sleep(250);
+    expect(h.runner.mcpConnected).toBe(true);
+    expect(h.events.mcp_died).toBeUndefined();
+    expect(errors(h)).toHaveLength(0);
+  });
+
+  it("a turn that ended with no server counts the grace period from the turn's end, and is then reported", async () => {
+    const h = await boot({ mcpConnects: "first_prompt", runner: { mcpGraceMs: 150 } });
+    send(h, "hello");
+    await turnEnded(h);
+    expect(h.events.mcp_died).toBeUndefined();
+    await until(() => (h.events.mcp_died?.length ?? 0) === 1, 3000, "the report after a turn");
+    expect(h.runner.isErrorState).toBe(true);
+    expect(errors(h)).toHaveLength(1);
+  });
+
+  it("grok's kind (server with the session) is still reported without any prompt", async () => {
+    const h = await boot({ mcpConnects: "with_session", runner: { mcpGraceMs: 80 } });
+    await until(() => (h.events.mcp_died?.length ?? 0) === 1, 3000, "the report");
+  });
+
+  it("a report that a late connection retracts leaves no error in the chat timeline, and none after the timeline is read back from disk", async () => {
+    const h = await boot({ runner: { mcpGraceMs: 60 } });
+    await until(() => (h.events.mcp_died?.length ?? 0) === 1, 3000, "the report");
+    expect(errors(h)).toHaveLength(1);
+    await mcpClient(h);
+    await until(() => (h.events.mcp_recovered?.length ?? 0) === 1, 3000, "the retraction");
+    expect(errors(h)).toHaveLength(0);
+    const all = h.runner.steps.snapshot(undefined, { thoughts: false }).steps;
+    expect(all.some(s => s.kind === "state" && /connected after all/.test(s.note ?? ""))).toBe(true);
+    // what was saved is the retracted step, not the error
+    const reloaded = new AcpStepStore(h.dir).snapshot(undefined, { thoughts: false }).steps;
+    expect(reloaded.filter(s => s.kind === "error")).toHaveLength(0);
+    expect(reloaded.some(s => s.kind === "state")).toBe(true);
+  });
+
+  it("a stopped instance's timer never reports, and neither does a paused one", async () => {
+    const stopped = await boot({ mcpConnects: "with_session", runner: { mcpGraceMs: 120 } });
+    await stopped.runner.stop();
+    const paused = await boot({ mcpConnects: "with_session", runner: { mcpGraceMs: 120 } });
+    await paused.runner.pause("operator");
+    await sleep(350);
+    expect(stopped.events.mcp_died).toBeUndefined();
+    expect(paused.events.mcp_died).toBeUndefined();
+  });
+});
+
+describe("a configured model that carries its effort level (agy) is split for ACP", () => {
+  const setConfigs = (state: string) => calls(state).filter(c => c.setConfig).map(c => c.setConfig);
+  const agy = { FAKE_ACP_CONFIG: "1", FAKE_ACP_MODELS: "gemini-4-hydrogen,gemini-4-carbon,gemini-4-argon" };
+
+  it("applies gemini-4-carbon-high as the model gemini-4-carbon plus the level high as the effort", async () => {
+    const h = await boot({ env: agy, config: { model: "gemini-4-carbon-high" } });
+    await until(() => setConfigs(h.state).length >= 2, 4000, "both settings");
+    expect(setConfigs(h.state)).toEqual([expect.objectContaining({ configId: "model", value: "gemini-4-carbon" }), expect.objectContaining({ configId: "effort", value: "high" })]);
+    expect(h.events.backend_launch_warning).toBeUndefined();
+  });
+
+  it("the configured effort wins over the level in the id", async () => {
+    const h = await boot({ env: agy, config: { model: "gemini-4-carbon-high", effort: "low" } as never });
+    await until(() => setConfigs(h.state).length >= 2, 4000, "both settings");
+    expect(setConfigs(h.state).find(c => c.configId === "effort")).toMatchObject({ value: "low" });
+  });
+
+  it("an id the agent offers as it is is applied as it is", async () => {
+    const h = await boot({ env: agy, config: { model: "gemini-4-argon" } });
+    await until(() => setConfigs(h.state).length >= 1, 4000, "the model");
+    expect(setConfigs(h.state)[0]).toMatchObject({ configId: "model", value: "gemini-4-argon" });
+  });
+
+  it("a model nothing offers is not applied, and the person is told in the chat as well as the log", async () => {
+    const h = await boot({ env: agy, config: { model: "no-such-model-high" } });
+    await until(() => (h.events.backend_launch_warning?.length ?? 0) === 1, 4000, "the warning");
+    expect(h.events.backend_launch_warning![0].message).toContain("was not applied");
+    const errs = h.runner.steps.snapshot(undefined, { thoughts: false }).steps.filter(s => s.kind === "error");
+    expect(errs).toHaveLength(1);
+    expect(errs[0]!.body).toContain("no-such-model");
+  });
+
+  it("a live model change with a tmux-style id is split too", async () => {
+    const h = await boot({ env: agy });
+    const result = await h.runner.setSessionSetting("model", "gemini-4-argon-low");
+    expect(result).toMatchObject({ ok: true, value: "gemini-4-argon" });
+    expect(setConfigs(h.state).map(c => `${c.configId}=${c.value}`)).toEqual(["model=gemini-4-argon", "effort=low"]);
   });
 });
 

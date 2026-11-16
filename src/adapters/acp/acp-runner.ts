@@ -17,6 +17,7 @@ import type { RecoveryLive } from "../../working-recovery.js";
 import { AcpAuthRequiredError, AcpVersionRefusedError, type AcpAdapter } from "./acp-adapter.js";
 import { AcpStepStore } from "./steps.js";
 import { ACP_MCP_SERVER_NAME } from "./profiles.js";
+import { splitAcpModel } from "./model-id.js";
 import type { LiveSteps } from "../../log-service.js";
 import type { AdapterEvent } from "../types.js";
 
@@ -151,6 +152,10 @@ export class AcpRunner extends EventEmitter {
   private mcpServed = false;
   private mcpReported = false;
   private mcpTimer: NodeJS.Timeout | null = null;
+  /** The CLI starts its MCP servers with the first prompt (agy): the check waits for a turn to end instead of counting from the launch. */
+  private mcpAwaitingTurn = false;
+  /** The timeline step of the current never-connected report, so a late connection can take it back. */
+  private mcpErrorStepId: string | null = null;
 
   // turns
   private chain: Promise<void> = Promise.resolve();
@@ -370,6 +375,7 @@ export class AcpRunner extends EventEmitter {
       this.pausedAt = this.now();
       writePausedMarker(this.opts.instanceDir, this.pausedAt, reason);
       this.clearRespawn();
+      this.clearMcpTimer();
       await this.adapter.stop().catch(() => undefined);
       this.pauseWake = "paused";
       this.emit("auto_paused", { pausedAt: this.pausedAt });
@@ -419,7 +425,8 @@ export class AcpRunner extends EventEmitter {
       await this.adapter.start({ admission });
       this.errorCause = null; this.lastError = null;
       this.touchState();
-      this.armMcpWatch();
+      // A stop that came in while the agent was starting has already cleared the timers: nothing is armed for an instance that is going away.
+      if (!this.stopping) this.armMcpWatch();
       void this.applyConfiguredSettings(this.spawnGeneration);
     } catch (err) {
       this.noteStartFailure(err);
@@ -478,10 +485,12 @@ export class AcpRunner extends EventEmitter {
 
   private clearRespawn(): void { if (this.respawnTimer) { clearTimeout(this.respawnTimer); this.respawnTimer = null; } }
 
+  private clearMcpTimer(): void { if (this.mcpTimer) { clearTimeout(this.mcpTimer); this.mcpTimer = null; } }
+
   private clearTimers(): void {
     this.clearRespawn();
     if (this.hangTimer) { clearInterval(this.hangTimer); this.hangTimer = null; }
-    if (this.mcpTimer) { clearTimeout(this.mcpTimer); this.mcpTimer = null; }
+    this.clearMcpTimer();
     if (this.cancelledHumansTimer) { clearTimeout(this.cancelledHumansTimer); this.cancelledHumansTimer = null; }
   }
 
@@ -523,23 +532,47 @@ export class AcpRunner extends EventEmitter {
   private armMcpWatch(): void {
     this.mcpServed = false;
     this.mcpReported = false;
-    if (this.mcpTimer) clearTimeout(this.mcpTimer);
+    this.mcpErrorStepId = null;
+    this.clearMcpTimer();
+    // agy declares the server in `session/new` but starts it with the first prompt: an instance nobody has written to has
+    // not had the chance to connect, so counting from the launch reports every idle agy. The count starts when a turn ends.
+    this.mcpAwaitingTurn = this.adapter.profile.mcpConnects === "first_prompt";
+    if (!this.mcpAwaitingTurn) this.startMcpTimer();
+  }
+
+  private startMcpTimer(): void {
+    this.clearMcpTimer();
     const generation = this.spawnGeneration;
+    const session = this.adapter.sessionId();
     this.mcpTimer = setTimeout(() => {
       this.mcpTimer = null;
-      if (generation !== this.spawnGeneration || this.stopping || this.pauseWake === "paused") return;
+      // Only for the launch that armed it, and only while that launch is the one running: an agent that was stopped, paused or
+      // replaced since has nothing to report.
+      if (generation !== this.spawnGeneration || this.stopping || (this.pauseWake !== "active" && this.pauseWake !== "waking")) return;
+      if (this.adapter.health().process !== "running" || this.adapter.sessionId() !== session) return;
       this.checkMcpConnected();
     }, this.opts.mcpGraceMs ?? MCP_GRACE_MS);
     this.mcpTimer.unref?.();
+  }
+
+  /** A turn has ended: for a CLI that starts its server with the first prompt, the grace period starts now. */
+  private mcpTurnEnded(): void {
+    if (!this.mcpAwaitingTurn) return;
+    this.mcpAwaitingTurn = false;
+    if (!this.mcpServed && !this.mcpReported) this.startMcpTimer();
   }
 
   /** The server's first word on the IPC socket (`mcp_ready`, or a tool call) is the proof it is up; it also retracts an earlier report. */
   private noteMcpServing(_socket: Socket): void {
     if (this.mcpServed) return;
     this.mcpServed = true;
-    if (this.mcpTimer) { clearTimeout(this.mcpTimer); this.mcpTimer = null; }
+    this.mcpAwaitingTurn = false;
+    this.clearMcpTimer();
     if (!this.mcpReported) return;
     this.mcpReported = false;
+    // The error line the report put in the chat is taken back: the person saw a failure that did not happen.
+    if (this.mcpErrorStepId) this.steps.retractError(this.mcpErrorStepId, "The agend MCP server connected after all: the earlier warning was a false alarm and nothing was lost.");
+    this.mcpErrorStepId = null;
     if (this.lastError === "mcp") { this.errorCause = null; this.lastError = null; }
     this.log.info({ name: this.name }, "acp: the agend MCP server connected after all");
     this.emit("mcp_recovered", { name: this.name, source: "late_connect" });
@@ -558,7 +591,7 @@ export class AcpRunner extends EventEmitter {
     this.lastError = "mcp";
     const grace = this.opts.mcpGraceMs ?? MCP_GRACE_MS;
     this.log.error({ name: this.name, graceMs: grace }, "acp: the agend MCP server never connected after the session opened — instance has no agend tools");
-    this.steps.error("The agend MCP server never connected: this agent has no agend tools (it cannot reply through the reply tool or reach other instances). Restart the instance; if it repeats, check the CLI's own MCP messages in the Log.");
+    this.mcpErrorStepId = this.steps.error("The agend MCP server never connected: this agent has no agend tools (it cannot reply through the reply tool or reach other instances). Restart the instance; if it repeats, check the CLI's own MCP messages in the Log.", { running: "keep" });
     this.emit("mcp_died", { name: this.name, pid: 0, autoRestart: false, authSuspected: false, neverConnected: true, acp: true });
   }
 
@@ -591,7 +624,13 @@ export class AcpRunner extends EventEmitter {
    * agent does not offer is reported as a launch warning, never typed anywhere.
    */
   private async applyConfiguredSettings(generation: number): Promise<void> {
-    const wanted: [string, string | undefined][] = [["model", this.modelOverride ?? this.config.model], ["thought_level", (this.config as InstanceConfig & { effort?: string }).effort]];
+    const effort = (this.config as InstanceConfig & { effort?: string }).effort;
+    // The configured model may be a tmux-style id that carries its effort level (`gemini-4-hydrogen-medium`): ACP takes the
+    // model and the effort apart, so it is split first. A level the id carried is used only when no effort is configured.
+    const configuredModel = this.modelOverride ?? this.config.model;
+    const offeredModels = this.adapter.configOption("model")?.values ?? [];
+    const split = configuredModel && offeredModels.length ? splitAcpModel(configuredModel, offeredModels) : null;
+    const wanted: [string, string | undefined][] = [["model", split?.model ?? configuredModel], ["thought_level", effort ?? split?.level]];
     for (const [category, value] of wanted) {
       if (!value || generation !== this.spawnGeneration) continue;
       const current = this.adapter.configOption(category)?.currentValue;
@@ -600,15 +639,25 @@ export class AcpRunner extends EventEmitter {
       if (!result.ok) {
         this.log.warn({ name: this.name, category, value, reason: result.reason, accepted: result.accepted }, "acp: a configured setting was not applied");
         if (result.reason === "invalid" || result.reason === "failed") {
-          this.emit("backend_launch_warning", { name: this.name, message: `${category === "model" ? "model" : "effort"} "${value}" was not applied: ${result.message}${result.accepted.length ? ` (it offers: ${result.accepted.join(", ")})` : ""}. It runs on its own setting.` });
+          const message = `${category === "model" ? "model" : "effort"} "${value}" was not applied: ${result.message}${result.accepted.length ? ` (it offers: ${result.accepted.join(", ")})` : ""}. It runs on its own setting.`;
+          this.emit("backend_launch_warning", { name: this.name, message });
+          // The log line and the topic message are not where a person looks first: the chat says it too.
+          if (generation === this.spawnGeneration) this.steps.error(`The configured ${message}`, { running: "keep" });
         }
       }
     }
   }
 
-  /** Set the live session's reasoning effort or model through ACP. The caller has already persisted the value for the next start. */
+  /**
+   * Set the live session's reasoning effort or model through ACP. The caller has already persisted the value for the next start.
+   * A tmux-style model id (model plus effort level) is split as at start; the level it carries is applied only when no effort is configured.
+   */
   async setSessionSetting(kind: "effort" | "model", value: string): Promise<import("./acp-adapter.js").SetConfigResult> {
-    return this.adapter.setConfigOption(kind === "effort" ? "thought_level" : "model", value);
+    if (kind === "effort") return this.adapter.setConfigOption("thought_level", value);
+    const split = splitAcpModel(value, this.sessionSettingValues("model"));
+    const result = await this.adapter.setConfigOption("model", split?.model ?? value);
+    if (result.ok && split?.level && !(this.config as InstanceConfig & { effort?: string }).effort) await this.adapter.setConfigOption("thought_level", split.level);
+    return result;
   }
   /** The values the live session offers for `effort` / `model` (empty when the agent is not running or offers none). */
   sessionSettingValues(kind: "effort" | "model"): readonly string[] { return this.adapter.configOption(kind === "effort" ? "thought_level" : "model")?.values ?? []; }
@@ -691,6 +740,7 @@ export class AcpRunner extends EventEmitter {
   private endTurn(t: NonNullable<AcpRunner["turn"]>, _stopReason: string): void {
     if (this.turn === t) this.turn = null;
     this.setBusy(false);
+    this.mcpTurnEnded();
     if (this.pauseWhenIdle && this.steps.pendingPermissions().length === 0) { this.pauseWhenIdle = false; void this.pause("auth"); }
   }
 

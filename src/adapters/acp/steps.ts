@@ -104,12 +104,29 @@ export class AcpStepStore {
   }
 
   /** A failure of the turn that is not a stop reason (the process died, the request was refused). */
-  error(message: string): void {
-    this.closeOpen();
-    this.settleRunning("interrupted");
+  error(message: string, o: { running?: "keep" } = {}): string {
+    // A notice that is not about the running turn (a setting that was not applied, a server that did not connect) leaves the turn's open steps alone.
+    if (o.running !== "keep") { this.closeOpen(); this.settleRunning("interrupted"); }
     const step: LogStep = { id: `e-${this.turn || "x"}-${++this.seq}`, turn: this.turn, ts: this.now(), kind: "error" };
     stepBody(step, message, TEXT_MAX);
     this.put(step, true);
+    return step.id;
+  }
+
+  /**
+   * An error that turned out not to be one (a warning that was raised too early): the step stays in the Log, as a plain state
+   * line that says what happened, and the chat no longer shows it (the chat shows errors, not state lines). Saved the same
+   * way, so a restart does not bring the error back. False when the step is gone or is not an error.
+   */
+  retractError(id: string, note: string): boolean {
+    const step = this.byId.get(id);
+    if (!step || step.kind !== "error") return false;
+    step.kind = "state";
+    step.note = note;
+    delete step.body;
+    delete step.bodyCut;
+    this.put(step, true);
+    return true;
   }
 
   /** A permission step's outcome: its buttons are gone, `note` says what was chosen. */

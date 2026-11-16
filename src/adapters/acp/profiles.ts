@@ -39,6 +39,12 @@ export interface AcpProfile {
    * when the agent advertised `mcpCapabilities` for it (agy advertises none, so only stdio).
    */
   readonly mcpTransport: "stdio";
+  /**
+   * When the CLI starts the MCP servers a `session/new` declares. `with_session`: while the session opens (grok), so a server
+   * that is still not connected 45 s later is missing. `first_prompt`: only when the first prompt arrives (agy builds its
+   * toolbox per turn), so an instance nobody has written to yet is not a missing server, and the check waits for a turn.
+   */
+  readonly mcpConnects: "with_session" | "first_prompt";
 }
 
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : null);
@@ -69,6 +75,7 @@ export const GROK_PROFILE: AcpProfile = {
   passEnv: ["XAI_API_KEY", /^GROK_/],
   capabilities: { ...COMMON, contextUsage: false },
   mcpTransport: "stdio",
+  mcpConnects: "with_session",
 };
 
 export const AGY_PROFILE: AcpProfile = {
@@ -89,6 +96,7 @@ export const AGY_PROFILE: AcpProfile = {
   passEnv: ["GEMINI_API_KEY", "GOOGLE_API_KEY", /^GOOGLE_/, /^ANTIGRAVITY_/],
   capabilities: { ...COMMON, contextUsage: true },
   mcpTransport: "stdio",
+  mcpConnects: "first_prompt",
 };
 
 const PROFILES: readonly AcpProfile[] = [GROK_PROFILE, AGY_PROFILE];
