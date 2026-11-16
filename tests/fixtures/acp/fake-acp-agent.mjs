@@ -184,13 +184,13 @@ process.stdin.on("data", d => {
           break;
         }
         if (turnActive && process.env.FAKE_ACP_CONCURRENT === "error") { out({ jsonrpc: "2.0", id: m.id, error: { code: -32602, message: "a turn is already running" } }); break; }
-        if (turnActive && process.env.FAKE_ACP_CONCURRENT === "fold") {
+        if (turnActive && (process.env.FAKE_ACP_CONCURRENT === "fold" || process.env.FAKE_ACP_CONCURRENT === "fold-hold")) {   // fold-hold: folded in, but the turn keeps waiting (for a cancel)
           const text = m.params.prompt.map(p => p.text).join("");
           log({ foldedPrompt: text });
           interjections.push(text); remember(m.params.sessionId, [...(known()[m.params.sessionId] ?? []), text]);
           running.folded = m.id; running.answered = true;
           out({ jsonrpc: "2.0", id: running.id, result: { stopReason: "end_turn" } });   // the first request is answered at once; the work goes on
-          cancelWake?.();
+          if (process.env.FAKE_ACP_CONCURRENT === "fold") cancelWake?.();
           break;
         }
         turn(m.id, m.params.sessionId, m.params.prompt.map(p => p.text).join("")).catch(e => { log({ error: String(e) }); process.exit(4); });

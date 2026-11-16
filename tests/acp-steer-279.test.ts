@@ -212,6 +212,20 @@ describe("durable deliveries added to a running turn (second review)", () => {
     expect(outbox.calls.filter(c => c.startsWith("complete:d1"))).toEqual(["complete:d1#1:delivered:acp:interjected"]);
   }, 20000);
 
+  it("the turn it was added to is cancelled before it ends: the verdict is uncertain, never delivered", async () => {
+    const outbox = new FakeOutbox();
+    const h = await boot({ env: { FAKE_ACP_CONCURRENT: "fold-hold" }, outbox });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B durable then cut", durable("d3"));
+    await until(() => outbox.calls.some(c => c.startsWith("enter:d3")), 3000, "the attempt begun");
+    expect(outbox.calls.filter(c => c.startsWith("complete:d3"))).toEqual([]);
+    await h.runner.adapter.cancel();                                                          // the turn that took it is cut short
+    await until(() => turnEnds(h).length === 1, 10000, "the turn ends");
+    expect(turnEnds(h)).toEqual(["cancelled"]);
+    expect(outbox.calls.filter(c => c.startsWith("complete:d3"))).toEqual(["complete:d3#1:uncertain:acp:interjected-turn-not-finished"]);
+  }, 20000);
+
   it("agy refuses the added prompt late: the attempt goes back to the outbox (abort), is never completed as delivered, and nothing is dropped", async () => {
     const outbox = new FakeOutbox();
     const h = await boot({ env: { FAKE_ACP_CONCURRENT: "late-error" }, outbox });
