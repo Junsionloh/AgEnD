@@ -20458,7 +20458,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const nonce = await this.postNonceButtonPrompt({
       prefix: REMOTE_CARD_CALLBACK_PREFIX, alertType: "interactive_prompt", instanceName, ...place,
       message: prompt.message, choices: prompt.choices, webInput: prompt.webInput,
-      expiredText: t("card.expired", instanceName), timeoutMs: REMOTE_CARD_TIMEOUT_MS,
+      expiredText: t(card.kind === "question" && card.acpPermission ? "card.permission_expired" : "card.expired", instanceName), timeoutMs: REMOTE_CARD_TIMEOUT_MS,
       extra: { remoteCard: { identity: card.identity, kind: card.kind, options: shown.kind === "question" ? shown.options.map(o => ({ n: o.n, title: o.title })) : [],
         requiresAdmin, ownerAdapterId: this.getInstanceAdapterId(instanceName) } },
     });

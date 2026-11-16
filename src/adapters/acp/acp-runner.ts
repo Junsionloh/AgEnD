@@ -18,7 +18,9 @@ import type { InstanceConfig } from "../../types.js";
 import type { WorkingStateObservation } from "../../working-state-journal.js";
 import type { RecoveryLive } from "../../working-recovery.js";
 import { AcpAuthRequiredError, AcpVersionRefusedError, type AcpAdapter } from "./acp-adapter.js";
-import { AcpStepStore } from "./steps.js";
+import { AcpStepStore, type PermissionStepInfo } from "./steps.js";
+import type { RemoteCardAction, RemoteCardOutcome } from "../../remote-card-answer.js";
+import type { RemoteCardOption, RemoteQuestionCard } from "../../backend/types.js";
 import { ACP_MCP_SERVER_NAME } from "./profiles.js";
 import { splitAcpModel } from "./model-id.js";
 import type { LiveSteps } from "../../log-service.js";
@@ -114,6 +116,19 @@ const DEFAULT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
 const MCP_GRACE_MS = 45_000;
 const PROXY_TEXT_MAX = 12_000;
 
+/** The identity of a permission card: the request's own step id (JSON-RPC ids restart with every agent process; the step id does not repeat). */
+export const permissionCardIdentity = (p: { stepId: string }): string => `acp-permission:${p.stepId}`;
+
+/** What a permission card asks, from the tool call the agent named: its title and the one argument that says what it would touch (never the whole input). */
+export function permissionQuestion(tool: unknown): string {
+  const t = tool && typeof tool === "object" ? tool as Record<string, unknown> : {};
+  const title = typeof t.title === "string" && t.title.trim() ? t.title.trim() : "a tool";
+  const input = t.rawInput && typeof t.rawInput === "object" ? t.rawInput as Record<string, unknown> : {};
+  const subject = ["command", "cmd", "path", "file_path", "filePath", "url", "query"].map(k => input[k]).find((v): v is string => typeof v === "string" && v.trim() !== "");
+  const clip = (text: string, max: number): string => { const one = text.replace(/\s+/g, " ").trim(); return one.length > max ? `${one.slice(0, max - 1)}…` : one; };
+  return `Permission request: ${clip(title, 160)}${subject && !title.includes(subject.trim()) ? ` — ${clip(subject, 240)}` : ""}`;
+}
+
 /** A token count as grok's own screen writes it: `850`, `14.9K`, `256K`, `1.2M`. */
 export function tokenLabel(n: number): string {
   if (n < 1000) return String(Math.round(n));
@@ -189,6 +204,8 @@ export class AcpRunner extends EventEmitter {
 
   // fleet requests
   private readonly pending = new Map<string, (msg: Msg) => void>();
+  /** The permission cards posted in the chat (`skipPermissions: false`): card identity → the request and what each option does. */
+  private readonly permissionCards = new Map<string, { requestId: string; choices: Map<number, "allow" | "deny" | "cancel"> }>();
   private fleetSeq = 0;
   private readonly sessionNames = new Map<Socket, string>();
 
@@ -199,7 +216,7 @@ export class AcpRunner extends EventEmitter {
     this.stateChangedAt = this.now();
     this.autoPause = new AutoPauseController(this.autoPauseMs(this.config), readLastInboundAt(opts.instanceDir) ?? this.now());
     this.steps = new AcpStepStore(opts.instanceDir, this.now, () => this.config.skipPermissions !== false);
-    this.steps.onChange(() => this.emit("steps_changed"));
+    this.steps.onChange(() => { this.emit("steps_changed"); this.syncPermissionCards(); });
     this.restoreLastChat();
     adapter.onEvent(e => this.onAdapterEvent(e));
     adapter.onExit(info => this.onAdapterExit(info));
@@ -302,8 +319,27 @@ export class AcpRunner extends EventEmitter {
   collectHandoverContext(): string { return ""; }
   captureHumanReceiptOwner(): string | null { return null; }
   humanReceiptWire(content: string, meta: Record<string, string>, _kind: string): string { return this.format(content, meta); }
-  async answerRemoteCard(): Promise<{ outcome: "stale" }> { return { outcome: "stale" }; }
-  repostRemoteCard(): void { /* permission requests are chat steps, not cards */ }
+  /**
+   * A button of a permission card posted in the chat (AGEND-279): option `n` is what `choices` of that card says (allow once, deny,
+   * cancel the turn), applied exactly as the web's buttons apply it. A request that is no longer waiting is `stale`.
+   */
+  async answerRemoteCard(identity: string, action: RemoteCardAction): Promise<RemoteCardOutcome> {
+    const card = this.permissionCards.get(identity);
+    const pending = card ? this.steps.pendingPermissions().find(p => p.requestId === card.requestId) : undefined;
+    if (!card || !pending) return { outcome: "stale" };
+    if (action.kind !== "option") return { outcome: "refused", reason: "a permission request is answered with its buttons" };
+    const decision = card.choices.get(action.n);
+    if (!decision) return { outcome: "refused", reason: `no option ${action.n}` };
+    const error = this.answerPermissionByUser(pending.stepId, decision);
+    return error ? { outcome: "refused", reason: error } : { outcome: "answered" };
+  }
+  /** The fleet could not apply an answer: the request is still waiting, so its card is posted again. */
+  repostRemoteCard(): void {
+    const pending = this.steps.pendingPermissions()[0];
+    if (!pending) return;
+    this.permissionCards.delete(permissionCardIdentity(pending));
+    this.postPermissionCard(pending);
+  }
   subagentSource(): null { return null; }
   seedErrorPatternOccurrenceCount(): void { /* no pane error patterns */ }
   noteLegacyRestartReminder(): void { /* no legacy continuation */ }
@@ -872,6 +908,38 @@ export class AcpRunner extends EventEmitter {
    * permission card appears. `skipPermissions: false`: requests wait for a person in the chat, except those for this instance's
    * own `agend` tools (found only by fields the CLI sets, `ownToolName`) other than the ones that change the fleet.
    */
+  /**
+   * Keep the chat's permission card in step with the requests that wait: the first one is put to the people in the chat as a card (the
+   * fleet posts it, admins only; a fleet with no chat connection has nowhere to post it and the dashboard's card stands), and when it was
+   * answered anywhere, cancelled, or lost with the turn its card is retired and the next waiting request, if any, is put up.
+   */
+  private syncPermissionCards(): void {
+    const pending = this.steps.pendingPermissions();
+    const live = new Set(pending.map(permissionCardIdentity));
+    for (const identity of [...this.permissionCards.keys()]) {
+      if (live.has(identity)) continue;
+      this.permissionCards.delete(identity);
+      this.emit("remote_card_gone", { name: this.name, identity });
+    }
+    // One card at a time (the fleet keeps one post per instance): the next waiting request is put up when the one shown is gone.
+    if (this.permissionCards.size === 0 && pending[0]) this.postPermissionCard(pending[0]);
+  }
+
+  private postPermissionCard(p: PermissionStepInfo): void {
+    const identity = permissionCardIdentity(p);
+    const choices = new Map<number, "allow" | "deny" | "cancel">();
+    const options: RemoteCardOption[] = [];
+    const add = (title: string, decision: "allow" | "deny" | "cancel"): void => { choices.set(options.length + 1, decision); options.push({ n: options.length + 1, title, recommended: false, description: null }); };
+    if (p.options.some(o => o.kind === "allow_once")) add("Allow once", "allow");
+    add("Deny", "deny");
+    add("Cancel the turn", "cancel");
+    this.permissionCards.set(identity, { requestId: p.requestId, choices });
+    this.emit("remote_card", { name: this.name, card: {
+      kind: "question", identity, title: "Permission", question: permissionQuestion(p.tool), page: "options", options, freeText: false,
+      cursor: null, typed: null, rowWidth: 0, noSkip: true, webOnly: true, acpPermission: true,
+    } satisfies RemoteQuestionCard });
+  }
+
   private onPermission(e: Extract<AdapterEvent, { kind: "permission" }>): void {
     const own = ownToolName(e.tool);
     const auto = this.config.skipPermissions !== false || (own !== null && !OWN_TOOLS_ASK.has(own));

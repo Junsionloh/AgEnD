@@ -377,6 +377,11 @@ export interface RemoteQuestionCard {
   noSkip?: true;
   /** Legacy CLI-dialog marker (#2910 D4). #3334 also posts it in chat, with owning-adapter fleet-admin authority. */
   webOnly?: true;
+  /**
+   * AGEND-279: a permission request of an ACP agent (`skipPermissions: false`). It is not keyed into a terminal: the buttons answer
+   * the agent over the protocol, so the card's closing line and its expiry say that instead of pointing at the pane / View.
+   */
+  acpPermission?: true;
 }
 
 /**
