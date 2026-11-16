@@ -33,6 +33,10 @@ let cancelWake = null;
 // grok's `_x.ai/interject` {sessionId, text} → {status: "queued"} (FAKE_ACP_INTERJECT=reject: "Method not found", as agy answers). A turn waiting in #slow is woken by it and ends normally ("end_turn", not cancelled) with a message that says what it was given.
 let turnActive = false;
 let interjections = [];
+// agy: FAKE_ACP_CONCURRENT=fold — a second `session/prompt` while one runs is folded into the running turn: the FIRST request is answered `end_turn` at once, the work goes on
+// (a #slow wait is woken, the turn says what it was given), and the SECOND request answers when everything is done. =error — the second prompt is refused at once.
+let running = null;
+const answerTurn = result => { if (!running) return; if (!running.answered) out({ jsonrpc: "2.0", id: running.id, result }); if (running.folded !== undefined) out({ jsonrpc: "2.0", id: running.folded, result }); running = null; };
 
 function ask(method, params) {
   const id = nextOut === 100 ? 0 : nextOut; nextOut++;
@@ -44,6 +48,7 @@ async function turn(id, sessionId, text) {
   cancelled = false;
   turnActive = true;
   interjections = [];
+  running = { id, answered: false, folded: undefined };
   const history = known()[sessionId] ?? [];
   history.push(text);
   remember(sessionId, history);
@@ -109,13 +114,14 @@ async function turn(id, sessionId, text) {
     } else {
       update(sessionId, { sessionUpdate: "tool_call_update", toolCallId: "w1", status: "failed" });
       update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "refused" } });
-      if (outcome?.outcome === "cancelled") { turnActive = false; out({ jsonrpc: "2.0", id, result: { stopReason: "cancelled" } }); return; }
+      if (outcome?.outcome === "cancelled") { turnActive = false; answerTurn({ stopReason: "cancelled" }); return; }
     }
   } else if (text.includes("#slow")) {
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "thinking " } });
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "slowly" } });
     await new Promise(r => { cancelWake = r; setTimeout(r, 20000); });
-    if (cancelled) { turnActive = false; out({ jsonrpc: "2.0", id, result: { stopReason: "cancelled" } }); return; }
+    if (cancelled) { turnActive = false; answerTurn({ stopReason: "cancelled" }); return; }
+    if (interjections.length && process.env.FAKE_ACP_FOLD_DELAY) await sleep(Number(process.env.FAKE_ACP_FOLD_DELAY));   // the work goes on after the first request was answered
     if (interjections.length) update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: `interjected: ${interjections.join(" | ")}` } });
   } else {
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "Let me " } });
@@ -126,7 +132,7 @@ async function turn(id, sessionId, text) {
   }
   if (grokContext) out({ ...grokContext.response_completed, params: { ...grokContext.response_completed.params, sessionId } });
   turnActive = false;
-  out({ jsonrpc: "2.0", id, result: { stopReason: "end_turn" } });
+  answerTurn({ stopReason: "end_turn" });
 }
 
 let buf = "";
@@ -171,6 +177,16 @@ process.stdin.on("data", d => {
         break;
       }
       case "session/prompt":
+        if (turnActive && process.env.FAKE_ACP_CONCURRENT === "error") { out({ jsonrpc: "2.0", id: m.id, error: { code: -32602, message: "a turn is already running" } }); break; }
+        if (turnActive && process.env.FAKE_ACP_CONCURRENT === "fold") {
+          const text = m.params.prompt.map(p => p.text).join("");
+          log({ foldedPrompt: text });
+          interjections.push(text); remember(m.params.sessionId, [...(known()[m.params.sessionId] ?? []), text]);
+          running.folded = m.id; running.answered = true;
+          out({ jsonrpc: "2.0", id: running.id, result: { stopReason: "end_turn" } });   // the first request is answered at once; the work goes on
+          cancelWake?.();
+          break;
+        }
         turn(m.id, m.params.sessionId, m.params.prompt.map(p => p.text).join("")).catch(e => { log({ error: String(e) }); process.exit(4); });
         break;
       case "_x.ai/interject": {

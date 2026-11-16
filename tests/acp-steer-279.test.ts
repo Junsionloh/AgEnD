@@ -32,11 +32,12 @@ afterEach(async () => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-/** `grok`: the profile that has `_x.ai/interject` (the fake agent answers it); default: agy's, which has none. `env`: more fake-agent switches. */
-async function boot(o: { grok?: boolean; env?: Record<string, string> } = {}) {
+/** `grok`: the profile with `_x.ai/interject`; default: agy's (a second prompt folded into the running one: FAKE_ACP_CONCURRENT); `plain`: a CLI with no way to add to a turn. `env`: fake-agent switches. */
+async function boot(o: { grok?: boolean; plain?: boolean; env?: Record<string, string> } = {}) {
   const dir = tmp(), state = tmp();
   const config = { working_directory: dir, backend: o.grok ? "grok" : "antigravity", cli_adapter: "acp" } as InstanceConfig;
-  const profile = { ...(o.grok ? GROK_PROFILE : AGY_PROFILE), supportedVersions: ["1.5.8"], versionOf: AGY_PROFILE.versionOf, args: () => [FAKE] };
+  const base = o.grok ? GROK_PROFILE : AGY_PROFILE;
+  const profile = { ...base, ...(o.plain ? { interject: undefined } : {}), supportedVersions: ["1.5.8"], versionOf: AGY_PROFILE.versionOf, args: () => [FAKE] };
   const holder: { runner?: AcpRunner } = {};
   const adapter = new AcpAdapter({
     profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger, env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8", ...o.env },
@@ -125,8 +126,8 @@ describe("an interruption where the CLI can add a message to the running turn (g
     expect(h.delivered).toHaveLength(2);                                                       // A, and B as its own prompt (no early "delivered" for B)
   });
 
-  it("an agent with no way of its own (agy) is told to cancel; an idle one just receives it", async () => {
-    const agy = await boot();
+  it("an agent with no way of adding to a turn is told to cancel; an idle one just receives it", async () => {
+    const agy = await boot({ plain: true });
     expect(agy.runner.interruptMode()).toBe("idle");
     agy.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
     await until(() => agy.runner.getInstanceState() === "working", 3000, "A is working");
@@ -150,14 +151,49 @@ describe("an interruption where the CLI can add a message to the running turn (g
   });
 });
 
+describe("an interruption where the CLI folds a second prompt into the running turn (agy)", () => {
+  it("sends it as a second prompt: nothing is cancelled, and the turn is over only when both requests have answered", async () => {
+    const h = await boot({ env: { FAKE_ACP_CONCURRENT: "fold", FAKE_ACP_FOLD_DELAY: "1500" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.pushChannelMessage("C queued", meta("c"));
+    expect(h.runner.interruptMode()).toBe("add");
+    h.runner.interruptMessage("B folded", meta("b"));
+    await until(() => calls(h.state).some(c => "foldedPrompt" in c), 3000, "the second prompt");
+    // The CLI answered the FIRST request at once and is still working: that is not the end of the turn, and the queue must not move.
+    await until(() => steps(h).filter(s => s.kind === "user").length === 2, 3000, "B as a step of the turn");
+    expect(h.runner.getInstanceState()).toBe("working");
+    expect(turnEnds(h)).toEqual([]);
+    expect(steps(h).filter(s => s.kind === "user").map(s => s.body)).toEqual(["A #slow", "B folded"]);
+    await until(() => turnEnds(h).length === 2, 10000, "A's turn (both requests) and C's");
+    expect(turnEnds(h)).toEqual(["end_turn", "end_turn"]);
+    expect(calls(h.state).filter(c => "cancelled" in c)).toEqual([]);
+    expect(steps(h).filter(s => s.kind === "user").map(s => s.body)).toEqual(["A #slow", "B folded", "C queued"]);
+    expect(steps(h).filter(s => s.kind === "assistant").map(s => s.body).join("\n")).toContain("interjected: ");
+    expect(h.delivered).toContainEqual({ chatId: "chat-1", messageId: "b" });
+    expect(h.confirmed).toContainEqual({ chatId: "chat-1", messageId: "b" });
+  });
+
+  it("falls back to cancel and a new prompt when the CLI refuses a second prompt at once", async () => {
+    const h = await boot({ env: { FAKE_ACP_CONCURRENT: "error" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B instead", meta("b"));
+    await until(() => turnEnds(h).length === 2, 10000, "both turns");
+    expect(turnEnds(h)).toEqual(["cancelled", "end_turn"]);
+    expect(calls(h.state).filter(c => "cancelled" in c)).toHaveLength(1);
+    expect(Object.values(sessions(h.state))[0]!.map(t => NOTE.test(t))).toEqual([false, true]);
+  });
+});
+
 describe("an interruption (/steer, steer: true)", () => {
   it("is what the IPC `steer` message does, and a launch that takes steer is what the fleet's cross-instance send asks", async () => {
-    const h = await boot();
+    const h = await boot({ plain: true });
     expect(h.runner.launchSupportsSteer()).toBe(true);
   });
 
   it("cancels the running turn, runs next in the same session with a note, and keeps the queued messages behind it", async () => {
-    const h = await boot();
+    const h = await boot({ plain: true });
     h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
     await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
     // Straight into the runner, so the order of arrival is exactly this.
@@ -183,7 +219,7 @@ describe("an interruption (/steer, steer: true)", () => {
   });
 
   it("two interruptions keep their own order, ahead of the queue", async () => {
-    const h = await boot();
+    const h = await boot({ plain: true });
     h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
     await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
     h.runner.pushChannelMessage("C queued", meta("c"));
@@ -196,7 +232,7 @@ describe("an interruption (/steer, steer: true)", () => {
   });
 
   it("an agent that is idle just receives it: no cancel, no note", async () => {
-    const h = await boot();
+    const h = await boot({ plain: true });
     h.fleet.send({ type: "steer", content: "hello", meta: meta("m-1") });
     await until(() => turnEnds(h).length === 1, 6000, "the turn");
     expect(turnEnds(h)).toEqual(["end_turn"]);
@@ -205,7 +241,7 @@ describe("an interruption (/steer, steer: true)", () => {
   });
 
   it("another agent's interruption says so in the note", async () => {
-    const h = await boot();
+    const h = await boot({ plain: true });
     h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
     await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
     h.fleet.send({ type: "steer", content: "from the planner", meta: { chat_id: "", message_id: "x1", user: "instance:planner", source: "cross_instance", from_instance: "planner" } });
@@ -217,7 +253,7 @@ describe("an interruption (/steer, steer: true)", () => {
     const dir = tmp(), state = tmp();
     const config = { working_directory: dir, backend: "antigravity", cli_adapter: "acp", skipPermissions: false } as InstanceConfig;
     const holder: { runner?: AcpRunner } = {};
-    const profile = { ...AGY_PROFILE, supportedVersions: ["1.5.8"], args: () => [FAKE] };
+    const profile = { ...AGY_PROFILE, interject: undefined, supportedVersions: ["1.5.8"], args: () => [FAKE] };   // no way of adding to a turn: the cancel path
     new AcpAdapter({ profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger, env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8" },
       makeRunner: a => (holder.runner = new AcpRunner(a, { name: "worker", config, instanceDir: dir, topicMode: true, backend: "antigravity", logger })) });
     const runner = holder.runner!; runners.push(runner);

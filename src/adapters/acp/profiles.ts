@@ -40,15 +40,19 @@ export interface AcpProfile {
    */
   accountLaunch?(folder: string): { env: Record<string, string>; args: string[] } | null;
   /**
-   * The CLI's own way to add a message to the turn that is running (not part of ACP, which has none). Absent: an interruption can only be
-   * `session/cancel` and a new prompt. Only valid while a `session/prompt` is outstanding (grok starts a turn of its own from it when idle).
+   * How a message is added to the turn that is running, without cancelling it (ACP itself has none). `method`: the CLI's own extension (grok).
+   * `prompt`: a second `session/prompt` for the same session while the first is outstanding, which the CLI folds into the running turn (agy). Absent:
+   * an interruption can only be `session/cancel` and a new prompt. Only valid while a `session/prompt` is outstanding.
    */
-  readonly interject?: {
-    readonly method: string;
-    params(sessionId: string, text: string): unknown;
-    /** Whether the CLI's answer says the message was taken into the turn. */
-    accepted(result: unknown): boolean;
-  };
+  readonly interject?:
+    | {
+      readonly via: "method";
+      readonly method: string;
+      params(sessionId: string, text: string): unknown;
+      /** Whether the CLI's answer says the message was taken into the turn. */
+      accepted(result: unknown): boolean;
+    }
+    | { readonly via: "prompt" };
   /** What the instance can do under this profile. */
   readonly capabilities: AdapterCapabilities;
   /**
@@ -97,7 +101,7 @@ export const GROK_PROFILE: AcpProfile = {
   },
   // grok's `_x.ai/interject` {sessionId, text} → {status: "queued"}: the message joins the running turn at its next safe point, the tool call that was
   // running is not cancelled (measured on 1.0.77: one turn, one `end_turn`, the answer covers both messages). Not announced in `initialize` (grok 1.0.14+).
-  interject: { method: "_x.ai/interject", params: (sessionId, text) => ({ sessionId, text }), accepted: result => obj(result)?.status === "queued" },
+  interject: { via: "method", method: "_x.ai/interject", params: (sessionId, text) => ({ sessionId, text }), accepted: result => obj(result)?.status === "queued" },
   passEnv: ["XAI_API_KEY", /^GROK_/],
   // grok reports each model call's tokens in its own `_x.ai/session_notification`, and the current model's window in `models` (`_meta.totalContextTokens`).
   contextWindowOf: models => {
@@ -130,6 +134,9 @@ export const AGY_PROFILE: AcpProfile = {
     const v = obj(obj(result)?.agentInfo)?.version;
     return typeof v === "string" ? v : null;
   },
+  // agy folds a second `session/prompt` sent for the same session while the first runs into the running turn: the tool in progress is not cancelled, the first request is
+  // answered `end_turn` at once and the work goes on, and the second request answers (`end_turn`) when everything is done (measured on 1.5.9). See `AcpAdapter.interject`.
+  interject: { via: "prompt" },
   passEnv: ["GEMINI_API_KEY", "GOOGLE_API_KEY", /^GOOGLE_/, /^ANTIGRAVITY_/],
   // The same launch the terminal backend gives a named agy account (`--app_data_dir <folder relative to ~/.gemini>` right after the binary, and the registry's pin that keeps the sign-in in the folder's file).
   accountLaunch: folder => credentialProfileLaunchAt("antigravity", folder),
