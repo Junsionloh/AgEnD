@@ -281,7 +281,7 @@ import { RuntimeWindowsBridge } from "./runtime-windows-bridge.js";
 import { FleetWindowsRuntime, type NativeRuntimePatch, type NativeExecutionResult } from "./fleet-windows-runtime.js";
 import { NativeMcpSessions } from "./native-mcp.js";
 import { nativeProviderMcpSupported } from "./windows-cli-providers.js";
-import { cachedNativeModelCatalog } from "./native-model-catalog.js";
+import { cachedNativeModelCatalog, refreshNativeModelCatalogAfterSignIn } from "./native-model-catalog.js";
 import { shapeWebModelCatalog } from "./web-model-groups.js";
 import { isWindowsInstance, isNativePaneInstance, isNativeExecInstance, WINDOWS_CONFIG_REFUSED, nativeCredentialProfile } from "./native-instance-registry.js";
 import { createNativeWindowsInstance, updateNativeWindowsInstance } from "./native-instance-api.js";
@@ -21709,7 +21709,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       reported: (id, profile, backend) => this.machineAccounts.profileState(id, profile, backend),
       reportedDefault: (id, backend) => this.machineAccounts.reportedDefault(id, backend),
       readiness: (id, backend, named) => this.machineAccounts.readiness(id, backend, named),
-      actor: owner => { const handle = (owner as SessionRecord).handle; return typeof handle === "string" && /^[a-f0-9]{16}$/.test(handle) ? `admin:${handle}` : null; },
+      actor: owner => this.machineSignInActor(owner),
       changed: (event, owner) => {
         // Safe fields only: the computer, the CLI, the profile name (none for Antigravity's default login), a phase and a fixed reason. Never a URL, a code, output or an e-mail address.
         this.logger.info({ machine: event.machine, backend: event.backend, ...(event.profile ? { profile: event.profile } : {}), phase: event.phase, ...(event.reason ? { reason: event.reason } : {}), by: (owner as SessionRecord).label },
@@ -21717,13 +21717,41 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         // The page reads the computer's last detection (agy is never run for a read): a login made just now is remembered until the next one.
         // Only the computer's OWN login (no profile) is remembered here: a named account's sign-in is reported by its Runtime's inventory, which it sends before the sign-in ends.
         if (event.phase === "done" && event.profile === undefined) this.machineAccounts.noteDefaultLogin(event.machine, event.backend, true);
-        // AGEND-276: that computer's Runtime lists models in its own inventory (never a host probe): pages read it again now.
-        if (event.phase === "done") this.announceModels(event.backend);
+        // AGEND-276: that computer's Runtime lists models in its own inventory (never a host probe): pages read it again now,
+        // and the Runtime is asked once, for the admin who finished the sign-in, to list them as this account.
+        if (event.phase === "done") {
+          this.announceModels(event.backend);
+          void this.nativeModelsAfterSignIn(event, owner);
+        }
         broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"));
         this.needsYou?.poke();
       },
     });
   }
+  /**
+   * AGEND-276: a paired computer's sign-in ended — ask its Runtime once (`models.refresh`, as the admin who finished the
+   * sign-in) for the list as this account, so the next read of its agents' and the create dialog's list has it without the
+   * Refresh button. Once per sign-in; never on a read (M-2239 P1-2). A Runtime without the capability, a refused account or any
+   * failure is skipped quietly: the sign-in is done either way.
+   */
+  /** The name a paired computer's audit log records for the admin session that signed in on it (`admin:<handle>`); null refuses. */
+  private machineSignInActor(owner: object): string | null {
+    const handle = (owner as SessionRecord).handle;
+    return typeof handle === "string" && /^[a-f0-9]{16}$/.test(handle) ? `admin:${handle}` : null;
+  }
+
+  private async nativeModelsAfterSignIn(event: { machine: string; backend: string; profile?: string }, owner: object): Promise<void> {
+    try {
+      const actor = this.machineSignInActor(owner);
+      if (!actor || this.shuttingDown || !this.browserSignInOwnerCurrent(owner)) return;
+      const refreshed = await refreshNativeModelCatalogAfterSignIn(this as never, {
+        backend: event.backend, machineId: event.machine, ...(event.profile ? { profile: event.profile } : {}), actor,
+        stillAdmin: () => !this.shuttingDown && this.browserSignInOwnerCurrent(owner),
+      });
+      if (refreshed) this.announceModels(event.backend);
+    } catch (err) { this.logger.debug({ backend: event.backend, err }, "Model refresh after a computer's sign-in skipped"); }
+  }
+
   private machineAccountsInstance: MachineAccounts | null = null;
   /** #3190 Part 3c: a paired computer's accounts in Settings → Accounts (machine-accounts.ts). */
   get machineAccounts(): MachineAccounts {

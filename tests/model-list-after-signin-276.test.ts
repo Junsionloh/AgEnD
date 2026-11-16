@@ -133,6 +133,29 @@ describe("a sign-in re-reads the CLI's models", () => {
     expect(FakeProbeWorker.workers).toHaveLength(0);
   });
 
+  it("a Windows Runtime's sign-in also asks that Runtime once, as the admin who finished it; a failure never reaches the sign-in", async () => {
+    vi.stubEnv("AGEND_REMOTE_RUNTIME", "1"); vi.stubEnv("AGEND_WINDOWS_CLI", "0");
+    fleet("codex");
+    const machine = "00000000-0000-4000-8000-000000000001";
+    fm.fleetConfig.instances.win = { runtime: "windows", working_directory: "C:\\w", backend: "claude-code", machine_id: machine, backend_options: { "claude-code": { credential_profile: "work" } } };
+    const call = vi.fn(async (_id: string, _op: string, p: any) => ({ cli: p.cli, profile: p.profile, source: "account-api", models: [{ id: "claude-new", name: "New" }] }));
+    const row = { id: machine, platform: "win32", status: "online", generation: 1, approvedAt: 1, bootId: "b", runtimeInfo: { capabilities: ["model-catalog-refresh"] }, inventory: { clis: [], credentialProfiles: { default: "work", profiles: [{ name: "work", loggedIn: true }] } } };
+    vi.spyOn(fm, "runtimeCoordinator").mockReturnValue({ machine: () => row, callAccount: call } as never);
+    vi.spyOn(fm, "browserSignInOwnerCurrent").mockReturnValue(true);
+    const events = stream();
+    const owner = { handle: "0123456789abcdef", label: "x" };
+    fm.machineSignIns.deps.changed({ machine, backend: "claude-code", profile: "work", phase: "starting" }, owner);
+    await new Promise(r => setImmediate(r));
+    expect(call).not.toHaveBeenCalled();                              // only a finished sign-in
+    fm.machineSignIns.deps.changed({ machine, backend: "claude-code", profile: "work", phase: "done" }, owner);
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2));
+    expect(call).toHaveBeenCalledWith(machine, "models.refresh", { cli: "claude-code", profile: "work", actor: "admin:0123456789abcdef" }, 25000);
+    await vi.waitFor(() => expect(events.models().length).toBe(2));   // the page is told at once, and again when the Runtime answered
+    call.mockRejectedValue(new Error("runtime unreachable"));
+    expect(() => fm.machineSignIns.deps.changed({ machine, backend: "claude-code", profile: "work", phase: "done" }, owner)).not.toThrow();
+    await new Promise(r => setImmediate(r));
+  });
+
   it("an attempt that found nothing before the sign-in does not hold the next open back", async () => {
     fleet("antigravity");
     FakeProbeWorker.answer = signedOut;
