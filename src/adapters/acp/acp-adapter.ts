@@ -37,6 +37,8 @@ export interface AcpAdapterOptions {
   readonly effort?: string;
   /** `skipPermissions` of the instance (unset = true): the CLI is started with its own auto-approve flag. */
   readonly skipPermissions?: boolean;
+  /** Where a person can sign this CLI in on this host (a sentence ending the "not signed in" message); read when the failure happens. */
+  readonly signInHint?: (label: string) => string;
   /** This instance's own MCP servers, passed in `session/new` / `session/load` (never shared with another instance). */
   readonly mcpServers: readonly AcpMcpServer[];
   /** Text put in front of the first prompt of a new session (fleet instructions). Not repeated after a resume. */
@@ -150,7 +152,7 @@ export class AcpAdapter implements CliAdapter {
       this.stopping = false;
       if (err instanceof AcpRpcError && err.authRequired) {
         this.emit({ kind: "auth_required" });
-        throw new AcpAuthRequiredError(`${profile.label} is not signed in (${err.message}). Sign in to ${profile.label}, then restart the instance.`);
+        throw new AcpAuthRequiredError(`${profile.label} is not signed in (${err.message}). ${this.opts.signInHint?.(profile.label) ?? `Sign in to ${profile.label}, then restart the instance.`}`);
       }
       throw err;
     }

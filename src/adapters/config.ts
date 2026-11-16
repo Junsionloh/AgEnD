@@ -64,3 +64,31 @@ export function acpAccountProblem(inst: { cli_adapter?: unknown; backend_options
   if (profile === undefined || profile === null || profile === "") return null;
   return `cli_adapter: acp runs under the CLI's own sign-in; a named account (backend_options.${backend}.credential_profile) is not supported with it yet`;
 }
+
+/**
+ * What `cli_adapter` becomes when an agent's Runtime or CLI is switched (`config` is the new configuration, runtime and backend
+ * already set). A Windows agent never takes one, and a backend that cannot run it drops it, so the agent goes back to the
+ * terminal / native way of running; a backend that can still run it (grok ↔ antigravity) keeps it. `skipPermissions` is not touched.
+ */
+export function adapterAfterRuntimeChange<T extends { cli_adapter?: unknown; runtime?: unknown; backend?: unknown }>(config: T, defaultBackend?: string): T {
+  if (config.cli_adapter === undefined || config.cli_adapter === null) return config;
+  const backend = (typeof config.backend === "string" ? config.backend : undefined) ?? defaultBackend ?? "claude-code";
+  if (config.runtime === "windows" || cliAdapterProblem(config.cli_adapter, backend) !== null) delete config.cli_adapter;
+  return config;
+}
+
+/**
+ * The same rules the config loader and validator apply to an instance, judged on a configuration about to be saved by a Runtime
+ * switch: a Windows agent with an adapter, an adapter its backend cannot run, a named account with `acp`. A switch that gives one is
+ * refused, so a `fleet.yaml` that would not load again is never written. Null: fine.
+ */
+export function runtimeConfigProblem(config: { cli_adapter?: unknown; runtime?: unknown; backend?: unknown; backend_options?: unknown }, defaultBackend?: string): string | null {
+  const backend = (typeof config.backend === "string" ? config.backend : undefined) ?? defaultBackend ?? "claude-code";
+  if (config.runtime === "windows") {
+    const windows = windowsAdapterProblem(config);
+    if (windows) return `${windows.key} ${windows.message}`;
+  }
+  const adapter = cliAdapterProblem(config.cli_adapter, backend);
+  if (adapter) return `cli_adapter ${adapter}`;
+  return acpAccountProblem(config, backend);
+}

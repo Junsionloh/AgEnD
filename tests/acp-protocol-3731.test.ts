@@ -30,11 +30,11 @@ afterEach(async () => {
 /** A profile that runs `script` under node, claiming to be `base` (same version rules, same events). */
 const profileFor = (base: AcpProfile, script: string, ...scriptArgs: string[]): AcpProfile => ({ ...base, args: () => [script, ...scriptArgs] });
 
-function adapterFor(profile: AcpProfile, opts: { instanceDir?: string; env?: NodeJS.ProcessEnv; mcpServers?: AcpMcpServer[]; preamble?: string; trace?: (d: "in" | "out", line: string) => void } = {}) {
+function adapterFor(profile: AcpProfile, opts: { instanceDir?: string; env?: NodeJS.ProcessEnv; mcpServers?: AcpMcpServer[]; preamble?: string; signInHint?: (label: string) => string; trace?: (d: "in" | "out", line: string) => void } = {}) {
   const instanceDir = opts.instanceDir ?? tmp();
   const adapter = new AcpAdapter({
     profile, command: process.execPath, cwd: instanceDir, instanceDir, mcpServers: opts.mcpServers ?? [], preamble: opts.preamble, logger,
-    env: { PATH: process.env.PATH }, childEnv: opts.env as Record<string, string>, trace: opts.trace, makeRunner: () => ({}) as InstanceRunner,
+    env: { PATH: process.env.PATH }, childEnv: opts.env as Record<string, string>, trace: opts.trace, ...(opts.signInHint ? { signInHint: opts.signInHint } : {}), makeRunner: () => ({}) as InstanceRunner,
   });
   adapters.push(adapter);
   const events: AdapterEvent[] = [];
@@ -367,6 +367,13 @@ describe("the adapter against the fake agent", () => {
     await expect(adapter.start()).rejects.toBeInstanceOf(AcpAuthRequiredError);
     expect(events).toContainEqual({ kind: "auth_required" });
     expect(adapter.pid).toBeUndefined();
+  });
+
+  it("the not-signed-in message ends with where to sign in when the host says (the label of the CLI is handed over), and with the plain line when it does not", async () => {
+    const plain = adapterFor(fakeProfile(), { env: fakeEnv(tmp(), { FAKE_ACP_AUTH: "1" }) });
+    await expect(plain.adapter.start()).rejects.toThrow(/agy is not signed in \(Authentication required\)\. Sign in to agy, then restart the instance\.$/);
+    const hinted = adapterFor(fakeProfile(), { env: fakeEnv(tmp(), { FAKE_ACP_AUTH: "1" }), signInHint: label => `Connect ${label} in Settings → Accounts.` });
+    await expect(hinted.adapter.start()).rejects.toThrow(/agy is not signed in \(Authentication required\)\. Connect agy in Settings → Accounts\.$/);
   });
 
   it("refuses to start under an unlisted version", async () => {

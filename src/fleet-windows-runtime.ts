@@ -1,4 +1,5 @@
 /** Windows execution adapter for the ordinary Fleet instance registry and delivery facade. */
+import {adapterAfterRuntimeChange} from "./adapters/config.js";
 import { addsSecondGeneral } from "./web-only-fleet.js";
 import { randomUUID } from "node:crypto";
 import type { FleetConfig, InstanceConfig } from "./types.js";
@@ -135,6 +136,8 @@ export class FleetWindowsRuntime {
       if(target.credentialProfile)config.backend_options={[agent.cli]:{credential_profile:assertCredentialProfileName(target.credentialProfile)}};
       nativeCredentialProfile(config);
       if(before.backend!==target.backend)config.model_failover=[];
+      // A Windows Agent runs through its native_adapter and takes no cli_adapter (an ACP agent goes back to native execution); skipPermissions stays.
+      adapterAfterRuntimeChange(config);
       return {config,discard,current:targetCurrent};}
     catch(error){discard();throw error;}
   }

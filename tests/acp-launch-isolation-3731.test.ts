@@ -52,3 +52,19 @@ describe("the lifecycle hands skipPermissions to the ACP adapter, which starts t
     }
   });
 });
+
+describe("the lifecycle hands the host's sign-in advice to the ACP adapter", () => {
+  it("the adapter asks the context with its backend and the CLI's label; a context with no advice leaves the plain line", async () => {
+    const { InstanceLifecycle } = await import("../src/instance-lifecycle.js");
+    const root = mkdtempSync(join(tmpdir(), "acp-lifecycle-")); dirs.push(root);
+    const make = (ctx: Record<string, unknown>) => (new InstanceLifecycle({ logger: { info() {}, warn() {}, error() {}, debug() {}, child() { return this; } }, ...ctx } as never) as unknown as {
+      buildAcpAdapter(p: Record<string, unknown>): { opts: { signInHint?: (label: string) => string } };
+    }).buildAcpAdapter({ name: "w", config: { working_directory: root, backend: "grok", cli_adapter: "acp" }, instanceDir: root, topicMode: true, backendName: "grok",
+      resolvedBinary: "/bin/x", capActiveDecisions: (r: unknown[]) => r, selectRelevantDecisions: (r: unknown[]) => r });
+    const asked: unknown[][] = [];
+    const withAdvice = make({ signInHint: (backend: string, label: string) => { asked.push([backend, label]); return "advice"; } });
+    expect(withAdvice.opts.signInHint!("grok")).toBe("advice");
+    expect(asked).toEqual([["grok", "grok"]]);
+    expect(make({}).opts.signInHint).toBeUndefined();
+  });
+});

@@ -380,6 +380,7 @@ import { idleGateTimeoutLog } from "./idle-gate-log.js";
 import { DEFAULT_STUCK_TIMEOUT_MS, readLastInboundAt, type Daemon, type OwnSwitchOutcome } from "./daemon.js";
 import type { InstanceRunner } from "./adapters/types.js";
 import { adapterOf, cancelRunner, capabilitiesOf } from "./adapters/registry.js";
+import { adapterAfterRuntimeChange } from "./adapters/config.js";
 import { adapterUiView } from "./adapters/ui-view.js";
 import { clearPausedMarker, readPausedAt, readPauseReason, writePausedMarker } from "./pause-marker.js";
 import { readBackgroundWorkEndedMarker } from "./background-work-ended.js";
@@ -1542,6 +1543,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         if(before.backend!==target.backend)config.model_failover=[];
         for(const key of ["machine_id","native_agent_id","native_adapter","native_sandbox"] as const)delete config[key];
         if(!sameAccount)delete config.backend_options;
+        // #3731: an ACP agent keeps its mode only when the new CLI can run it too (grok ↔ antigravity); otherwise it is a terminal agent again.
+        adapterAfterRuntimeChange(config,this.fleetConfig?.defaults?.backend);
         return {config,discard:()=>{}};
       },
       closed:async(name,before)=>{
@@ -2135,6 +2138,19 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       this.needsYou?.poke();this.emitSseEvent("status",this.getUiStatus());
     });
   }
+  /**
+   * Where a person can sign `backend` in on this host, for the "not signed in" message of an ACP instance (toast and Log). The dashboard's
+   * Accounts page when it can connect that CLI here (its row's `signIn`: for agy this needs the CLI's version read, which a host that blocks
+   * `unshare` cannot do); otherwise what alpha offers on every host: a terminal-mode agent's View tab, or /login in a chat channel.
+   */
+  signInHint(backend: string, label: string): string {
+    let dashboard = false;
+    try { dashboard = this.backendSignInTargets().some(t => t.backend === backend && !t.profile && t.signIn); } catch { dashboard = false; }
+    return dashboard
+      ? `Connect it in Settings → Accounts (Connect, next to ${label}), then restart the instance.`
+      : `The dashboard cannot connect ${label} on this host. Sign in from a terminal instead: open the View tab of a terminal-mode (tmux) agent that runs ${label} and sign in there, or send /login in a chat channel; then restart the instance.`;
+  }
+
   nativePanePinnedSession(name:string):string|null{
     const config=this.fleetConfig?.instances[name];if(!isNativePaneInstance(config)||!config.native_agent_id)return null;
     const agent=windowsAgentsFor(this,this.runtimeWindowsExecutor()).get(config.native_agent_id);

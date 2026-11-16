@@ -1,4 +1,5 @@
 /** Administrator-only moves of one Fleet identity. Provider sessions never cross machines or providers. */
+import {runtimeConfigProblem} from "./adapters/config.js";
 import { z } from "zod";
 import type { InstanceConfig } from "./types.js";
 import { settingsFingerprint } from "./settings-transaction.js";
@@ -47,7 +48,7 @@ export class AgentRuntimeChanges {
     const backend=config.backend||(this.host.defaults() as {backend?:string}|undefined)?.backend||"claude-code";
     return {revision:settingsFingerprint([config,this.host.defaults(),this.host.generation(name),this.host.epoch(name)]),
       runtime:config.runtime==="windows"?"windows":"wsl",machineId:config.machine_id,backend,backendState:this.host.backendState?.(name,backend),
-      directory:config.working_directory,model:config.model??"",general:this.isGeneral(name,config),adapter:config.native_adapter??"exec",sandbox:config.native_sandbox??"read-only",
+      cliAdapter:config.cli_adapter==="acp"?"acp":"tmux",directory:config.working_directory,model:config.model??"",general:this.isGeneral(name,config),adapter:config.native_adapter??"exec",sandbox:config.native_sandbox??"read-only",
       credentialProfile:(()=>{try{return isWindowsInstance(config)?nativeCredentialProfile(config):undefined;}catch{return undefined;}})()};
   }
   change(name:string,raw:unknown,authorized:()=>boolean):Promise<unknown>{
@@ -75,6 +76,9 @@ export class AgentRuntimeChanges {
       try{
         prepared=await this.host.prepare(name,before,target,current);
         if(!current())throw Error("Runtime change was revoked or the Agent became busy during preparation");
+        // The same rules the config loader applies: a switch that would save a fleet.yaml that does not load again is refused, nothing is stopped or written.
+        const unloadable=runtimeConfigProblem(prepared.config,(this.host.defaults() as {backend?:string}|undefined)?.backend);
+        if(unloadable)throw Error(`The Runtime change would leave this Agent with a configuration that cannot be loaded (${unloadable}); nothing was changed`);
         // stop() owns exactly one epoch advance, even for the exec adapter. Any other advance permanently revokes us.
         epoch++;await stop();
         if(!current())throw Error("Runtime change lost its source owner while stopping the old CLI");

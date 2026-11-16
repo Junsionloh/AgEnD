@@ -229,6 +229,8 @@ export interface LifecycleContext {
   reconcileNativePaneBeforeStart?(name: string, daemon: Daemon): Promise<boolean>;
   closeRetainedNativePane?(name: string): Promise<void>;
   nativePanePinnedSession?(name:string):string|null;
+  /** #3731: the sentence that tells a person where to sign `backend` in on this host (the dashboard when it can, else a terminal or /login). */
+  signInHint?(backend: string, label: string): string;
   onNativePaneRecoverySettled?(name:string):void;
   holdNativePaneRecovery?(name:string,error:unknown):boolean;
   setNativePanePaused?(name: string, paused: boolean): void;
@@ -1971,6 +1973,7 @@ export class InstanceLifecycle {
       model: p.config.model,
       effort: (p.config as InstanceConfig & { effort?: string }).effort,
       skipPermissions: p.config.skipPermissions !== false,
+      ...(this.ctx.signInHint ? { signInHint: (label: string) => this.ctx.signInHint!(p.backendName, label) } : {}),
       mcpServers: [],
       logger: this.ctx.logger,
       // AGEND_ACP_TRACE=1 writes every frame to acp-trace.jsonl in the instance directory (owner-only). A debugging aid.
