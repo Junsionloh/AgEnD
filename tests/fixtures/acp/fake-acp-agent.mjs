@@ -177,6 +177,11 @@ process.stdin.on("data", d => {
         break;
       }
       case "session/prompt":
+        if (turnActive && process.env.FAKE_ACP_CONCURRENT === "late-error") {   // the second prompt is refused, but only after a while (the first goes on)
+          log({ latePrompt: m.params.prompt.map(p => p.text).join("") });
+          setTimeout(() => out({ jsonrpc: "2.0", id: m.id, error: { code: -32602, message: "a turn is already running" } }), 900);
+          break;
+        }
         if (turnActive && process.env.FAKE_ACP_CONCURRENT === "error") { out({ jsonrpc: "2.0", id: m.id, error: { code: -32602, message: "a turn is already running" } }); break; }
         if (turnActive && process.env.FAKE_ACP_CONCURRENT === "fold") {
           const text = m.params.prompt.map(p => p.text).join("");
@@ -191,6 +196,14 @@ process.stdin.on("data", d => {
         break;
       case "_x.ai/interject": {
         if (process.env.FAKE_ACP_INTERJECT === "reject") { out({ jsonrpc: "2.0", id: m.id, error: { code: -32601, message: "Method not found" } }); break; }
+        // announce-slow: grok announces the interjection at once (and the turn takes it) but its answer comes after 6 s. late: the answer comes after FAKE_ACP_INTERJECT_DELAY ms and the turn does not take it.
+        if (process.env.FAKE_ACP_INTERJECT === "announce-slow" || process.env.FAKE_ACP_INTERJECT === "late") {
+          log({ interject: m.params.text, active: turnActive, mode: process.env.FAKE_ACP_INTERJECT });
+          const slow = process.env.FAKE_ACP_INTERJECT === "announce-slow";
+          if (slow) { out({ jsonrpc: "2.0", method: "_x.ai/session/interjection", params: { sessionId: m.params.sessionId, text: m.params.text } }); if (turnActive) { interjections.push(m.params.text); cancelWake?.(); } }
+          setTimeout(() => out({ jsonrpc: "2.0", id: m.id, result: { result: { status: "queued" } } }), slow ? 6000 : Number(process.env.FAKE_ACP_INTERJECT_DELAY ?? 1200));
+          break;
+        }
         if (process.env.FAKE_ACP_INTERJECT === "refuse") { out({ jsonrpc: "2.0", id: m.id, result: { result: { status: "rejected" } } }); break; }
         log({ interject: m.params.text, active: turnActive });
         if (turnActive) { interjections.push(m.params.text); cancelWake?.(); }

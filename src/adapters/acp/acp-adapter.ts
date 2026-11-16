@@ -258,6 +258,7 @@ export class AcpAdapter implements CliAdapter {
     const sessionId = this.session;
     this.translator.reset();
     this.extraPrompts.length = 0;
+    this.interjectionTexts.length = 0;
     // The turn is over when its prompt and every prompt added to it (`interject`, for a CLI that folds a second prompt in) have answered: the last answer is the turn's.
     const turn = this.request(client, sessionId, text)
       .then(async first => { let last = first; while (this.extraPrompts.length) { const prev = last; last = await this.extraPrompts.shift()!.catch(() => prev); } return last; })
@@ -272,6 +273,8 @@ export class AcpAdapter implements CliAdapter {
 
   /** The prompts added to the running turn that have not answered yet (see `interject`). */
   private readonly extraPrompts: Promise<TurnResult>[] = [];
+  /** Texts grok announced as interjected (`_x.ai/session/interjection`, sent the moment it takes one): tells a late `queued` from a refusal when the answer timed out. */
+  private readonly interjectionTexts: string[] = [];
 
   private request(client: AcpClient, sessionId: string, text: string): Promise<TurnResult> {
     return client.request<Record<string, unknown>>("session/prompt", { sessionId, prompt: [{ type: "text", text }] })
@@ -290,19 +293,28 @@ export class AcpAdapter implements CliAdapter {
    * Add `text` to the running turn without cancelling it (`profile.interject`): with the CLI's own method (grok: true only when it says it took
    * it), or as a second `session/prompt` that the CLI folds into the turn (agy: true unless it refuses at once). An error, a refusal or no
    * running turn is false and the caller falls back to cancel and a new prompt. Never called without a running turn. The turn then ends when
-   * its prompt and the added one have both answered (`prompt`).
+   * its prompt and the added one have both answered (`prompt`). `onLateRefusal`: after this returned true for `prompt`, the CLI refused the second
+   * prompt after all (agy answers within a moment or not at all; a refusal later than the 400 ms looked at here): the caller sends the message again.
    */
-  async interject(text: string): Promise<boolean> {
+  async interject(text: string, onLateRefusal?: (error: Error) => void): Promise<false | "taken" | "announced"> {
     const spec = this.opts.profile.interject, client = this.client, sessionId = this.session;
     if (!spec || !client?.isRunning || !sessionId || this.turn === null) return false;
     try {
-      if (spec.via === "method") return spec.accepted(await client.request(spec.method, spec.params(sessionId, text), { timeoutMs: 5000 }));
+      if (spec.via === "method") {
+        try { return spec.accepted(await client.request(spec.method, spec.params(sessionId, text), { timeoutMs: 5000 })) ? "taken" : false; }
+        catch (err) {
+          // No answer in time: grok announces an interjection the moment it takes one, so an announcement of this very text means it was taken (and must not be sent again).
+          if (this.interjectionTexts.includes(text)) { this.opts.logger.warn({ error: (err as Error).message }, "acp: the interjection was announced although its answer did not come in time; counted as taken"); return "announced"; }
+          throw err;
+        }
+      }
       const added = this.request(client, sessionId, text);
       // Registered before anything is awaited: the CLI answers the first prompt the moment it takes the second, and the turn must not end then.
       this.extraPrompts.push(added);
       const refused = await Promise.race([added.then(() => false, () => true), new Promise<boolean>(r => { const t = setTimeout(() => r(false), 400); t.unref?.(); })]);
       if (refused) throw new Error("the CLI refused a second prompt while one runs");
-      return true;
+      added.catch(err => { this.opts.logger.warn({ error: (err as Error).message }, "acp: the CLI refused the added prompt after taking it"); onLateRefusal?.(err as Error); });
+      return "taken";
     } catch (err) { this.opts.logger.warn({ error: (err as Error).message }, "acp: the CLI did not take the interjection"); return false; }
   }
 
@@ -386,6 +398,11 @@ export class AcpAdapter implements CliAdapter {
     // Any frame is proof of life for the hang timer, even those that carry nothing we show.
     this.lastEvent = Date.now();
     if (method === "_x.ai/models/update") { this.readContextWindow(params); return; }
+    if (method === "_x.ai/session/interjection") {
+      const text = (params as { text?: unknown } | null)?.text;
+      if (typeof text === "string") { this.interjectionTexts.push(text); if (this.interjectionTexts.length > 20) this.interjectionTexts.shift(); }
+      return;
+    }
     if (method === "_x.ai/session_notification" && this.opts.profile.id === "grok") {
       if (this.replaying) return;
       const p = params && typeof params === "object" ? params as Record<string, unknown> : null;

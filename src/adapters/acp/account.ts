@@ -1,4 +1,5 @@
-import { lstatSync, mkdirSync } from "node:fs";
+import { lstatSync, mkdirSync, realpathSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { credentialHomeSpec, credentialProfileHome, credentialProfileLoginCommand, prepareCredentialProfileHome, resolveCredentialProfile } from "../../backend/credential-profile.js";
 import type { AcpProfile } from "./profiles.js";
 
@@ -20,19 +21,40 @@ export interface AcpAccountLaunch {
  * account's. grok is told its folder by `GROK_HOME`; agy by `--app_data_dir` (the terminal backend's own launch). Throws for a name
  * that is not a valid profile name, and for a CLI profile that cannot take an account.
  */
+/**
+ * Every level from the AgEnD home down to the account's folder (`credential-profiles`, `credential-profiles/<cli>`, `<name>`) is a real directory that
+ * stays under the home: a link at any level would make the account share another place's sign-in. Looked at before anything is made and again after
+ * (the folder is created in between), so a link put there in the meantime is seen too.
+ */
+function assertIsolated(agendHome: string, folder: string): void {
+  const home = resolve(agendHome);
+  const levels: string[] = [];
+  for (let at = resolve(folder); at !== home && at.startsWith(home + sep); at = dirname(at)) levels.unshift(at);
+  for (const level of levels) {
+    let link = false;
+    try { link = lstatSync(level).isSymbolicLink(); } catch { /* absent: created below, checked again after */ }
+    if (link) throw new Error(`credential profile path is a symlink, so it is not isolated: ${level}. Remove the link and let AgEnD create a real directory.`);
+  }
+  let real: string | null = null;
+  try { real = realpathSync(folder); } catch { /* not there yet */ }
+  if (real !== null) {
+    let realHome = home;
+    try { realHome = realpathSync(home); } catch { /* the home itself is not there */ }
+    const inside = relative(realHome, real);
+    if (inside === "" || inside.startsWith("..") || resolve(realHome, inside) !== real) throw new Error(`credential profile folder resolves outside the AgEnD home: ${folder}`);
+  }
+}
+
 export function acpAccountLaunch(profile: AcpProfile, agendHome: string, backendOptions: Record<string, unknown> | undefined): AcpAccountLaunch | null {
   const name = resolveCredentialProfile(backendOptions);
   if (!name) return null;
   if (!profile.accountLaunch) throw new Error(`cli_adapter: acp for ${profile.label} cannot run a named account (backend_options.${profile.backend}.credential_profile)`);
   const folder = credentialProfileHome(agendHome, profile.backend, name);
+  assertIsolated(agendHome, folder);
   const spec = credentialHomeSpec(profile.backend);
   if (spec) prepareCredentialProfileHome(spec, folder);
-  else {
-    let link = false;
-    try { link = lstatSync(folder).isSymbolicLink(); } catch { /* absent: created below */ }
-    if (link) throw new Error(`credential profile path is a symlink, so it is not isolated: ${folder}. Remove the link and let AgEnD create a real directory.`);
-    mkdirSync(folder, { recursive: true, mode: 0o700 });
-  }
+  else mkdirSync(folder, { recursive: true, mode: 0o700 });
+  assertIsolated(agendHome, folder);
   const launch = profile.accountLaunch(folder);
   if (!launch) throw new Error(`cli_adapter: acp could not set up the named account "${name}" for ${profile.label} on this host`);
   const env = Object.entries(launch.env).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(" ");

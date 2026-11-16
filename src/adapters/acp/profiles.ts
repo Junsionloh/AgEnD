@@ -77,7 +77,9 @@ export interface AcpProfile {
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : null);
 
 const COMMON: AdapterCapabilities = {
-  steer: false, // no mid-turn input is defined by ACP: a message sent during a turn waits for it to end
+  // The protocol defines no mid-turn input, so this stays false. An interruption is each CLI's own business (`AcpProfile.interject`: grok's `_x.ai/interject`, agy's folded second
+  // prompt), with `session/cancel` and a new prompt as the fallback; a plain message sent during a turn is queued until it ends.
+  steer: false,
   livePermissions: true,
   liveThought: true,
   contextUsage: false,

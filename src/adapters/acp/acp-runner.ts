@@ -9,6 +9,7 @@ import { formatCrossInstanceInboundMessage } from "../../cross-instance-envelope
 import { AutoPauseController, readLastInboundAt, writeLastInboundAt } from "../../auto-pause.js";
 import { generalByName } from "../../general-instance.js";
 import { clampContextPercent, type TokenContextRatio } from "../../context-percent.js";
+import { redactSecrets } from "../../tool-progress.js";
 import { HangDetector } from "../../hang-detector.js";
 import { clearPausedMarker, readPausedAt, writePausedMarker, type PauseReason } from "../../pause-marker.js";
 import { turnExpectsPersonReply } from "../../turn-reply-guard.js";
@@ -133,7 +134,9 @@ export function permissionQuestion(tool: unknown): string {
   const input = t.rawInput && typeof t.rawInput === "object" ? t.rawInput as Record<string, unknown> : {};
   const subject = ["command", "cmd", "path", "file_path", "filePath", "url", "query"].map(k => input[k]).find((v): v is string => typeof v === "string" && v.trim() !== "");
   const clip = (text: string, max: number): string => { const one = text.replace(/\s+/g, " ").trim(); return one.length > max ? `${one.slice(0, max - 1)}…` : one; };
-  return `Permission request: ${clip(title, 160)}${subject && !title.includes(subject.trim()) ? ` — ${clip(subject, 240)}` : ""}`;
+  // Masked first, cut after: a token cut in half would no longer be recognised as one.
+  const shownTitle = redactSecrets(title), shownSubject = subject ? redactSecrets(subject) : undefined;
+  return `Permission request: ${clip(shownTitle, 160)}${shownSubject && !shownTitle.includes(shownSubject.trim()) ? ` — ${clip(shownSubject, 240)}` : ""}`;
 }
 
 /** A token count as grok's own screen writes it: `850`, `14.9K`, `256K`, `1.2M`. */
@@ -202,10 +205,15 @@ export class AcpRunner extends EventEmitter {
   private readonly autoPause: AutoPauseController;
   private autoPauseRequested = false;
   private workLease: (() => boolean) | null = null;
-  private turn: { item: InboundItem; startedAt: number; text: string; outbound: boolean; consumed: boolean; deliveryId: string | null; attemptNo: number; cancelled: boolean; interjected: { chatId: string; messageId: string; threadId?: string }[] } | null = null;
+  private turn: { item: InboundItem; startedAt: number; text: string; outbound: boolean; consumed: boolean; deliveryId: string | null; attemptNo: number; cancelled: boolean; interjected: { chatId: string; messageId: string; threadId?: string }[];
+    /** A cancel was asked for before the prompt left (the agent was still being started): sent right after it. */ cancelPending: boolean;
+    /** How the turn ended (its stop reason, or `error`), once it has. */ ended: string | null } | null = null;
   /** Messages waiting for their turn, in the order they will run (an interruption goes in front of the others). `queued` counts these and the one running. */
   private readonly inbox: InboundItem[] = [];
   private pumping = false;
+  /** The message `runItem` has taken from the inbox and not yet started a turn for (it may be waking a paused agent). An interruption in that gap cancels the turn as it starts. */
+  private startingItem: InboundItem | null = null;
+  private startInterrupted = false;
   private turnSeq = 0;
   private readonly idleWaiters = new Set<() => void>();
   private lastChatId = ""; private lastThreadId: string | undefined; private lastAdapterId: string | undefined;
@@ -793,14 +801,30 @@ export class AcpRunner extends EventEmitter {
    * When the CLI does not take it (an error, a refusal, the turn ended meanwhile) the message goes the other way: cancel and a new prompt.
    */
   private async interjectInto(turn: NonNullable<AcpRunner["turn"]>, content: string, meta: Record<string, string>, deliveryEpoch: number): Promise<void> {
-    let taken = false;
-    try { taken = await this.adapter.interject(this.format(content, meta)); } catch { taken = false; }
+    const status = statusOf(meta);
+    let taken: false | "taken" | "announced" = false;
+    try {
+      taken = await this.adapter.interject(this.format(content, meta), error => {
+        // The CLI took the message and then refused it: it was not delivered. Sent again (queued, or interrupting what is running by then).
+        if (status) { const at = turn.interjected.findIndex(s => s.messageId === status.messageId); if (at >= 0) turn.interjected.splice(at, 1); }
+        this.log.warn({ name: this.name, error: error.message }, "acp: the interjection was refused after being taken; sending the message again");
+        this.admit(content, meta, deliveryEpoch, false, true, false);
+      });
+    } catch { taken = false; }
     if (!taken) {
       this.log.info({ name: this.name }, "acp: the CLI did not take the interjection; interrupting the turn instead");
       this.admit(content, meta, deliveryEpoch, false, true, false);
       return;
     }
-    const status = statusOf(meta);
+    // Taken, but the turn it was meant for has ended or been cancelled in the meantime: it joins no turn, so it is sent again as a message of its own
+    // (next in line, or interrupting what runs by then) rather than left without a state. If the CLI did act on the first copy it may be seen twice.
+    // (A message the CLI announced as taken while its answer was late is counted as in a turn that ended normally: it was in it.)
+    const endedNormally = taken === "announced" && turn.ended === "end_turn" && !turn.cancelled;
+    if (!endedNormally && (this.turn !== turn || turn.cancelled || turn.ended !== null)) {
+      this.log.warn({ name: this.name, ended: turn.ended }, "acp: the turn ended or was cancelled while the interjection was in flight; sending the message again as its own");
+      this.admit(content, meta, deliveryEpoch, false, true, false);
+      return;
+    }
     this.steps.addUserMessage(content);
     this.noteWorkActivity();
     if (status) this.emit("message_delivered", status);
@@ -809,7 +833,8 @@ export class AcpRunner extends EventEmitter {
       this.outbox.markEnterStarted(attempt.deliveryId, this.bootId, attempt.attemptNo);
       this.outbox.complete(attempt.deliveryId, this.bootId, attempt.attemptNo, "delivered", "acp:interjected");
     }
-    if (status && this.turn === turn && !turn.cancelled) turn.interjected.push(status);
+    if (endedNormally) { if (status) this.emit("message_confirmed", status); }
+    else if (status) turn.interjected.push(status);
     this.log.info({ name: this.name }, "acp: the message was added to the running turn (the CLI's own interjection)");
   }
 
@@ -832,7 +857,11 @@ export class AcpRunner extends EventEmitter {
       const first = this.inbox.findIndex(i => !i.interrupts);
       this.inbox.splice(first < 0 ? this.inbox.length : first, 0, item);
       const turn = this.turn;
-      if (turn && !turn.cancelled) { turn.cancelled = true; void this.adapter.cancel(); }
+      if (turn && !turn.cancelled) {
+        turn.cancelled = true;
+        // Only a cancel that reaches a running prompt counts: before the prompt has left it is held and sent right after (`cancelPending`), never dropped.
+        if (this.adapter.busy) void this.adapter.cancel(); else turn.cancelPending = true;
+      } else if (!turn && this.startingItem) this.startInterrupted = true;
     } else {
       if (this.queued > 1) { const status = statusOf(meta); if (status) this.emit("message_queued", status); }
       this.inbox.push(item);
@@ -851,9 +880,10 @@ export class AcpRunner extends EventEmitter {
       try {
         while (this.inbox.length) {
           const item = this.inbox.shift()!;
+          this.startingItem = item;
           try { await this.runItem(item); }
           catch (err) { this.log.error({ error: (err as Error).message }, "acp: a delivery failed"); }
-          finally { this.queued--; }
+          finally { this.queued--; this.startingItem = null; this.startInterrupted = false; }
         }
       } finally { this.pumping = false; }
     })();
@@ -890,8 +920,11 @@ export class AcpRunner extends EventEmitter {
       if (this.outbox.begin(attempt.deliveryId, this.bootId, attempt.attemptNo) !== "begun") return;
     }
     const wire = item.raw ? content : this.format(content, meta);
-    const t = { item, startedAt: this.now(), text: "", outbound: false, consumed: false, deliveryId: attempt ? attempt.deliveryId : null, attemptNo: attempt ? attempt.attemptNo : 0, cancelled: false, interjected: [] };
+    const t: NonNullable<AcpRunner["turn"]> = { item, startedAt: this.now(), text: "", outbound: false, consumed: false, deliveryId: attempt ? attempt.deliveryId : null, attemptNo: attempt ? attempt.attemptNo : 0, cancelled: false, interjected: [], cancelPending: false, ended: null };
     this.turn = t;
+    this.startingItem = null;
+    // An interruption arrived while this message was being started (a paused agent waking): this turn is cut short as soon as its prompt has left.
+    if (this.startInterrupted) { this.startInterrupted = false; t.cancelled = true; t.cancelPending = true; }
     this.noteWorkActivity();
     this.steps.beginTurn(item.turnId, content, undefined, wire);
     this.setBusy(true);
@@ -899,11 +932,14 @@ export class AcpRunner extends EventEmitter {
     if (attempt) this.outbox?.markEnterStarted(attempt.deliveryId, this.bootId, attempt.attemptNo);
     let stopReason = "error";
     try {
-      const result = await this.adapter.prompt(item.interrupts ? `${interruptedNote(item.interrupts.by)}\n\n${wire}` : wire);
+      const sent = this.adapter.prompt(item.interrupts ? `${interruptedNote(item.interrupts.by)}\n\n${wire}` : wire);
+      if (t.cancelPending) { t.cancelPending = false; void this.adapter.cancel(); }     // asked for before the prompt left: nothing was running to cancel then
+      const result = await sent;
       stopReason = result.stopReason;
       this.proveConsumed(t, "prompt-response");
     } catch (err) {
       const message = (err as Error).message;
+      t.ended = "error";
       this.log.warn({ name: this.name, error: message }, "acp: the turn failed");
       if (!t.consumed) this.finishDurable(t, attempt ? "uncertain" : null, `acp:${message.slice(0, 120)}`);
       else this.steps.error(message);
@@ -911,6 +947,7 @@ export class AcpRunner extends EventEmitter {
       this.endTurn(t, "error");
       return;
     }
+    t.ended = stopReason;
     this.steps.apply({ kind: "turn_end", stopReason });
     if (stopReason !== "cancelled" && !t.cancelled && status) this.emit("message_confirmed", status);
     if (stopReason !== "cancelled" && !t.cancelled) for (const s of t.interjected) this.emit("message_confirmed", s);
@@ -920,6 +957,8 @@ export class AcpRunner extends EventEmitter {
 
   private endTurn(t: NonNullable<AcpRunner["turn"]>, _stopReason: string): void {
     if (this.turn === t) this.turn = null;
+    // A turn that ends is activity too: a long one must not be followed by an idle pause a few seconds later (`auto_pause_after` counts from here).
+    this.noteWorkActivity();
     this.setBusy(false);
     this.mcpTurnEnded();
     if (this.pauseWhenIdle && this.steps.pendingPermissions().length === 0) { this.pauseWhenIdle = false; void this.pause("auth"); }

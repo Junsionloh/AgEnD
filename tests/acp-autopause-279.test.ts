@@ -82,7 +82,7 @@ describe("an idle ACP instance with auto_pause_after", () => {
       expect(h.requests, `${name} ${JSON.stringify(config)}`).toEqual([]);
     }
   });
-  it("never while a turn is running; once it ends, the clock is the one from when the work arrived (as in a terminal)", async () => {
+  it("never while a turn is running; a turn that ends counts as activity, so a long one is not followed by an immediate pause", async () => {
     const clock = { t: 1_000_000 };
     const h = await boot({ clock, config: { auto_pause_after: 10 } });
     clock.t += 30 * MIN;
@@ -92,7 +92,11 @@ describe("an idle ACP instance with auto_pause_after", () => {
     expect(h.requests).toEqual([]);                       // working: past the threshold, and still not asked
     await done(h, 1);
     h.runner.checkAutoPause();
-    expect(h.requests).toHaveLength(1);                   // idle again, and the work arrived 30 min ago: asked
+    expect(h.requests).toEqual([]);                       // the turn ended just now: the window starts here, not at the (30 min older) start of the turn
+    clock.t += 9 * MIN; h.runner.checkAutoPause();
+    expect(h.requests).toEqual([]);
+    clock.t += 2 * MIN; h.runner.checkAutoPause();
+    expect(h.requests).toHaveLength(1);                   // idle for longer than the threshold since the turn ended
   }, 15000);
   it("never while a permission request waits for a person", async () => {
     const clock = { t: 1_000_000 };

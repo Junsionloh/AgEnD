@@ -84,6 +84,16 @@ describe("grok under a named account", () => {
     expect(() => acpAccountLaunch(GROK_PROFILE, home, { credential_profile: "work" })).toThrow(/symlink/);
     expect(lstatSync(join(home, "credential-profiles", "grok", "work")).isSymbolicLink()).toBe(true);
   });
+  it("a link at ANY level above the folder is refused, not only at the last one (review of 00c682636)", () => {
+    for (const [level, backend, profile] of [["credential-profiles", "grok", GROK_PROFILE], ["credential-profiles/grok", "grok", GROK_PROFILE], ["credential-profiles/antigravity", "antigravity", AGY_PROFILE]] as const) {
+      const home = tmp(), other = tmp();
+      mkdirSync(join(home, ...level.split("/").slice(0, -1)), { recursive: true });
+      symlinkSync(other, join(home, level));
+      expect(() => acpAccountLaunch(profile, home, { credential_profile: "work" }), level).toThrow(/symlink/);
+      expect(existsSync(join(other, "work")), `nothing was made through the link at ${level}`).toBe(false);
+      expect(backend).toBeTruthy();
+    }
+  });
   it("a name that is not a profile name is refused before anything is made", () => {
     const home = tmp();
     expect(() => acpAccountLaunch(GROK_PROFILE, home, { credential_profile: "../escape" })).toThrow(/credential_profile/);

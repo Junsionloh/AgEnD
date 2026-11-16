@@ -186,6 +186,64 @@ describe("an interruption where the CLI folds a second prompt into the running t
   });
 });
 
+describe("an interruption in the gaps (review of 00c682636)", () => {
+  it("while a paused agent is being woken for the message that is starting: that turn is cut short as soon as its prompt has left, and the next message runs", async () => {
+    const h = await boot({ plain: true });
+    h.fleet.send({ type: "fleet_inbound", content: "first", meta: meta("m-0") });
+    await until(() => turnEnds(h).length === 1, 6000, "the first turn");
+    await h.runner.pause("idle");
+    expect(h.runner.isPaused).toBe(true);
+    h.runner.pushChannelMessage("A #slow", meta("a"));        // starts waking the agent (takes a moment)
+    h.runner.interruptMessage("B instead", meta("b"));       // arrives while A is being started: there is no running prompt to cancel yet
+    await until(() => turnEnds(h).length === 3, 15000, "A (cut short) and B");
+    expect(turnEnds(h)).toEqual(["end_turn", "cancelled", "end_turn"]);   // A did NOT run its 20 s: it was cancelled the moment it started
+    expect(calls(h.state).filter(c => "cancelled" in c)).toHaveLength(1);
+    expect(steps(h).filter(s => s.kind === "user").map(s => s.body)).toEqual(["first", "A #slow", "B instead"]);
+    const prompts = Object.values(sessions(h.state)).flat();
+    expect(prompts.map(t => NOTE.test(t))).toEqual([false, false, true]);
+  }, 25000);
+
+  it("agy refuses the second prompt late (after the 400 ms looked at): the message is sent again, interrupting, not lost", async () => {
+    const h = await boot({ env: { FAKE_ACP_CONCURRENT: "late-error" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B late refused", meta("b"));
+    await until(() => turnEnds(h).length === 2, 15000, "A (cancelled by the resend) and B");
+    expect(calls(h.state).some(c => "latePrompt" in c)).toBe(true);
+    expect(turnEnds(h)).toEqual(["cancelled", "end_turn"]);
+    const prompts = Object.values(sessions(h.state))[0]!;
+    expect(prompts.filter(t => t.includes("B late refused"))).toHaveLength(1);              // delivered once, as its own prompt with the note
+    expect(prompts.map(t => NOTE.test(t))).toContain(true);
+    expect(h.confirmed.filter((c: any) => c.messageId === "b")).toHaveLength(1);              // confirmed once (the refused copy is not counted)
+  }, 25000);
+
+  it("grok's answer comes too late but it announced the interjection: counted as taken, not sent a second time", async () => {
+    const h = await boot({ grok: true, env: { FAKE_ACP_INTERJECT: "announce-slow" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B once", meta("b"));
+    await until(() => turnEnds(h).length === 1, 15000, "the turn");
+    await sleep(6500);                                                                       // the late `queued` arrives; nothing must follow from it
+    expect(turnEnds(h)).toEqual(["end_turn"]);
+    expect(calls(h.state).filter(c => "cancelled" in c)).toEqual([]);
+    expect(Object.values(sessions(h.state)).flat().filter(t => t.includes("B once"))).toEqual([]);   // never prompted
+    expect(calls(h.state).filter(c => "interject" in c)).toHaveLength(1);                     // asked once
+    expect(h.delivered).toContainEqual({ chatId: "chat-1", messageId: "b" });
+  }, 30000);
+
+  it("the answer comes after the turn it was for has ended: the message is sent again as its own, not left without a state", async () => {
+    const h = await boot({ grok: true, env: { FAKE_ACP_INTERJECT: "late", FAKE_ACP_INTERJECT_DELAY: "1500" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #linger", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B after the end", meta("b"));
+    await until(() => turnEnds(h).length === 2, 15000, "A, then B as its own turn");
+    expect(turnEnds(h)).toEqual(["end_turn", "end_turn"]);
+    expect(Object.values(sessions(h.state))[0]!.filter(t => t.includes("B after the end"))).toHaveLength(1);
+    expect(h.delivered.filter((c: any) => c.messageId === "b")).toHaveLength(1);
+    expect(h.confirmed.filter((c: any) => c.messageId === "b")).toHaveLength(1);
+  }, 25000);
+});
+
 describe("an interruption (/steer, steer: true)", () => {
   it("is what the IPC `steer` message does, and a launch that takes steer is what the fleet's cross-instance send asks", async () => {
     const h = await boot({ plain: true });

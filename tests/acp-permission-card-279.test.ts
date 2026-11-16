@@ -182,6 +182,12 @@ describe("the card's text", () => {
     expect(permissionQuestion(null)).toBe("Permission request: a tool");
     expect(permissionQuestion({ title: "t", rawInput: { command: "a\n\n   b" } })).toBe("Permission request: t — a b");
   });
+  it("a secret is masked before the text is cut, so a token that straddles the cut is not left half showing", () => {
+    const token = "sk-abcdefghijklmnopqrstuvwxyz0123456789";
+    const text = permissionQuestion({ title: "run_command", rawInput: { command: `${"a".repeat(222)} ${token}` } });
+    expect(text).not.toContain("sk-abc");                      // cut first, the 14 characters after `sk-` left would have been too few to be recognised
+    expect(text).not.toContain(token);
+  });
   it("a terminal card keeps its own closing line", () => {
     const card = { kind: "question", identity: "i", title: "Q", question: "q", page: "options", options: [{ n: 1, title: "Yes", recommended: false, description: null }], freeText: false, cursor: null, typed: null, rowWidth: 0, noSkip: true } as any;
     expect(remoteCardPrompt("w", card).message).toContain("keyed into the agent's terminal");
