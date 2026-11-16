@@ -164,6 +164,7 @@ process.stdin.on("data", d => {
         turn(m.id, m.params.sessionId, m.params.prompt.map(p => p.text).join("")).catch(e => { log({ error: String(e) }); process.exit(4); });
         break;
       case "session/cancel":
+        log({ cancelled: m.params?.sessionId });
         cancelled = true; cancelWake?.();
         break;
       default:

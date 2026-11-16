@@ -1272,8 +1272,11 @@ export class TopicCommands {
     msg: Pick<InboundMessage, "chatId" | "messageId" | "username" | "userId" | "threadId" | "adapterId" | "source" | "humanOrigin" | "humanOriginalBody"> & { webGuest?: boolean },
   ): string {
     const backend = this.effectiveBackend(instanceName);
-    const launchSupportsSteer = this.ctx.instanceLaunchSupportsSteer?.(instanceName);
-    if (!instanceSupportsSteer(backend, launchSupportsSteer)) {
+    // ACP defines no mid-turn input (AGEND-279): the message is queued like any message sent to a busy agent and lands when the running turn
+    // ends, and the reply says so. It is never said to land mid-turn, and it never cancels the turn to make room (that would throw away work).
+    const acp = this.runsAcp(instanceName);
+    const launchSupportsSteer = acp ? true : this.ctx.instanceLaunchSupportsSteer?.(instanceName);
+    if (!acp && !instanceSupportsSteer(backend, launchSupportsSteer)) {
       // A backend that answers per launch (kiro, #1405) can steer, just not as this instance runs now.
       return launchSupportsSteer === false ? t("steer.unsupported_launch", backend) : t("steer.unsupported", backend);
     }
@@ -1298,7 +1301,7 @@ export class TopicCommands {
       ? this.ctx.sendHumanControl(instanceName, payload, msg.humanOrigin, msg.humanOriginalBody ?? content)
       : ipc.send(payload) !== false;
     if (!sent) return t("steer.not_connected");
-    return t("steer.sent", instanceName);
+    return t(acp ? "steer.queued_acp" : "steer.sent", instanceName);
   }
 
   /** Ask a Claude Code side question without folding it into the active turn. */

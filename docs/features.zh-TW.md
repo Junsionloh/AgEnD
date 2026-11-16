@@ -1626,7 +1626,7 @@ web:
 | 閒置／忙碌 | 讀畫面 | 有一個未完成的 `session/prompt` |
 | 卡住 | 畫面不再變動 | 回合進行中、超過 `hang_detector.timeout_minutes`（預設 10）沒有 agent 的任何訊息（等人回答權限請求不算卡住） |
 | 權限 | 預設跳過（`skipPermissions`，用 CLI 自己的旗標） | 預設跳過，同一個設定；`skipPermissions: false` 才在聊天裡詢問 |
-| 回合中途送訊息 | 可 steer（依 backend） | 等這回合結束（ACP 沒有回合中途輸入） |
+| 回合中途送訊息 | 排隊到回合結束；`/steer` 可插入（grok） | 排隊到回合結束、依序送出，進行中的回合絕不會被取消；`/steer` 同樣排隊並如實說明（ACP 沒有回合中途輸入） |
 | context % 與額度通知 | 讀畫面 | 只有 agy 有 context %；grok 沒有 |
 | 回覆聊天 | agent 的 `reply` 工具 | 同一個工具；人發起的回合若沒用它就結束，agent 的文字會當作回覆送出 |
 | `checkout_repo`、`release_repo`、網頁主題／Office 工具 | 有 | 尚未支援（工具回傳錯誤） |

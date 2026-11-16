@@ -1749,7 +1749,7 @@ In the web app, the instance form has an **Execution mode** choice (Terminal / A
 | Idle / busy | read from the screen | an outstanding `session/prompt` |
 | Hang | the screen stops changing | a running turn with no word from the agent for `hang_detector.timeout_minutes` (default 10; a request waiting for a person is not a hang) |
 | Permissions | skipped by default (`skipPermissions`, the CLI's own flag) | skipped by default, the same setting; `skipPermissions: false` asks in the chat |
-| Message sent during a turn | steered (per backend) | waits for the turn to end (ACP has no mid-turn input) |
+| Message sent during a turn | queued until the turn ends; `/steer` interjects (grok) | queued until the turn ends, in order, and the running turn is never cancelled; `/steer` is queued the same way and says so (ACP has no mid-turn input) |
 | Context % and quota notices | from the screen | context % for agy only; none for grok |
 | Reply to the chat | the agent's `reply` tool | the same tool; if a turn that a person started ends without one, the agent's text is sent as the reply |
 | `checkout_repo`, `release_repo`, web theme / Office tools | yes | not yet (the tool answers with an error) |
