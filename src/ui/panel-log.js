@@ -35,6 +35,7 @@ register("log", {
     enable: "Turn on the Log", enabling: "Waiting for a fleet admin to confirm it — the confirmation card says where…", enabled: "The Log is on.",
     enableFailed: "The Log was not turned on: {0}", offPublic: "A fleet admin can turn it on in Settings → Web dashboard.",
     unsupported: "{0} has no transcript AgEnD can read, so this Log shows fleet events only. View shows its screen.",
+    unsupportedNoView: "{0} has no transcript AgEnD can read, so this Log shows fleet events only.",
     kiroWhy: "kiro's own steps are shown only when AgEnD can prove which conversation it is in now. {0} Fleet events are shown meanwhile.",
     kiro_not_running: "It is not running.",
     kiro_v3: "Its engine (V3) keeps a history AgEnD does not read.",
@@ -65,6 +66,7 @@ register("log", {
     enable: "開啟紀錄", enabling: "等待 fleet admin 確認，確認卡片上有說明確認方式…", enabled: "紀錄已開啟。",
     enableFailed: "紀錄沒有開啟：{0}", offPublic: "fleet admin 可以在「設定 → 網頁儀表板」開啟。",
     unsupported: "{0} 沒有 AgEnD 讀得到的對話紀錄，所以這裡只顯示 fleet 事件。「檢視」可以看它的畫面。",
+    unsupportedNoView: "{0} 沒有 AgEnD 讀得到的對話紀錄，所以這裡只顯示 fleet 事件。",
     kiroWhy: "只有在 AgEnD 能證明 kiro 目前所在的對話時，才會顯示它自己的步驟。{0}目前先顯示 fleet 事件。",
     kiro_not_running: "它沒有在執行。",
     kiro_v3: "它的引擎（V3）的紀錄 AgEnD 不讀取。",
@@ -269,7 +271,7 @@ function LogView({ name, inst, navKey, exec, awaiting }) {
       action=${overPublicLink ? html`<p class="note">${tl("offPublic")}</p>`
         : html`<button type="button" class="btn btn-primary log-enable" disabled=${enabling} onClick=${enable}>${enabling ? tl("enabling") : tl("enable")}</button>`} /></div>`;
   } else {
-    const why = info && info.reason ? (info.reason === "unsupported" ? tl("unsupported", info.backend)
+    const why = info && info.reason ? (info.reason === "unsupported" ? tl(inst && inst.pane_view === false ? "unsupportedNoView" : "unsupported", info.backend)
       : KIRO_REASONS.has(info.reason) ? tl("kiroWhy", tl(info.reason))
       : info.reason === "not_running" ? tl("notRunning") : info.reason === "no_transcript" ? tl("noTranscript") : "") : "";
     content = html`

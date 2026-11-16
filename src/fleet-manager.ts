@@ -6767,6 +6767,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     // An instance that runs over ACP has no transcript file: its steps are built live, from the agent's own updates.
     const acpSteps = runner && adapterOf(runner)?.id === "acp" ? (runner as unknown as { liveSteps?: LiveSteps }).liveSteps : undefined;
     if (acpSteps) return { backend, path: null, format: null, live: acpSteps };
+    // An `acp` instance that is not running (stopped, or its CLI is not signed in) has nothing to read: its steps exist only
+    // while it runs, and a transcript from an earlier terminal-mode run is not its conversation. Never "unsupported" (that text
+    // sends the reader to a View an acp instance does not have).
+    if (!runner && adapterUiView(undefined, config, this.fleetConfig?.defaults).cli_adapter === "acp") return { backend, path: null, format: null, reason: "not_running" };
     const live = runner?.logTranscriptPath() ?? null;
     if (backend === "claude-code") {
       let path = live;
