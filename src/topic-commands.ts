@@ -1275,8 +1275,8 @@ export class TopicCommands {
     msg: Pick<InboundMessage, "chatId" | "messageId" | "username" | "userId" | "threadId" | "adapterId" | "source" | "humanOrigin" | "humanOriginalBody"> & { webGuest?: boolean },
   ): string {
     const backend = this.effectiveBackend(instanceName);
-    // ACP defines no mid-turn input (AGEND-279): the message is queued like any message sent to a busy agent and lands when the running turn
-    // ends, and the reply says so. It is never said to land mid-turn, and it never cancels the turn to make room (that would throw away work).
+    // ACP defines no mid-turn input (AGEND-279): `/steer` interrupts. The runner cancels the running turn and runs this message next in the
+    // same session; a message that is not a `/steer` is queued as ever. An idle agent just receives it, and the reply says which.
     const acp = this.runsAcp(instanceName);
     const launchSupportsSteer = acp ? true : this.ctx.instanceLaunchSupportsSteer?.(instanceName);
     if (!acp && !instanceSupportsSteer(backend, launchSupportsSteer)) {
@@ -1304,7 +1304,9 @@ export class TopicCommands {
       ? this.ctx.sendHumanControl(instanceName, payload, msg.humanOrigin, msg.humanOriginalBody ?? content)
       : ipc.send(payload) !== false;
     if (!sent) return t("steer.not_connected");
-    return t(acp ? "steer.queued_acp" : "steer.sent", instanceName);
+    if (!acp) return t("steer.sent", instanceName);
+    const state = this.ctx.getInstanceExecutionState?.(instanceName);
+    return t(state === "working" || state === "stuck" ? "steer.interrupted_acp" : "steer.idle_acp", instanceName);
   }
 
   /** Ask a Claude Code side question without folding it into the active turn. */

@@ -1,7 +1,9 @@
 /**
- * AGEND-279 (3): a message sent to an ACP agent that is busy. tmux queues a normal message until the turn ends; ACP has no
- * mid-turn input, so it does the same, and `/steer` is queued too and says so (it never claims to land mid-turn, and it never
- * cancels the running turn to make room). The runner is driven through its IPC socket with the fake ACP agent behind it.
+ * AGEND-279 (3): a message sent to an ACP agent that is busy, queue or interrupt, as the sender chooses. A normal message is queued until
+ * the turn ends (as in tmux, the default). `/steer` (or `steer: true` from another instance) interrupts: the running turn is cancelled
+ * (`session/cancel`), the message runs next in the SAME session with a line saying the last turn was cut short, ahead of what was
+ * already queued; a permission request that waits is answered cancelled and its chat card retired; an idle agent just receives it.
+ * The runner is driven through its IPC socket with the fake ACP agent behind it.
  */
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,6 +14,7 @@ import { AcpAdapter } from "../src/adapters/acp/acp-adapter.js";
 import { AcpRunner } from "../src/adapters/acp/acp-runner.js";
 import { AGY_PROFILE } from "../src/adapters/acp/profiles.js";
 import { TopicCommands } from "../src/topic-commands.js";
+import { outboundHandlers } from "../src/outbound-handlers.js";
 import type { InboundMessage } from "../src/channel/types.js";
 import type { InstanceConfig } from "../src/types.js";
 
@@ -49,46 +52,146 @@ async function boot() {
   fleet.on("message", (m: any) => { if (m.type === "fleet_outbound") fleet.send({ type: "fleet_outbound_response", fleetRequestId: m.fleetRequestId, result: { messageId: "m1" } }); });
   return { runner, fleet, state, queued };
 }
-const meta = (id: string) => ({ chat_id: "chat-1", message_id: id, user: "alice", source: "web" });
+const meta = (id: string, extra: Record<string, string> = {}) => ({ chat_id: "chat-1", message_id: id, user: "alice", source: "web", ...extra });
 const steps = (h: { runner: AcpRunner }) => h.runner.steps.snapshot(undefined, { thoughts: false }).steps;
 const calls = (state: string): any[] => readFileSync(join(state, "calls.jsonl"), "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l));
+const sessions = (state: string): Record<string, string[]> => JSON.parse(readFileSync(join(state, "sessions.json"), "utf8"));
+const turnEnds = (h: { runner: AcpRunner }) => steps(h).filter(s => s.kind === "turn_end").map(s => s.note);
+const NOTE = /was interrupted by the user before it finished/;
 
-describe("a message that arrives while the agent is working", () => {
-  it.each(["fleet_inbound", "steer"] as const)("%s: waits for the running turn, which is not cancelled, then runs as its own turn", async (type) => {
+describe("a normal message that arrives while the agent is working (the default)", () => {
+  it.each(["fleet_inbound", "btw"] as const)("%s: waits for the running turn, which is not cancelled, then runs as its own turn", async (type) => {
     const h = await boot();
     h.fleet.send({ type: "fleet_inbound", content: "first #linger", meta: meta("m-1") });
     await until(() => h.runner.getInstanceState() === "working", 3000, "busy");
     h.fleet.send({ type, content: "second", meta: meta("m-2") });
-    await until(() => steps(h).filter(s => s.kind === "turn_end").length === 2, 8000, "both turns");
+    await until(() => turnEnds(h).length === 2, 8000, "both turns");
     expect(steps(h).filter(s => s.kind === "user").map(s => s.body)).toEqual(["first #linger", "second"]);
-    // The first turn ran to its own end: nothing was cancelled to make room for the second.
-    
-    expect(calls(h.state).filter(c => "cancelled" in c)).toEqual([]);   // the fake agent logs every session/cancel it receives
+    expect(turnEnds(h)).toEqual(["end_turn", "end_turn"]);
+    expect(calls(h.state).filter(c => "cancelled" in c)).toEqual([]);
     expect(h.queued).toEqual([{ chatId: "chat-1", messageId: "m-2" }]);
+    expect(Object.values(sessions(h.state)).flat().some(t => NOTE.test(t))).toBe(false);
   });
+});
+
+describe("an interruption (/steer, steer: true)", () => {
+  it("is what the IPC `steer` message does, and a launch that takes steer is what the fleet's cross-instance send asks", async () => {
+    const h = await boot();
+    expect(h.runner.launchSupportsSteer()).toBe(true);
+  });
+
+  it("cancels the running turn, runs next in the same session with a note, and keeps the queued messages behind it", async () => {
+    const h = await boot();
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    // Straight into the runner, so the order of arrival is exactly this.
+    h.runner.pushChannelMessage("C queued", meta("c"));
+    expect(h.runner.inboxOrder()).toEqual(["C queued"]);
+    h.runner.interruptMessage("B interrupts", meta("b"));
+    expect(h.runner.inboxOrder()).toEqual(["B interrupts", "C queued"]);
+    await until(() => turnEnds(h).length === 3, 10000, "all three turns");
+    // Order: A (cut short), then B, then the message that was already waiting.
+    expect(steps(h).filter(s => s.kind === "user").map(s => s.body)).toEqual(["A #slow", "B interrupts", "C queued"]);
+    expect(turnEnds(h)).toEqual(["cancelled", "end_turn", "end_turn"]);
+    // One session for everything, one cancel; only B's prompt carries the note.
+    const all = sessions(h.state);
+    expect(Object.keys(all)).toHaveLength(1);
+    const prompts = Object.values(all)[0]!;
+    expect(prompts).toHaveLength(3);
+    expect(prompts.map(t => NOTE.test(t))).toEqual([false, true, false]);
+    expect(prompts[1]).toContain("B interrupts");
+    expect(calls(h.state).filter(c => "cancelled" in c)).toHaveLength(1);
+    expect(calls(h.state).filter(c => c.sessionNew)).toHaveLength(1);
+    // B is not announced as "queued"; C, which did wait, is.
+    expect(h.queued).toEqual([{ chatId: "chat-1", messageId: "c" }]);
+  });
+
+  it("two interruptions keep their own order, ahead of the queue", async () => {
+    const h = await boot();
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.pushChannelMessage("C queued", meta("c"));
+    h.runner.interruptMessage("B1", meta("b1"));
+    h.runner.interruptMessage("B2", meta("b2"));
+    expect(h.runner.inboxOrder()).toEqual(["B1", "B2", "C queued"]);
+    await until(() => turnEnds(h).length === 4, 12000, "all turns");
+    expect(steps(h).filter(s => s.kind === "user").map(s => s.body)).toEqual(["A #slow", "B1", "B2", "C queued"]);
+    expect(turnEnds(h)[0]).toBe("cancelled");
+  });
+
+  it("an agent that is idle just receives it: no cancel, no note", async () => {
+    const h = await boot();
+    h.fleet.send({ type: "steer", content: "hello", meta: meta("m-1") });
+    await until(() => turnEnds(h).length === 1, 6000, "the turn");
+    expect(turnEnds(h)).toEqual(["end_turn"]);
+    expect(calls(h.state).filter(c => "cancelled" in c)).toEqual([]);
+    expect(Object.values(sessions(h.state)).flat().some(t => NOTE.test(t))).toBe(false);
+  });
+
+  it("another agent's interruption says so in the note", async () => {
+    const h = await boot();
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.fleet.send({ type: "steer", content: "from the planner", meta: { chat_id: "", message_id: "x1", user: "instance:planner", source: "cross_instance", from_instance: "planner" } });
+    await until(() => turnEnds(h).length === 2, 8000, "both turns");
+    expect(Object.values(sessions(h.state))[0]![1]).toMatch(/interrupted by another agent \(planner\) before it finished/);
+  });
+
+  it("a permission request that waits is answered cancelled and its chat card is retired", async () => {
+    const dir = tmp(), state = tmp();
+    const config = { working_directory: dir, backend: "antigravity", cli_adapter: "acp", skipPermissions: false } as InstanceConfig;
+    const holder: { runner?: AcpRunner } = {};
+    const profile = { ...AGY_PROFILE, supportedVersions: ["1.5.8"], args: () => [FAKE] };
+    new AcpAdapter({ profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger, env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8" },
+      makeRunner: a => (holder.runner = new AcpRunner(a, { name: "worker", config, instanceDir: dir, topicMode: true, backend: "antigravity", logger })) });
+    const runner = holder.runner!; runners.push(runner);
+    const cards: any[] = [], gone: string[] = [];
+    runner.on("remote_card", (d: any) => cards.push(d.card));
+    runner.on("remote_card_gone", (d: any) => gone.push(d.identity));
+    await runner.start();
+    const fleet = new IpcClient(join(dir, "channel.sock")); clients.push(fleet); await fleet.connect();
+    fleet.on("message", (m: any) => { if (m.type === "fleet_outbound") fleet.send({ type: "fleet_outbound_response", fleetRequestId: m.fleetRequestId, result: { messageId: "m1" } }); });
+    fleet.send({ type: "fleet_inbound", content: "#tool", meta: meta("a") });
+    await until(() => runner.steps.pendingPermissions().length === 1 && cards.length === 1, 6000, "the permission card");
+    fleet.send({ type: "steer", content: "never mind, do this", meta: meta("b") });
+    await until(() => runner.steps.snapshot(undefined, { thoughts: false }).steps.filter(s => s.kind === "turn_end").length === 2, 10000, "both turns");
+    expect(runner.steps.pendingPermissions()).toHaveLength(0);
+    const all = runner.steps.snapshot(undefined, { thoughts: false }).steps;
+    expect(all.filter(s => s.kind === "permission").map(s => [s.status, s.note])).toEqual([["interrupted", "cancelled"]]);
+    expect(gone).toEqual([cards[0].identity]);
+    expect(all.filter(s => s.kind === "turn_end").map(s => s.note)).toEqual(["cancelled", "end_turn"]);
+    expect(readFileSync(join(state, "calls.jsonl"), "utf8")).toContain("\"permissionOutcome\":{\"outcome\":\"cancelled\"}");   // the agent was told: cancelled, never allowed
+  }, 20000);
 });
 
 describe("/steer in a chat, for an ACP instance", () => {
   const inbound = (text: string): InboundMessage => ({ source: "discord", adapterId: "discord-main", chatId: "c", threadId: "t", messageId: "m1", userId: "u", username: "u", text, timestamp: new Date(), isBotMessage: false });
-  function setup(backend: string, acp: boolean) {
+  function setup(backend: string, acp: boolean, state: "working" | "idle" | "stuck" = "working") {
     const send = vi.fn();
     const sendText = vi.fn().mockResolvedValue({ messageId: "r", chatId: "c" });
     const commands = new TopicCommands({
       adapter: { sendText }, adapters: new Map(),
       fleetConfig: { defaults: {}, instances: { worker: { backend, working_directory: "/tmp", ...(acp ? { cli_adapter: "acp" } : {}) } } },
       instanceIpcClients: new Map([["worker", { connected: true, send }]]),
-      instanceRunsAcp: () => acp, getDeliveryEpoch: () => 3, isFleetAdmin: () => false,
+      instanceRunsAcp: () => acp, getInstanceExecutionState: () => state, getDeliveryEpoch: () => 3, isFleetAdmin: () => false,
     } as any);
     return { commands, send, sendText };
   }
-  it.each(["grok", "antigravity"])("%s over ACP: the message goes to the runner, and the reply says it is queued for the end of the turn", async (backend) => {
+  it.each(["grok", "antigravity"])("%s over ACP, working: the message goes to the runner and the reply says the turn was interrupted", async (backend) => {
     const { commands, send, sendText } = setup(backend, true);
     expect(await commands.handleInstanceCommand(inbound("/steer do it"), "worker")).toBe(true);
     expect(send).toHaveBeenCalledOnce();
     expect(send.mock.calls[0][0]).toMatchObject({ type: "steer", content: "do it" });
-    const said = String(sendText.mock.calls[0][1]);
-    expect(said).toMatch(/queued and lands when the running turn ends/);
-    expect(said).not.toMatch(/mid-turn instead|lands mid-turn/);
+    expect(String(sendText.mock.calls[0][1])).toMatch(/Interrupted worker's current turn and sent this message instead/);
+  });
+  it("idle: sent directly, and the reply says so; stuck counts as working", async () => {
+    const idle = setup("grok", true, "idle");
+    await idle.commands.handleInstanceCommand(inbound("/steer do it"), "worker");
+    expect(idle.send).toHaveBeenCalledOnce();
+    expect(String(idle.sendText.mock.calls[0][1])).toMatch(/is idle: your message was sent directly/);
+    const stuck = setup("grok", true, "stuck");
+    await stuck.commands.handleInstanceCommand(inbound("/steer do it"), "worker");
+    expect(String(stuck.sendText.mock.calls[0][1])).toMatch(/Interrupted/);
   });
   it("a terminal grok instance is unchanged: it steers mid-turn; a terminal agy instance still refuses", async () => {
     const grok = setup("grok", false);
@@ -99,5 +202,44 @@ describe("/steer in a chat, for an ACP instance", () => {
     await agy.commands.handleInstanceCommand(inbound("/steer do it"), "worker");
     expect(agy.send).not.toHaveBeenCalled();
     expect(String(agy.sendText.mock.calls[0][1])).toContain("not supported");
+  });
+});
+
+describe("steer: true from another instance (the existing field, the same meaning)", () => {
+  const callerMeta = { instanceName: "sender", requestId: 1, fleetRequestId: undefined, senderSessionName: undefined };
+  function ctxFor(backend: string, acp: boolean) {
+    return {
+      fleetConfig: { defaults: {}, instances: { sender: {}, target: { backend, ...(acp ? { cli_adapter: "acp" } : {}) } }, channel: undefined },
+      adapter: null, logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
+      instanceIpcClients: new Map([["target", { connected: true, send: vi.fn() }]]), sessionRegistry: new Map(),
+      lifecycle: { daemons: new Map(), isPaused: vi.fn(() => false) }, classicChannels: null, eventLog: { logActivity: vi.fn(), insert: vi.fn() },
+      deliverToInstance: vi.fn(() => new Promise<void>(() => {})), notifyInstanceTopic: vi.fn(), lastActivityMs: vi.fn(() => 0),
+      instanceRunsAcp: () => acp, instanceLaunchSupportsSteer: () => (acp ? true : undefined), hasPendingIdleGatedDelivery: vi.fn(() => true),
+    } as any;
+  }
+  const call = async (ctx: any, args: Record<string, unknown>) => {
+    let result: any; let error: string | undefined;
+    await outboundHandlers.get("send_to_instance")!(ctx, { detail: true, instance_name: "target", message: "supplement", ...args }, (r, e) => { result = r; error = e; }, callerMeta as any);
+    return { result, error };
+  };
+  it.each(["grok", "antigravity"])("an ACP %s target gets a steer message, and it is not held behind an earlier queued send (it goes in front)", async (backend) => {
+    const ctx = ctxFor(backend, true);
+    const { result, error } = await call(ctx, { steer: true });
+    expect(error).toBeUndefined();
+    expect(result).toMatchObject({ delivery_mode: "steer" });
+    expect(result).not.toHaveProperty("warning");
+    expect(ctx.deliverToInstance).toHaveBeenCalledWith("target", expect.objectContaining({ type: "steer", content: "supplement" }), { isCrossInstance: true, waitForIdle: false });
+  });
+  it("without steer it is an ordinary queued message, whatever the target runs", async () => {
+    const ctx = ctxFor("grok", true);
+    const { result } = await call(ctx, {});
+    expect(result).not.toHaveProperty("delivery_mode", "steer");
+    expect(ctx.deliverToInstance).toHaveBeenCalledWith("target", expect.objectContaining({ type: "fleet_inbound" }));
+  });
+  it("a terminal target is unchanged: a steer still waits behind an earlier queued send", async () => {
+    const ctx = ctxFor("claude-code", false);
+    const { result } = await call(ctx, { steer: true });
+    expect(result).toMatchObject({ delivery_mode: "idle_queue" });
+    expect(result.warning).toContain("previous message is still queued");
   });
 });

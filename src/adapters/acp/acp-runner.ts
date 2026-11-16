@@ -56,6 +56,8 @@ interface InboundItem {
   readonly turnId: string;
   /** Sent to the agent exactly as given, with no `[user:]` envelope (a silent schedule's text). */
   readonly raw?: boolean;
+  /** An interruption (`/steer`, `steer: true`): who sent it. The turn it found running was cancelled, and the agent is told so before the message. */
+  readonly interrupts?: { readonly by: string };
 }
 
 const FLEET_RESPONSE_TYPES = new Set([
@@ -115,6 +117,11 @@ const DEFAULT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
 /** Both CLIs start the declared MCP server while the session opens, so seconds are enough; a loaded host needs room for a Node cold start. */
 const MCP_GRACE_MS = 45_000;
 const PROXY_TEXT_MAX = 12_000;
+
+/** The line put in front of an interrupting message: the agent must continue the same work, not start over. */
+export function interruptedNote(by: string): string {
+  return `[AgEnD: your previous turn was interrupted by ${by} before it finished. This is the same conversation: keep what you already know, treat the unfinished work as cut short (a tool call that was running may not have completed), and now handle the message below.]`;
+}
 
 /** The identity of a permission card: the request's own step id (JSON-RPC ids restart with every agent process; the step id does not repeat). */
 export const permissionCardIdentity = (p: { stepId: string }): string => `acp-permission:${p.stepId}`;
@@ -196,6 +203,9 @@ export class AcpRunner extends EventEmitter {
   private autoPauseRequested = false;
   private workLease: (() => boolean) | null = null;
   private turn: { item: InboundItem; startedAt: number; text: string; outbound: boolean; consumed: boolean; deliveryId: string | null; attemptNo: number; cancelled: boolean } | null = null;
+  /** Messages waiting for their turn, in the order they will run (an interruption goes in front of the others). `queued` counts these and the one running. */
+  private readonly inbox: InboundItem[] = [];
+  private pumping = false;
   private turnSeq = 0;
   private readonly idleWaiters = new Set<() => void>();
   private lastChatId = ""; private lastThreadId: string | undefined; private lastAdapterId: string | undefined;
@@ -308,7 +318,8 @@ export class AcpRunner extends EventEmitter {
   }
   getInstanceState(): InstanceState | "paused" { return this.isPaused ? "paused" : this.stuck ? "stuck" : this.busy ? "working" : "idle"; }
   getProcessStatus(): "running" | "crashed" | "stopped" { return this.adapter.health().process; }
-  launchSupportsSteer(): boolean | undefined { return false; }
+  /** `/steer` and `steer: true` work over ACP as an interruption (see `interruptMessage`). */
+  launchSupportsSteer(): boolean | undefined { return true; }
   get isNewSession(): boolean { return this.adapter.isNewSession; }
   logLaunch(): null { return null; }
   logTranscriptPath(): null { return null; }
@@ -755,6 +766,20 @@ export class AcpRunner extends EventEmitter {
 
   /** Admit one message (a person's, another instance's, a schedule's). Returns at once; the turn runs when its turn comes. */
   pushChannelMessage(content: string, meta: Record<string, string>, _targetSession?: string, deliveryEpoch = this.deliveryEpoch, raw = false): void {
+    this.admit(content, meta, deliveryEpoch, raw, false);
+  }
+
+  /**
+   * An interruption (`/steer`, or `steer: true` from another instance). ACP has no mid-turn input, so a running turn is cancelled
+   * (`session/cancel`, and any permission request it waits on is answered "cancelled"), and when it has ended with `cancelled` this
+   * message runs next, in the same session, with a line in front saying the previous turn was cut short. It goes ahead of the messages
+   * already queued, which keep their order behind it. An agent that is idle just receives it, as any message.
+   */
+  interruptMessage(content: string, meta: Record<string, string>, deliveryEpoch = this.deliveryEpoch): void {
+    this.admit(content, meta, deliveryEpoch, false, true);
+  }
+
+  private admit(content: string, meta: Record<string, string>, deliveryEpoch: number, raw: boolean, interrupt: boolean): void {
     if (deliveryEpoch !== this.deliveryEpoch) {
       this.log.info({ name: this.name }, "acp: pending delivery dropped by cancel");
       this.deferDurable(meta, "delivery epoch changed before queue admission");
@@ -764,14 +789,43 @@ export class AcpRunner extends EventEmitter {
     if (!this.started && !this.adapter.health().process) return;
     this.updateLastChat(meta.chat_id, meta.thread_id, meta.adapter_id);
     if (meta.chat_id) this.noteWorkActivity();
-    const item: InboundItem = { content, meta, epoch: deliveryEpoch, turnId: `${this.bootId.slice(0, 8)}-${++this.turnSeq}`, ...(raw ? { raw: true } : {}) };
-    if (this.queued > 0) { const status = statusOf(meta); if (status) this.emit("message_queued", status); }
+    const interrupts = interrupt && this.queued > 0 ? { by: meta.from_instance ? `another agent (${meta.from_display || meta.from_instance})` : "the user" } : undefined;
+    const item: InboundItem = { content, meta, epoch: deliveryEpoch, turnId: `${this.bootId.slice(0, 8)}-${++this.turnSeq}`, ...(raw ? { raw: true } : {}), ...(interrupts ? { interrupts } : {}) };
     this.queued++;
-    this.chain = this.chain.then(() => this.runItem(item)).catch(err => this.log.error({ error: (err as Error).message }, "acp: a delivery failed")).finally(() => { this.queued--; });
+    if (interrupts) {
+      // In front of everything waiting, but behind an interruption that is already waiting (they keep their own order).
+      const first = this.inbox.findIndex(i => !i.interrupts);
+      this.inbox.splice(first < 0 ? this.inbox.length : first, 0, item);
+      const turn = this.turn;
+      if (turn && !turn.cancelled) { turn.cancelled = true; void this.adapter.cancel(); }
+    } else {
+      if (this.queued > 1) { const status = statusOf(meta); if (status) this.emit("message_queued", status); }
+      this.inbox.push(item);
+    }
+    this.pump();
   }
 
-  /** ACP has no mid-turn input: a steer or a /btw waits for the running turn like any message. */
-  steerMessage(content: string, meta: Record<string, string>, deliveryEpoch?: number): void { this.pushChannelMessage(content, meta, undefined, deliveryEpoch); }
+  /** The messages waiting, in the order they will run (a test seam, and what a diagnosis would ask). */
+  inboxOrder(): string[] { return this.inbox.map(i => i.content); }
+
+  /** Runs the waiting messages one after another (one turn at a time, in the inbox's order). */
+  private pump(): void {
+    if (this.pumping) return;
+    this.pumping = true;
+    this.chain = (async () => {
+      try {
+        while (this.inbox.length) {
+          const item = this.inbox.shift()!;
+          try { await this.runItem(item); }
+          catch (err) { this.log.error({ error: (err as Error).message }, "acp: a delivery failed"); }
+          finally { this.queued--; }
+        }
+      } finally { this.pumping = false; }
+    })();
+  }
+
+  /** `/steer` and `steer: true`: an interruption (see `interruptMessage`). */
+  steerMessage(content: string, meta: Record<string, string>, deliveryEpoch?: number): void { this.interruptMessage(content, meta, deliveryEpoch); }
 
   private async runItem(item: InboundItem): Promise<void> {
     const { meta, content } = item;
@@ -810,7 +864,7 @@ export class AcpRunner extends EventEmitter {
     if (attempt) this.outbox?.markEnterStarted(attempt.deliveryId, this.bootId, attempt.attemptNo);
     let stopReason = "error";
     try {
-      const result = await this.adapter.prompt(wire);
+      const result = await this.adapter.prompt(item.interrupts ? `${interruptedNote(item.interrupts.by)}\n\n${wire}` : wire);
       stopReason = result.stopReason;
       this.proveConsumed(t, "prompt-response");
     } catch (err) {
@@ -1025,9 +1079,15 @@ export class AcpRunner extends EventEmitter {
           .catch(err => { this.deferDurable(meta, `target wake failed: ${(err as Error).message}`); });
         return;
       }
-      case "steer": case "btw": {
+      case "steer": {
         const meta = (msg.meta ?? {}) as Record<string, string>;
         this.steerMessage(String(msg.content ?? msg.text ?? ""), meta, this.captureEpoch(msg.delivery_epoch));
+        return;
+      }
+      // A side question does not interrupt: it waits its turn like any message.
+      case "btw": {
+        const meta = (msg.meta ?? {}) as Record<string, string>;
+        this.pushChannelMessage(String(msg.content ?? msg.text ?? ""), meta, undefined, this.captureEpoch(msg.delivery_epoch));
         return;
       }
       case "raw_paste": this.onRawPaste(msg); return;
