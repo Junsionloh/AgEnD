@@ -1140,6 +1140,13 @@ const NONCE_RETIRE_BUDGET_MS = 5_000;
  */
 const CLI_ENV_FRESH_MS = 60 * 60 * 1000;
 /**
+ * AGEND-276: how long a menu that opens on an empty model list waits for its one discovery, and how long an attempt that
+ * found nothing (a CLI not signed in, offline) is not repeated by the next open. Shorter than CLI_ENV_PROBE_DEADLINE_MS: a
+ * slower probe finishes behind the menu and the page reads again (the `models` event).
+ */
+const MODEL_OPEN_PROBE_WAIT_MS = 12_000;
+const MODEL_OPEN_PROBE_COOLDOWN_MS = 60_000;
+/**
  * Upper bound on a live probe driven by `/model`.
  *
  * A probe chains bounded leaves but is not itself bounded: claude-code runs
@@ -19799,6 +19806,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         return {current:catalog.current_model,options:catalog.models.map(m=>({id:m.id,label:m.label})),actions:["refresh"]};
       }
       const backend = this.backendNameForInstance(instance);
+      // AGEND-276: opened on an empty list, the menu waits for one bounded discovery ("loading") instead of showing nothing.
+      if (!more) await this.ensureModelCatalog(backend, instance);
       const env = this.webModelEnv(backend, instance);
       const current = this.resolveInstanceModel(instance).model;
       const models = more ? this.modelCatalogFor(backend, instance) : env?.models ?? [];
@@ -19857,7 +19866,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       backendStep: async (instance, args, stepOpts) => {
         const refusal = this.backendCommandRefusal(instance);
         if (refusal) return { error: refusal };
-        // The cached model lists only, as the web's /model: never a live probe on this path.
+        // The cached model lists, as the web's /model; an empty one is discovered once, bounded (AGEND-276: moving to a CLI
+        // never signed in at startup, or probed before it was installed, must not offer an empty list).
+        const wanted = backendArgs(args)[0];
+        if (wanted && KNOWN_BACKENDS.includes(wanted)) await this.ensureModelCatalog(wanted, instance);
         const step = await backendStep({ ...this.backendCommandDeps(instance, { live: false }), models: async backend => this.modelCatalogFor(backend, instance) }, instance, backendArgs(args));
         if (step.kind === "refuse") return step.noop ? { text: step.text } : { error: step.text };
         if (step.kind === "choose") {
@@ -21375,6 +21387,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         recoverBackendInstances: (backend, profile) => {
           // #2072: a sign-in just finished — the pickers learn it now, not at the next pass.
           if (!profile) void this.backendAvailability.refresh([backend], { force: true });
+          this.modelsAfterSignIn(backend, profile ?? null);   // AGEND-276: chat /login and the dashboard's terminal sign-in
           return this.recoverBackendInstances(backend, undefined, profile ?? null);
         },
         claimWindow: backend => this.loginWindow.tryClaim("web", backend),
@@ -21419,6 +21432,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         // The page reads the computer's last detection (agy is never run for a read): a login made just now is remembered until the next one.
         // Only the computer's OWN login (no profile) is remembered here: a named account's sign-in is reported by its Runtime's inventory, which it sends before the sign-in ends.
         if (event.phase === "done" && event.profile === undefined) this.machineAccounts.noteDefaultLogin(event.machine, event.backend, true);
+        // AGEND-276: that computer's Runtime lists models in its own inventory (never a host probe): pages read it again now.
+        if (event.phase === "done") this.announceModels(event.backend);
         broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"));
         this.needsYou?.poke();
       },
@@ -21467,6 +21482,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"));
         if (event.phase === "done") {
           this.forgetSignInIdentities();   // a sign-in may be a different account now
+          this.modelsAfterSignIn(event.backend, null);   // AGEND-276: the list read before this sign-in (a signed-out CLI answers none) is not this account's
           this.keepAliveAfterSignIn(event.backend, null);   // its file changed, whoever is watching: a "needs sign-in" left from before is no longer the answer
           this.usageAfterSignIn();   // the usage read before this sign-in is not this account's
         }
@@ -21516,6 +21532,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"));
         if (event.phase === "done") {
           this.forgetSignInIdentities();   // a sign-in may be a different account now
+          this.modelsAfterSignIn(event.backend, event.profile);   // AGEND-276
           this.keepAliveAfterSignIn(event.backend, event.profile);
           this.usageAfterSignIn();
         }
@@ -24518,6 +24535,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     profile: string | null = null,
   ): import("./backend/types.js").CliEnv {
     const env: import("./backend/types.js").CliEnv = { backend, probedAt: Date.now(), ...probed };
+    const listed = (e: import("./backend/types.js").CliEnv | null) => (e?.models ?? []).map(m => m.id).join("\0");
+    const before = listed(this.readCliEnv(backend, profile));
     // An empty result must never overwrite a catalog we already have. Some
     // probes hit the network (`agy models` fetches, 5s cap), so a slow moment
     // returns [] — and writing that would blank the list for the whole 24h
@@ -24546,6 +24565,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const path = this.cliEnvPath(backend, profile);
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     writeFileSync(path, JSON.stringify(env, null, 2));
+    if (listed(env) !== before) this.announceModels(backend);   // AGEND-276: an open /model or Settings page reads the new list
     return env;
   }
 
@@ -24562,6 +24582,84 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     this.probeChangedCliEnvs(null);
   }
 
+  /**
+   * A named agy account has no verified relocation/discovery contract. In particular, never publish the ambient account's
+   * models under that profile (#3526 / D7). (AGEND-119: agy now HAS named accounts, but `agy models` is not run with the
+   * account's folder, so its answer would still be the default account's: only a CLI whose profile is a variable the
+   * probe inherits is discovered under one.)
+   */
+  private modelDiscoverable(backend: string, binding: { profile: string | null }): boolean {
+    return !binding.profile || (!!credentialHomeSpec(backend) && credentialHomeSpec(backend)!.kind !== "launch-argument");
+  }
+
+  /** One model discovery for a binding — the scoped (own config) or the shared per-backend/profile cache — or null when fenced. */
+  private discoverModels(backend: string, name: string | null, binding = this.webModelBinding(backend, name), opts: { refreshVendorCatalog?: boolean } = {}): Promise<unknown> | null {
+    if (!binding || !this.modelDiscoverable(backend, binding)) return null;
+    return binding.scoped
+      ? this.refreshModelCatalogFor(backend, name)
+      : this.probeBackendBounded(backend, { profile: binding.profile, ...(opts.refreshVendorCatalog ? { refreshVendorCatalog: true } : {}) });
+  }
+
+  /** The `models` stream event: a backend's model list changed — an open page reads it again (no details, as `backend_login`). */
+  private announceModels(backend: string): void {
+    try { broadcastSseEvent(this.sseClients, "models", { backend }, err => this.logger.debug({ err }, "models event failed")); } catch { /* best effort */ }
+  }
+
+  private modelOpenProbes = new Map<string, number>();
+
+  /**
+   * AGEND-276: the list a menu opens on. Cached and fresh: nothing to do. Empty (never discovered: the CLI was signed out
+   * at startup, or the agent just moved to this CLI): one bounded discovery that the caller waits for — so `/model` and
+   * Settings show "loading" instead of an empty list. Stale: the list stands and is refreshed behind it. Both join a
+   * discovery already running, and an attempt that found nothing is not repeated for MODEL_OPEN_PROBE_COOLDOWN_MS.
+   * Never throws; a Windows Runtime's catalog is its inventory's and is not a host probe.
+   */
+  async ensureModelCatalog(backend: string, instance: string | null, selection?: { profile?: string }): Promise<void> {
+    try {
+      const binding = this.webModelBinding(backend, instance, selection);
+      if (!binding || this.shuttingDown) return;
+      const env = this.webModelEnv(backend, instance, selection);
+      const empty = !env?.models?.length;
+      if (!empty && !this.cliEnvNeedsRefresh(env)) return;
+      this.modelOpenProbes ??= new Map();
+      const last = this.modelOpenProbes.get(binding.key);
+      if (last !== undefined && Date.now() - last < MODEL_OPEN_PROBE_COOLDOWN_MS) return;
+      const work = this.discoverModels(backend, instance, binding);
+      if (!work) return;
+      const done = work.catch(err => { this.logger.debug({ backend, instance, err }, "Model discovery on open failed"); }).then(() => {
+        const after = this.webModelEnv(backend, instance, selection);
+        if (!after?.models?.length || this.cliEnvNeedsRefresh(after)) this.modelOpenProbes.set(binding.key, Date.now());
+        else this.modelOpenProbes.delete(binding.key);
+      });
+      if (!empty) return;
+      let timer: NodeJS.Timeout | undefined;
+      await Promise.race([done, new Promise<void>(resolve => { timer = setTimeout(resolve, MODEL_OPEN_PROBE_WAIT_MS); timer.unref?.(); })]);
+      if (timer) clearTimeout(timer);
+    } catch (err) { this.logger.debug({ backend, instance, err }, "Model discovery on open failed"); }
+  }
+
+  /**
+   * AGEND-276: a sign-in just ended, so the CLI can now answer `models` as this account — whatever started the sign-in
+   * (Settings → Accounts, a named account, chat `/login`, the dashboard's terminal). The account's list is read again now,
+   * not at the next startup or by hand. The default account: the backend's shared cache. A named account: its own store
+   * (claude's profile catalog), or each agent's scoped one (the other CLIs); never an agy account (see modelDiscoverable).
+   * A provider-bound agent does not depend on the sign-in. Background; each page is told when the list changed.
+   */
+  private modelsAfterSignIn(backend: string, profile: string | null): void {
+    if (this.shuttingDown || !KNOWN_BACKENDS.includes(backend) || backend === "mock") return;
+    (this.modelOpenProbes ??= new Map()).clear();   // a cooldown from before the sign-in said "nothing to find": it no longer does
+    const settle = (work: Promise<unknown> | null): void => {
+      void work?.catch(err => this.logger.debug({ backend, profile, err }, "Model discovery after sign-in failed"));
+    };
+    if (profile === null) { settle(this.discoverModels(backend, null, undefined, { refreshVendorCatalog: true })); return; }
+    if (backend === "claude-code") { settle(this.probeBackendBounded(backend, { profile, refreshVendorCatalog: true })); return; }
+    for (const name of this.configuredBackendInstanceNames()) {
+      if (this.backendNameOf(name) !== backend || this.credentialProfileOf(name, backend) !== profile) continue;
+      const binding = this.webModelBinding(backend, name);
+      if (binding?.scoped) settle(this.discoverModels(backend, name, binding));
+    }
+  }
+
   /** Maintain discovery after committed config changes; a model-field read remains passive. */
   private probeChangedCliEnvs(previous: FleetConfig | null): void {
     const signature = (fleet: FleetConfig | null, name: string) => {
@@ -24574,20 +24672,14 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       if (isWindowsInstance(this.fleetConfig?.instances[name])) continue;
       const backend = this.backendNameForInstance(name);
       const binding = this.webModelBinding(backend, name);
-      // A named agy account has no verified relocation/discovery contract. In particular,
-      // never publish the ambient account's models under that profile (#3526 / D7). (AGEND-119: agy now HAS
-      // named accounts, but `agy models` is not run with the account's folder, so its answer would still be the
-      // default account's: only a CLI whose profile is a variable the probe inherits is discovered under one.)
-      if (!binding || (binding.profile && (!credentialHomeSpec(backend) || credentialHomeSpec(backend)!.kind === "launch-argument"))) continue;
+      if (!binding || !this.modelDiscoverable(backend, binding)) continue;
       // A description/defaults save can retire a scoped answer's full binding even
       // though its account signature is unchanged. Keep the conservative fence and
       // re-arm the current binding, unless its answer or flight is already present.
       if (previous && signature(previous, name) === signature(this.fleetConfig, name)
           && (!binding.scoped || this.webModelEnv(backend, name) || this.webModelRefreshes.has(binding.key))) continue;
-      const work = binding.scoped
-        ? this.refreshModelCatalogFor(backend, name)
-        : this.probeBackendBounded(backend, { profile: binding.profile });
-      void work.catch(err => this.logger.debug({ backend, name, err }, "Background model discovery failed"));
+      const work = this.discoverModels(backend, name, binding);
+      void work?.catch(err => this.logger.debug({ backend, name, err }, "Background model discovery failed"));
     }
   }
 
@@ -25807,7 +25899,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       // Raw failure/empty discovery never masquerades as a successful refresh of the retained catalog.
       if (!result || Array.isArray(result) || (!Array.isArray(result.models) || !result.models.length || result.catalogRefreshFailed)) return { models: this.modelCatalogFor(backend, instance, selection), refreshed: false };
       if (this.webModelCatalogs.size >= 64) this.webModelCatalogs.delete(this.webModelCatalogs.keys().next().value!);
+      const listed = (models: Array<{ id: string }>) => models.map(m => m.id).join("\0");
+      const before = listed(this.webModelEnv(backend, instance, selection)?.models ?? []);
       this.webModelCatalogs.set(binding.key, { ...result, backend, probedAt: Date.now() });
+      if (listed(result.models) !== before) this.announceModels(backend);   // AGEND-276
       return { models: this.modelCatalogFor(backend, instance, selection), refreshed: true };
     }).finally(() => { if (this.webModelRefreshes.get(binding.key) === work) this.webModelRefreshes.delete(binding.key); });
     this.webModelRefreshes.set(binding.key, work);
