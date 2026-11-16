@@ -274,3 +274,22 @@ describe("the agent moved to another CLI", () => {
     expect(FakeProbeWorker.workers).toHaveLength(1);
   });
 });
+
+describe("the agent moved to another way of running the same CLI (tmux ↔ ACP)", () => {
+  it("an empty list is read now; a fresh list is left alone", async () => {
+    fleet("antigravity");
+    FakeProbeWorker.answer = signedOut;
+    await fm.probeBackendBounded("antigravity");                    // signed out at startup: nothing cached
+    expect(ids("antigravity")).toEqual([]);
+    FakeProbeWorker.answer = found("hydrogen");
+    fm.modelOpenProbes.clear();
+    fm.fleetConfig.instances.w.cli_adapter = "acp";
+    fm.saveFleetConfig(); await settled();
+    expect(ids("antigravity")).toEqual(["antigravity-hydrogen"]);
+    const probes = FakeProbeWorker.workers.length;
+    fm.fleetConfig.instances.w.cli_adapter = "tmux";
+    fm.saveFleetConfig(); await settled();
+    expect(FakeProbeWorker.workers).toHaveLength(probes);            // already listed and fresh: no second probe
+  });
+});
+

@@ -24696,6 +24696,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       const backend = inst.backend ?? fleet?.defaults?.backend ?? "claude-code";
       return JSON.stringify({ backend, options: { ...fleet?.defaults?.backend_options?.[backend], ...inst.backend_options?.[backend] } });
     };
+    const modeOf = (fleet: FleetConfig | null, name: string) => fleet?.instances[name]?.cli_adapter ?? fleet?.defaults?.cli_adapter ?? "tmux";
     for (const name of Object.keys(this.fleetConfig?.instances ?? {})) {
       if (isWindowsInstance(this.fleetConfig?.instances[name])) continue;
       const backend = this.backendNameForInstance(name);
@@ -24705,7 +24706,12 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       // though its account signature is unchanged. Keep the conservative fence and
       // re-arm the current binding, unless its answer or flight is already present.
       if (previous && signature(previous, name) === signature(this.fleetConfig, name)
-          && (!binding.scoped || this.webModelEnv(backend, name) || this.webModelRefreshes.has(binding.key))) continue;
+          && (!binding.scoped || this.webModelEnv(backend, name) || this.webModelRefreshes.has(binding.key))) {
+        // AGEND-276: moving to another way of running the same CLI (tmux ↔ ACP) changes neither its account nor its list, but a list
+        // that is empty or stale is read now, as for any other move — only then (a fresh list is left alone).
+        if (modeOf(previous, name) !== modeOf(this.fleetConfig, name)) void this.ensureModelCatalog(backend, name);
+        continue;
+      }
       const work = this.discoverModels(backend, name, binding);
       void work?.catch(err => this.logger.debug({ backend, name, err }, "Background model discovery failed"));
     }
