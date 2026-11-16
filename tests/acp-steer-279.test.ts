@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { IpcClient } from "../src/channel/ipc-bridge.js";
 import { AcpAdapter } from "../src/adapters/acp/acp-adapter.js";
 import { AcpRunner } from "../src/adapters/acp/acp-runner.js";
-import { AGY_PROFILE } from "../src/adapters/acp/profiles.js";
+import { AGY_PROFILE, GROK_PROFILE } from "../src/adapters/acp/profiles.js";
 import { TopicCommands } from "../src/topic-commands.js";
 import { outboundHandlers } from "../src/outbound-handlers.js";
 import type { InboundMessage } from "../src/channel/types.js";
@@ -32,25 +32,28 @@ afterEach(async () => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-async function boot() {
+/** `grok`: the profile that has `_x.ai/interject` (the fake agent answers it); default: agy's, which has none. `env`: more fake-agent switches. */
+async function boot(o: { grok?: boolean; env?: Record<string, string> } = {}) {
   const dir = tmp(), state = tmp();
-  const config = { working_directory: dir, backend: "antigravity", cli_adapter: "acp" } as InstanceConfig;
-  const profile = { ...AGY_PROFILE, supportedVersions: ["1.5.8"], args: () => [FAKE] };
+  const config = { working_directory: dir, backend: o.grok ? "grok" : "antigravity", cli_adapter: "acp" } as InstanceConfig;
+  const profile = { ...(o.grok ? GROK_PROFILE : AGY_PROFILE), supportedVersions: ["1.5.8"], versionOf: AGY_PROFILE.versionOf, args: () => [FAKE] };
   const holder: { runner?: AcpRunner } = {};
   const adapter = new AcpAdapter({
-    profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger, env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8" },
-    makeRunner: a => (holder.runner = new AcpRunner(a, { name: "worker", config, instanceDir: dir, topicMode: true, backend: "antigravity", logger })),
+    profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger, env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8", ...o.env },
+    makeRunner: a => (holder.runner = new AcpRunner(a, { name: "worker", config, instanceDir: dir, topicMode: true, backend: o.grok ? "grok" : "antigravity", logger })),
   });
   const runner = holder.runner!;
   runners.push(runner);
-  const queued: unknown[] = [];
+  const queued: unknown[] = [], delivered: unknown[] = [], confirmed: unknown[] = [];
   runner.on("message_queued", (d: unknown) => queued.push(d));
+  runner.on("message_delivered", (d: unknown) => delivered.push(d));
+  runner.on("message_confirmed", (d: unknown) => confirmed.push(d));
   await runner.start();
   const fleet = new IpcClient(join(dir, "channel.sock"));
   clients.push(fleet);
   await fleet.connect();
   fleet.on("message", (m: any) => { if (m.type === "fleet_outbound") fleet.send({ type: "fleet_outbound_response", fleetRequestId: m.fleetRequestId, result: { messageId: "m1" } }); });
-  return { runner, fleet, state, queued };
+  return { runner, fleet, state, queued, delivered, confirmed };
 }
 const meta = (id: string, extra: Record<string, string> = {}) => ({ chat_id: "chat-1", message_id: id, user: "alice", source: "web", ...extra });
 const steps = (h: { runner: AcpRunner }) => h.runner.steps.snapshot(undefined, { thoughts: false }).steps;
@@ -71,6 +74,79 @@ describe("a normal message that arrives while the agent is working (the default)
     expect(calls(h.state).filter(c => "cancelled" in c)).toEqual([]);
     expect(h.queued).toEqual([{ chatId: "chat-1", messageId: "m-2" }]);
     expect(Object.values(sessions(h.state)).flat().some(t => NOTE.test(t))).toBe(false);
+  });
+});
+
+describe("an interruption where the CLI can add a message to the running turn (grok's `_x.ai/interject`)", () => {
+  it("adds it to the turn: no cancel, no new prompt, the turn ends once, normally, and the queue is untouched", async () => {
+    const h = await boot({ grok: true });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.pushChannelMessage("C queued", meta("c"));
+    expect(h.runner.interruptMode()).toBe("add");
+    h.runner.interruptMessage("B joins", meta("b"));
+    await until(() => turnEnds(h).length === 2, 10000, "A's turn and C's");
+    const log = calls(h.state);
+    expect(log.filter(c => "cancelled" in c)).toEqual([]);                                     // nothing was cancelled
+    expect(log.filter(c => "interject" in c)).toHaveLength(1);
+    expect(log.find(c => "interject" in c).interject).toContain("B joins");                    // with the usual [user:] envelope
+    expect(log.find(c => "interject" in c).active).toBe(true);
+    expect(turnEnds(h)).toEqual(["end_turn", "end_turn"]);                                     // A took B inside its own turn; C was the next turn
+    const prompts = Object.values(sessions(h.state))[0]!;
+    expect(prompts).toHaveLength(2);                                                          // only A and C were ever prompted: B was not a prompt
+    expect(prompts.some(t => NOTE.test(t) || t.includes("B joins"))).toBe(false);
+    const st = steps(h);
+    expect(st.filter(s => s.kind === "user").map(s => s.body)).toEqual(["A #slow", "B joins", "C queued"]);
+    expect(st.filter(s => s.kind === "assistant").map(s => s.body).join("\n")).toContain("interjected:");
+    // B is delivered at once and confirmed with A's turn; B is never announced as queued, C is.
+    expect(h.delivered).toContainEqual({ chatId: "chat-1", messageId: "b" });
+    expect(h.confirmed).toContainEqual({ chatId: "chat-1", messageId: "b" });
+    expect(h.queued).toEqual([{ chatId: "chat-1", messageId: "c" }]);
+  });
+
+  it("falls back to cancel and a new prompt when the CLI does not take it", async () => {
+    const h = await boot({ grok: true, env: { FAKE_ACP_INTERJECT: "reject" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B instead", meta("b"));
+    await until(() => turnEnds(h).length === 2, 10000, "both turns");
+    expect(turnEnds(h)).toEqual(["cancelled", "end_turn"]);
+    expect(calls(h.state).filter(c => "cancelled" in c)).toHaveLength(1);
+    expect(Object.values(sessions(h.state))[0]!.map(t => NOTE.test(t))).toEqual([false, true]);
+  });
+
+  it("an answer that is not \"queued\" is not a delivery: the turn is cancelled and the message is a new prompt", async () => {
+    const h = await boot({ grok: true, env: { FAKE_ACP_INTERJECT: "refuse" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B instead", meta("b"));
+    await until(() => turnEnds(h).length === 2, 10000, "both turns");
+    expect(turnEnds(h)).toEqual(["cancelled", "end_turn"]);
+    expect(h.delivered).toHaveLength(2);                                                       // A, and B as its own prompt (no early "delivered" for B)
+  });
+
+  it("an agent with no way of its own (agy) is told to cancel; an idle one just receives it", async () => {
+    const agy = await boot();
+    expect(agy.runner.interruptMode()).toBe("idle");
+    agy.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => agy.runner.getInstanceState() === "working", 3000, "A is working");
+    expect(agy.runner.interruptMode()).toBe("interrupt");
+    const grok = await boot({ grok: true });
+    expect(grok.runner.interruptMode()).toBe("idle");
+    grok.fleet.send({ type: "steer", content: "hi", meta: meta("m") });                        // idle: sent as it is, the CLI is not asked to interject
+    await until(() => turnEnds(grok).length === 1, 6000, "the turn");
+    expect(calls(grok.state).filter(c => "interject" in c)).toEqual([]);
+  });
+
+  it("while an interruption by cancel is already waiting, a further one joins it (the turn is already being cancelled)", async () => {
+    const h = await boot({ grok: true, env: { FAKE_ACP_INTERJECT: "reject" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B1", meta("b1"));
+    await sleep(200);
+    h.runner.interruptMessage("B2", meta("b2"));
+    await until(() => turnEnds(h).length === 3, 12000, "all turns");
+    expect(steps(h).filter(s => s.kind === "user").map(s => s.body)).toEqual(["A #slow", "B1", "B2"]);
   });
 });
 
@@ -192,6 +268,18 @@ describe("/steer in a chat, for an ACP instance", () => {
     const stuck = setup("grok", true, "stuck");
     await stuck.commands.handleInstanceCommand(inbound("/steer do it"), "worker");
     expect(String(stuck.sendText.mock.calls[0][1])).toMatch(/Interrupted/);
+  });
+  it("where the CLI adds it to the turn (grok), the reply says it was added and the turn is not interrupted", async () => {
+    const { commands, send, sendText } = (() => {
+      const send = vi.fn(); const sendText = vi.fn().mockResolvedValue({ messageId: "r", chatId: "c" });
+      const commands = new TopicCommands({ adapter: { sendText }, adapters: new Map(),
+        fleetConfig: { defaults: {}, instances: { worker: { backend: "grok", working_directory: "/tmp", cli_adapter: "acp" } } },
+        instanceIpcClients: new Map([["worker", { connected: true, send }]]), instanceRunsAcp: () => true, acpSteerMode: () => "add", getDeliveryEpoch: () => 3, isFleetAdmin: () => false } as any);
+      return { commands, send, sendText };
+    })();
+    await commands.handleInstanceCommand(inbound("/steer more"), "worker");
+    expect(send).toHaveBeenCalledOnce();
+    expect(String(sendText.mock.calls[0][1])).toMatch(/Added to worker's current turn.*the turn is not interrupted/);
   });
   it("a terminal grok instance is unchanged: it steers mid-turn; a terminal agy instance still refuses", async () => {
     const grok = setup("grok", false);

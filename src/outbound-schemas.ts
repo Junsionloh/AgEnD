@@ -630,7 +630,7 @@ export const SendToInstanceArgs = z.object({
   message: NonEmptyString.describe("The message to send to the target instance."),
   forwards: ForwardMessageIds,
   steer: z.boolean().optional().describe(
-    "Inject as a supplement into the target's CURRENT turn — for correcting or adding to work you just sent. Omit for a new task. Safe: an idle target receives it normally; an unsupported backend falls back to the idle queue. A target that runs over ACP (no terminal) cannot take input mid-turn: steer=true interrupts its running turn (it is cancelled) and the target continues the same conversation with this message first; messages already queued for it stay behind. Without steer the message is queued until the turn ends.",
+    "Inject as a supplement into the target's CURRENT turn — for correcting or adding to work you just sent. Omit for a new task. Safe: an idle target receives it normally; an unsupported backend falls back to the idle queue. A target that runs over ACP (no terminal) has no standard way to take input mid-turn: a grok target takes the message into its running turn through its own interjection (the turn is not cancelled; it reads it at its next step); any other (antigravity) has its running turn interrupted (cancelled) and continues the same conversation with this message first. Messages already queued for it stay behind. Without steer the message is queued until the turn ends.",
   ),
   request_kind: z.enum(["query", "task", "report", "update"]).optional().describe(
     "Categorizes the message intent. 'query' = asking a question, 'task' = delegating work, 'report' = returning results, 'update' = status notification.",
@@ -683,7 +683,7 @@ export const DelegateTaskArgs = z.object({
   task: NonEmptyString.describe("Description of the task to perform."),
   forwards: ForwardMessageIds,
   steer: z.boolean().optional().describe(
-    "Inject as a supplement into the target's CURRENT turn — for correcting or adding to work you just sent. Omit for a new task. Safe: an idle target receives it normally; an unsupported backend falls back to the idle queue. A target that runs over ACP (no terminal) has its running turn interrupted (cancelled) and continues the same conversation with this message first; without steer the message is queued until the turn ends.",
+    "Inject as a supplement into the target's CURRENT turn — for correcting or adding to work you just sent. Omit for a new task. Safe: an idle target receives it normally; an unsupported backend falls back to the idle queue. A grok target over ACP (no terminal) takes it into its running turn without cancelling (it reads it at its next step); an antigravity one has its running turn interrupted (cancelled) and continues the same conversation with this message first; without steer the message is queued until the turn ends.",
   ),
   success_criteria: z.string().optional()
     .describe("How the recipient should judge if the task is complete."),

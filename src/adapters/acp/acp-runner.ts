@@ -202,7 +202,7 @@ export class AcpRunner extends EventEmitter {
   private readonly autoPause: AutoPauseController;
   private autoPauseRequested = false;
   private workLease: (() => boolean) | null = null;
-  private turn: { item: InboundItem; startedAt: number; text: string; outbound: boolean; consumed: boolean; deliveryId: string | null; attemptNo: number; cancelled: boolean } | null = null;
+  private turn: { item: InboundItem; startedAt: number; text: string; outbound: boolean; consumed: boolean; deliveryId: string | null; attemptNo: number; cancelled: boolean; interjected: { chatId: string; messageId: string; threadId?: string }[] } | null = null;
   /** Messages waiting for their turn, in the order they will run (an interruption goes in front of the others). `queued` counts these and the one running. */
   private readonly inbox: InboundItem[] = [];
   private pumping = false;
@@ -770,16 +770,50 @@ export class AcpRunner extends EventEmitter {
   }
 
   /**
-   * An interruption (`/steer`, or `steer: true` from another instance). ACP has no mid-turn input, so a running turn is cancelled
-   * (`session/cancel`, and any permission request it waits on is answered "cancelled"), and when it has ended with `cancelled` this
-   * message runs next, in the same session, with a line in front saying the previous turn was cut short. It goes ahead of the messages
-   * already queued, which keep their order behind it. An agent that is idle just receives it, as any message.
+   * An interruption (`/steer`, or `steer: true` from another instance). Where the CLI has its own way to add a message to the running turn
+   * (grok's `_x.ai/interject`) that is used: the turn is not cancelled, the message joins it at the CLI's next safe point. Otherwise (agy; or the
+   * CLI did not take it) ACP has no mid-turn input, so the running turn is cancelled (`session/cancel`, and any permission request it waits on is
+   * answered "cancelled") and when it has ended with `cancelled` this message runs next, in the same session, with a line in front saying the
+   * previous turn was cut short. That form goes ahead of the messages already queued, which keep their order behind it. An idle agent just
+   * receives it, as any message.
    */
   interruptMessage(content: string, meta: Record<string, string>, deliveryEpoch = this.deliveryEpoch): void {
     this.admit(content, meta, deliveryEpoch, false, true);
   }
 
-  private admit(content: string, meta: Record<string, string>, deliveryEpoch: number, raw: boolean, interrupt: boolean): void {
+  /** How an interruption sent now would be delivered: `add` (into the running turn, the CLI's own way), `interrupt` (cancel and a new prompt), `idle` (nothing runs: sent as it is). */
+  interruptMode(): "add" | "interrupt" | "idle" {
+    if (this.queued === 0) return "idle";
+    const turn = this.turn;
+    return turn && !turn.cancelled && !this.inbox.some(i => i.interrupts) && this.adapter.canInterject ? "add" : "interrupt";
+  }
+
+  /**
+   * The CLI took `content` into the turn that is running: it is a step of that turn, delivered, and confirmed when the turn ends as it should.
+   * When the CLI does not take it (an error, a refusal, the turn ended meanwhile) the message goes the other way: cancel and a new prompt.
+   */
+  private async interjectInto(turn: NonNullable<AcpRunner["turn"]>, content: string, meta: Record<string, string>, deliveryEpoch: number): Promise<void> {
+    let taken = false;
+    try { taken = await this.adapter.interject(this.format(content, meta)); } catch { taken = false; }
+    if (!taken) {
+      this.log.info({ name: this.name }, "acp: the CLI did not take the interjection; interrupting the turn instead");
+      this.admit(content, meta, deliveryEpoch, false, true, false);
+      return;
+    }
+    const status = statusOf(meta);
+    this.steps.addUserMessage(content);
+    this.noteWorkActivity();
+    if (status) this.emit("message_delivered", status);
+    const attempt = this.durableAttempt(meta);
+    if (attempt && this.outbox && this.outbox.begin(attempt.deliveryId, this.bootId, attempt.attemptNo) === "begun") {
+      this.outbox.markEnterStarted(attempt.deliveryId, this.bootId, attempt.attemptNo);
+      this.outbox.complete(attempt.deliveryId, this.bootId, attempt.attemptNo, "delivered", "acp:interjected");
+    }
+    if (status && this.turn === turn && !turn.cancelled) turn.interjected.push(status);
+    this.log.info({ name: this.name }, "acp: the message was added to the running turn (the CLI's own interjection)");
+  }
+
+  private admit(content: string, meta: Record<string, string>, deliveryEpoch: number, raw: boolean, interrupt: boolean, tryNative = true): void {
     if (deliveryEpoch !== this.deliveryEpoch) {
       this.log.info({ name: this.name }, "acp: pending delivery dropped by cancel");
       this.deferDurable(meta, "delivery epoch changed before queue admission");
@@ -789,6 +823,7 @@ export class AcpRunner extends EventEmitter {
     if (!this.started && !this.adapter.health().process) return;
     this.updateLastChat(meta.chat_id, meta.thread_id, meta.adapter_id);
     if (meta.chat_id) this.noteWorkActivity();
+    if (interrupt && tryNative && !raw && this.interruptMode() === "add") { void this.interjectInto(this.turn!, content, meta, deliveryEpoch); return; }
     const interrupts = interrupt && this.queued > 0 ? { by: meta.from_instance ? `another agent (${meta.from_display || meta.from_instance})` : "the user" } : undefined;
     const item: InboundItem = { content, meta, epoch: deliveryEpoch, turnId: `${this.bootId.slice(0, 8)}-${++this.turnSeq}`, ...(raw ? { raw: true } : {}), ...(interrupts ? { interrupts } : {}) };
     this.queued++;
@@ -855,7 +890,7 @@ export class AcpRunner extends EventEmitter {
       if (this.outbox.begin(attempt.deliveryId, this.bootId, attempt.attemptNo) !== "begun") return;
     }
     const wire = item.raw ? content : this.format(content, meta);
-    const t = { item, startedAt: this.now(), text: "", outbound: false, consumed: false, deliveryId: attempt ? attempt.deliveryId : null, attemptNo: attempt ? attempt.attemptNo : 0, cancelled: false };
+    const t = { item, startedAt: this.now(), text: "", outbound: false, consumed: false, deliveryId: attempt ? attempt.deliveryId : null, attemptNo: attempt ? attempt.attemptNo : 0, cancelled: false, interjected: [] };
     this.turn = t;
     this.noteWorkActivity();
     this.steps.beginTurn(item.turnId, content, undefined, wire);
@@ -878,6 +913,7 @@ export class AcpRunner extends EventEmitter {
     }
     this.steps.apply({ kind: "turn_end", stopReason });
     if (stopReason !== "cancelled" && !t.cancelled && status) this.emit("message_confirmed", status);
+    if (stopReason !== "cancelled" && !t.cancelled) for (const s of t.interjected) this.emit("message_confirmed", s);
     await this.maybeProxyReply(t, stopReason);
     this.endTurn(t, stopReason);
   }

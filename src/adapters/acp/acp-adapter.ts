@@ -273,6 +273,20 @@ export class AcpAdapter implements CliAdapter {
     return { accepted: true };
   }
 
+  /** This CLI can add a message to the turn that is running (its own extension) and a turn is running now. */
+  get canInterject(): boolean { return !!this.opts.profile.interject && !!this.client?.isRunning && !!this.session && this.turn !== null; }
+
+  /**
+   * Add `text` to the running turn with the CLI's own method (`profile.interject`). True only when the CLI says it took it; an error, a
+   * refusal or no running turn is false and the caller falls back to cancel and a new prompt. Never called without a running turn.
+   */
+  async interject(text: string): Promise<boolean> {
+    const spec = this.opts.profile.interject, client = this.client, sessionId = this.session;
+    if (!spec || !client?.isRunning || !sessionId || this.turn === null) return false;
+    try { return spec.accepted(await client.request(spec.method, spec.params(sessionId, text), { timeoutMs: 5000 })); }
+    catch (err) { this.opts.logger.warn({ error: (err as Error).message }, "acp: the CLI did not take the interjection"); return false; }
+  }
+
   /** ACP defines no mid-turn input: not offered (capabilities.steer is false). */
   steer = undefined;
 

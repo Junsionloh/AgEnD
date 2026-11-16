@@ -58,6 +58,8 @@ type ExecutionFleetContext = FleetContext & {
   instanceLaunchSupportsSteer?(instanceName: string): boolean | undefined;
   /** The instance runs over ACP: it has no terminal, so what is typed into a pane is answered, not sent. */
   instanceRunsAcp?(instanceName: string): boolean;
+  /** How a `/steer` sent now to an ACP instance would be delivered (the runner knows: the CLI's own way in, cancel and a new prompt, or nothing is running). */
+  acpSteerMode?(instanceName: string): "add" | "interrupt" | "idle" | undefined;
 };
 
 /** Sanitize a directory name into a valid instance name. Keeps Unicode letters (incl. CJK). */
@@ -1275,8 +1277,9 @@ export class TopicCommands {
     msg: Pick<InboundMessage, "chatId" | "messageId" | "username" | "userId" | "threadId" | "adapterId" | "source" | "humanOrigin" | "humanOriginalBody"> & { webGuest?: boolean },
   ): string {
     const backend = this.effectiveBackend(instanceName);
-    // ACP defines no mid-turn input (AGEND-279): `/steer` interrupts. The runner cancels the running turn and runs this message next in the
-    // same session; a message that is not a `/steer` is queued as ever. An idle agent just receives it, and the reply says which.
+    // ACP defines no mid-turn input (AGEND-279): `/steer` interrupts. The runner adds the message to the running turn where the CLI has its own way
+    // (grok), else cancels the turn and runs this message next in the same session; a message that is not a `/steer` is queued as ever. An idle
+    // agent just receives it, and the reply says which of the three it is.
     const acp = this.runsAcp(instanceName);
     const launchSupportsSteer = acp ? true : this.ctx.instanceLaunchSupportsSteer?.(instanceName);
     if (!acp && !instanceSupportsSteer(backend, launchSupportsSteer)) {
@@ -1305,8 +1308,9 @@ export class TopicCommands {
       : ipc.send(payload) !== false;
     if (!sent) return t("steer.not_connected");
     if (!acp) return t("steer.sent", instanceName);
-    const state = this.ctx.getInstanceExecutionState?.(instanceName);
-    return t(state === "working" || state === "stuck" ? "steer.interrupted_acp" : "steer.idle_acp", instanceName);
+    const mode = this.ctx.acpSteerMode?.(instanceName)
+      ?? (["working", "stuck"].includes(this.ctx.getInstanceExecutionState?.(instanceName) ?? "") ? "interrupt" : "idle");
+    return t(mode === "add" ? "steer.added_acp" : mode === "interrupt" ? "steer.interrupted_acp" : "steer.idle_acp", instanceName);
   }
 
   /** Ask a Claude Code side question without folding it into the active turn. */

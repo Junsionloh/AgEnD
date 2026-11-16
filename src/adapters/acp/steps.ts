@@ -90,6 +90,14 @@ export class AcpStepStore {
     this.put(step, true);
   }
 
+  /** A person's message added to the turn that is running (`interject`): a step of its own in that turn, after what has happened so far. */
+  addUserMessage(text: string, ts = this.now()): void {
+    this.closeOpen();
+    const step: LogStep = { id: `ui-${this.turn || "x"}-${++this.seq}`, turn: this.turn, ts, kind: "user" };
+    stepBody(step, text, TEXT_MAX);
+    this.put(step, true);
+  }
+
   /** Fold one adapter event into the timeline. Events with no place in it (usage, quota, user echo) are ignored. */
   apply(event: AdapterEvent): void {
     switch (event.kind) {

@@ -5811,6 +5811,12 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     return this.lastActivity.get(name) ?? 0;
   }
 
+  /** How a `/steer` to an ACP instance would be delivered now (see `AcpRunner.interruptMode`); undefined: not an ACP instance. */
+  acpSteerMode(name: string): "add" | "interrupt" | "idle" | undefined {
+    const runner = this.daemons.get(name);
+    return runner && adapterOf(runner)?.id === "acp" ? (runner as unknown as { interruptMode?(): "add" | "interrupt" | "idle" }).interruptMode?.() : undefined;
+  }
+
   /** The context an ACP agent reports itself, for the places that otherwise read it off a screen (/ctx, /status, the dashboard). */
   reportedContext(name: string): { context: number; tokenRatio: import("./context-percent.js").TokenContextRatio | null } | null {
     const runner = this.daemons.get(name);

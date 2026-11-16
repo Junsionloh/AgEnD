@@ -30,6 +30,9 @@ const waiting = new Map(); // request id -> resolve
 let nextOut = 100;
 let cancelled = false;
 let cancelWake = null;
+// grok's `_x.ai/interject` {sessionId, text} → {status: "queued"} (FAKE_ACP_INTERJECT=reject: "Method not found", as agy answers). A turn waiting in #slow is woken by it and ends normally ("end_turn", not cancelled) with a message that says what it was given.
+let turnActive = false;
+let interjections = [];
 
 function ask(method, params) {
   const id = nextOut === 100 ? 0 : nextOut; nextOut++;
@@ -39,6 +42,8 @@ function ask(method, params) {
 
 async function turn(id, sessionId, text) {
   cancelled = false;
+  turnActive = true;
+  interjections = [];
   const history = known()[sessionId] ?? [];
   history.push(text);
   remember(sessionId, history);
@@ -104,13 +109,14 @@ async function turn(id, sessionId, text) {
     } else {
       update(sessionId, { sessionUpdate: "tool_call_update", toolCallId: "w1", status: "failed" });
       update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "refused" } });
-      if (outcome?.outcome === "cancelled") { out({ jsonrpc: "2.0", id, result: { stopReason: "cancelled" } }); return; }
+      if (outcome?.outcome === "cancelled") { turnActive = false; out({ jsonrpc: "2.0", id, result: { stopReason: "cancelled" } }); return; }
     }
   } else if (text.includes("#slow")) {
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "thinking " } });
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "slowly" } });
     await new Promise(r => { cancelWake = r; setTimeout(r, 20000); });
-    if (cancelled) { out({ jsonrpc: "2.0", id, result: { stopReason: "cancelled" } }); return; }
+    if (cancelled) { turnActive = false; out({ jsonrpc: "2.0", id, result: { stopReason: "cancelled" } }); return; }
+    if (interjections.length) update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: `interjected: ${interjections.join(" | ")}` } });
   } else {
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "Let me " } });
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "think." } });
@@ -119,6 +125,7 @@ async function turn(id, sessionId, text) {
     update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "OK" } });
   }
   if (grokContext) out({ ...grokContext.response_completed, params: { ...grokContext.response_completed.params, sessionId } });
+  turnActive = false;
   out({ jsonrpc: "2.0", id, result: { stopReason: "end_turn" } });
 }
 
@@ -166,6 +173,14 @@ process.stdin.on("data", d => {
       case "session/prompt":
         turn(m.id, m.params.sessionId, m.params.prompt.map(p => p.text).join("")).catch(e => { log({ error: String(e) }); process.exit(4); });
         break;
+      case "_x.ai/interject": {
+        if (process.env.FAKE_ACP_INTERJECT === "reject") { out({ jsonrpc: "2.0", id: m.id, error: { code: -32601, message: "Method not found" } }); break; }
+        if (process.env.FAKE_ACP_INTERJECT === "refuse") { out({ jsonrpc: "2.0", id: m.id, result: { status: "rejected" } }); break; }
+        log({ interject: m.params.text, active: turnActive });
+        if (turnActive) { interjections.push(m.params.text); cancelWake?.(); }
+        out({ jsonrpc: "2.0", id: m.id, result: { status: "queued" } });
+        break;
+      }
       case "session/cancel":
         log({ cancelled: m.params?.sessionId });
         cancelled = true; cancelWake?.();
