@@ -7,7 +7,8 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, st
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { acpAccountLaunch } from "../src/adapters/acp/account.js";
+import { win32 } from "node:path";
+import { acpAccountLaunch, isUnder } from "../src/adapters/acp/account.js";
 import { AcpAdapter } from "../src/adapters/acp/acp-adapter.js";
 import { AGY_PROFILE, GROK_PROFILE, type AcpProfile } from "../src/adapters/acp/profiles.js";
 import { spawn as nodeSpawn } from "../src/child-process.js";
@@ -93,6 +94,14 @@ describe("grok under a named account", () => {
       expect(existsSync(join(other, "work")), `nothing was made through the link at ${level}`).toBe(false);
       expect(backend).toBeTruthy();
     }
+  });
+  it("a folder that resolves onto another drive is outside the home, as is a path that climbs out (judged with Windows path rules)", () => {
+    expect(isUnder("C:\\agend", "C:\\agend\\credential-profiles\\grok\\work", win32)).toBe(true);
+    expect(isUnder("C:\\agend", "D:\\elsewhere\\work", win32)).toBe(false);          // relative() answers with D:\... (absolute, not ..\...)
+    expect(isUnder("C:\\agend", "C:\\other\\work", win32)).toBe(false);
+    expect(isUnder("C:\\agend", "C:\\agend", win32)).toBe(false);
+    expect(isUnder("/h/agend", "/h/agend/credential-profiles/grok/work")).toBe(true);
+    expect(isUnder("/h/agend", "/h/other")).toBe(false);
   });
   it("a name that is not a profile name is refused before anything is made", () => {
     const home = tmp();

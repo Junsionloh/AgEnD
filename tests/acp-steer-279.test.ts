@@ -33,18 +33,19 @@ afterEach(async () => {
 });
 
 /** `grok`: the profile with `_x.ai/interject`; default: agy's (a second prompt folded into the running one: FAKE_ACP_CONCURRENT); `plain`: a CLI with no way to add to a turn. `env`: fake-agent switches. */
-async function boot(o: { grok?: boolean; plain?: boolean; env?: Record<string, string> } = {}) {
+async function boot(o: { grok?: boolean; plain?: boolean; env?: Record<string, string>; log?: { info(...a: any[]): void; warn(...a: any[]): void; error(...a: any[]): void; debug(...a: any[]): void }; outbox?: unknown; cancelEveryMs?: number } = {}) {
   const dir = tmp(), state = tmp();
   const config = { working_directory: dir, backend: o.grok ? "grok" : "antigravity", cli_adapter: "acp" } as InstanceConfig;
   const base = o.grok ? GROK_PROFILE : AGY_PROFILE;
   const profile = { ...base, ...(o.plain ? { interject: undefined } : {}), supportedVersions: ["1.5.8"], versionOf: AGY_PROFILE.versionOf, args: () => [FAKE] };
   const holder: { runner?: AcpRunner } = {};
   const adapter = new AcpAdapter({
-    profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger, env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8", ...o.env },
-    makeRunner: a => (holder.runner = new AcpRunner(a, { name: "worker", config, instanceDir: dir, topicMode: true, backend: o.grok ? "grok" : "antigravity", logger })),
+    profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger: o.log ?? logger, env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8", ...o.env },
+    makeRunner: a => (holder.runner = new AcpRunner(a, { name: "worker", config, instanceDir: dir, topicMode: true, backend: o.grok ? "grok" : "antigravity", logger: o.log ?? logger, ...(o.cancelEveryMs ? { cancelRetryEveryMs: o.cancelEveryMs } : {}) })),
   });
   const runner = holder.runner!;
   runners.push(runner);
+  if (o.outbox) runner.setDeliveryOutboxPort(o.outbox as never);
   const queued: unknown[] = [], delivered: unknown[] = [], confirmed: unknown[] = [];
   runner.on("message_queued", (d: unknown) => queued.push(d));
   runner.on("message_delivered", (d: unknown) => delivered.push(d));
@@ -184,6 +185,103 @@ describe("an interruption where the CLI folds a second prompt into the running t
     expect(calls(h.state).filter(c => "cancelled" in c)).toHaveLength(1);
     expect(Object.values(sessions(h.state))[0]!.map(t => NOTE.test(t))).toEqual([false, true]);
   });
+});
+
+/** An outbox with the real one's rules that matter here: one attempt per (delivery, attempt number); `begin` again is `duplicate`; `abort` only while begun; `complete` ends it. */
+class FakeOutbox {
+  calls: string[] = [];
+  private state = new Map<string, "begun" | "completed" | "aborted">();
+  begin(id: string, _boot: string, attempt: number) { const k = `${id}#${attempt}`; this.calls.push(`begin:${k}`); if (this.state.has(k)) return "duplicate" as const; this.state.set(k, "begun"); return "begun" as const; }
+  markEnterStarted(id: string, _b: string, attempt: number) { this.calls.push(`enter:${id}#${attempt}`); return true; }
+  complete(id: string, _b: string, attempt: number, outcome: string, evidence?: string) { const k = `${id}#${attempt}`; this.calls.push(`complete:${k}:${outcome}:${evidence}`); if (this.state.get(k) !== "begun") return false; this.state.set(k, "completed"); return true; }
+  abort(id: string, _b: string, attempt: number, reason: string) { const k = `${id}#${attempt}`; this.calls.push(`abort:${k}`); void reason; if (this.state.get(k) !== "begun") return false; this.state.set(k, "aborted"); return true; }
+  retryBeforeBegin(id: string, _b: string, attempt: number, reason: string) { this.calls.push(`retry:${id}#${attempt}:${reason}`); return true; }
+}
+const durable = (id: string, attempt = 1) => ({ chat_id: "", message_id: "x1", user: "instance:planner", source: "cross_instance", from_instance: "planner", delivery_id: id, delivery_attempt: String(attempt) });
+
+describe("durable deliveries added to a running turn (second review)", () => {
+  it("the verdict waits for the turn's end: nothing is completed while the turn runs, then delivered once", async () => {
+    const outbox = new FakeOutbox();
+    const h = await boot({ env: { FAKE_ACP_CONCURRENT: "fold", FAKE_ACP_FOLD_DELAY: "1200" }, outbox });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B durable", durable("d1"));
+    await until(() => outbox.calls.some(c => c.startsWith("enter:d1")), 3000, "the attempt begun");
+    expect(outbox.calls.filter(c => c.startsWith("complete:d1"))).toEqual([]);                // taken, but the turn is still running
+    await until(() => turnEnds(h).length === 1, 10000, "the turn");
+    expect(outbox.calls.filter(c => c.startsWith("complete:d1"))).toEqual(["complete:d1#1:delivered:acp:interjected"]);
+  }, 20000);
+
+  it("agy refuses the added prompt late: the attempt goes back to the outbox (abort), is never completed as delivered, and nothing is dropped", async () => {
+    const outbox = new FakeOutbox();
+    const h = await boot({ env: { FAKE_ACP_CONCURRENT: "late-error" }, outbox });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B durable late", durable("d2"));
+    await until(() => outbox.calls.some(c => c.startsWith("abort:d2")), 5000, "the attempt handed back");
+    expect(outbox.calls.filter(c => c.startsWith("complete:d2"))).toEqual([]);                // not recorded as delivered
+    expect(steps(h).filter(s => s.kind === "user").map(s => [s.body, s.status ?? null])).toEqual([["A #slow", null], ["B durable late", "failed"]]);   // the step says it was refused
+    await h.runner.adapter.cancel();                                                          // (ends A, which nothing else would)
+    await until(() => turnEnds(h).length === 1, 10000, "A ends");
+    expect(outbox.calls.filter(c => c.startsWith("complete:d2"))).toEqual([]);                // the end of the turn does not complete what was handed back
+    // The outbox delivers it again as a new attempt (the fleet's part): it reaches the runner as a message of its own.
+    h.runner.pushChannelMessage("B durable late", durable("d2", 2));
+    await until(() => turnEnds(h).length === 2, 10000, "the redelivery");
+    expect(outbox.calls.filter(c => c.startsWith("complete:d2"))).toEqual([expect.stringMatching(/^complete:d2#2:delivered:acp:/)]);   // the second attempt is the one completed
+    expect(Object.values(sessions(h.state))[0]!.filter(t => t.includes("B durable late"))).toHaveLength(1);   // prompted once, as its own turn
+  }, 30000);
+
+  it("a message that is not durable is sent again here, and the second copy does not report 'delivered' a second time", async () => {
+    const h = await boot({ env: { FAKE_ACP_CONCURRENT: "late-error" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B plain", meta("b"));
+    await until(() => turnEnds(h).length === 2, 15000, "A (cancelled by the resend) and B");
+    expect(h.delivered.filter((d: any) => d.messageId === "b")).toHaveLength(1);
+    expect(steps(h).filter(s => s.kind === "user").map(s => [s.body, s.status ?? null])).toEqual([["A #slow", null], ["B plain", "failed"], ["B plain", null]]);
+  }, 25000);
+});
+
+describe("the cancel that is repeated", () => {
+  it("stops with the turn it was for: the next turn is not cancelled by it", async () => {
+    const h = await boot({ plain: true, cancelEveryMs: 150 });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B #slow", meta("b"));                                         // B itself waits for a cancel
+    await until(() => turnEnds(h).length === 1, 5000, "A cancelled");
+    await until(() => steps(h).filter(s => s.kind === "user").length === 2, 3000, "B started");
+    await sleep(1200);                                                                        // many retry intervals later
+    expect(turnEnds(h)).toEqual(["cancelled"]);                                              // B is still running
+    expect(calls(h.state).filter(c => "cancelled" in c)).toHaveLength(1);                     // and never received a cancel
+  }, 20000);
+
+  it("gives up after 8 asks and says so, naming the turn and the interruption that waits", async () => {
+    const warns: any[] = [];
+    const log = { ...logger, warn: (o: object, m?: string) => { warns.push([o, m]); } };
+    const h = await boot({ plain: true, cancelEveryMs: 60, env: { FAKE_ACP_IGNORE_CANCEL: "all" }, log });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B waits", meta("b"));
+    await until(() => warns.some(w => /giving up asking/.test(String(w[1]))), 5000, "the warning");
+    const w = warns.find(x => /giving up asking/.test(String(x[1])))!;
+    expect(w[0]).toMatchObject({ name: "worker", waitingInterruptions: 1, interruptedBy: "the user" });
+    expect(calls(h.state).filter(c => "cancelIgnored" in c)).toHaveLength(9);                 // the first ask and eight repeats, then no more
+    await sleep(400);
+    expect(calls(h.state).filter(c => "cancelIgnored" in c)).toHaveLength(9);
+  }, 20000);
+});
+
+describe("grok's announcement counts for one message", () => {
+  it("two messages with the same text: the one announcement is used up by the first, the second (not announced) is sent as a prompt", async () => {
+    const h = await boot({ grok: true, env: { FAKE_ACP_INTERJECT: "announce-first" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    // Identical on the wire (same envelope): what the CLI would announce for either.
+    h.runner.interruptMessage("same words", meta("b"));
+    h.runner.interruptMessage("same words", meta("b"));
+    await until(() => turnEnds(h).length === 2, 20000, "A, then the second message as its own turn");
+    expect(Object.values(sessions(h.state))[0]!.filter(t => t.includes("same words"))).toHaveLength(1);   // exactly one of the two became a prompt
+  }, 30000);
 });
 
 describe("an interruption in the gaps (review of 00c682636)", () => {

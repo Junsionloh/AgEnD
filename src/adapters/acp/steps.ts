@@ -91,10 +91,20 @@ export class AcpStepStore {
   }
 
   /** A person's message added to the turn that is running (`interject`): a step of its own in that turn, after what has happened so far. */
-  addUserMessage(text: string, ts = this.now()): void {
+  addUserMessage(text: string, ts = this.now()): string {
     this.closeOpen();
     const step: LogStep = { id: `ui-${this.turn || "x"}-${++this.seq}`, turn: this.turn, ts, kind: "user" };
     stepBody(step, text, TEXT_MAX);
+    this.put(step, true);
+    return step.id;
+  }
+
+  /** The CLI took a message added to the turn and then refused it: the step says so (the message is sent again as a message of its own). */
+  refuseUserMessage(id: string): void {
+    const step = this.byId.get(id);
+    if (!step || step.kind !== "user") return;
+    step.status = "failed";
+    step.note = "the CLI refused this message; it is sent again as its own";
     this.put(step, true);
   }
 

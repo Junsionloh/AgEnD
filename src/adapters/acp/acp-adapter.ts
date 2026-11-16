@@ -304,7 +304,9 @@ export class AcpAdapter implements CliAdapter {
         try { return spec.accepted(await client.request(spec.method, spec.params(sessionId, text), { timeoutMs: 5000 })) ? "taken" : false; }
         catch (err) {
           // No answer in time: grok announces an interjection the moment it takes one, so an announcement of this very text means it was taken (and must not be sent again).
-          if (this.interjectionTexts.includes(text)) { this.opts.logger.warn({ error: (err as Error).message }, "acp: the interjection was announced although its answer did not come in time; counted as taken"); return "announced"; }
+          const announced = this.interjectionTexts.indexOf(text);
+          if (announced >= 0) { this.interjectionTexts.splice(announced, 1);   // one announcement counts for one message
+            this.opts.logger.warn({ error: (err as Error).message }, "acp: the interjection was announced although its answer did not come in time; counted as taken"); return "announced"; }
           throw err;
         }
       }

@@ -45,6 +45,8 @@ export interface AcpRunnerOptions {
   /** A running turn with no word from the agent this long is reported as hung. */
   readonly hangAfterMs?: number;
   readonly hangCheckEveryMs?: number;
+  /** How often an interruption's cancel is asked again (default 2000 ms; tests shorten it). */
+  readonly cancelRetryEveryMs?: number;
   /** How long after the session opens the instance's own MCP server may take to connect before it is reported missing (default 45 s). */
   readonly mcpGraceMs?: number;
   readonly now?: () => number;
@@ -59,6 +61,8 @@ interface InboundItem {
   readonly raw?: boolean;
   /** An interruption (`/steer`, `steer: true`): who sent it. The turn it found running was cancelled, and the agent is told so before the message. */
   readonly interrupts?: { readonly by: string };
+  /** Sent a second time (the CLI refused the first copy after taking it): its "delivered" was reported then. */
+  readonly resent?: true;
 }
 
 const FLEET_RESPONSE_TYPES = new Set([
@@ -207,6 +211,8 @@ export class AcpRunner extends EventEmitter {
   private workLease: (() => boolean) | null = null;
   private turn: { item: InboundItem; startedAt: number; text: string; outbound: boolean; consumed: boolean; deliveryId: string | null; attemptNo: number; cancelled: boolean; interjected: { chatId: string; messageId: string; threadId?: string }[];
     /** A cancel was asked for before the prompt left (the agent was still being started): sent right after it. */ cancelPending: boolean;
+    /** Durable deliveries added to this turn (`interject`) whose verdict waits for the turn's end: a late refusal can still take them back. */
+    pendingDurable: { deliveryId: string; attemptNo: number }[];
     /** How the turn ended (its stop reason, or `error`), once it has. */ ended: string | null } | null = null;
   /** Messages waiting for their turn, in the order they will run (an interruption goes in front of the others). `queued` counts these and the one running. */
   private readonly inbox: InboundItem[] = [];
@@ -803,12 +809,26 @@ export class AcpRunner extends EventEmitter {
   private async interjectInto(turn: NonNullable<AcpRunner["turn"]>, content: string, meta: Record<string, string>, deliveryEpoch: number): Promise<void> {
     const status = statusOf(meta);
     let taken: false | "taken" | "announced" = false;
+    let record: { stepId: string; durable?: { deliveryId: string; attemptNo: number } } | null = null;
     try {
       taken = await this.adapter.interject(this.format(content, meta), error => {
-        // The CLI took the message and then refused it: it was not delivered. Sent again (queued, or interrupting what is running by then).
+        // The CLI took the message and then refused it: it was not delivered, and what was reported about it is taken back.
         if (status) { const at = turn.interjected.findIndex(s => s.messageId === status.messageId); if (at >= 0) turn.interjected.splice(at, 1); }
+        if (record) this.steps.refuseUserMessage(record.stepId);
+        const durable = record?.durable;
+        if (durable) {
+          const at = turn.pendingDurable.findIndex(d => d.deliveryId === durable.deliveryId);
+          if (at >= 0) turn.pendingDurable.splice(at, 1);
+          // A durable delivery goes back to the outbox, which delivers it again as a new attempt (no pane write happened for this one). If its verdict was
+          // already given (the turn ended first) the message is sent again here instead, without the delivery's identity: the outbox cannot take a second attempt of it.
+          if (this.outbox?.abort(durable.deliveryId, this.bootId, durable.attemptNo, "the CLI refused the added prompt")) {
+            this.log.warn({ name: this.name, deliveryId: durable.deliveryId, error: error.message }, "acp: the interjection was refused after being taken; the delivery goes back to the outbox");
+            return;
+          }
+        }
         this.log.warn({ name: this.name, error: error.message }, "acp: the interjection was refused after being taken; sending the message again");
-        this.admit(content, meta, deliveryEpoch, false, true, false);
+        const { delivery_id: _id, delivery_attempt: _attempt, ...plain } = meta;
+        this.admit(content, durable ? plain : meta, deliveryEpoch, false, true, false, true);
       });
     } catch { taken = false; }
     if (!taken) {
@@ -825,20 +845,27 @@ export class AcpRunner extends EventEmitter {
       this.admit(content, meta, deliveryEpoch, false, true, false);
       return;
     }
-    this.steps.addUserMessage(content);
+    record = { stepId: this.steps.addUserMessage(content) };
     this.noteWorkActivity();
     if (status) this.emit("message_delivered", status);
     const attempt = this.durableAttempt(meta);
     if (attempt && this.outbox && this.outbox.begin(attempt.deliveryId, this.bootId, attempt.attemptNo) === "begun") {
       this.outbox.markEnterStarted(attempt.deliveryId, this.bootId, attempt.attemptNo);
-      this.outbox.complete(attempt.deliveryId, this.bootId, attempt.attemptNo, "delivered", "acp:interjected");
+      // The verdict waits for the turn's end (a late refusal can still take the delivery back); one that is already over is decided now.
+      if (endedNormally) this.outbox.complete(attempt.deliveryId, this.bootId, attempt.attemptNo, "delivered", "acp:interjected");
+      else { record.durable = { deliveryId: attempt.deliveryId, attemptNo: attempt.attemptNo }; turn.pendingDurable.push(record.durable); }
     }
     if (endedNormally) { if (status) this.emit("message_confirmed", status); }
     else if (status) turn.interjected.push(status);
     this.log.info({ name: this.name }, "acp: the message was added to the running turn (the CLI's own interjection)");
   }
 
-  private admit(content: string, meta: Record<string, string>, deliveryEpoch: number, raw: boolean, interrupt: boolean, tryNative = true): void {
+  /** The verdicts of the durable deliveries added to turn `t` (`interjectInto` held them back): its end says whether they were read. */
+  private settleInterjected(t: NonNullable<AcpRunner["turn"]>, outcome: "delivered" | "uncertain"): void {
+    for (const d of t.pendingDurable.splice(0)) this.outbox?.complete(d.deliveryId, this.bootId, d.attemptNo, outcome, outcome === "delivered" ? "acp:interjected" : "acp:interjected-turn-not-finished");
+  }
+
+  private admit(content: string, meta: Record<string, string>, deliveryEpoch: number, raw: boolean, interrupt: boolean, tryNative = true, resent = false): void {
     if (deliveryEpoch !== this.deliveryEpoch) {
       this.log.info({ name: this.name }, "acp: pending delivery dropped by cancel");
       this.deferDurable(meta, "delivery epoch changed before queue admission");
@@ -850,7 +877,7 @@ export class AcpRunner extends EventEmitter {
     if (meta.chat_id) this.noteWorkActivity();
     if (interrupt && tryNative && !raw && this.interruptMode() === "add") { void this.interjectInto(this.turn!, content, meta, deliveryEpoch); return; }
     const interrupts = interrupt && this.queued > 0 ? { by: meta.from_instance ? `another agent (${meta.from_display || meta.from_instance})` : "the user" } : undefined;
-    const item: InboundItem = { content, meta, epoch: deliveryEpoch, turnId: `${this.bootId.slice(0, 8)}-${++this.turnSeq}`, ...(raw ? { raw: true } : {}), ...(interrupts ? { interrupts } : {}) };
+    const item: InboundItem = { content, meta, epoch: deliveryEpoch, turnId: `${this.bootId.slice(0, 8)}-${++this.turnSeq}`, ...(raw ? { raw: true } : {}), ...(interrupts ? { interrupts } : {}), ...(resent ? { resent: true as const } : {}) };
     this.queued++;
     if (interrupts) {
       // In front of everything waiting, but behind an interruption that is already waiting (they keep their own order).
@@ -878,9 +905,16 @@ export class AcpRunner extends EventEmitter {
     void this.adapter.cancel();
     let tries = 0;
     const timer = setInterval(() => {
-      if (this.turn !== t || t.ended !== null || this.stopping || ++tries > 8) { clearInterval(timer); return; }
+      if (this.turn !== t || t.ended !== null || this.stopping) { clearInterval(timer); return; }
+      if (++tries > 8) {
+        clearInterval(timer);
+        // Given up: this turn was cut short for an interruption and the CLI did not stop it. It runs to its end, its message's confirmation is not given, and the interruption waits for it.
+        this.log.warn({ name: this.name, turn: t.item.turnId, interruptedBy: this.inbox.find(i => i.interrupts)?.interrupts?.by ?? null, waitingInterruptions: this.inbox.filter(i => i.interrupts).length },
+          "acp: the CLI did not stop the interrupted turn after 8 cancels (16 s); giving up asking. The turn runs to its end, its confirmation is lost, and the interrupting message waits for it");
+        return;
+      }
       void this.adapter.cancel();
-    }, 2000);
+    }, this.opts.cancelRetryEveryMs ?? 2000);
     timer.unref?.();
   }
 
@@ -935,7 +969,7 @@ export class AcpRunner extends EventEmitter {
       if (this.outbox.begin(attempt.deliveryId, this.bootId, attempt.attemptNo) !== "begun") return;
     }
     const wire = item.raw ? content : this.format(content, meta);
-    const t: NonNullable<AcpRunner["turn"]> = { item, startedAt: this.now(), text: "", outbound: false, consumed: false, deliveryId: attempt ? attempt.deliveryId : null, attemptNo: attempt ? attempt.attemptNo : 0, cancelled: false, interjected: [], cancelPending: false, ended: null };
+    const t: NonNullable<AcpRunner["turn"]> = { item, startedAt: this.now(), text: "", outbound: false, consumed: false, deliveryId: attempt ? attempt.deliveryId : null, attemptNo: attempt ? attempt.attemptNo : 0, cancelled: false, interjected: [], cancelPending: false, pendingDurable: [], ended: null };
     this.turn = t;
     this.startingItem = null;
     // An interruption arrived while this message was being started (a paused agent waking): this turn is cut short as soon as its prompt has left.
@@ -955,6 +989,7 @@ export class AcpRunner extends EventEmitter {
     } catch (err) {
       const message = (err as Error).message;
       t.ended = "error";
+      this.settleInterjected(t, "uncertain");
       this.log.warn({ name: this.name, error: message }, "acp: the turn failed");
       if (!t.consumed) this.finishDurable(t, attempt ? "uncertain" : null, `acp:${message.slice(0, 120)}`);
       else this.steps.error(message);
@@ -963,6 +998,7 @@ export class AcpRunner extends EventEmitter {
       return;
     }
     t.ended = stopReason;
+    this.settleInterjected(t, stopReason === "end_turn" && !t.cancelled ? "delivered" : "uncertain");
     this.steps.apply({ kind: "turn_end", stopReason });
     if (stopReason !== "cancelled" && !t.cancelled && status) this.emit("message_confirmed", status);
     if (stopReason !== "cancelled" && !t.cancelled) for (const s of t.interjected) this.emit("message_confirmed", s);
@@ -983,7 +1019,7 @@ export class AcpRunner extends EventEmitter {
     if (t.consumed) return;
     t.consumed = true;
     const status = statusOf(t.item.meta);
-    if (status) this.emit("message_delivered", status);
+    if (status && !t.item.resent) this.emit("message_delivered", status);
     this.finishDurable(t, t.deliveryId ? "delivered" : null, `acp:${proof}`);
   }
 

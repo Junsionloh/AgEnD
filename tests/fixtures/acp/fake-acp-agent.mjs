@@ -14,6 +14,7 @@ const knownFile = state && join(state, "sessions.json");
 const known = () => (knownFile && existsSync(knownFile) ? JSON.parse(readFileSync(knownFile, "utf8")) : {});
 const remember = (id, history) => { if (knownFile) writeFileSync(knownFile, JSON.stringify({ ...known(), [id]: history })); };
 
+globalThis.__announced = 0;
 const grokContext = process.env.FAKE_ACP_GROK_CONTEXT ? JSON.parse(readFileSync(process.env.FAKE_ACP_GROK_CONTEXT, "utf8")) : null;
 const out = obj => process.stdout.write(JSON.stringify(obj) + "\n");
 const update = (sessionId, u) => out({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update: u } });
@@ -197,11 +198,12 @@ process.stdin.on("data", d => {
       case "_x.ai/interject": {
         if (process.env.FAKE_ACP_INTERJECT === "reject") { out({ jsonrpc: "2.0", id: m.id, error: { code: -32601, message: "Method not found" } }); break; }
         // announce-slow: grok announces the interjection at once (and the turn takes it) but its answer comes after 6 s. late: the answer comes after FAKE_ACP_INTERJECT_DELAY ms and the turn does not take it.
-        if (process.env.FAKE_ACP_INTERJECT === "announce-slow" || process.env.FAKE_ACP_INTERJECT === "late") {
+        if (process.env.FAKE_ACP_INTERJECT === "announce-slow" || process.env.FAKE_ACP_INTERJECT === "announce-first" || process.env.FAKE_ACP_INTERJECT === "late") {
           log({ interject: m.params.text, active: turnActive, mode: process.env.FAKE_ACP_INTERJECT });
-          const slow = process.env.FAKE_ACP_INTERJECT === "announce-slow";
+          // announce-first: only the first call is announced (and taken by the turn); every answer is late. A second, identical message is NOT announced.
+          const slow = process.env.FAKE_ACP_INTERJECT === "announce-slow" || (process.env.FAKE_ACP_INTERJECT === "announce-first" && !globalThis.__announced++);
           if (slow) { out({ jsonrpc: "2.0", method: "_x.ai/session/interjection", params: { sessionId: m.params.sessionId, text: m.params.text } }); if (turnActive) { interjections.push(m.params.text); cancelWake?.(); } }
-          setTimeout(() => out({ jsonrpc: "2.0", id: m.id, result: { result: { status: "queued" } } }), slow ? 6000 : Number(process.env.FAKE_ACP_INTERJECT_DELAY ?? 1200));
+          setTimeout(() => out({ jsonrpc: "2.0", id: m.id, result: { result: { status: "queued" } } }), (slow || process.env.FAKE_ACP_INTERJECT === "announce-first") ? 6000 : Number(process.env.FAKE_ACP_INTERJECT_DELAY ?? 1200));
           break;
         }
         if (process.env.FAKE_ACP_INTERJECT === "refuse") { out({ jsonrpc: "2.0", id: m.id, result: { result: { status: "rejected" } } }); break; }
@@ -212,6 +214,7 @@ process.stdin.on("data", d => {
       }
       case "session/cancel":
         // FAKE_ACP_IGNORE_FIRST_CANCEL: the first cancel is dropped (as agy does right after it resumed a session): only a repeated one stops the turn.
+        if (process.env.FAKE_ACP_IGNORE_CANCEL === "all") { log({ cancelIgnored: m.params?.sessionId }); break; }
         if (process.env.FAKE_ACP_IGNORE_FIRST_CANCEL && !globalThis.__cancelIgnored) { globalThis.__cancelIgnored = true; log({ cancelIgnored: m.params?.sessionId }); break; }
         log({ cancelled: m.params?.sessionId });
         cancelled = true; cancelWake?.();
