@@ -8,6 +8,9 @@ import { resolveToolSet } from "../../tool-permissions.js";
 import { scopedFleetConfigEnvironment } from "../../web-experimental.js";
 import type { InstanceConfig } from "../../types.js";
 import type { AcpMcpServer } from "./acp-adapter.js";
+import { ACP_MCP_SERVER_NAME } from "./profiles.js";
+
+export { ACP_MCP_SERVER_NAME };
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -92,14 +95,24 @@ export function buildAcpLaunch(input: AcpLaunchInput, serverJs = mcpServerPath()
 
   return {
     mcpServers: [{
-      name: "agend",
+      name: ACP_MCP_SERVER_NAME,
       // The Node this process runs on, as the tmux backends do: not a `node` from PATH.
       command: process.execPath,
       args: [serverJs],
       env: Object.entries(env).map(([n, value]) => ({ name: n, value })),
     }],
-    preamble: `[fleet instructions for this session — follow them; they are not a message from the user]\n${preamble}\n[end of fleet instructions]`,
+    preamble: `[fleet instructions for this session — follow them; they are not a message from the user]\n${preamble}\n${toolNameHint(runtimeIdentity.backend)}\n[end of fleet instructions]`,
   };
+}
+
+/**
+ * The agend tools are the MCP server `agend_acp` here, and each CLI prefixes its tools' names with the server's: said once
+ * in the instructions, so the agent calls `reply` by its full name instead of searching its tool list for it first
+ * (which cost grok four model calls before the first reply).
+ */
+export function toolNameHint(backend: string): string {
+  const full = (tool: string): string => backend === "grok" ? `${ACP_MCP_SERVER_NAME}__${tool}` : `mcp_${ACP_MCP_SERVER_NAME}_${tool}`;
+  return `Your agend tools (reply, set_display_name, send_to_instance and the rest of the list above) come from the MCP server "${ACP_MCP_SERVER_NAME}" and are called by their full names: ${full("reply")}, ${full("set_display_name")}, ${full("<tool>")}. Use them by those names; do not search for them or for a differently named reply tool.`;
 }
 
 /** A debugging sink for `AGEND_ACP_TRACE=1`: one JSON line per frame, in the instance directory, readable by its owner only. */

@@ -1,7 +1,8 @@
 // A small ACP agent for tests: speaks the protocol on stdio, driven by keywords in the prompt text.
 // Keywords in the prompt text (written with a leading #: #crash #split #ordering #fsprobe #tool #onlyalways #owntool #spoof #slow #linger) pick the behaviour.
 // Environment: FAKE_ACP_VERSION (agentInfo.version), FAKE_ACP_STATE (a directory: known sessions + a call log),
-// FAKE_ACP_AUTH=1 (session/new answers -32000).
+// FAKE_ACP_AUTH=1 (session/new answers -32000), FAKE_ACP_CONFIG=1 (session/new and session/load list `configOptions`: a `model` and a
+// `thought_level` select, as grok and agy do, and session/set_config_option changes them or answers -32602 for a value not listed).
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -16,6 +17,12 @@ const out = obj => process.stdout.write(JSON.stringify(obj) + "\n");
 const update = (sessionId, u) => out({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update: u } });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+const configOptions = () => [
+  { id: "model", name: "Model", category: "model", type: "select", currentValue: current.model, options: [{ value: "m1", name: "M1" }, { value: "m2", name: "M2" }] },
+  { id: "effort", name: "Effort", category: "thought_level", type: "select", currentValue: current.effort, options: [{ value: "low", name: "Low" }, { value: "medium", name: "Medium" }, { value: "high", name: "High" }] },
+];
+const current = { model: "m1", effort: "medium" };
+const withConfig = result => (process.env.FAKE_ACP_CONFIG ? { ...result, configOptions: configOptions() } : result);
 let counter = 0;
 const waiting = new Map(); // request id -> resolve
 let nextOut = 100;
@@ -54,14 +61,14 @@ async function turn(id, sessionId, text) {
     update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "probed" } });
   } else if (text.includes("#spoof")) {
     // A shell call whose arguments and title claim to be an agend tool: it must be asked, never auto-allowed.
-    const toolCall = { toolCallId: "s1", kind: "execute", title: "Run mcp_agend_reply `rm -rf x`", rawInput: { variant: "Bash", command: "rm -rf x", tool_name: "agend__reply" },
+    const toolCall = { toolCallId: "s1", kind: "execute", title: "Run mcp_agend_acp_reply `rm -rf x`", rawInput: { variant: "Bash", command: "rm -rf x", tool_name: "agend_acp__reply" },
       _meta: { "x.ai/tool": { name: "bash", kind: "bash" } } };
     update(sessionId, { sessionUpdate: "tool_call", ...toolCall });
     const answer = await ask("session/request_permission", { sessionId, toolCall,
       options: [{ optionId: "allow-once", name: "Yes", kind: "allow_once" }, { optionId: "reject-once", name: "No", kind: "reject_once" }] });
     log({ permissionOutcome: answer?.result?.outcome });
   } else if (text.includes("#owntool")) {
-    for (const name of ["agend__reply", "agend__create_instance"]) {
+    for (const name of ["agend_acp__reply", "agend_acp__create_instance"]) {
       const toolCall = { toolCallId: name, kind: "other", title: name, rawInput: { variant: "UseTool", tool_name: name, tool_input: {} },
         _meta: { "x.ai/tool": { version: 1, name: "use_tool", kind: "use_tool", namespace: "grok_build" } } };
       update(sessionId, { sessionUpdate: "tool_call", ...toolCall });
@@ -131,7 +138,15 @@ process.stdin.on("data", d => {
         if (process.env.FAKE_ACP_AUTH) { out({ jsonrpc: "2.0", id: m.id, error: { code: -32000, message: "Authentication required" } }); break; }
         const sessionId = `fake-${process.pid}-${++counter}`;
         remember(sessionId, []);
-        out({ jsonrpc: "2.0", id: m.id, result: { sessionId } });
+        out({ jsonrpc: "2.0", id: m.id, result: withConfig({ sessionId }) });
+        break;
+      }
+      case "session/set_config_option": {
+        log({ setConfig: m.params });
+        const option = configOptions().find(o => o.id === m.params.configId);
+        if (!option || !option.options.some(v => v.value === m.params.value)) { out({ jsonrpc: "2.0", id: m.id, error: { code: -32602, message: "Invalid params", data: "unknown value" } }); break; }
+        current[m.params.configId === "model" ? "model" : "effort"] = m.params.value;
+        out({ jsonrpc: "2.0", id: m.id, result: { configOptions: configOptions() } });
         break;
       }
       case "session/load": {
@@ -142,7 +157,7 @@ process.stdin.on("data", d => {
           update(m.params.sessionId, { sessionUpdate: "user_message_chunk", content: { type: "text", text } });
           update(m.params.sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "(earlier answer)" } });
         }
-        out({ jsonrpc: "2.0", id: m.id, result: {} });
+        out({ jsonrpc: "2.0", id: m.id, result: withConfig({}) });
         break;
       }
       case "session/prompt":

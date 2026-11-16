@@ -1,6 +1,16 @@
 import type { AdapterCapabilities } from "../types.js";
 
 /**
+ * The name an ACP instance's own MCP server is declared under in `session/new`. It is deliberately not `agend`, the name
+ * every tmux backend writes into its config files: grok merges the project's `.mcp.json` over what the client passes, by
+ * name, so a leftover tmux `agend` entry (a launch shim that needs variables only a tmux launch sets, shared by every
+ * instance in that folder) replaced the ACP one and the agent started with no tools. A name no tmux backend writes cannot
+ * collide with anything they leave behind, and nothing of theirs has to be edited or removed (the file can be shared with
+ * a tmux instance that is running). Tools are named `<name>__<tool>` by grok and `mcp_<name>_<tool>` by agy.
+ */
+export const ACP_MCP_SERVER_NAME = "agend_acp";
+
+/**
  * One launch profile per CLI that ships official ACP. A profile is data: how to start the CLI's ACP server, which
  * versions are known to behave, and what that CLI's `initialize` answer looks like. The shared client does the rest.
  */

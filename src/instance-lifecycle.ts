@@ -1249,7 +1249,7 @@ export class InstanceLifecycle {
       this.notifyIncident(name, "muse_relay_exhausted", t("inst.muse_relay_exhausted", name));
     }, this.ctx.logger, `daemon.muse_relay_exhausted[${name}]`));
 
-    daemon.on("mcp_died", safeHandler(async (data: { name: string; pid: number; autoRestart?: boolean; authSuspected?: boolean; neverConnected?: boolean }) => {
+    daemon.on("mcp_died", safeHandler(async (data: { name: string; pid: number; autoRestart?: boolean; authSuspected?: boolean; neverConnected?: boolean; acp?: boolean }) => {
       const stormAtDetection = this.ctx.stormWindow?.isActive() === true;
       const incident = this.mcpIncident(name);
       const generation = ++incident.gen;
@@ -1288,7 +1288,7 @@ export class InstanceLifecycle {
       // agent is doing. With it off, tell the operator what to run, as before.
       if (data.neverConnected) {
         incident.deathNoticeSent = this.notifyIncident(name, "mcp_died",
-          t(data.autoRestart ? "inst.mcp_never_connected_auto" : "inst.mcp_never_connected_manual", name));
+          t(data.acp ? "inst.mcp_never_connected_acp" : data.autoRestart ? "inst.mcp_never_connected_auto" : "inst.mcp_never_connected_manual", name));
         return;
       }
       incident.deathNoticeSent = this.notifyIncident(name, "mcp_died",

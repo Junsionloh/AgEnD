@@ -267,12 +267,12 @@ describe("the instance's own agend tools", () => {
     h.fleet.send(person("#owntool"));
     await until(() => h.runner.steps.pendingPermissions().length === 1, 5000, "the create_instance request");
     const perms = steps(h).filter(s => s.kind === "permission");
-    expect(perms.map(s => s.subject)).toEqual(["agend__create_instance"]);        // the reply left no card
+    expect(perms.map(s => s.subject)).toEqual(["agend_acp__create_instance"]);        // the reply left no card
     expect(perms[0]).toMatchObject({ status: "running" });
     expect(calls(h.state).filter(l => l.permissionOutcome)).toHaveLength(1);        // only the reply was answered
     // the call the runner allowed says so; the one a person still has to decide does not
-    expect(steps(h).find(s => s.id === "t-agend__reply")?.auto).toBe(true);
-    expect(steps(h).find(s => s.id === "t-agend__create_instance")?.auto).toBeUndefined();
+    expect(steps(h).find(s => s.id === "t-agend_acp__reply")?.auto).toBe(true);
+    expect(steps(h).find(s => s.id === "t-agend_acp__create_instance")?.auto).toBeUndefined();
   });
 
   it("with skipPermissions (the default) the fleet-changing tools are allowed too, as in a terminal, and no card appears", async () => {

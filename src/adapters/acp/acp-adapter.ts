@@ -60,6 +60,37 @@ export interface AcpAdapterOptions {
 
 export interface TurnResult { readonly stopReason: string }
 
+/** One selectable setting the agent advertises for its session (ACP `configOptions`): its id, kind, and accepted values. */
+export interface AcpConfigOption {
+  readonly id: string;
+  /** ACP's category: `model`, `thought_level` (reasoning effort), `mode`, or an agent's own. */
+  readonly category: string;
+  readonly currentValue: string;
+  readonly values: readonly string[];
+}
+
+export type SetConfigResult = { ok: true; value: string } | { ok: false; reason: "not_running" | "not_offered" | "invalid" | "failed"; message: string; accepted: readonly string[] };
+
+/** The options of an ACP `configOptions` list: flat `{value}` entries or grouped `{options:[{value}]}`; anything else is skipped. */
+export function parseConfigOptions(raw: unknown): AcpConfigOption[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AcpConfigOption[] = [];
+  for (const o of raw) {
+    if (!o || typeof o !== "object") continue;
+    const r = o as Record<string, unknown>;
+    if (typeof r.id !== "string" || typeof r.category !== "string" || !Array.isArray(r.options)) continue;
+    const values: string[] = [];
+    for (const v of r.options) {
+      if (!v || typeof v !== "object") continue;
+      const e = v as Record<string, unknown>;
+      if (typeof e.value === "string") values.push(e.value);
+      else if (Array.isArray(e.options)) for (const g of e.options) { const gv = g && typeof g === "object" ? (g as Record<string, unknown>).value : undefined; if (typeof gv === "string") values.push(gv); }
+    }
+    out.push({ id: r.id, category: r.category, currentValue: typeof r.currentValue === "string" ? r.currentValue : "", values });
+  }
+  return out;
+}
+
 type Listener = (event: AdapterEvent) => void;
 const SESSION_FILE = "acp-session-id";
 const INIT_TIMEOUT_MS = 30_000;
@@ -89,6 +120,7 @@ export class AcpAdapter implements CliAdapter {
   private preamble: string | undefined;
   private _newSession = true;
   private _agentVersion: string | null = null;
+  private configOptions: AcpConfigOption[] = [];
 
   constructor(private readonly opts: AcpAdapterOptions) {
     this.capabilities = opts.profile.capabilities;
@@ -167,7 +199,8 @@ export class AcpAdapter implements CliAdapter {
     if (this.session && (caps.loadSession === true || caps.load_session === true)) {
       this.replaying = true;
       try {
-        await client.request("session/load", { sessionId: this.session, ...params }, { timeoutMs: SESSION_TIMEOUT_MS });
+        const loaded = await client.request<Record<string, unknown> | null>("session/load", { sessionId: this.session, ...params }, { timeoutMs: SESSION_TIMEOUT_MS });
+        this.configOptions = parseConfigOptions(loaded?.configOptions);
         this._newSession = false;
         this.preambleSent = true;
         this.opts.logger.info({ sessionId: this.session }, "acp: resumed the stored session");
@@ -185,6 +218,7 @@ export class AcpAdapter implements CliAdapter {
     const created = await client.request<Record<string, unknown>>("session/new", params, { timeoutMs: SESSION_TIMEOUT_MS });
     if (typeof created?.sessionId !== "string" || !created.sessionId) throw new Error("session/new did not return a session id");
     this.session = created.sessionId;
+    this.configOptions = parseConfigOptions(created.configOptions);
     this._newSession = true;
     this.preambleSent = !this.preamble;
     this.storeSession(this.session);
@@ -265,6 +299,33 @@ export class AcpAdapter implements CliAdapter {
   }
 
   sessionId(): string | null { return this.session; }
+
+  /** The agent's own setting of a category (`model`, `thought_level`) for the live session, or null when it offers none. */
+  configOption(category: string): AcpConfigOption | null { return this.configOptions.find(o => o.category === category) ?? null; }
+
+  /**
+   * Change one of the agent's session settings through ACP's `session/set_config_option` (the protocol's own way: no
+   * restart, no text typed into anything). The value must be one the agent lists; a value it does not take is answered
+   * with what it does, never sent.
+   */
+  async setConfigOption(category: string, value: string): Promise<SetConfigResult> {
+    const client = this.client;
+    if (!client?.isRunning || !this.session) return { ok: false, reason: "not_running", message: "the agent is not running", accepted: [] };
+    const option = this.configOption(category);
+    if (!option) return { ok: false, reason: "not_offered", message: `${this.opts.profile.label} offers no ${category} setting over ACP`, accepted: [] };
+    if (!option.values.includes(value)) return { ok: false, reason: "invalid", message: `${value} is not one of the values ${this.opts.profile.label} offers`, accepted: option.values };
+    try {
+      const result = await client.request<Record<string, unknown> | null>("session/set_config_option", { sessionId: this.session, configId: option.id, value }, { timeoutMs: 30_000 });
+      // The answer is the full list again, with the new current values.
+      const next = parseConfigOptions(result?.configOptions);
+      if (next.length) this.configOptions = next;
+      else this.configOptions = this.configOptions.map(o => o.id === option.id ? { ...o, currentValue: value } : o);
+      return { ok: true, value };
+    } catch (err) {
+      if (err instanceof AcpTransportError) return { ok: false, reason: "not_running", message: err.message, accepted: [] };
+      return { ok: false, reason: "failed", message: (err as Error).message, accepted: option.values };
+    }
+  }
 
   /** Forget the stored conversation: the next start opens a new session. */
   forgetSession(): void {

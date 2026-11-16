@@ -56,6 +56,8 @@ type ExecutionFleetContext = FleetContext & {
   getInstanceExecutionState?(instanceName: string): "idle" | "working" | "stuck" | null;
   /** The running launch's own steer capability (CliBackend.supportsSteer, #1405); undefined when it has none to give. */
   instanceLaunchSupportsSteer?(instanceName: string): boolean | undefined;
+  /** The instance runs over ACP: it has no terminal, so what is typed into a pane is answered, not sent. */
+  instanceRunsAcp?(instanceName: string): boolean;
 };
 
 /** Sanitize a directory name into a valid instance name. Keeps Unicode letters (incl. CJK). */
@@ -1065,10 +1067,17 @@ export class TopicCommands {
     // `/raw <text>` is pasted into the CLI as typed, with no [user:] envelope (daemon.ts): it is CLI input, so only
     // the owning bot's fleet admin may send it (#754 audit). An admin's falls through to delivery unchanged.
     if (command === "raw") {
-      if (this.ctx.isFleetAdmin(msg.userId, msg.adapterId)) return false;
       const adapter = this.getReplyAdapter(msg);
-      if (adapter) await adapter.sendText(msg.chatId, t("permission.denied"), { threadId: msg.threadId });
-      return true;
+      if (!this.ctx.isFleetAdmin(msg.userId, msg.adapterId)) {
+        if (adapter) await adapter.sendText(msg.chatId, t("permission.denied"), { threadId: msg.threadId });
+        return true;
+      }
+      // An ACP agent has no terminal to type into: `/raw` would reach it as a question.
+      if (this.runsAcp(instanceName)) {
+        if (adapter) await adapter.sendText(msg.chatId, t("acp.unsupported_command", "/raw", instanceName), { threadId: msg.threadId });
+        return true;
+      }
+      return false;
     }
 
     if (command !== "ctx") return false;
@@ -1093,6 +1102,8 @@ export class TopicCommands {
       return t(`${action}.failed`, instanceName, (err as Error).message);
     }
   }
+
+  private runsAcp(instanceName: string): boolean { return this.ctx.instanceRunsAcp?.(instanceName) === true; }
 
   /** Resolve the effective backend name for fleet or classic instances. */
   private effectiveBackend(instanceName: string): string {
@@ -1200,6 +1211,7 @@ export class TopicCommands {
    * the command reached the pane (`raw_paste_written`). A write the IPC refuses is not sent.
    */
   compactInstance(instanceName: string, instructions?: string, notify?: () => string | null): { sent: boolean; text: string } {
+    if (this.runsAcp(instanceName)) return { sent: false, text: t("acp.unsupported_command", "/compact", instanceName) };
     const ipc = this.ctx.instanceIpcClients.get(instanceName);
     if (ipc?.connected) {
       const classicBackend = this.ctx.classicChannels?.getChannelIdByInstance(instanceName)
@@ -1236,6 +1248,7 @@ export class TopicCommands {
 
   /** Whether the instance backend exposes a verified full-reset command. */
   supportsClear(instanceName: string): boolean {
+    if (this.runsAcp(instanceName)) return false;
     return clearCommandForBackend(this.effectiveBackend(instanceName)) !== null;
   }
 
@@ -1327,6 +1340,7 @@ export class TopicCommands {
 
   /** sendClear, saying whether the command was handed to the daemon (board 003648ac: the web chat's card then leaves). */
   clearInstance(instanceName: string): { sent: boolean; text: string } {
+    if (this.runsAcp(instanceName)) return { sent: false, text: t("acp.unsupported_command", "/clear", instanceName) };
     const backend = this.effectiveBackend(instanceName);
     const cmd = clearCommandForBackend(backend);
     if (!cmd) return { sent: false, text: t("clear.unsupported") };
@@ -1346,6 +1360,7 @@ export class TopicCommands {
 
   /** Send a backend-appropriate session-save command to a fleet-topic instance. */
   async sendSave(instanceName: string, filename: string): Promise<string> {
+    if (this.runsAcp(instanceName)) return t("acp.unsupported_command", "/save", instanceName);
     const classicBackend = this.ctx.classicChannels?.getChannelIdByInstance(instanceName)
       ? this.ctx.classicChannels.getBackendByInstance(instanceName, this.ctx.fleetConfig?.defaults?.backend)
       : undefined;

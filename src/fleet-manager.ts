@@ -380,6 +380,7 @@ import { idleGateTimeoutLog } from "./idle-gate-log.js";
 import { DEFAULT_STUCK_TIMEOUT_MS, readLastInboundAt, type Daemon, type OwnSwitchOutcome } from "./daemon.js";
 import type { InstanceRunner } from "./adapters/types.js";
 import { adapterOf, cancelRunner, capabilitiesOf } from "./adapters/registry.js";
+import type { AcpRunner } from "./adapters/acp/acp-runner.js";
 import { adapterAfterRuntimeChange } from "./adapters/config.js";
 import { adapterUiView } from "./adapters/ui-view.js";
 import { clearPausedMarker, readPausedAt, readPauseReason, writePausedMarker } from "./pause-marker.js";
@@ -7811,7 +7812,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       }
       const filename = data.options?.filename as string;
       if (!SAVE_FILENAME_RE.test(filename ?? "")) { await data.respond(t("filename.invalid")); return; }
-      this.pasteRawToClassicInstance(name, `/chat load ${filename}`);
+      if (!this.pasteRawToClassicInstance(name, `/chat load ${filename}`)) { await data.respond(this.instanceRunsAcp(name) ? this.acpUnsupported(name, "/load") : t("compact.not_connected")); return; }
       await data.respond(t("save.sent", `/chat load ${filename}`, name));
     } else if (data.command === "model") {
       await this.handleModelSlash(data, adapterId);
@@ -13527,7 +13528,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
           const backend = this.classicChannels.getBackendByInstance(saveName, this.fleetConfig?.defaults?.backend);
           const cmd = saveCommandForBackend(backend, filename);
           if (!cmd) { await msgAdapter?.sendText(chatId, t("save.unsupported")); return; }
-          this.pasteRawToClassicInstance(saveName, cmd);
+          if (!this.pasteRawToClassicInstance(saveName, cmd)) {
+            await msgAdapter?.sendText(chatId, this.instanceRunsAcp(saveName) ? this.acpUnsupported(saveName, "/save") : t("save.not_connected"));
+            return;
+          }
           await msgAdapter?.sendText(chatId, t("save.sent", cmd, saveName));
           return;
         }
@@ -18950,7 +18954,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     chatId: string,
     threadId?: string,
   ): Promise<string | null> {
-    if (!this.topicCommands.supportsClear(instanceName)) return t("clear.unsupported");
+    if (!this.topicCommands.supportsClear(instanceName)) return this.instanceRunsAcp(instanceName) ? this.acpUnsupported(instanceName, "/clear") : t("clear.unsupported");
 
     const adapterId = adapter.id;
     if (!adapterId) return t("clear.prompt_unavailable");
@@ -19891,7 +19895,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       pauseWake: (instance, action) => this.topicCommands.runPauseWake(instance, action),
       save: (instance, filename) => this.topicCommands.sendSave(instance, filename),
       clearAsk: (instance) => {
-        if (!this.topicCommands.supportsClear(instance)) return { refused: t("clear.unsupported") };
+        if (!this.topicCommands.supportsClear(instance)) return { refused: this.instanceRunsAcp(instance) ? this.acpUnsupported(instance, "/clear") : t("clear.unsupported") };
         const fence = this.clearTargetFence(instance);
         if (!fence) return { refused: t("clear.not_connected") };
         const now = performance.now();
@@ -20564,6 +20568,11 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       : this.routing.resolve(data.channelId);
     if (!target) {
       await data.respond(t("classic.no_agent_start"));
+      return;
+    }
+    // An ACP agent has no terminal to type a save command into.
+    if (this.instanceRunsAcp(target.name)) {
+      await data.respond(this.acpUnsupported(target.name, "/save"));
       return;
     }
     const filename = (data.options?.filename as string) ?? "";
@@ -24163,7 +24172,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
    */
   private runRuntimeModelSwitch(instanceName: string, model: string): Promise<OwnSwitchOutcome> {
     const ipc = this.instanceIpcClients.get(instanceName);
-    if (!ipc) return Promise.resolve({ outcome: "not_sent" });
+    if (!ipc || this.instanceRunsAcp(instanceName)) return Promise.resolve({ outcome: "not_sent" });
     const id = `switch-${randomUUID()}`;
     return new Promise(resolve => {
       const timer = setTimeout(() => { this.runtimeSwitchWaiters.delete(id); resolve({ outcome: "not_confirmed" }); }, RUNTIME_SWITCH_RESULT_MS);
@@ -24196,14 +24205,43 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     return { known, names: [...aliases, ...api.filter(id => !id.endsWith("[1m]")).slice(0, 12)] };
   }
 
-  private pasteRawToClassicInstance(instanceName: string, text: string): void {
+  /**
+   * Whether the instance runs over ACP (a running one by the adapter it was built with; one that is not running by its
+   * configuration). An ACP instance has no terminal: everything the fleet does by typing into a pane (`raw_paste`, keys) is
+   * answered for it instead of being sent, because an ACP agent reads whatever arrives as a prompt.
+   */
+  instanceRunsAcp(instanceName: string): boolean {
+    const runner = this.lifecycle?.daemons.get(instanceName);
+    if (runner) return adapterOf(runner)?.id === "acp";
+    const inst = this.fleetConfig?.instances[instanceName];
+    return (inst?.cli_adapter ?? this.fleetConfig?.defaults?.cli_adapter) === "acp";
+  }
+
+  /** The running instance's ACP runner, or null (not ACP, or not running). */
+  private acpRunnerOf(instanceName: string): AcpRunner | null {
+    const runner = this.daemons.get(instanceName);
+    return runner && adapterOf(runner)?.id === "acp" ? runner as unknown as AcpRunner : null;
+  }
+
+  /** The reply for a terminal-only operation asked of an ACP instance. */
+  private acpUnsupported(instanceName: string, operation: string): string {
+    return t("acp.unsupported_command", operation, this.shownInstanceName(instanceName));
+  }
+
+  /** Types `text` into a classic instance's pane. False when it was not sent (no IPC, or the instance runs over ACP and has no pane). */
+  private pasteRawToClassicInstance(instanceName: string, text: string): boolean {
+    if (this.instanceRunsAcp(instanceName)) {
+      this.logger.warn({ instanceName, text: text.slice(0, 60) }, "Raw paste not sent: the instance runs over ACP and has no terminal");
+      return false;
+    }
     const ipc = this.instanceIpcClients.get(instanceName);
     if (!ipc) {
       this.logger.warn({ instanceName }, "Cannot paste raw: IPC not connected");
-      return;
+      return false;
     }
     ipc.send({ type: "raw_paste", content: text });
     this.logger.info({ instanceName, text: text.slice(0, 100) }, "Raw paste sent to classic instance");
+    return true;
   }
 
   /** Resolve the backend name configured for an instance (fleet or classic). */
@@ -25411,6 +25449,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     if (opts?.current && !opts.current()) return t("menu.instance_replaced", this.shownInstanceName(instanceName));
     if (isWindowsInstance(this.fleetConfig?.instances[instanceName])) return t("effort.unsupported", this.backendNameForInstance(instanceName));
     const level = requested.trim().toLowerCase();
+    // An ACP agent has no pane to type `/effort` into: its effort is a session setting, set through the protocol.
+    if (this.instanceRunsAcp(instanceName)) return this.applyAcpSetting(instanceName, "effort", level);
     const backendName = this.backendNameForInstance(instanceName);
     let strategy: "runtime" | "restart" | "unsupported" = "unsupported";
     let supported: string[] = [];
@@ -25469,6 +25509,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       });
       return t("model.restart_success",instanceName,model);
     }
+    // An ACP agent has no pane to type `/model` into: its model is a session setting, set through the protocol.
+    if (this.instanceRunsAcp(instanceName)) return this.applyAcpSetting(instanceName, "model", model);
     const backendName = this.backendNameForInstance(instanceName);
     let strategy: "runtime" | "restart" = "restart";
     try {
@@ -25512,6 +25554,43 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
 
     await this.restartSingleInstance(instanceName, { ownerCurrent: opts?.current });
     return `${warn}${t("model.restart_success", instanceName, model)}${this.effortSuffix(instanceName)}`;
+  }
+
+  /**
+   * `/effort` and `/model` for an instance that runs over ACP: the agent's own session setting (`session/set_config_option`),
+   * which needs neither a pane nor a restart. A running agent answers with the values it takes; one it does not take is refused
+   * with that list and nothing is saved. The value is saved for the next start either way (the runner applies it at each start).
+   */
+  private async applyAcpSetting(instanceName: string, kind: "effort" | "model", requested: string): Promise<string> {
+    const runner = this.acpRunnerOf(instanceName);
+    const live = runner ? runner.sessionSettingValues(kind) : [];
+    const backendName = this.backendNameForInstance(instanceName);
+    let value = requested;
+    let warn = "";
+    if (kind === "effort") {
+      const canonical = FleetManager.EFFORT_LEVELS as readonly string[];
+      if (!canonical.includes(value)) return t("effort.unknown", value, canonical.join(", "));
+      const offered = live.length ? [...live] : this.effortLevelsFor(instanceName);
+      if (!offered.length) return t("effort.unsupported", backendName);
+      const applied = FleetManager.clampEffort(value, offered);
+      if (!applied) return t("effort.no_canonical", backendName);
+      if (applied !== value) warn = t("effort.clamped", applied, value, backendName);
+      value = applied;
+    } else if (live.length && !live.includes(value)) {
+      return t("model.unknown_name", value, live.join(", "));
+    }
+    if (runner) {
+      const result = await runner.setSessionSetting(kind, value);
+      if (!result.ok) {
+        return `${warn}${t("acp.setting_failed", this.shownInstanceName(instanceName), kind === "effort" ? "effort" : "model", value, result.message)}${result.accepted.length ? ` ${t("acp.setting_offered", result.accepted.join(", "))}` : ""}`;
+      }
+    }
+    const saved = kind === "effort"
+      ? (() => { const inst = this.fleetConfig?.instances[instanceName]; if (!inst) return false; (inst as { effort?: string }).effort = value; this.saveFleetConfig(); return true; })()
+      : this.persistInstanceModel(instanceName, value);
+    if (!saved) return `${warn}${t("model.persist_failed", instanceName)}`;
+    if (!runner) return `${warn}${t("acp.setting_saved", this.shownInstanceName(instanceName), kind === "effort" ? "effort" : "model", value)}`;
+    return `${warn}${t(kind === "effort" ? "effort.runtime_success" : "model.runtime_success", instanceName, value)}`;
   }
 
   /** Save an instance's model (fleet.yaml, or its ClassicBot channel). False when neither holds it. */

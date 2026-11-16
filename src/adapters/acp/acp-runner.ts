@@ -16,6 +16,7 @@ import type { WorkingStateObservation } from "../../working-state-journal.js";
 import type { RecoveryLive } from "../../working-recovery.js";
 import { AcpAuthRequiredError, AcpVersionRefusedError, type AcpAdapter } from "./acp-adapter.js";
 import { AcpStepStore } from "./steps.js";
+import { ACP_MCP_SERVER_NAME } from "./profiles.js";
 import type { LiveSteps } from "../../log-service.js";
 import type { AdapterEvent } from "../types.js";
 
@@ -37,6 +38,8 @@ export interface AcpRunnerOptions {
   /** A running turn with no word from the agent this long is reported as hung. */
   readonly hangAfterMs?: number;
   readonly hangCheckEveryMs?: number;
+  /** How long after the session opens the instance's own MCP server may take to connect before it is reported missing (default 45 s). */
+  readonly mcpGraceMs?: number;
   readonly now?: () => number;
 }
 
@@ -45,6 +48,8 @@ interface InboundItem {
   readonly meta: Record<string, string>;
   readonly epoch: number;
   readonly turnId: string;
+  /** Sent to the agent exactly as given, with no `[user:]` envelope (a silent schedule's text). */
+  readonly raw?: boolean;
 }
 
 const FLEET_RESPONSE_TYPES = new Set([
@@ -77,9 +82,9 @@ const OWN_TOOLS_ASK: ReadonlySet<string> = new Set(["create_instance", "delete_i
  * for a shell tool the command line) can both be made to say `agend__reply`, so neither is ever read on its own.
  * Shapes, from real permission requests (grok 1.0.77, agy 1.5.9; tests/fixtures/acp/*agend-tool-permission*):
  *  - grok: `kind: "other"`, `_meta["x.ai/tool"].name === "use_tool"`, `rawInput.variant === "UseTool"` (the CLI's own
- *    discriminator; the model's arguments are nested under `tool_input`) and `rawInput.tool_name === "agend__<tool>"`.
+ *    discriminator; the model's arguments are nested under `tool_input`) and `rawInput.tool_name === "<server>__<tool>"`.
  *    A Bash or Write call has another variant and another `_meta` name, whatever extra keys the model puts in its input.
- *  - agy: `kind: "other"` and the tool's registered name in `name` (`mcp_agend_<tool>`); its `rawInput` is the model's
+ *  - agy: `kind: "other"` and the tool's registered name in `name` (`mcp_<server>_<tool>`); its `rawInput` is the model's
  *    arguments and its `title` is "Run <name>", so only `name` is read. A shell or file tool has its own name and kind.
  */
 export function ownToolName(tool: unknown): string | null {
@@ -96,11 +101,13 @@ export function ownToolName(tool: unknown): string | null {
     candidate = t.name;
   }
   if (typeof candidate !== "string") return null;
-  const m = (grokMeta ? /^agend__([a-z][a-z0-9_]{0,63})$/ : /^mcp_agend_([a-z][a-z0-9_]{0,63})$/).exec(candidate);
+  const m = (grokMeta ? new RegExp(`^${ACP_MCP_SERVER_NAME}__([a-z][a-z0-9_]{0,63})$`) : new RegExp(`^mcp_${ACP_MCP_SERVER_NAME}_([a-z][a-z0-9_]{0,63})$`)).exec(candidate);
   return m ? m[1]! : null;
 }
 
 const DEFAULT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
+/** Both CLIs start the declared MCP server while the session opens, so seconds are enough; a loaded host needs room for a Node cold start. */
+const MCP_GRACE_MS = 45_000;
 const PROXY_TEXT_MAX = 12_000;
 
 /**
@@ -139,6 +146,11 @@ export class AcpRunner extends EventEmitter {
   private lastError: string | null = null;
   private hangTimer: NodeJS.Timeout | null = null;
   private hangEmitted = false;
+
+  // the instance's own MCP server: connected (it announced itself on the IPC socket) since this launch?
+  private mcpServed = false;
+  private mcpReported = false;
+  private mcpTimer: NodeJS.Timeout | null = null;
 
   // turns
   private chain: Promise<void> = Promise.resolve();
@@ -407,6 +419,8 @@ export class AcpRunner extends EventEmitter {
       await this.adapter.start({ admission });
       this.errorCause = null; this.lastError = null;
       this.touchState();
+      this.armMcpWatch();
+      void this.applyConfiguredSettings(this.spawnGeneration);
     } catch (err) {
       this.noteStartFailure(err);
       throw err;
@@ -467,6 +481,7 @@ export class AcpRunner extends EventEmitter {
   private clearTimers(): void {
     this.clearRespawn();
     if (this.hangTimer) { clearInterval(this.hangTimer); this.hangTimer = null; }
+    if (this.mcpTimer) { clearTimeout(this.mcpTimer); this.mcpTimer = null; }
     if (this.cancelledHumansTimer) { clearTimeout(this.cancelledHumansTimer); this.cancelledHumansTimer = null; }
   }
 
@@ -502,10 +517,106 @@ export class AcpRunner extends EventEmitter {
     return (typeof minutes === "number" && minutes > 0 ? minutes : 10) * 60_000;
   }
 
+  // ───────────────────────────────────────────────────────────────── the instance's own MCP server
+
+  /** A launch starts the count again: the server is declared in `session/new`, so each new session must bring it up. */
+  private armMcpWatch(): void {
+    this.mcpServed = false;
+    this.mcpReported = false;
+    if (this.mcpTimer) clearTimeout(this.mcpTimer);
+    const generation = this.spawnGeneration;
+    this.mcpTimer = setTimeout(() => {
+      this.mcpTimer = null;
+      if (generation !== this.spawnGeneration || this.stopping || this.pauseWake === "paused") return;
+      this.checkMcpConnected();
+    }, this.opts.mcpGraceMs ?? MCP_GRACE_MS);
+    this.mcpTimer.unref?.();
+  }
+
+  /** The server's first word on the IPC socket (`mcp_ready`, or a tool call) is the proof it is up; it also retracts an earlier report. */
+  private noteMcpServing(_socket: Socket): void {
+    if (this.mcpServed) return;
+    this.mcpServed = true;
+    if (this.mcpTimer) { clearTimeout(this.mcpTimer); this.mcpTimer = null; }
+    if (!this.mcpReported) return;
+    this.mcpReported = false;
+    if (this.lastError === "mcp") { this.errorCause = null; this.lastError = null; }
+    this.log.info({ name: this.name }, "acp: the agend MCP server connected after all");
+    this.emit("mcp_recovered", { name: this.name, source: "late_connect" });
+  }
+
+  /**
+   * The agent is running and nothing of this instance's MCP server ever connected: no `reply`, no cross-instance tools.
+   * As for a tmux instance: logged, kept in the event log, told in the topic and on the web (the shared `mcp_died` incident
+   * with `neverConnected`), and shown in the chat timeline. No automatic restart: a restart of the same declaration would not
+   * change what this launch did, and the agent still answers (its text is relayed as the reply).
+   */
+  private checkMcpConnected(): void {
+    if (this.mcpServed || this.mcpReported) return;
+    this.mcpReported = true;
+    this.errorCause = "error_detected";
+    this.lastError = "mcp";
+    const grace = this.opts.mcpGraceMs ?? MCP_GRACE_MS;
+    this.log.error({ name: this.name, graceMs: grace }, "acp: the agend MCP server never connected after the session opened — instance has no agend tools");
+    this.steps.error("The agend MCP server never connected: this agent has no agend tools (it cannot reply through the reply tool or reach other instances). Restart the instance; if it repeats, check the CLI's own MCP messages in the Log.");
+    this.emit("mcp_died", { name: this.name, pid: 0, autoRestart: false, authSuspected: false, neverConnected: true, acp: true });
+  }
+
+  /** Whether the instance's MCP server has connected since this launch (for status and tests). */
+  get mcpConnected(): boolean { return this.mcpServed; }
+
+  // ───────────────────────────────────────────────────────────────── terminal-only input
+
+  /**
+   * `raw_paste` is a tmux operation: bytes typed into a pane (`/effort`, `/model`, `/compact`, `/clear`, `/save`, `/chat load`).
+   * An ACP agent has no pane, and what it gets is a prompt, so a command pasted here would be read as a question and cost a
+   * whole turn. The fleet answers each of those commands itself before sending (`FleetManager.instanceRunsAcp`), so the only
+   * `raw_paste` that is meant for an ACP instance is a silent schedule's text, which goes in as a prompt as it is; anything else
+   * is dropped here, with a log line, as the backstop for a caller that did not ask first.
+   */
+  private onRawPaste(msg: Msg): void {
+    const content = String(msg.content ?? msg.text ?? "");
+    if (msg.silent_schedule === true && typeof msg.delivery_id === "string") {
+      const meta: Record<string, string> = { delivery_id: msg.delivery_id, delivery_attempt: String(msg.delivery_attempt ?? ""), source: "schedule" };
+      this.pushChannelMessage(content, meta, undefined, this.captureEpoch(msg.delivery_epoch), true);
+      return;
+    }
+    this.log.warn({ name: this.name, preview: content.slice(0, 60), type: msg.type }, "acp: terminal input was not sent — an ACP instance has no terminal; it is not a prompt");
+    if (typeof msg.notify_written === "string") this.ipc?.broadcast({ type: "raw_paste_written", id: msg.notify_written, outcome: "not_written" });
+  }
+
+  /**
+   * Apply the instance's configured model and effort to the session through ACP (`session/set_config_option`): the way an
+   * agent that takes no launch flag for them (agy) honours fleet.yaml, and the same for one that does (grok). A value the
+   * agent does not offer is reported as a launch warning, never typed anywhere.
+   */
+  private async applyConfiguredSettings(generation: number): Promise<void> {
+    const wanted: [string, string | undefined][] = [["model", this.modelOverride ?? this.config.model], ["thought_level", (this.config as InstanceConfig & { effort?: string }).effort]];
+    for (const [category, value] of wanted) {
+      if (!value || generation !== this.spawnGeneration) continue;
+      const current = this.adapter.configOption(category)?.currentValue;
+      if (current === value) continue;
+      const result = await this.adapter.setConfigOption(category, value);
+      if (!result.ok) {
+        this.log.warn({ name: this.name, category, value, reason: result.reason, accepted: result.accepted }, "acp: a configured setting was not applied");
+        if (result.reason === "invalid" || result.reason === "failed") {
+          this.emit("backend_launch_warning", { name: this.name, message: `${category === "model" ? "model" : "effort"} "${value}" was not applied: ${result.message}${result.accepted.length ? ` (it offers: ${result.accepted.join(", ")})` : ""}. It runs on its own setting.` });
+        }
+      }
+    }
+  }
+
+  /** Set the live session's reasoning effort or model through ACP. The caller has already persisted the value for the next start. */
+  async setSessionSetting(kind: "effort" | "model", value: string): Promise<import("./acp-adapter.js").SetConfigResult> {
+    return this.adapter.setConfigOption(kind === "effort" ? "thought_level" : "model", value);
+  }
+  /** The values the live session offers for `effort` / `model` (empty when the agent is not running or offers none). */
+  sessionSettingValues(kind: "effort" | "model"): readonly string[] { return this.adapter.configOption(kind === "effort" ? "thought_level" : "model")?.values ?? []; }
+
   // ───────────────────────────────────────────────────────────────── inbound messages and turns
 
   /** Admit one message (a person's, another instance's, a schedule's). Returns at once; the turn runs when its turn comes. */
-  pushChannelMessage(content: string, meta: Record<string, string>, _targetSession?: string, deliveryEpoch = this.deliveryEpoch): void {
+  pushChannelMessage(content: string, meta: Record<string, string>, _targetSession?: string, deliveryEpoch = this.deliveryEpoch, raw = false): void {
     if (deliveryEpoch !== this.deliveryEpoch) {
       this.log.info({ name: this.name }, "acp: pending delivery dropped by cancel");
       this.deferDurable(meta, "delivery epoch changed before queue admission");
@@ -514,7 +625,7 @@ export class AcpRunner extends EventEmitter {
     }
     if (!this.started && !this.adapter.health().process) return;
     this.updateLastChat(meta.chat_id, meta.thread_id, meta.adapter_id);
-    const item: InboundItem = { content, meta, epoch: deliveryEpoch, turnId: `${this.bootId.slice(0, 8)}-${++this.turnSeq}` };
+    const item: InboundItem = { content, meta, epoch: deliveryEpoch, turnId: `${this.bootId.slice(0, 8)}-${++this.turnSeq}`, ...(raw ? { raw: true } : {}) };
     if (this.queued > 0) { const status = statusOf(meta); if (status) this.emit("message_queued", status); }
     this.queued++;
     this.chain = this.chain.then(() => this.runItem(item)).catch(err => this.log.error({ error: (err as Error).message }, "acp: a delivery failed")).finally(() => { this.queued--; });
@@ -527,6 +638,12 @@ export class AcpRunner extends EventEmitter {
     const { meta, content } = item;
     const status = statusOf(meta);
     if (this.stopping || this.writesFenced) { this.deferDurable(meta, "the instance is stopping"); return; }
+    // `/raw <text>` is "type this into the CLI as it is" (tmux only, see `onRawPaste`): not a message for an agent with no terminal.
+    if (!item.raw && !meta.from_instance && content.startsWith("/raw ")) {
+      this.log.warn({ name: this.name }, "acp: /raw was not sent — an ACP instance has no terminal");
+      if (status && !meta.delivery_id) this.emit("message_failed", status);
+      return;
+    }
     if (item.epoch !== this.deliveryEpoch) {
       this.deferDurable(meta, "delivery epoch changed while queued");
       this.noteCancelledHuman(meta);
@@ -544,7 +661,7 @@ export class AcpRunner extends EventEmitter {
       if (!this.outbox) { this.emit("durable_delivery_deferred", { ...attempt, targetBootId: this.bootId, reason: "outbox port unavailable before submission" }); return; }
       if (this.outbox.begin(attempt.deliveryId, this.bootId, attempt.attemptNo) !== "begun") return;
     }
-    const wire = this.format(content, meta);
+    const wire = item.raw ? content : this.format(content, meta);
     const t = { item, startedAt: this.now(), text: "", outbound: false, consumed: false, deliveryId: attempt ? attempt.deliveryId : null, attemptNo: attempt ? attempt.attemptNo : 0, cancelled: false };
     this.turn = t;
     this.steps.beginTurn(item.turnId, content, undefined, wire);
@@ -690,9 +807,10 @@ export class AcpRunner extends EventEmitter {
 
   private onIpc(msg: Msg, socket: Socket): void {
     switch (msg.type) {
-      case "tool_call": this.handleToolCall(msg, socket); return;
+      case "tool_call": this.noteMcpServing(socket); this.handleToolCall(msg, socket); return;
       case "mcp_ready": {
         const sessionName = msg.sessionName as string | undefined;
+        if (!sessionName || sessionName === this.name) this.noteMcpServing(socket);
         if (sessionName) { this.sessionNames.set(socket, sessionName); socket.on("close", () => { this.sessionNames.delete(socket); if (sessionName !== this.name) this.ipc?.broadcast({ type: "session_disconnected", sessionName }); }); }
         this.ipc?.broadcast({ type: "mcp_ready", sessionName });
         return;
@@ -711,11 +829,12 @@ export class AcpRunner extends EventEmitter {
           .catch(err => { this.deferDurable(meta, `target wake failed: ${(err as Error).message}`); });
         return;
       }
-      case "steer": case "btw": case "raw_paste": {
+      case "steer": case "btw": {
         const meta = (msg.meta ?? {}) as Record<string, string>;
         this.steerMessage(String(msg.content ?? msg.text ?? ""), meta, this.captureEpoch(msg.delivery_epoch));
         return;
       }
+      case "raw_paste": this.onRawPaste(msg); return;
       case "config_update": this.applyConfigUpdate(msg.config); return;
       case "fleet_schedule_trigger": {
         const payload = (msg.payload ?? {}) as Record<string, unknown>;
