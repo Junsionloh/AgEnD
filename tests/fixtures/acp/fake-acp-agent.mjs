@@ -211,6 +211,8 @@ process.stdin.on("data", d => {
         break;
       }
       case "session/cancel":
+        // FAKE_ACP_IGNORE_FIRST_CANCEL: the first cancel is dropped (as agy does right after it resumed a session): only a repeated one stops the turn.
+        if (process.env.FAKE_ACP_IGNORE_FIRST_CANCEL && !globalThis.__cancelIgnored) { globalThis.__cancelIgnored = true; log({ cancelIgnored: m.params?.sessionId }); break; }
         log({ cancelled: m.params?.sessionId });
         cancelled = true; cancelWake?.();
         break;

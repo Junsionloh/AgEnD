@@ -188,7 +188,8 @@ describe("an interruption where the CLI folds a second prompt into the running t
 
 describe("an interruption in the gaps (review of 00c682636)", () => {
   it("while a paused agent is being woken for the message that is starting: that turn is cut short as soon as its prompt has left, and the next message runs", async () => {
-    const h = await boot({ plain: true });
+    // The CLI drops the first cancel it gets (agy does so right after resuming a session): the runner asks again.
+    const h = await boot({ plain: true, env: { FAKE_ACP_IGNORE_FIRST_CANCEL: "1" } });
     h.fleet.send({ type: "fleet_inbound", content: "first", meta: meta("m-0") });
     await until(() => turnEnds(h).length === 1, 6000, "the first turn");
     await h.runner.pause("idle");
@@ -197,7 +198,8 @@ describe("an interruption in the gaps (review of 00c682636)", () => {
     h.runner.interruptMessage("B instead", meta("b"));       // arrives while A is being started: there is no running prompt to cancel yet
     await until(() => turnEnds(h).length === 3, 15000, "A (cut short) and B");
     expect(turnEnds(h)).toEqual(["end_turn", "cancelled", "end_turn"]);   // A did NOT run its 20 s: it was cancelled the moment it started
-    expect(calls(h.state).filter(c => "cancelled" in c)).toHaveLength(1);
+    expect(calls(h.state).filter(c => "cancelIgnored" in c)).toHaveLength(1);
+    expect(calls(h.state).filter(c => "cancelled" in c)).toHaveLength(1);                  // the second ask stopped it
     expect(steps(h).filter(s => s.kind === "user").map(s => s.body)).toEqual(["first", "A #slow", "B instead"]);
     const prompts = Object.values(sessions(h.state)).flat();
     expect(prompts.map(t => NOTE.test(t))).toEqual([false, false, true]);

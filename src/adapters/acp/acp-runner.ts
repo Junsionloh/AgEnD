@@ -860,13 +860,28 @@ export class AcpRunner extends EventEmitter {
       if (turn && !turn.cancelled) {
         turn.cancelled = true;
         // Only a cancel that reaches a running prompt counts: before the prompt has left it is held and sent right after (`cancelPending`), never dropped.
-        if (this.adapter.busy) void this.adapter.cancel(); else turn.cancelPending = true;
+        if (this.adapter.busy) this.cancelTurn(turn); else turn.cancelPending = true;
       } else if (!turn && this.startingItem) this.startInterrupted = true;
     } else {
       if (this.queued > 1) { const status = statusOf(meta); if (status) this.emit("message_queued", status); }
       this.inbox.push(item);
     }
     this.pump();
+  }
+
+  /**
+   * Cancel the running turn for an interruption, and keep asking every 2 s (up to 8 times) until it has ended: a CLI that has not yet registered the prompt
+   * ignores a cancel that comes too early (measured: agy, in the second after it resumed a session with `session/load`, answered the prompt 84 s later).
+   * A cancel is harmless to repeat; the timer stops with the turn.
+   */
+  private cancelTurn(t: NonNullable<AcpRunner["turn"]>): void {
+    void this.adapter.cancel();
+    let tries = 0;
+    const timer = setInterval(() => {
+      if (this.turn !== t || t.ended !== null || this.stopping || ++tries > 8) { clearInterval(timer); return; }
+      void this.adapter.cancel();
+    }, 2000);
+    timer.unref?.();
   }
 
   /** The messages waiting, in the order they will run (a test seam, and what a diagnosis would ask). */
@@ -933,7 +948,7 @@ export class AcpRunner extends EventEmitter {
     let stopReason = "error";
     try {
       const sent = this.adapter.prompt(item.interrupts ? `${interruptedNote(item.interrupts.by)}\n\n${wire}` : wire);
-      if (t.cancelPending) { t.cancelPending = false; void this.adapter.cancel(); }     // asked for before the prompt left: nothing was running to cancel then
+      if (t.cancelPending) { t.cancelPending = false; this.cancelTurn(t); }     // asked for before the prompt left: nothing was running to cancel then
       const result = await sent;
       stopReason = result.stopReason;
       this.proveConsumed(t, "prompt-response");
