@@ -157,6 +157,12 @@ export function tokenLabel(n: number): string {
  * builds the chat timeline from adapter events, and reports delivery to the outbox. The protocol itself is the
  * adapter's.
  */
+/** The `messageId` a `reply`'s answer from the fleet names (`{ chatId, messageId }`), or undefined. */
+function sentMessageId(result: unknown): string | undefined {
+  const id = result && typeof result === "object" ? (result as { messageId?: unknown }).messageId : undefined;
+  return typeof id === "string" && id ? id : undefined;
+}
+
 export class AcpRunner extends EventEmitter {
   readonly bootId = randomUUID();
   readonly steps: AcpStepStore;
@@ -1039,7 +1045,10 @@ export class AcpRunner extends EventEmitter {
     if (this.lastChatId) { args.chat_id = this.lastChatId; if (this.lastThreadId) args.thread_id = this.lastThreadId; }
     const ok = await this.fleetRequest("proxyreply", { type: "fleet_outbound", tool: "reply", args, adapterId: this.lastAdapterId }, "reply");
     if (!ok.ok) this.log.warn({ name: this.name, error: ok.error }, "acp: the proxy reply did not go out");
-    else this.log.info({ name: this.name }, "acp: the agent's text was sent as the reply (it used no reply tool)");
+    else {
+      this.log.info({ name: this.name }, "acp: the agent's text was sent as the reply (it used no reply tool)");
+      this.steps.addProxyReply(String(args.text), sentMessageId(ok.result));
+    }
   }
 
   /** The latest context reading the agent reported (tokens in use, and the window when it is known). */
@@ -1281,8 +1290,11 @@ export class AcpRunner extends EventEmitter {
     };
     if (UNSUPPORTED_TOOLS.has(tool)) { respond(null, `${tool} is not available on an instance that runs over ACP`); return; }
     const typed = TYPED_TOOLS[tool];
-    const via = (payload: Msg): void => {
-      void this.fleetRequest(typed?.prefix ?? "tool", payload, tool).then(r => r.ok ? respond(r.result) : respond(null, r.error));
+    const via = (payload: Msg, onSent?: (result: unknown) => void): void => {
+      void this.fleetRequest(typed?.prefix ?? "tool", payload, tool).then(r => {
+        if (r.ok && onSent) { try { onSent(r.result); } catch { /* the timeline never fails a tool call */ } }
+        r.ok ? respond(r.result) : respond(null, r.error);
+      });
     };
     if (typed) {
       const meta = tool.endsWith("schedule") || tool.includes("_schedule")
@@ -1302,7 +1314,10 @@ export class AcpRunner extends EventEmitter {
       routed.chat_id = this.lastChatId;
       if (this.lastThreadId) routed.thread_id = this.lastThreadId;
     }
-    via({ type: "fleet_outbound", tool, args: routed, ...(operationId ? { operationId, sourceDaemonBootId: this.bootId } : {}), adapterId: this.lastAdapterId });
+    // The fleet's answer to a `reply` names the message it made: the timeline's reply step is anchored to that row exactly.
+    const noteSent = tool === "reply" && fromOwn && typeof routed.text === "string"
+      ? (result: unknown) => { const id = sentMessageId(result); if (id) this.steps.anchorReply(routed.text as string, id); } : undefined;
+    via({ type: "fleet_outbound", tool, args: routed, ...(operationId ? { operationId, sourceDaemonBootId: this.bootId } : {}), adapterId: this.lastAdapterId }, noteSent);
   }
 
   // ───────────────────────────────────────────────────────────────── small helpers

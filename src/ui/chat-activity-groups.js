@@ -20,6 +20,8 @@
 //   turn  the turn has no `reply` at all (a backend that has none): its steps go above the last agent row between its
 //         user row and the next user row;
 //   none  nothing matched: an "activity" group of its own, between the rows by time. Never attached to a guess.
+// An assistant step marked `sent` (an ACP agent that used no reply tool: AgEnD sent its closing text as the reply, and left a
+// reply step with the bubble's messageId) is that bubble's own text, and is not repeated as a step.
 // A `reply` call that failed or was interrupted sent nothing: it claims no row (a retry that worked would lose its row to
 // it); its steps join the next segment, and the failed call shows there as an ordinary tool step.
 // What a step must be to be shown (AGEND-197): a text with nothing in it — blank, or only punctuation (the `.` Claude Code
@@ -143,6 +145,7 @@ export function groupSteps(rows, steps, opts = {}) {
     const flush = (replyStep) => { segs.push({ n: n++, items: seg, reply: replyStep, from }); from = replyStep.ts || from; seg = []; };
     for (const s of turn.steps) {
       if (s.kind === "user" || s.kind === "turn_end" || s.kind === "state") continue;
+      if (s.sent) continue;                                // text AgEnD sent as a bubble: the bubble is where it is shown
       if (isReplyStep(s) && !isLostReply(s)) { replied++; flush(s); continue; }
       if (SHOWN.has(s.kind) && hasSubstance(s)) seg.push(s);
     }

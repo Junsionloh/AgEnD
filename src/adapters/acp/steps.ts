@@ -81,6 +81,7 @@ export class AcpStepStore {
   /** The turn's own id and the person's message. `wire`: what was sent to the CLI — the ids the chat joins by are in it. */
   beginTurn(turnId: string, text: string, ts = this.now(), wire = text): void {
     this.closeOpen();
+    this.pendingReplies.length = 0;
     this.turn = turnId;
     const step: LogStep = { id: `u-${turnId}`, turn: turnId, ts, kind: "user" };
     stepBody(step, text, TEXT_MAX);
@@ -97,6 +98,52 @@ export class AcpStepStore {
     stepBody(step, text, TEXT_MAX);
     this.put(step, true);
     return step.id;
+  }
+
+  /**
+   * The chat row AgEnD's `reply` tool call produced, known to the daemon exactly (the fleet's answer to the MCP call names the
+   * message): the call's step gains that `messageId`. An ACP CLI's own update for the call does not always say (agy's carries no
+   * result), so this is the exact anchor and the text the call came with is only how the step is found. The call's step may
+   * not be here yet (its update and the MCP call race): the id waits for it, and a turn that ends first gives it to the oldest
+   * reply step still without one, else a step of its own.
+   */
+  anchorReply(text: string, messageId: string): void {
+    const head = replyAnchor({ text })?.replyText;
+    if (!head || !messageId) return;
+    const step = this.turnReplies().reverse().find(s => s.anchor?.replyText === head);
+    if (step) { this.setReplyId(step, messageId); return; }
+    this.pendingReplies.push({ head, messageId });
+    if (this.pendingReplies.length > 20) this.pendingReplies.shift();
+  }
+  private readonly pendingReplies: { head: string; messageId: string }[] = [];
+
+  /** This turn's reply steps (calls that did not fail) that no message is named for yet, oldest first. */
+  private turnReplies(): Mutable<LogStep>[] {
+    return this.steps.filter(s => s.turn === this.turn && s.kind === "tool" && s.tool === REPLY_TOOL_NAME && s.status !== "failed" && s.status !== "interrupted" && !s.anchor?.messageId);
+  }
+
+  private setReplyId(step: Mutable<LogStep>, messageId: string): void {
+    step.anchor = { ...step.anchor, messageId };
+    this.put(step, step.status !== "running");
+  }
+
+  /**
+   * The agent used no `reply` tool and AgEnD sent its closing text as the reply (`messageId`: the bubble it made): the timeline
+   * gets the reply step a tool call would have left — so the steps before it are anchored to that bubble exactly — and the text
+   * the turn wrote is marked as sent, so the chat does not show it a second time inside the activity block.
+   */
+  addProxyReply(text: string, messageId?: string): void {
+    this.closeOpen();
+    const anchor = { ...replyAnchor({ text }), ...(messageId ? { messageId } : {}) };
+    const step: LogStep = { id: `pr-${this.turn || "x"}-${++this.seq}`, turn: this.turn, ts: this.now(), kind: "tool", tool: REPLY_TOOL_NAME, cat: "message", status: "done" };
+    if (anchor.replyText || anchor.messageId) step.anchor = anchor;
+    stepBody(step, text, 2000);
+    for (const s of this.steps) {
+      if (s.turn !== this.turn || s.kind !== "assistant" || s.sent) continue;
+      s.sent = true;
+      this.put(s, true);
+    }
+    this.put(step, true);
   }
 
   /** The CLI took a message added to the turn and then refused it: the step says so (the message is sent again as a message of its own). */
@@ -233,7 +280,9 @@ export class AcpStepStore {
       step.tool = REPLY_TOOL_NAME;
       step.cat = "message";
       const anchor = replyAnchor(named.input);
-      if (anchor) step.anchor = anchor;
+      if (anchor) step.anchor = { ...anchor, ...(step.anchor?.messageId ? { messageId: step.anchor.messageId } : {}) };
+      const waiting = this.pendingReplies.findIndex(p => p.head === step!.anchor?.replyText);
+      if (waiting >= 0 && !step.anchor?.messageId) step.anchor = { ...step.anchor, messageId: this.pendingReplies.splice(waiting, 1)[0]!.messageId };
     }
     // The plan and AgEnD's own `reply` are the agent talking, not a tool that would have asked.
     if (this.autoIds.has(e.id) || (this.skipping() && step.cat !== "plan" && step.cat !== "message")) step.auto = true;
@@ -283,9 +332,21 @@ export class AcpStepStore {
 
   private endTurn(stopReason: string): void {
     this.closeOpen();
+    this.settlePendingReplies();
     this.settleRunning(stopReason === "cancelled" ? "interrupted" : "done");
     const step: LogStep = { id: `end-${this.turn || "x"}-${++this.seq}`, turn: this.turn, ts: this.now(), kind: "turn_end", note: stopReason };
     this.put(step, true);
+  }
+
+  /** A reply the fleet confirmed that no step of the turn has claimed by now: the oldest reply step without an id takes it, else it gets a step. */
+  private settlePendingReplies(): void {
+    const waiting = this.pendingReplies.splice(0);
+    for (const p of waiting) {
+      const step = this.turnReplies()[0];
+      if (step) { this.setReplyId(step, p.messageId); continue; }
+      const made: LogStep = { id: `pr-${this.turn || "x"}-${++this.seq}`, turn: this.turn, ts: this.now(), kind: "tool", tool: REPLY_TOOL_NAME, cat: "message", status: "done", anchor: { replyText: p.head, messageId: p.messageId } };
+      this.put(made, true);
+    }
   }
 
   private closeOpen(): void {
@@ -354,7 +415,7 @@ export class AcpStepStore {
       for (const line of lines.slice(-KEEP * 3)) {
         try {
           const s = JSON.parse(line) as LogStep;
-          if (s && typeof s.id === "string" && typeof s.kind === "string") { latest.delete(s.id); latest.set(s.id, s); }
+          if (s && typeof s.id === "string" && typeof s.kind === "string") { latest.set(s.id, s); }   // a step keeps the place it first had (as in memory); a later line only updates it
         } catch { /* a torn last line */ }
       }
       for (const s of [...latest.values()].slice(-KEEP)) {

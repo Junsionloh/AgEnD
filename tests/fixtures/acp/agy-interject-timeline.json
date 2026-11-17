@@ -1,0 +1,41 @@
+{
+  "_about": "The ACP session/update order of agy-acp for an interjection, as recorded on the :8449 preview (turns 145a28d6-3 and -4) and what the daemon knew beside it: agy backgrounds `sleep 20; echo A`, ends its first turn with text (no reply tool, so AgEnD sends it as the reply), takes the person's mid-run message in a second prompt, and answers it with reply tool calls whose updates carry no result. `mcp` is the fleet's answer to each MCP `reply` call; `fleetAnswer` its answer to the proxy reply.",
+  "turns": [
+    {
+      "id": "145a28d6-3",
+      "wire": "[agend-human-id:hmsg-3333-aaaa]\nsleep 20; echo A\n(message_id: web-u3 | verification_id: v3)",
+      "text": "sleep 20; echo A",
+      "events": [
+        { "do": "event", "e": { "kind": "tool", "id": "c-sleep", "title": "sleep 20; echo A", "toolKind": "execute", "status": "in_progress", "rawInput": { "command": "sleep 20; echo A" } } },
+        { "do": "user", "text": "順便告訴我今天幾號" },
+        { "do": "event", "e": { "kind": "tool", "id": "c-sleep", "title": "sleep 20; echo A", "toolKind": "execute", "status": "completed", "rawInput": { "command": "sleep 20; echo A" }, "rawOutput": "Command exited with code 0\nA" } },
+        { "do": "event", "e": { "kind": "message", "text": "Waiting for the command to finish." } },
+        { "do": "event", "e": { "kind": "turn_end", "stopReason": "end_turn" } },
+        { "do": "proxy", "text": "Waiting for the command to finish.", "fleetAnswer": { "chatId": "web", "messageId": "web-w3" } }
+      ]
+    },
+    {
+      "id": "145a28d6-4",
+      "wire": "[agend-human-id:hmsg-4444-bbbb]\n順便告訴我今天幾號\n(message_id: web-u4 | verification_id: v4)",
+      "text": "順便告訴我今天幾號",
+      "events": [
+        { "do": "event", "e": { "kind": "thought", "text": "The person wants the date." } },
+        { "do": "event", "e": { "kind": "tool", "id": "c-r1", "title": "mcp_agend_reply", "toolKind": "other", "status": "completed", "rawInput": { "text": "今天是 2026 年 11 月 17 日（UTC）。" } } },
+        { "do": "mcp", "text": "今天是 2026 年 11 月 17 日（UTC）。", "fleetAnswer": { "chatId": "web", "messageId": "web-r4a" } },
+        { "do": "event", "e": { "kind": "thought", "text": "Now the command's output." } },
+        { "do": "event", "e": { "kind": "tool", "id": "c-tail", "title": "tail out.txt", "toolKind": "execute", "status": "completed", "rawInput": { "command": "tail out.txt" }, "rawOutput": "A" } },
+        { "do": "event", "e": { "kind": "tool", "id": "c-r2", "title": "mcp_agend_reply", "toolKind": "other", "status": "completed", "rawInput": { "text": "指令執行完成，輸出為：`A`" } } },
+        { "do": "mcp", "text": "指令執行完成，輸出為：`A`", "fleetAnswer": { "chatId": "web", "messageId": "web-r4b" } },
+        { "do": "event", "e": { "kind": "message", "text": "." } },
+        { "do": "event", "e": { "kind": "turn_end", "stopReason": "end_turn" } }
+      ]
+    }
+  ],
+  "rows": [
+    { "role": "user", "anchor": "web-u3", "text": "sleep 20; echo A" },
+    { "role": "agent", "anchor": "web-w3", "text": "Waiting for the command to finish." },
+    { "role": "user", "anchor": "web-u4", "text": "順便告訴我今天幾號" },
+    { "role": "agent", "anchor": "web-r4a", "text": "今天是 2026 年 11 月 17 日（UTC）。" },
+    { "role": "agent", "anchor": "web-r4b", "text": "指令執行完成，輸出為：`A`" }
+  ]
+}

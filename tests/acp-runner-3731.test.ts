@@ -96,7 +96,9 @@ describe("a turn through the IPC socket", () => {
     await until(() => h.runner.getInstanceState() === "working", 3000, "busy");
     await idle(h);
     const s = steps(h);
-    expect(s.map(x => x.kind)).toEqual(["user", "thinking", "assistant", "turn_end"]);
+    expect(s.map(x => x.kind)).toEqual(["user", "thinking", "assistant", "turn_end", "tool"]);
+    expect(s[4]).toMatchObject({ kind: "tool", tool: "mcp__agend__reply", cat: "message", anchor: { replyText: "OK", messageId: "m1" } });   // the text AgEnD sent as the reply, as a reply call would be
+    expect(s[2]).toMatchObject({ sent: true });
     expect(s[0]).toMatchObject({ body: "hello there #linger" });
     expect(s[1]).toMatchObject({ kind: "thinking", body: "Let me think." }); // two chunks, one step
     expect(s[2]).toMatchObject({ kind: "assistant", body: "OK", status: "done" });
@@ -421,7 +423,7 @@ describe("what survives a restart", () => {
     expect(h2.adapter.sessionId()).toBe(id);
     expect(h2.adapter.isNewSession).toBe(false);
     const again = steps(h2);
-    expect(again.map(s => s.kind)).toEqual(["user", "assistant", "turn_end"]);
+    expect(again.map(s => s.kind)).toEqual(["user", "assistant", "turn_end", "tool"]);
     expect(again.some(s => s.kind === "thinking")).toBe(false);
   });
 });
@@ -517,7 +519,7 @@ describe("the Log's view of an ACP instance", () => {
     h.fleet.send(person("again", "m-2"));
     await until(() => steps(h).filter(s => s.kind === "turn_end").length === 2, 5000);
     const next = await service.steps("worker", { admin: true, thinking: true, after: first.after, key: first.key }) as any;
-    expect(next.steps.map((s: any) => s.kind)).toEqual(["user", "thinking", "assistant", "turn_end"]);
+    expect(next.steps.map((s: any) => s.kind)).toEqual(["user", "thinking", "assistant", "turn_end", "tool"]);
     const other = await service.steps("worker", { admin: true, thinking: true, after: 3, key: "1-2" }) as any;
     expect(other.reset).toBe(true);
     expect(other.steps.length).toBeGreaterThan(4);

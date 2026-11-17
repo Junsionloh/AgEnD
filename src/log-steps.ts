@@ -56,6 +56,11 @@ export interface LogStep {
   auto?: boolean;
   /** AGEND-181: what ties this step to a row of the chat ledger (see StepAnchor). Only user steps and `reply` calls carry one. */
   anchor?: StepAnchor;
+  /**
+   * assistant (`cli_adapter: acp`): this text went to the chat as a bubble (AgEnD sent the turn's closing text as the reply,
+   * the agent having used no `reply` tool). The bubble is the text's place; the chat's activity block does not repeat it.
+   */
+  sent?: true;
   modelSwitch?: ModelSwitch;
   servedModel?: string;
   /**
