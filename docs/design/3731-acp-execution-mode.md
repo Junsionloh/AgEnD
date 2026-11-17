@@ -275,6 +275,8 @@ The protocol difference is therefore confined to three translators, and to the c
 
 #3648 builds the chat timeline from transcripts, parsed into `LogStep`s (`src/log-steps.ts:24`). A structured adapter is a **second producer** of the same `LogStep`s, not a second UI. This is the main reason the adapters are cheap to adopt for the chat: the front end does not change. Differences to handle: thought text arrives incrementally (chunks must be coalesced into one step and finalised on the next non-thought event), and a step can be updated after it first appears (`tool_call_update`, `item/*` updates), which the existing step ids (stable per content) must tolerate.
 
+**Replies are anchored by message id, not inferred.** A transcript backend can only guess which bubble a block belongs to (by the reply call's text or time); the daemon of a structured adapter sees both the update stream and the fleet's answer to every reply, so each reply step carries the `messageId` of the bubble it made. This holds for an agent's own `reply` call (its update may carry no result, as agy's does: the fleet's answer names the row) and for the reply AgEnD sends itself when the agent ends a turn with text and no `reply` call: that leaves a reply step too, and the text it sent is marked `sent` so the block does not show it a second time. A reply an agent makes between prompts (agy, once a command it left running finished) keeps its id until its update arrives with the next prompt. Steps hang above the first reply after them, as for transcripts.
+
 ## 6. MCP identity (#1411)
 
 Today every backend has its own way of injecting the per-instance `agend` MCP server, and several are fragile because the CLI, not AgEnD, spawns the MCP child:
