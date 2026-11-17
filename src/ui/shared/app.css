@@ -1191,12 +1191,14 @@ img.amb-p { object-fit: contain; }
   background: var(--surface); box-shadow: var(--shadow-1); opacity: 0; pointer-events: none; transition: opacity var(--t-fast); }
 .msg:hover > .msg-actions, .msg:focus-within > .msg-actions { opacity: 1; pointer-events: auto; }
 @media (hover: none) { .msg-actions { display: none; } }
-/* AGEND-279: "Send now" on a message that waits for the running turn, beside the reply icon. A touch screen has no hover, so a waiting bubble shows it always. */
-.msg-actions .send-now { width: auto; padding: 0 var(--s-2); font-size: var(--fs-xs); white-space: nowrap; }
-.msg-actions .send-now:disabled { opacity: .5; cursor: default; }
-.msg.sendnow { margin-top: 34px; }                 /* room above the bubble's meta line for the strip, so it never covers the "Queued" mark */
-.msg.sendnow > .msg-actions { top: -32px; }
-@media (hover: none) { .msg-actions.has-sendnow { display: flex; opacity: 1; pointer-events: auto; } .msg-actions.has-sendnow [data-act="reply"] { display: none; } }
+/* AGEND-279: "Send now" on a message that waits for the running turn, in its meta line right after the "Queued" mark. A solid accent button,
+   so it is never taken for the dashed mark beside it; the line is for reading, the button for pressing (a touch screen gets a 32px target). */
+.msg .meta .send-now { align-self: center; flex: none; min-height: 24px; padding: 0 var(--s-2); border: 0; border-radius: 999px;
+  background: var(--accent-fill); color: var(--on-accent); font: inherit; font-weight: var(--fw-semibold); white-space: nowrap; cursor: pointer; }
+.msg .meta .send-now:hover:not(:disabled) { opacity: .88; }
+.msg .meta .send-now:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: 2px; }
+.msg .meta .send-now:disabled { opacity: .5; cursor: default; }
+@media (pointer: coarse) { .msg .meta .send-now { min-height: 32px; padding: 0 var(--s-3); } }
 .msg-quote { display: flex; align-items: center; gap: 4px; max-width: 100%; margin: 0 0 4px; padding: 2px var(--s-2) 2px calc(var(--s-2) + 3px); border: 0;
   --lbar-color: var(--border-strong, var(--border)); --lbar-inset: 4px; --lbar-left: 2px; border-radius: var(--r-sm); background: transparent; color: var(--text-3);
   font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer; overflow: hidden; }

@@ -374,15 +374,26 @@ describe("the chat's commands (the real page modules)", () => {
   describe("AGEND-279: Send now on a message that waits for the running turn", () => {
     const row = (id: number, over: Record<string, unknown> = {}) => ({ boot: "b", id, role: "user", sender: "web-user", text: `waiting ${id}`, ts: new Date(1_000_000 + id * 1000).toISOString(), messageId: `web-q${id}`, anchor: `web-q${id}`, delivery: "queued", ...over });
     const busy = { state: "working", steer_supported: true, send_now_supported: true };
-    const sendNowBtn = (c: { p: any }) => c.p.root.querySelector(".msg-actions .send-now");
+    const sendNowBtn = (c: { p: any }) => c.p.root.querySelector(".msg .meta .send-now");
     const nowCalls = (c: { fx: { calls: Array<{ path: string; body?: any }> } }) => c.fx.calls.filter((x) => x.path === "/ui/send-now");
-    it("a waiting message of mine gets \"Send now\" beside the reply icon; the hover words say what it does", async () => {
+    it("a waiting message of mine gets \"Send now\" in its meta line, right after the \"Queued\" mark, with no hover needed; the hover words say what it does", async () => {
       const c = await chatPage(busy, [row(1)]);
       const b = sendNowBtn(c);
       expect(b.textContent).toBe("Send now");
       expect(b.getAttribute("title")).toBe("Stop waiting and put this into the turn that is running");
-      expect([...b.parentElement.children].map((e: any) => e.dataset.act)).toEqual(["sendNow", "reply"]);       // with the ↶ icon, in the same strip
-      expect(b.parentElement.className).toContain("has-sendnow");                                                  // (shown without hover on a touch screen)
+      const meta = b.parentElement;
+      expect(meta.className).toBe("meta");
+      const kids = [...meta.children].map((e: any) => e.className.split(" ")[0]);
+      expect(kids.slice(-2)).toEqual(["queue-mark", "send-now"]);                                                  // the mark, then the button: `Queued … | Send now`
+      expect(b.closest(".msg-actions"), "not in the hover strip").toBeNull();
+    });
+    it("the hover strip is the reply icon alone, as it was (no Send now there, no special case for a waiting bubble)", async () => {
+      const c = await chatPage(busy, [row(1)]);
+      const strip = c.p.root.querySelector(".msg.user .msg-actions");
+      expect([...strip.children].map((e: any) => e.dataset.act)).toEqual(["reply"]);
+      expect(strip.className).toBe("msg-actions");
+      const css = readFileSync(join(process.cwd(), "src", "ui", "shared", "app.css"), "utf8");
+      expect(css).not.toMatch(/has-sendnow|\.sendnow/);
     });
     it.each([
       ["idle", { ...busy, state: "idle" }, {}],

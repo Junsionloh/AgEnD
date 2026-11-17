@@ -199,3 +199,15 @@ describe("the composer", () => {
     setLang("en");
   });
 });
+
+describe("Send now's look (the meta line's button)", () => {
+  const css = read("shared", "app.css");
+  const rule = (sel: string) => (css.match(new RegExp(`${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{[^}]*\\}`, "g")) ?? []).join(" ");
+  it("always shown (no hover or opacity rule on it), a solid accent button next to the dashed mark, and a 32px target on a touch screen", () => {
+    const base = rule(".msg .meta .send-now");
+    expect(base).toMatch(/background: var\(--accent-fill\)/);
+    expect(base).not.toMatch(/opacity|pointer-events|display: none/);
+    expect(css).toMatch(/@media \(pointer: coarse\) \{ \.msg \.meta \.send-now \{ min-height: 32px;/);
+    expect(rule(".queue-mark")).toMatch(/dashed/);                                                               // so the two are not taken for each other
+  });
+});
