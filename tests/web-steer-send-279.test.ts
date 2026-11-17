@@ -33,7 +33,7 @@ const cookieOf = (sid: string) => `${WEB_SESSION_COOKIE}=${sid}`;
 const write = (sid: string) => ({ cookie: cookieOf(sid), origin: `http://127.0.0.1:${port}`, [WEB_CSRF_HEADER]: csrfTokenFor(sid), "content-type": "application/json" });
 beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), "agend-steer-fleet-"));
-  writeFileSync(join(dir, "fleet.yaml"), `health_port: 0\ninstances:\n  a:\n    working_directory: ${dir}\n    backend: claude-code\n  w:\n    working_directory: ${dir}\n    backend: claude-code\n    runtime: windows\n`);
+  writeFileSync(join(dir, "fleet.yaml"), `health_port: 0\ninstances:\n  a:\n    working_directory: ${dir}\n    backend: claude-code\n  t:\n    working_directory: ${dir}\n    backend: claude-code\n  w:\n    working_directory: ${dir}\n    backend: claude-code\n    runtime: windows\n`);
   fm = new FleetManager(dir);
   const q = () => {}; fm.logger = { info: q, warn: q, error: q, debug: q, trace: q, fatal: q, child: () => fm.logger };
   fm.notifyFleetError = () => true; fm.loadConfig(join(dir, "fleet.yaml"));
@@ -277,5 +277,20 @@ describe("the fleet's part of Send now (sendQueuedNow)", () => {
     fm.daemons.set("a", plain);                                                              // no ACP adapter bound: a terminal agent
     expect(fm.sendQueuedNow("a", "web-fl-0004")).toBeNull();
     expect(plain.interruptQueued).not.toHaveBeenCalled();
+  });
+});
+
+describe("the status frame's `send_now_supported`", () => {
+  const flag = (name: string) => fm.getUiStatus().instances.find((i: any) => i.name === name)?.send_now_supported;
+  it("true only for an agent that runs over ACP (its queue lets one message leave); a terminal agent's is false", () => {
+    const runsAcp = vi.spyOn(fm, "instanceRunsAcp").mockImplementation(((n: string) => n === "a") as never);
+    expect([flag("a"), flag("t")]).toEqual([true, false]);
+    runsAcp.mockImplementation((() => false) as never);
+    expect([flag("a"), flag("t")]).toEqual([false, false]);                                  // not ACP any more: not offered
+  });
+  it("and `steer_supported` is its own, wider question (a terminal agent whose backend steers)", () => {
+    vi.spyOn(fm, "instanceRunsAcp").mockReturnValue(false as never);
+    const inst = fm.getUiStatus().instances.find((i: any) => i.name === "a");
+    expect([inst.send_now_supported, inst.steer_supported]).toEqual([false, true]);          // claude-code steers, but has no queue to take one from
   });
 });

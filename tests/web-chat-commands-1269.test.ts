@@ -427,6 +427,15 @@ describe("the chat's commands (the real page modules)", () => {
       fire(sendNowBtn(c), "click"); await settle();
       expect(sendNowBtn(c).disabled).toBe(false);
     });
+    it("a guest's page never shows it, whatever the agent and the message are (the server refuses a guest too)", async () => {
+      const c = await chatPage(busy, [row(1)]);
+      expect(sendNowBtn(c)).not.toBeNull();                                                                          // (the same page, as a signed-in person's)
+      (c.p.document as any).body.dataset.tier = "guest";                                                              // the server marks a guest's page on <body>
+      c.stream.emit("status", { uptime: 3, instances: [inst("w", busy)] }); await settle();
+      c.stream.emit("status", { uptime: 4, instances: [inst("w", { ...busy, state: "idle" })] }); await settle();       // a redraw, as the work ends…
+      c.stream.emit("status", { uptime: 5, instances: [inst("w", busy)] }); await settle();                            // …and starts again
+      expect(sendNowBtn(c)).toBeNull();
+    });
     it("the agent turns idle meanwhile: the button goes with the work", async () => {
       const c = await chatPage(busy, [row(1)]);
       expect(sendNowBtn(c)).not.toBeNull();

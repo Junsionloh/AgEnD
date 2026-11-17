@@ -31,13 +31,13 @@ afterEach(async () => {
 });
 
 const MIN = 60_000;
-async function boot(o: { config?: Partial<InstanceConfig>; name?: string; dir?: string; clock: { t: number }; hangCheckEveryMs?: number; lease?: () => boolean }) {
+async function boot(o: { config?: Partial<InstanceConfig>; name?: string; dir?: string; clock: { t: number }; hangCheckEveryMs?: number; lease?: () => boolean; env?: Record<string, string> }) {
   const dir = o.dir ?? tmp(), state = tmp();
   const config = { working_directory: dir, backend: "antigravity", cli_adapter: "acp", ...o.config } as InstanceConfig;
   const profile = { ...AGY_PROFILE, supportedVersions: ["1.5.8"], args: () => [FAKE] };
   const holder: { runner?: AcpRunner } = {};
   const adapter = new AcpAdapter({
-    profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger, env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8" },
+    profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger, env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8", ...o.env },
     makeRunner: a => (holder.runner = new AcpRunner(a, { name: o.name ?? "worker", config, instanceDir: dir, topicMode: true, backend: "antigravity", logger, now: () => o.clock.t, ...(o.hangCheckEveryMs ? { hangCheckEveryMs: o.hangCheckEveryMs } : {}) })),
   });
   const runner = holder.runner!;
@@ -182,5 +182,24 @@ describe("the shared clock is the terminal daemon's", () => {
     const c = new AutoPauseController(10_000, 0);
     expect(c.observe("idle", 10_000)).toBe(true);
     expect(c.observe("working", 10_000)).toBe(false);
+  });
+});
+
+describe("\"Send now\" takes a message out of the queue: the count goes with it (AGEND-279)", () => {
+  it("the queue count matches the queue, so the instance goes idle and is auto-paused afterwards, and an interruption is `idle` again", async () => {
+    const clock = { t: 1_000_000 };
+    const h = await boot({ clock, config: { auto_pause_after: 10 }, env: { FAKE_ACP_CONCURRENT: "fold" } });
+    const count = () => (h.runner as unknown as { queued: number }).queued;
+    h.fleet.send(say("A #slow", "a"));
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.pushChannelMessage("C waits", { chat_id: "chat-1", message_id: "c", user: "alice", source: "web" });
+    expect([count(), h.runner.inboxOrder()]).toEqual([2, ["C waits"]]);                       // the running turn and the one waiting
+    expect(h.runner.interruptQueued("c")).toBe("add");
+    expect([count(), h.runner.inboxOrder()]).toEqual([1, []]);                                // the waiting one left: only the running turn is counted
+    await done(h, 1);
+    expect(count()).toBe(0);                                                                  // nothing is counted that is not there
+    expect(h.runner.interruptMode()).toBe("idle");
+    clock.t += 11 * MIN; h.runner.checkAutoPause();
+    expect(h.requests).toMatchObject([{ name: "worker", reason: "idle" }]);                    // a stuck count would keep it "queued" for ever
   });
 });
