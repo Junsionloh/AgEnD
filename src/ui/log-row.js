@@ -5,13 +5,14 @@ import { modelSwitchText, modelName, observationLabel } from "/assets/model-obse
 import { html, useState } from "/assets/app-html.js";
 import { register, t } from "/assets/app-i18n.js";
 import { Icon } from "/assets/ui-icons.js";
+import { PermissionCard } from "./adapter-mode.js";
 import "/assets/chat-strings.js";
 import { chatTime, chatTimeFull } from "/assets/chat-time.js";
 
 register("log", {
   en: {
     user: "Asked", assistant: "Replied", error: "Error", errorCode: "Error {0}", turnEnd: "Turn ended", turnEndIn: "Turn ended · {0}",
-    compacted: "Conversation compacted", turn: "Turn",
+    compacted: "Conversation compacted", malformedCall: "agy retried a malformed tool call", turn: "Turn",
     running: "running", done: "done", failed: "failed", interrupted: "interrupted", exit: "exit {0}",
     showScreen: "Show what was on screen", hideScreen: "Hide what was on screen",
     showOutput: "Show output", hideOutput: "Hide output", args: "Arguments", output: "Output", noOutput: "No output.",
@@ -19,12 +20,13 @@ register("log", {
     times: "×{0}", newer: "{0} new",
     cat_read: "Read", cat_edit: "Edit", cat_search: "Search", cat_run: "Run", cat_web: "Web", cat_mcp: "MCP", cat_agent: "Sub-agent",
     cat_plan: "Plan", cat_message: "Message", cat_other: "Tool", plan_items: "{0} items",
+    permission: "Permission", auto: "auto", autoTitle: "Allowed without asking (skip permissions is on)",
     said: "Said", thinking: "Thinking", thinkingMore: "Show all thinking", thinkingLess: "Show less",
     expand: "Show details", collapse: "Hide details", command: "Command", removed: "Removed", added: "Added",
   },
   "zh-TW": {
     user: "收到要求", assistant: "回覆", error: "錯誤", errorCode: "錯誤 {0}", turnEnd: "回合結束", turnEndIn: "回合結束 · {0}",
-    compacted: "對話已壓縮", turn: "回合",
+    compacted: "對話已壓縮", malformedCall: "agy 重試了一次格式錯誤的工具呼叫", turn: "回合",
     running: "執行中", done: "完成", failed: "失敗", interrupted: "中斷", exit: "結束碼 {0}",
     showScreen: "顯示當時的畫面", hideScreen: "隱藏當時的畫面",
     showOutput: "顯示輸出", hideOutput: "隱藏輸出", args: "參數", output: "輸出", noOutput: "沒有輸出。",
@@ -32,6 +34,7 @@ register("log", {
     times: "×{0}", newer: "{0} 則新的",
     cat_read: "讀取", cat_edit: "編輯", cat_search: "搜尋", cat_run: "執行", cat_web: "網頁", cat_mcp: "MCP", cat_agent: "子 agent",
     cat_plan: "計畫", cat_message: "訊息", cat_other: "工具", plan_items: "{0} 項",
+    permission: "權限", auto: "auto", autoTitle: "自動允許，沒有詢問（已跳過權限詢問）",
     said: "說了", thinking: "思考", thinkingMore: "顯示完整思考", thinkingLess: "收合",
     expand: "顯示細節", collapse: "隱藏細節", command: "指令", removed: "移除", added: "新增",
   },
@@ -120,7 +123,7 @@ export function shortenPaths(text, paths) {
 
 // The app's own SVG icons (never emoji: a device without an emoji font shows boxes).
 export const CAT_ICON = { read: "file", edit: "edit", search: "search", run: "code", web: "globe", mcp: "plug", agent: "team", plan: "tasks", message: "send", other: "sliders" };
-export const KIND_ICON = { user: "user", assistant: "bot", thinking: "wand", error: "alert", turn_end: "stop", state: "info", event: "bell" };
+export const KIND_ICON = { user: "user", assistant: "bot", thinking: "wand", permission: "key", error: "alert", turn_end: "stop", state: "info", event: "bell" };
 
 function size(bytes) {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -221,8 +224,10 @@ export function collapse(items) {
 export function stepLine(x, paths) {
   const short = (v) => shortenPaths(v, paths);
   if (x.kind === "thinking") return tl("thinking");
+  if (x.kind === "permission") return `${tl("permission")}: ${short(x.subject || x.tool || "")}`.replace(/: $/, "");
   if (x.kind === "assistant") return `${tl("said")}: ${short(String(x.body || "").replace(/\s+/g, " ").trim()).slice(0, 80)}`;
   if (x.kind === "error") return x.note ? tl("errorCode", x.note) : tl("error");
+  if (x.kind === "state" && x.note === "malformed_call") return tl("malformedCall");
   const cat = x.cat || "other";
   const subject = cat === "plan" && x.subject ? tl("plan_items", x.subject) : short(x.subject || x.tool || "");
   return subject ? `${tl(`cat_${cat}`)} ${subject}` : tl(`cat_${cat}`);
@@ -232,8 +237,9 @@ export function stepLine(x, paths) {
  * One line of the Log. `chat`: in the chat's activity block (an assistant line is "Said"). `compact` (the block's rows,
  * AGEND-197): no time column and no "done" word — a step line is its icon, its words, and only what is unusual about it
  * (running, failed, interrupted, a non-zero exit); `latest` marks the newest step of a block still running.
+ * `instance` / `fetcher`: where a permission row's buttons post their answer (#3731, `cli_adapter: acp`).
  */
-export function LogRow({ x, prev, paths, chat, compact, latest }) {
+export function LogRow({ x, prev, paths, chat, compact, latest, instance, fetcher }) {
   const [open, setOpen] = useState(false);
   const [full, setFull] = useState(false);
   const short = (v) => shortenPaths(v, paths);
@@ -262,6 +268,8 @@ export function LogRow({ x, prev, paths, chat, compact, latest }) {
       ? html`<button type="button" class=${`log-head log-fold log-toggle${cls ? ` ${cls}` : ""}`} aria-expanded=${open ? "true" : "false"} onClick=${() => setOpen(!open)}>${inner}</button>`
       : html`<div class="log-head">${inner}</div>`;
   };
+  // #3731: a tool call AgEnD's policy allowed without asking (`skipPermissions`): there is no card, so the call says so.
+  const autoMark = x.auto ? html`<span class="log-auto" title=${tl("autoTitle")}>${tl("auto")}</span>` : null;
   const note = (cut, bytes) => html`${cut ? html`<p class="note">${tl("cut", cut.toLocaleString())}</p>` : null}${bytes ? html`<p class="note">${tl("tooLarge", size(bytes))}</p>` : null}`;
   let row;
   if (compact && (x.kind === "thinking" || (x.kind === "assistant" && chat))) {
@@ -272,6 +280,11 @@ export function LogRow({ x, prev, paths, chat, compact, latest }) {
     row = html`${line(KIND_ICON[x.kind], html`<span class=${`log-sum ${think ? "log-think" : "log-said"}${open ? " open" : ""}`}>${shown}</span>`,
       html`<span class="log-cat">${tl(think ? "thinking" : "said")}</span>`, more, "log-more")}
       ${open && x.bodyCut ? html`<p class="note">${tl("cut", x.bodyCut.toLocaleString())}</p>` : null}`;
+  } else if (compact && x.kind === "state" && x.note === "malformed_call") {
+    // The CLI's own notice (agy retrying a malformed tool call, AGEND-279): one quiet line; its words are the detail.
+    const has = !!x.body;
+    row = html`${line(KIND_ICON.state, html`<span class="log-sum log-notice">${tl("malformedCall")}</span>`, null, has)}
+      ${has && open ? html`<div class="log-detail"><div class="log-text mono">${short(x.body)}</div>${x.bodyCut ? note(x.bodyCut) : null}</div>` : null}`;
   } else if (compact && x.kind === "tool") {
     const cat = x.cat || "other";
     const raw = x.subject || "";
@@ -285,13 +298,18 @@ export function LogRow({ x, prev, paths, chat, compact, latest }) {
     const middle = subject || x.tool || tl(`cat_${cat}`);
     const kind = cat === "other" && x.tool ? (subject ? x.tool : "") : tl(`cat_${cat}`);
     const label = html`<span class="log-sum"><span class="log-subject mono" title=${raw && subject !== raw ? raw : null}>${middle}</span>${x.repeat ? html` <span class="log-repeat">${tl("times", x.repeat)}</span>` : null}</span>`;
-    const tail = html`${kind ? html`<span class="log-cat">${kind}</span>` : null}${mark}`;
+    const tail = html`${autoMark}${kind ? html`<span class="log-cat">${kind}</span>` : null}${mark}`;
     row = html`${line(CAT_ICON[cat] || CAT_ICON.other, label, tail, has)}
       ${has && open ? html`<div class="log-detail">
         ${view && view.code ? html`<pre class="log-code"><span class="log-prompt" aria-hidden="true">$ </span>${short(view.code)}</pre>${x.inputCut ? note(x.inputCut) : null}` : null}
         ${view && view.diff ? html`<div class="log-diff">${view.diff.old ? html`<pre class="log-code rm" aria-label=${tl("removed")}>${short(view.diff.old)}</pre>` : null}${view.diff.next ? html`<pre class="log-code add" aria-label=${tl("added")}>${short(view.diff.next)}</pre>` : null}</div>` : null}
         ${view && view.raw ? html`<div class="log-sec"><span class="log-sec-h">${tl("args")}</span><div class="log-text mono">${short(view.raw)}</div>${x.inputCut ? note(x.inputCut) : null}</div>` : null}
         ${x.body || x.bodyBytes ? html`<div class="log-sec"><span class="log-sec-h">${tl("output")}</span>${text(x.body, x.bodyCut, x.bodyBytes)}</div>` : null}</div>` : null}`;
+  } else if (x.kind === "permission") {
+    // #3731: a permission request an ACP agent waits on — Allow / Deny / Cancel turn answer it (POST /ui/permission).
+    const status = html`<span class=${`log-status ${x.status || "running"}`}>${x.status === "running" ? html`<span class="spinner" aria-hidden="true"></span>` : null}${tl(x.status || "running")}</span>`;
+    row = html`${compact ? line(KIND_ICON.permission, html`<span class="log-sum">${tl("permission")}</span>`, status, false) : head(KIND_ICON.permission, tl("permission"), status)}
+      <${PermissionCard} step=${x} instance=${instance} fetcher=${fetcher} />`;
   } else if (compact && x.kind === "error") {
     row = html`${line(KIND_ICON.error, html`<span class="log-sum">${x.note ? tl("errorCode", x.note) : tl("error")}</span>`, null, false)}${text(x.body, x.bodyCut)}`;
   } else if (x.kind === "event") {
@@ -318,6 +336,7 @@ export function LogRow({ x, prev, paths, chat, compact, latest }) {
       x.status && x.status !== "done" ? html`<span class=${`log-status ${x.status}`}>${tl(x.status)}</span>` : null);
   } else if (x.kind === "state") {
     row = x.modelSwitch ? html`${head(KIND_ICON.state, observationLabel("title"))}${text(modelSwitchText(x.modelSwitch))}`
+      : x.note === "malformed_call" ? html`${head(KIND_ICON.state, tl("malformedCall"))}${text(x.body, x.bodyCut)}`
       : head(KIND_ICON.state, x.note === "compacted" ? tl("compacted") : x.note || "");
   } else {
     const cat = x.cat || "other";
@@ -326,7 +345,7 @@ export function LogRow({ x, prev, paths, chat, compact, latest }) {
     const status = quiet ? null : html`<span class=${`log-status ${x.status || "done"}`}>${x.status === "running" ? html`<span class="spinner" aria-hidden="true"></span>` : null}${tl(x.status || "done")}${typeof x.exitCode === "number" && x.exitCode !== 0 ? ` · ${tl("exit", x.exitCode)}` : ""}${x.durationMs ? ` · ${duration(x.durationMs)}` : ""}</span>`;
     const label = html`<span class="log-cat">${tl(`cat_${cat}`)}</span>${subject ? html` <span class="log-subject mono" title=${x.subject && subject !== x.subject ? x.subject : null}>${subject}</span>` : null}${x.tool && !subject ? html` <span class="log-tool mono muted">${x.tool}</span>` : null}`;
     const has = !!(x.body || x.input || x.bodyBytes);
-    row = html`${head(CAT_ICON[cat] || CAT_ICON.other, label, html`${x.repeat ? html`<span class="log-repeat">${tl("times", x.repeat)}</span>` : null}${status}`)}
+    row = html`${head(CAT_ICON[cat] || CAT_ICON.other, label, html`${x.repeat ? html`<span class="log-repeat">${tl("times", x.repeat)}</span>` : null}${autoMark}${status}`)}
       ${has ? html`<button type="button" class="link-btn log-toggle" aria-expanded=${open ? "true" : "false"} onClick=${() => setOpen(!open)}>${open ? tl("hideOutput") : tl("showOutput")}</button>` : null}
       ${open ? html`<div class="log-detail">
         ${x.input ? html`<div class="log-sec"><span class="log-sec-h">${tl("args")}</span><div class="log-text mono">${short(x.input)}</div>${x.inputCut ? html`<p class="note">${tl("cut", x.inputCut.toLocaleString())}</p>` : null}</div>` : null}

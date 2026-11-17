@@ -25,6 +25,7 @@ import "./agent-page-strings.js";
 import { pt } from "./agent-page-strings.js";
 import { operationActive, startOperation, takeLeftover } from "./settings-apply.js";
 import { batchImpact, impactOf, shortName } from "./settings-model.js";
+import { askModeConfirm, isModeConfirm, modeConfirms } from "./adapter-mode.js";
 import { AGENT_CATEGORIES, AgentFields, CLASSIC_CATEGORIES, ClassicFields, ask, useAgentForm, useClassicForm } from "./settings-dialogs.js";
 import { NATIVE_CATEGORIES, NativeFields, useNativeForm } from "./native-instance-settings.js";
 
@@ -233,7 +234,7 @@ export function useAgentSettings({ name, lease, enabled, navKey }) {
     try {
       for (const c of [...stagedRef.current.values()]) {
         for (const k of c.confirms || []) {
-          const yes = await ask(k.includes(".") ? t(k) : tn(k));
+          const yes = isModeConfirm(k) ? await askModeConfirm(k) : await ask(k.includes(".") ? t(k) : tn(k));
           if (!lease.current()) return;
           if (!yes) { toast(tn("accessChangeCancelled"), false); return; }
         }
@@ -296,8 +297,9 @@ function AgentForms({ name, kind, cat, sess, inst, room, onDirty, onDelete, dele
     if (!Object.keys(patch).length) { sess.unstage(key); return; }
     const change = changeFor(ctx, kind, name, inst, room, patch);
     // Turning the MCP proxy reply on is asked about first (it can post raw screen text to a channel): the Save asks.
-    const confirms = patch.mcp_proxy_reply === true ? ["agentPage.confirmMcpProxy"] : undefined;
-    sess.stage(key, { ...change, ...(confirms ? { confirms } : {}), ...(ready ? {} : { invalid: true }) });
+    // An execution-mode change restarts the agent: the Save asks, the same question the Settings page's agent dialog asks.
+    const confirms = [...(patch.mcp_proxy_reply === true ? ["agentPage.confirmMcpProxy"] : []), ...(kind === "fleet" ? modeConfirms(shortName(name, inst), patch) : [])];
+    sess.stage(key, { ...change, ...(confirms.length ? { confirms } : {}), ...(ready ? {} : { invalid: true }) });
   }, [patchJson, ready, deleting]);
   const cats = categoriesOf(kind).slice(1);
   const Fields = kind === "classic" ? ClassicFields : kind === "native" ? NativeFields : AgentFields;

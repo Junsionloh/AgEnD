@@ -280,14 +280,15 @@ import { RuntimeWindowsBridge } from "./runtime-windows-bridge.js";
 import { FleetWindowsRuntime, type NativeRuntimePatch, type NativeExecutionResult } from "./fleet-windows-runtime.js";
 import { NativeMcpSessions } from "./native-mcp.js";
 import { nativeProviderMcpSupported } from "./windows-cli-providers.js";
-import { cachedNativeModelCatalog } from "./native-model-catalog.js";
+import { cachedNativeModelCatalog, refreshNativeModelCatalogAfterSignIn } from "./native-model-catalog.js";
 import { shapeWebModelCatalog } from "./web-model-groups.js";
 import { isWindowsInstance, isNativePaneInstance, isNativeExecInstance, WINDOWS_CONFIG_REFUSED, nativeCredentialProfile } from "./native-instance-registry.js";
 import { createNativeWindowsInstance, updateNativeWindowsInstance } from "./native-instance-api.js";
 import { NativeInstanceConfigEdit, parseNativeInstanceCreate, type NativeInstanceCreateInput } from "./native-instance-input.js";
-import { LogService, thinkingOn, type LogAnswer, type LogQuery, type LogSource } from "./log-service.js";
+import { LogService, thinkingOn, type LiveSteps, type LogAnswer, type LogQuery, type LogSource } from "./log-service.js";
 import { viewHistory, type ViewHistoryAnswer, type ViewHistoryQuery } from "./view-history.js";
-import { WebChatHistory, WEB_CHAT_TEXT_MAX, isWebMessageId, newWebMessageId, webChatFrom, type WebChatAttachment, type WebChatPost } from "./web-chat-history.js";
+import { WebChatHistory, WEB_CHAT_TEXT_MAX, isWebMessageId, newWebMessageId, webChatFrom, type WebChatAttachment, type WebChatPost, type WebSteerState } from "./web-chat-history.js";
+import { instanceSupportsSteer } from "./steer-capability.js";
 import { WEB_ECHO_COPIES_MAX, WEB_MIRROR_TIMEOUT_MS, webReactionEmoji, webReactionProblem, type WebEchoCopy } from "./web-reactions.js";
 import { WebChatDiskStore, isSafeInstanceDirName } from "./web-chat-store.js";
 import { SeenUsers, resolveMentions, type MentionNames, type MentionQuery, type MentionSource } from "./web-mentions.js";
@@ -378,6 +379,12 @@ import type { RemoteCardAction, RemoteCardOutcome } from "./remote-card-answer.j
 import { redactSecrets } from "./tool-progress.js";
 import { idleGateTimeoutLog } from "./idle-gate-log.js";
 import { DEFAULT_STUCK_TIMEOUT_MS, readLastInboundAt, type Daemon, type OwnSwitchOutcome } from "./daemon.js";
+import type { InstanceRunner } from "./adapters/types.js";
+import { adapterOf, cancelRunner, capabilitiesOf } from "./adapters/registry.js";
+import type { AcpRunner } from "./adapters/acp/acp-runner.js";
+import { splitAcpModel } from "./adapters/acp/model-id.js";
+import { adapterAfterRuntimeChange } from "./adapters/config.js";
+import { adapterUiView } from "./adapters/ui-view.js";
 import { clearPausedMarker, readPausedAt, readPauseReason, writePausedMarker } from "./pause-marker.js";
 import { readBackgroundWorkEndedMarker } from "./background-work-ended.js";
 import { DEFAULT_WARM_OVERFLOW, WakeCoordinator } from "./wake-coordinator.js";
@@ -1134,6 +1141,13 @@ const NONCE_RETIRE_BUDGET_MS = 5_000;
  */
 const CLI_ENV_FRESH_MS = 60 * 60 * 1000;
 /**
+ * AGEND-276: how long a menu that opens on an empty model list waits for its one discovery, and how long an attempt that
+ * found nothing (a CLI not signed in, offline) is not repeated by the next open. Shorter than CLI_ENV_PROBE_DEADLINE_MS: a
+ * slower probe finishes behind the menu and the page reads again (the `models` event).
+ */
+const MODEL_OPEN_PROBE_WAIT_MS = 12_000;
+const MODEL_OPEN_PROBE_COOLDOWN_MS = 60_000;
+/**
  * Upper bound on a live probe driven by `/model`.
  *
  * A probe chains bounded leaves but is not itself bounded: claude-code runs
@@ -1539,6 +1553,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         if(before.backend!==target.backend)config.model_failover=[];
         for(const key of ["machine_id","native_agent_id","native_adapter","native_sandbox"] as const)delete config[key];
         if(!sameAccount)delete config.backend_options;
+        // #3731: an ACP agent keeps its mode only when the new CLI can run it too (grok ↔ antigravity); otherwise it is a terminal agent again.
+        adapterAfterRuntimeChange(config,this.fleetConfig?.defaults?.backend);
         return {config,discard:()=>{}};
       },
       closed:async(name,before)=>{
@@ -1629,7 +1645,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   }
   /** The local machine's inventory as last used to open its pane relay (status only; never a launch decision). */
   private localPaneInventory: import("./windows-cli.js").WindowsCliProbe | null = null;
-  private nativeCliStatus(cli: string | undefined, machineId: string | undefined, daemon?: Daemon): { native_cli_version?: string; native_cli_verification?: string } {
+  private nativeCliStatus(cli: string | undefined, machineId: string | undefined, daemon?: InstanceRunner): { native_cli_version?: string; native_cli_verification?: string } {
     if (cli !== "codex" && cli !== "claude-code") return {};
     // The version the running pane actually launched; only without one, the machine's last inventory.
     let running: string | undefined;
@@ -2132,6 +2148,19 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       this.needsYou?.poke();this.emitSseEvent("status",this.getUiStatus());
     });
   }
+  /**
+   * Where a person can sign `backend` in on this host, for the "not signed in" message of an ACP instance (toast and Log). The dashboard's
+   * Accounts page when it can connect that CLI here (its row's `signIn`: for agy this needs the CLI's version read, which a host that blocks
+   * `unshare` cannot do); otherwise what alpha offers on every host: a terminal-mode agent's View tab, or /login in a chat channel.
+   */
+  signInHint(backend: string, label: string): string {
+    let dashboard = false;
+    try { dashboard = this.backendSignInTargets().some(t => t.backend === backend && !t.profile && t.signIn); } catch { dashboard = false; }
+    return dashboard
+      ? `Connect it in Settings → Accounts (Connect, next to ${label}), then restart the instance.`
+      : `The dashboard cannot connect ${label} on this host. Sign in from a terminal instead: open the View tab of a terminal-mode (tmux) agent that runs ${label} and sign in there, or send /login in a chat channel; then restart the instance.`;
+  }
+
   nativePanePinnedSession(name:string):string|null{
     const config=this.fleetConfig?.instances[name];if(!isNativePaneInstance(config)||!config.native_agent_id)return null;
     const agent=windowsAgentsFor(this,this.runtimeWindowsExecutor()).get(config.native_agent_id);
@@ -4983,11 +5012,11 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     this.scheduleDeliveryOutboxPump();
   }
 
-  private workingStateListeners?: WeakSet<Daemon>;
+  private workingStateListeners?: WeakSet<InstanceRunner>;
   private workingStateErrors?: Set<string>;
 
   /** Attach only to the published owner. Nothing here sends or resumes work. */
-  private listenForWorkingState(name: string, daemon: Daemon): void {
+  private listenForWorkingState(name: string, daemon: InstanceRunner): void {
     if (typeof daemon.getWorkingStateObservation !== "function") return;
     this.workingStateListeners ??= new WeakSet();
     if (this.workingStateListeners.has(daemon)) return;
@@ -5783,10 +5812,23 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     return this.lastActivity.get(name) ?? 0;
   }
 
+  /** How a `/steer` to an ACP instance would be delivered now (see `AcpRunner.interruptMode`); undefined: not an ACP instance. */
+  acpSteerMode(name: string): "add" | "interrupt" | "idle" | undefined {
+    const runner = this.daemons.get(name);
+    return runner && adapterOf(runner)?.id === "acp" ? (runner as unknown as { interruptMode?(): "add" | "interrupt" | "idle" }).interruptMode?.() : undefined;
+  }
+
+  /** The context an ACP agent reports itself, for the places that otherwise read it off a screen (/ctx, /status, the dashboard). */
+  reportedContext(name: string): { context: number; tokenRatio: import("./context-percent.js").TokenContextRatio | null } | null {
+    const runner = this.daemons.get(name);
+    return runner && adapterOf(runner)?.id === "acp" ? (runner as unknown as { contextReport?(): { context: number; tokenRatio: import("./context-percent.js").TokenContextRatio | null } | null }).contextReport?.() ?? null : null;
+  }
+
   /** Capture the current daemon and delivery owner for a background context read. */
   getPaneContextSource(name: string): import("./pane-context-cache.js").PaneContextSource | null {
     const daemon = this.daemons.get(name);
-    const source = daemon?.getPaneContextSource?.();
+    // Reading context off the screen needs a pane.
+    const source = capabilitiesOf(daemon).paneView ? daemon?.getPaneContextSource?.() : null;
     if (!daemon || !source || this.shuttingDown) return null;
     const epoch = this.getDeliveryEpoch(name);
     return { ...source, generation: `${source.generation}:${epoch}`, isCurrent: () => !this.shuttingDown
@@ -6691,7 +6733,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         try { return daemon ? launchIdentity(daemon.getInteractionSnapshot().owner) : null; } catch { return null; }
       },
       paneFollow: (name) => {
-        try { return this.lifecycle.daemons.get(name)?.compactPaneUi() != null; } catch { return false; }
+        try {
+          const daemon = this.lifecycle.daemons.get(name);
+          return capabilitiesOf(daemon).paneView && daemon?.compactPaneUi() != null;
+        } catch { return false; }
       },
       changed: () => this.emitSseEvent("status", this.getUiStatus()),
     });
@@ -6707,6 +6752,16 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
 
   /** #1218: GET /ui/steps — an instance's steps, read on demand (null: no such instance). */
   logSteps(name: string, q: LogQuery): Promise<LogAnswer | null> { return this.log.steps(name, q); }
+
+  logStepsAsAdmin(name: string, q: LogQuery): Promise<LogAnswer | null> { return this.log.steps(name, { ...q, admin: true }); }
+
+  /** #3731: POST /ui/permission — a person answers an ACP instance's waiting permission request. Null: applied. */
+  answerAcpPermission(name: string, requestId: string, decision: "allow" | "deny" | "cancel"): string | null {
+    const runner = this.lifecycle.daemons.get(name);
+    const acp = runner && adapterOf(runner)?.id === "acp" ? runner as unknown as { answerPermissionByUser?: (id: string, d: "allow" | "deny" | "cancel") => string | null } : undefined;
+    if (!acp?.answerPermissionByUser) return `"${name}" is not running over ACP`;
+    return acp.answerPermissionByUser(requestId, decision);
+  }
   private subagentReader = new SubagentService(name => this.lifecycle.daemons.get(name)?.subagentSource() ?? null);
   subagentRuns(name: string) { return this.subagentReader.read(name); }
 
@@ -6721,7 +6776,15 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const instances = this.fleetConfig?.instances ?? {};
     const config = Object.prototype.hasOwnProperty.call(instances, name) ? instances[name] : undefined;
     const backend = config?.backend ?? (config ? null : this.classicRoomFor(name)?.backend) ?? this.fleetConfig?.defaults?.backend ?? "claude-code";
-    const live = this.lifecycle.daemons.get(name)?.logTranscriptPath() ?? null;
+    const runner = this.lifecycle.daemons.get(name);
+    // An instance that runs over ACP has no transcript file: its steps are built live, from the agent's own updates.
+    const acpSteps = runner && adapterOf(runner)?.id === "acp" ? (runner as unknown as { liveSteps?: LiveSteps }).liveSteps : undefined;
+    if (acpSteps) return { backend, path: null, format: null, live: acpSteps };
+    // An `acp` instance that is not running (stopped, or its CLI is not signed in) has nothing to read: its steps exist only
+    // while it runs, and a transcript from an earlier terminal-mode run is not its conversation. Never "unsupported" (that text
+    // sends the reader to a View an acp instance does not have).
+    if (!runner && adapterUiView(undefined, config, this.fleetConfig?.defaults).cli_adapter === "acp") return { backend, path: null, format: null, reason: "not_running" };
+    const live = runner?.logTranscriptPath() ?? null;
     if (backend === "claude-code") {
       let path = live;
       if (!path) {
@@ -7394,7 +7457,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     return this.daemons.get(instanceName)?.launchSupportsSteer();
   }
 
-  private humanReceiptDaemons = new WeakSet<Daemon>();
+  private humanReceiptDaemons = new WeakSet<InstanceRunner>();
 
   /** Cached FM + lifecycle + Daemon + tmux owner; unknown ownership grants nothing. */
   private humanReceiptOwner(instanceName: string, daemon = this.daemons.get(instanceName)): string | null {
@@ -7407,9 +7470,9 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     } catch { return null; }
   }
 
-  private listenForHumanReceipt(instanceName: string, daemon: Daemon): void {
+  private listenForHumanReceipt(instanceName: string, daemon: InstanceRunner): void {
     // Lazy initialization also supports narrow prototype-based integration fixtures.
-    this.humanReceiptDaemons ??= new WeakSet<Daemon>();
+    this.humanReceiptDaemons ??= new WeakSet<InstanceRunner>();
     if (this.humanReceiptDaemons.has(daemon)) return;
     this.humanReceiptDaemons.add(daemon);
     daemon.on("human_receipt_result", (result: { receipt_id: string; owner_key: string; proof: unknown }) => {
@@ -7774,7 +7837,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       }
       const filename = data.options?.filename as string;
       if (!SAVE_FILENAME_RE.test(filename ?? "")) { await data.respond(t("filename.invalid")); return; }
-      this.pasteRawToClassicInstance(name, `/chat load ${filename}`);
+      if (!this.pasteRawToClassicInstance(name, `/chat load ${filename}`)) { await data.respond(this.instanceRunsAcp(name) ? this.acpUnsupported(name, "/load") : t("compact.not_connected")); return; }
       await data.respond(t("save.sent", `/chat load ${filename}`, name));
     } else if (data.command === "model") {
       await this.handleModelSlash(data, adapterId);
@@ -12376,7 +12439,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     if (!native && !existsSync(sockPath)) return;
 
     const ipc: InstanceClient = native
-      ? new NativeDaemonClient(daemon!, () => this.daemons.get(name) === daemon && (!this.instanceIpcClients.has(name) || this.instanceIpcClients.get(name) === ipc))
+      ? new NativeDaemonClient(daemon as Daemon /* a native pane is always the tmux runner, which is a Daemon */, () => this.daemons.get(name) === daemon && (!this.instanceIpcClients.has(name) || this.instanceIpcClients.get(name) === ipc))
       : new IpcClient(sockPath);
     try {
       await ipc.connect();
@@ -13490,7 +13553,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
           const backend = this.classicChannels.getBackendByInstance(saveName, this.fleetConfig?.defaults?.backend);
           const cmd = saveCommandForBackend(backend, filename);
           if (!cmd) { await msgAdapter?.sendText(chatId, t("save.unsupported")); return; }
-          this.pasteRawToClassicInstance(saveName, cmd);
+          if (!this.pasteRawToClassicInstance(saveName, cmd)) {
+            await msgAdapter?.sendText(chatId, this.instanceRunsAcp(saveName) ? this.acpUnsupported(saveName, "/save") : t("save.not_connected"));
+            return;
+          }
           await msgAdapter?.sendText(chatId, t("save.sent", cmd, saveName));
           return;
         }
@@ -17007,7 +17073,53 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   private reportWebDelivery(instanceName: string, messageId: string, status: DeliveryStatus): void {
     if (status !== "queued" && status !== "processing" && status !== "delivered" && status !== "failed") return;
     const m = this.webChatHistory.setDelivery(instanceName, messageId, status);
-    if (m) this.emitSseEvent("delivery", { instance: instanceName, messageId, delivery: m.delivery });
+    if (m) this.emitSseEvent("delivery", { instance: instanceName, messageId, delivery: m.delivery, ...(m.sentAt ? { sentAt: m.sentAt } : {}), ...(m.steer ? { steer: m.steer } : {}) });
+  }
+
+  private readonly earlySteer = new Map<string, WebSteerState>();
+
+  /** AGEND-279: a message that asked to interject went another way (the turn was cancelled for it; the CLI refused it): the bubble says so. Web messages only. */
+  reportSteer(instanceName: string, messageId: string, steer: WebSteerState): void {
+    if (!isWebMessageId(messageId)) return;
+    // The row is recorded once the send is answered, which can be after the runner has already said how it went: kept for it.
+    if (!this.webChatHistory.findByMessageId(instanceName, messageId)) {
+      this.earlySteer.set(messageId, steer);
+      if (this.earlySteer.size > 50) this.earlySteer.delete(this.earlySteer.keys().next().value as string);
+      return;
+    }
+    const m = this.webChatHistory.setSteer(instanceName, messageId, steer);
+    if (m) this.emitSseEvent("delivery", { instance: instanceName, messageId, ...(m.delivery ? { delivery: m.delivery } : {}), ...(m.sentAt ? { sentAt: m.sentAt } : {}), steer });
+  }
+
+  /**
+   * How a message that asks to interject would go now (AGEND-279): `add` into the running turn, `interrupt` (cancel, then it runs next),
+   * `native` (a terminal agent's own steer), `idle` (nothing runs: sent as any message), `unsupported` (queued: the agent has no way to interject).
+   */
+  webSteerMode(instanceName: string): "add" | "interrupt" | "native" | "idle" | "unsupported" {
+    const acp = this.acpSteerMode(instanceName);
+    if (acp) return acp;
+    if (!["working", "stuck"].includes(this.getInstanceExecutionState(instanceName) ?? "")) return "idle";
+    return instanceSupportsSteer(this.backendNameForInstance(instanceName), this.instanceLaunchSupportsSteer(instanceName)) ? "native" : "unsupported";
+  }
+
+  /**
+   * AGEND-279 "Send now": a web message that waits in an ACP agent's queue is taken out and interjected. Its row says how (and when), the pages are told.
+   * Null: it is not waiting in the queue (it started, or it is gone), nothing was sent. Only ACP agents have a queue that one message can leave.
+   */
+  sendQueuedNow(instanceName: string, messageId: string): "added" | "interrupted" | "idle" | null {
+    const runner = this.daemons.get(instanceName);
+    if (!runner || adapterOf(runner)?.id !== "acp") return null;
+    const mode = (runner as unknown as { interruptQueued?(id: string): "add" | "interrupt" | "idle" | null }).interruptQueued?.(messageId) ?? null;
+    if (mode === null || mode === "idle") return mode;
+    const steer: WebSteerState = mode === "add" ? "added" : "interrupted";
+    const m = this.webChatHistory.markSentNow(instanceName, messageId, steer);
+    if (m) this.emitSseEvent("delivery", { instance: instanceName, messageId, ...(m.delivery ? { delivery: m.delivery } : {}), ...(m.sentAt ? { sentAt: m.sentAt } : {}), steer });
+    return steer;
+  }
+
+  /** AGEND-279: a web message sent as an interjection, handed to the agent the way `/steer` hands one (the same receipt and epoch). */
+  sendWebSteer(instanceName: string, payload: Record<string, unknown>, origin: HumanOrigin | undefined, originalBody: string): boolean {
+    return this.sendHumanControl(instanceName, { ...payload, type: "steer", delivery_epoch: this.getDeliveryEpoch(instanceName) ?? undefined }, origin, originalBody);
   }
 
   /**
@@ -18913,7 +19025,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     chatId: string,
     threadId?: string,
   ): Promise<string | null> {
-    if (!this.topicCommands.supportsClear(instanceName)) return t("clear.unsupported");
+    if (!this.topicCommands.supportsClear(instanceName)) return this.instanceRunsAcp(instanceName) ? this.acpUnsupported(instanceName, "/clear") : t("clear.unsupported");
 
     const adapterId = adapter.id;
     if (!adapterId) return t("clear.prompt_unavailable");
@@ -19757,6 +19869,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         return {current:catalog.current_model,options:catalog.models.map(m=>({id:m.id,label:m.label})),actions:["refresh"]};
       }
       const backend = this.backendNameForInstance(instance);
+      // AGEND-276: opened on an empty list, the menu waits for one bounded discovery ("loading") instead of showing nothing.
+      if (!more) await this.ensureModelCatalog(backend, instance);
       const env = this.webModelEnv(backend, instance);
       const current = this.resolveInstanceModel(instance).model;
       const models = more ? this.modelCatalogFor(backend, instance) : env?.models ?? [];
@@ -19815,7 +19929,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       backendStep: async (instance, args, stepOpts) => {
         const refusal = this.backendCommandRefusal(instance);
         if (refusal) return { error: refusal };
-        // The cached model lists only, as the web's /model: never a live probe on this path.
+        // The cached model lists, as the web's /model; an empty one is discovered once, bounded (AGEND-276: moving to a CLI
+        // never signed in at startup, or probed before it was installed, must not offer an empty list).
+        const wanted = backendArgs(args)[0];
+        if (wanted && KNOWN_BACKENDS.includes(wanted)) await this.ensureModelCatalog(wanted, instance);
         const step = await backendStep({ ...this.backendCommandDeps(instance, { live: false }), models: async backend => this.modelCatalogFor(backend, instance) }, instance, backendArgs(args));
         if (step.kind === "refuse") return step.noop ? { text: step.text } : { error: step.text };
         if (step.kind === "choose") {
@@ -19854,7 +19971,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       pauseWake: (instance, action) => this.topicCommands.runPauseWake(instance, action),
       save: (instance, filename) => this.topicCommands.sendSave(instance, filename),
       clearAsk: (instance) => {
-        if (!this.topicCommands.supportsClear(instance)) return { refused: t("clear.unsupported") };
+        if (!this.topicCommands.supportsClear(instance)) return { refused: this.instanceRunsAcp(instance) ? this.acpUnsupported(instance, "/clear") : t("clear.unsupported") };
         const fence = this.clearTargetFence(instance);
         if (!fence) return { refused: t("clear.not_connected") };
         const now = performance.now();
@@ -20394,7 +20511,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const nonce = await this.postNonceButtonPrompt({
       prefix: REMOTE_CARD_CALLBACK_PREFIX, alertType: "interactive_prompt", instanceName, ...place,
       message: prompt.message, choices: prompt.choices, webInput: prompt.webInput,
-      expiredText: t("card.expired", instanceName), timeoutMs: REMOTE_CARD_TIMEOUT_MS,
+      expiredText: t(card.kind === "question" && card.acpPermission ? "card.permission_expired" : "card.expired", instanceName), timeoutMs: REMOTE_CARD_TIMEOUT_MS,
       extra: { remoteCard: { identity: card.identity, kind: card.kind, options: shown.kind === "question" ? shown.options.map(o => ({ n: o.n, title: o.title })) : [],
         requiresAdmin, ownerAdapterId: this.getInstanceAdapterId(instanceName) } },
     });
@@ -20527,6 +20644,11 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       : this.routing.resolve(data.channelId);
     if (!target) {
       await data.respond(t("classic.no_agent_start"));
+      return;
+    }
+    // An ACP agent has no terminal to type a save command into.
+    if (this.instanceRunsAcp(target.name)) {
+      await data.respond(this.acpUnsupported(target.name, "/save"));
       return;
     }
     const filename = (data.options?.filename as string) ?? "";
@@ -21273,7 +21395,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     if (!daemon) return false;
     const deliveryEpoch = this.cancelPendingDeliveries(instanceName);
     daemon.clearPendingDeliveries?.(deliveryEpoch);
-    daemon.sendEscape().catch(e => this.logger.warn({ err: e, instanceName }, "sendEscape failed"));
+    cancelRunner(daemon).catch(e => this.logger.warn({ err: e, instanceName }, "sendEscape failed"));
     this.lastInboundMsg.delete(instanceName);
     this.clearCancelButton(instanceName);
     // The queued web messages were just dropped with the rest: their ticks say so, on every page.
@@ -21328,6 +21450,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         recoverBackendInstances: (backend, profile) => {
           // #2072: a sign-in just finished — the pickers learn it now, not at the next pass.
           if (!profile) void this.backendAvailability.refresh([backend], { force: true });
+          this.modelsAfterSignIn(backend, profile ?? null);   // AGEND-276: chat /login and the dashboard's terminal sign-in
           return this.recoverBackendInstances(backend, undefined, profile ?? null);
         },
         claimWindow: backend => this.loginWindow.tryClaim("web", backend),
@@ -21364,7 +21487,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       reported: (id, profile, backend) => this.machineAccounts.profileState(id, profile, backend),
       reportedDefault: (id, backend) => this.machineAccounts.reportedDefault(id, backend),
       readiness: (id, backend, named) => this.machineAccounts.readiness(id, backend, named),
-      actor: owner => { const handle = (owner as SessionRecord).handle; return typeof handle === "string" && /^[a-f0-9]{16}$/.test(handle) ? `admin:${handle}` : null; },
+      actor: owner => this.machineSignInActor(owner),
       changed: (event, owner) => {
         // Safe fields only: the computer, the CLI, the profile name (none for Antigravity's default login), a phase and a fixed reason. Never a URL, a code, output or an e-mail address.
         this.logger.info({ machine: event.machine, backend: event.backend, ...(event.profile ? { profile: event.profile } : {}), phase: event.phase, ...(event.reason ? { reason: event.reason } : {}), by: (owner as SessionRecord).label },
@@ -21372,11 +21495,41 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         // The page reads the computer's last detection (agy is never run for a read): a login made just now is remembered until the next one.
         // Only the computer's OWN login (no profile) is remembered here: a named account's sign-in is reported by its Runtime's inventory, which it sends before the sign-in ends.
         if (event.phase === "done" && event.profile === undefined) this.machineAccounts.noteDefaultLogin(event.machine, event.backend, true);
+        // AGEND-276: that computer's Runtime lists models in its own inventory (never a host probe): pages read it again now,
+        // and the Runtime is asked once, for the admin who finished the sign-in, to list them as this account.
+        if (event.phase === "done") {
+          this.announceModels(event.backend);
+          void this.nativeModelsAfterSignIn(event, owner);
+        }
         broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"));
         this.needsYou?.poke();
       },
     });
   }
+  /**
+   * AGEND-276: a paired computer's sign-in ended — ask its Runtime once (`models.refresh`, as the admin who finished the
+   * sign-in) for the list as this account, so the next read of its agents' and the create dialog's list has it without the
+   * Refresh button. Once per sign-in; never on a read (M-2239 P1-2). A Runtime without the capability, a refused account or any
+   * failure is skipped quietly: the sign-in is done either way.
+   */
+  /** The name a paired computer's audit log records for the admin session that signed in on it (`admin:<handle>`); null refuses. */
+  private machineSignInActor(owner: object): string | null {
+    const handle = (owner as SessionRecord).handle;
+    return typeof handle === "string" && /^[a-f0-9]{16}$/.test(handle) ? `admin:${handle}` : null;
+  }
+
+  private async nativeModelsAfterSignIn(event: { machine: string; backend: string; profile?: string }, owner: object): Promise<void> {
+    try {
+      const actor = this.machineSignInActor(owner);
+      if (!actor || this.shuttingDown || !this.browserSignInOwnerCurrent(owner)) return;
+      const refreshed = await refreshNativeModelCatalogAfterSignIn(this as never, {
+        backend: event.backend, machineId: event.machine, ...(event.profile ? { profile: event.profile } : {}), actor,
+        stillAdmin: () => !this.shuttingDown && this.browserSignInOwnerCurrent(owner),
+      });
+      if (refreshed) this.announceModels(event.backend);
+    } catch (err) { this.logger.debug({ backend: event.backend, err }, "Model refresh after a computer's sign-in skipped"); }
+  }
+
   private machineAccountsInstance: MachineAccounts | null = null;
   /** #3190 Part 3c: a paired computer's accounts in Settings → Accounts (machine-accounts.ts). */
   get machineAccounts(): MachineAccounts {
@@ -21420,6 +21573,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"));
         if (event.phase === "done") {
           this.forgetSignInIdentities();   // a sign-in may be a different account now
+          this.modelsAfterSignIn(event.backend, null);   // AGEND-276: the list read before this sign-in (a signed-out CLI answers none) is not this account's
           this.keepAliveAfterSignIn(event.backend, null);   // its file changed, whoever is watching: a "needs sign-in" left from before is no longer the answer
           this.usageAfterSignIn();   // the usage read before this sign-in is not this account's
         }
@@ -21469,6 +21623,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         broadcastSseEvent(this.sseClients, "backend_login", {}, err => this.logger.debug({ err }, "backend_login event failed"));
         if (event.phase === "done") {
           this.forgetSignInIdentities();   // a sign-in may be a different account now
+          this.modelsAfterSignIn(event.backend, event.profile);   // AGEND-276
           this.keepAliveAfterSignIn(event.backend, event.profile);
           this.usageAfterSignIn();
         }
@@ -23116,12 +23271,13 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       // #2861: an Office share's dialogue box hears that someone talked to an instance (never what was said).
       this.officeTalk.noteMessage(data);
       // A chat message: record it, and send it WITH its id so a reconnecting stream can ask for what it missed.
-      const m = data as { instance?: unknown; sender?: unknown; text?: unknown; ts?: unknown; attachments?: unknown; messageId?: unknown; anchor?: unknown; role?: unknown; buttons?: unknown; click?: unknown; links?: unknown; channel?: unknown; from?: unknown; replyTo?: unknown; cards?: unknown; posts?: unknown; reserved?: unknown };
+      const m = data as { instance?: unknown; sender?: unknown; text?: unknown; ts?: unknown; steer?: unknown; attachments?: unknown; messageId?: unknown; anchor?: unknown; role?: unknown; buttons?: unknown; click?: unknown; links?: unknown; channel?: unknown; from?: unknown; replyTo?: unknown; cards?: unknown; posts?: unknown; reserved?: unknown };
       const recorded = this.webChatHistory.record({
         instance: String(m.instance ?? ""), sender: String(m.sender ?? ""), text: String(m.text ?? ""), ts: String(m.ts ?? new Date().toISOString()),
         attachments: Array.isArray(m.attachments) ? m.attachments as WebChatAttachment[] : undefined,
         messageId: typeof m.messageId === "string" ? m.messageId : undefined,
         anchor: typeof m.anchor === "string" ? m.anchor : undefined,
+        steer: (typeof m.messageId === "string" ? this.earlySteer.get(m.messageId) : undefined) ?? m.steer,
         role: typeof m.role === "string" ? m.role : undefined,
         buttons: m.buttons,
         click: m.click,
@@ -24126,7 +24282,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
    */
   private runRuntimeModelSwitch(instanceName: string, model: string): Promise<OwnSwitchOutcome> {
     const ipc = this.instanceIpcClients.get(instanceName);
-    if (!ipc) return Promise.resolve({ outcome: "not_sent" });
+    if (!ipc || this.instanceRunsAcp(instanceName)) return Promise.resolve({ outcome: "not_sent" });
     const id = `switch-${randomUUID()}`;
     return new Promise(resolve => {
       const timer = setTimeout(() => { this.runtimeSwitchWaiters.delete(id); resolve({ outcome: "not_confirmed" }); }, RUNTIME_SWITCH_RESULT_MS);
@@ -24159,14 +24315,43 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     return { known, names: [...aliases, ...api.filter(id => !id.endsWith("[1m]")).slice(0, 12)] };
   }
 
-  private pasteRawToClassicInstance(instanceName: string, text: string): void {
+  /**
+   * Whether the instance runs over ACP (a running one by the adapter it was built with; one that is not running by its
+   * configuration). An ACP instance has no terminal: everything the fleet does by typing into a pane (`raw_paste`, keys) is
+   * answered for it instead of being sent, because an ACP agent reads whatever arrives as a prompt.
+   */
+  instanceRunsAcp(instanceName: string): boolean {
+    const runner = this.lifecycle?.daemons.get(instanceName);
+    if (runner) return adapterOf(runner)?.id === "acp";
+    const inst = this.fleetConfig?.instances[instanceName];
+    return (inst?.cli_adapter ?? this.fleetConfig?.defaults?.cli_adapter) === "acp";
+  }
+
+  /** The running instance's ACP runner, or null (not ACP, or not running). */
+  private acpRunnerOf(instanceName: string): AcpRunner | null {
+    const runner = this.daemons.get(instanceName);
+    return runner && adapterOf(runner)?.id === "acp" ? runner as unknown as AcpRunner : null;
+  }
+
+  /** The reply for a terminal-only operation asked of an ACP instance. */
+  private acpUnsupported(instanceName: string, operation: string): string {
+    return t("acp.unsupported_command", operation, this.shownInstanceName(instanceName));
+  }
+
+  /** Types `text` into a classic instance's pane. False when it was not sent (no IPC, or the instance runs over ACP and has no pane). */
+  private pasteRawToClassicInstance(instanceName: string, text: string): boolean {
+    if (this.instanceRunsAcp(instanceName)) {
+      this.logger.warn({ instanceName, text: text.slice(0, 60) }, "Raw paste not sent: the instance runs over ACP and has no terminal");
+      return false;
+    }
     const ipc = this.instanceIpcClients.get(instanceName);
     if (!ipc) {
       this.logger.warn({ instanceName }, "Cannot paste raw: IPC not connected");
-      return;
+      return false;
     }
     ipc.send({ type: "raw_paste", content: text });
     this.logger.info({ instanceName, text: text.slice(0, 100) }, "Raw paste sent to classic instance");
+    return true;
   }
 
   /** Resolve the backend name configured for an instance (fleet or classic). */
@@ -24442,6 +24627,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     profile: string | null = null,
   ): import("./backend/types.js").CliEnv {
     const env: import("./backend/types.js").CliEnv = { backend, probedAt: Date.now(), ...probed };
+    const listed = (e: import("./backend/types.js").CliEnv | null) => (e?.models ?? []).map(m => m.id).join("\0");
+    const before = listed(this.readCliEnv(backend, profile));
     // An empty result must never overwrite a catalog we already have. Some
     // probes hit the network (`agy models` fetches, 5s cap), so a slow moment
     // returns [] — and writing that would blank the list for the whole 24h
@@ -24470,6 +24657,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const path = this.cliEnvPath(backend, profile);
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     writeFileSync(path, JSON.stringify(env, null, 2));
+    if (listed(env) !== before) this.announceModels(backend);   // AGEND-276: an open /model or Settings page reads the new list
     return env;
   }
 
@@ -24486,6 +24674,84 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     this.probeChangedCliEnvs(null);
   }
 
+  /**
+   * A named agy account has no verified relocation/discovery contract. In particular, never publish the ambient account's
+   * models under that profile (#3526 / D7). (AGEND-119: agy now HAS named accounts, but `agy models` is not run with the
+   * account's folder, so its answer would still be the default account's: only a CLI whose profile is a variable the
+   * probe inherits is discovered under one.)
+   */
+  private modelDiscoverable(backend: string, binding: { profile: string | null }): boolean {
+    return !binding.profile || (!!credentialHomeSpec(backend) && credentialHomeSpec(backend)!.kind !== "launch-argument");
+  }
+
+  /** One model discovery for a binding — the scoped (own config) or the shared per-backend/profile cache — or null when fenced. */
+  private discoverModels(backend: string, name: string | null, binding = this.webModelBinding(backend, name), opts: { refreshVendorCatalog?: boolean } = {}): Promise<unknown> | null {
+    if (!binding || !this.modelDiscoverable(backend, binding)) return null;
+    return binding.scoped
+      ? this.refreshModelCatalogFor(backend, name)
+      : this.probeBackendBounded(backend, { profile: binding.profile, ...(opts.refreshVendorCatalog ? { refreshVendorCatalog: true } : {}) });
+  }
+
+  /** The `models` stream event: a backend's model list changed — an open page reads it again (no details, as `backend_login`). */
+  private announceModels(backend: string): void {
+    try { broadcastSseEvent(this.sseClients, "models", { backend }, err => this.logger.debug({ err }, "models event failed")); } catch { /* best effort */ }
+  }
+
+  private modelOpenProbes = new Map<string, number>();
+
+  /**
+   * AGEND-276: the list a menu opens on. Cached and fresh: nothing to do. Empty (never discovered: the CLI was signed out
+   * at startup, or the agent just moved to this CLI): one bounded discovery that the caller waits for — so `/model` and
+   * Settings show "loading" instead of an empty list. Stale: the list stands and is refreshed behind it. Both join a
+   * discovery already running, and an attempt that found nothing is not repeated for MODEL_OPEN_PROBE_COOLDOWN_MS.
+   * Never throws; a Windows Runtime's catalog is its inventory's and is not a host probe.
+   */
+  async ensureModelCatalog(backend: string, instance: string | null, selection?: { profile?: string }): Promise<void> {
+    try {
+      const binding = this.webModelBinding(backend, instance, selection);
+      if (!binding || this.shuttingDown) return;
+      const env = this.webModelEnv(backend, instance, selection);
+      const empty = !env?.models?.length;
+      if (!empty && !this.cliEnvNeedsRefresh(env)) return;
+      this.modelOpenProbes ??= new Map();
+      const last = this.modelOpenProbes.get(binding.key);
+      if (last !== undefined && Date.now() - last < MODEL_OPEN_PROBE_COOLDOWN_MS) return;
+      const work = this.discoverModels(backend, instance, binding);
+      if (!work) return;
+      const done = work.catch(err => { this.logger.debug({ backend, instance, err }, "Model discovery on open failed"); }).then(() => {
+        const after = this.webModelEnv(backend, instance, selection);
+        if (!after?.models?.length || this.cliEnvNeedsRefresh(after)) this.modelOpenProbes.set(binding.key, Date.now());
+        else this.modelOpenProbes.delete(binding.key);
+      });
+      if (!empty) return;
+      let timer: NodeJS.Timeout | undefined;
+      await Promise.race([done, new Promise<void>(resolve => { timer = setTimeout(resolve, MODEL_OPEN_PROBE_WAIT_MS); timer.unref?.(); })]);
+      if (timer) clearTimeout(timer);
+    } catch (err) { this.logger.debug({ backend, instance, err }, "Model discovery on open failed"); }
+  }
+
+  /**
+   * AGEND-276: a sign-in just ended, so the CLI can now answer `models` as this account — whatever started the sign-in
+   * (Settings → Accounts, a named account, chat `/login`, the dashboard's terminal). The account's list is read again now,
+   * not at the next startup or by hand. The default account: the backend's shared cache. A named account: its own store
+   * (claude's profile catalog), or each agent's scoped one (the other CLIs); never an agy account (see modelDiscoverable).
+   * A provider-bound agent does not depend on the sign-in. Background; each page is told when the list changed.
+   */
+  private modelsAfterSignIn(backend: string, profile: string | null): void {
+    if (this.shuttingDown || !KNOWN_BACKENDS.includes(backend) || backend === "mock") return;
+    (this.modelOpenProbes ??= new Map()).clear();   // a cooldown from before the sign-in said "nothing to find": it no longer does
+    const settle = (work: Promise<unknown> | null): void => {
+      void work?.catch(err => this.logger.debug({ backend, profile, err }, "Model discovery after sign-in failed"));
+    };
+    if (profile === null) { settle(this.discoverModels(backend, null, undefined, { refreshVendorCatalog: true })); return; }
+    if (backend === "claude-code") { settle(this.probeBackendBounded(backend, { profile, refreshVendorCatalog: true })); return; }
+    for (const name of this.configuredBackendInstanceNames()) {
+      if (this.backendNameOf(name) !== backend || this.credentialProfileOf(name, backend) !== profile) continue;
+      const binding = this.webModelBinding(backend, name);
+      if (binding?.scoped) settle(this.discoverModels(backend, name, binding));
+    }
+  }
+
   /** Maintain discovery after committed config changes; a model-field read remains passive. */
   private probeChangedCliEnvs(previous: FleetConfig | null): void {
     const signature = (fleet: FleetConfig | null, name: string) => {
@@ -24494,24 +24760,24 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       const backend = inst.backend ?? fleet?.defaults?.backend ?? "claude-code";
       return JSON.stringify({ backend, options: { ...fleet?.defaults?.backend_options?.[backend], ...inst.backend_options?.[backend] } });
     };
+    const modeOf = (fleet: FleetConfig | null, name: string) => fleet?.instances[name]?.cli_adapter ?? fleet?.defaults?.cli_adapter ?? "tmux";
     for (const name of Object.keys(this.fleetConfig?.instances ?? {})) {
       if (isWindowsInstance(this.fleetConfig?.instances[name])) continue;
       const backend = this.backendNameForInstance(name);
       const binding = this.webModelBinding(backend, name);
-      // A named agy account has no verified relocation/discovery contract. In particular,
-      // never publish the ambient account's models under that profile (#3526 / D7). (AGEND-119: agy now HAS
-      // named accounts, but `agy models` is not run with the account's folder, so its answer would still be the
-      // default account's: only a CLI whose profile is a variable the probe inherits is discovered under one.)
-      if (!binding || (binding.profile && (!credentialHomeSpec(backend) || credentialHomeSpec(backend)!.kind === "launch-argument"))) continue;
+      if (!binding || !this.modelDiscoverable(backend, binding)) continue;
       // A description/defaults save can retire a scoped answer's full binding even
       // though its account signature is unchanged. Keep the conservative fence and
       // re-arm the current binding, unless its answer or flight is already present.
       if (previous && signature(previous, name) === signature(this.fleetConfig, name)
-          && (!binding.scoped || this.webModelEnv(backend, name) || this.webModelRefreshes.has(binding.key))) continue;
-      const work = binding.scoped
-        ? this.refreshModelCatalogFor(backend, name)
-        : this.probeBackendBounded(backend, { profile: binding.profile });
-      void work.catch(err => this.logger.debug({ backend, name, err }, "Background model discovery failed"));
+          && (!binding.scoped || this.webModelEnv(backend, name) || this.webModelRefreshes.has(binding.key))) {
+        // AGEND-276: moving to another way of running the same CLI (tmux ↔ ACP) changes neither its account nor its list, but a list
+        // that is empty or stale is read now, as for any other move — only then (a fresh list is left alone).
+        if (modeOf(previous, name) !== modeOf(this.fleetConfig, name)) void this.ensureModelCatalog(backend, name);
+        continue;
+      }
+      const work = this.discoverModels(backend, name, binding);
+      void work?.catch(err => this.logger.debug({ backend, name, err }, "Background model discovery failed"));
     }
   }
 
@@ -25374,6 +25640,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     if (opts?.current && !opts.current()) return t("menu.instance_replaced", this.shownInstanceName(instanceName));
     if (isWindowsInstance(this.fleetConfig?.instances[instanceName])) return t("effort.unsupported", this.backendNameForInstance(instanceName));
     const level = requested.trim().toLowerCase();
+    // An ACP agent has no pane to type `/effort` into: its effort is a session setting, set through the protocol.
+    if (this.instanceRunsAcp(instanceName)) return this.applyAcpSetting(instanceName, "effort", level);
     const backendName = this.backendNameForInstance(instanceName);
     let strategy: "runtime" | "restart" | "unsupported" = "unsupported";
     let supported: string[] = [];
@@ -25432,6 +25700,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       });
       return t("model.restart_success",instanceName,model);
     }
+    // An ACP agent has no pane to type `/model` into: its model is a session setting, set through the protocol.
+    if (this.instanceRunsAcp(instanceName)) return this.applyAcpSetting(instanceName, "model", model);
     const backendName = this.backendNameForInstance(instanceName);
     let strategy: "runtime" | "restart" = "restart";
     try {
@@ -25475,6 +25745,43 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
 
     await this.restartSingleInstance(instanceName, { ownerCurrent: opts?.current });
     return `${warn}${t("model.restart_success", instanceName, model)}${this.effortSuffix(instanceName)}`;
+  }
+
+  /**
+   * `/effort` and `/model` for an instance that runs over ACP: the agent's own session setting (`session/set_config_option`),
+   * which needs neither a pane nor a restart. A running agent answers with the values it takes; one it does not take is refused
+   * with that list and nothing is saved. The value is saved for the next start either way (the runner applies it at each start).
+   */
+  private async applyAcpSetting(instanceName: string, kind: "effort" | "model", requested: string): Promise<string> {
+    const runner = this.acpRunnerOf(instanceName);
+    const live = runner ? runner.sessionSettingValues(kind) : [];
+    const backendName = this.backendNameForInstance(instanceName);
+    let value = requested;
+    let warn = "";
+    if (kind === "effort") {
+      const canonical = FleetManager.EFFORT_LEVELS as readonly string[];
+      if (!canonical.includes(value)) return t("effort.unknown", value, canonical.join(", "));
+      const offered = live.length ? [...live] : this.effortLevelsFor(instanceName);
+      if (!offered.length) return t("effort.unsupported", backendName);
+      const applied = FleetManager.clampEffort(value, offered);
+      if (!applied) return t("effort.no_canonical", backendName);
+      if (applied !== value) warn = t("effort.clamped", applied, value, backendName);
+      value = applied;
+    } else if (live.length && !splitAcpModel(value, live)) {
+      return t("model.unknown_name", value, live.join(", "));
+    }
+    if (runner) {
+      const result = await runner.setSessionSetting(kind, value);
+      if (!result.ok) {
+        return `${warn}${t("acp.setting_failed", this.shownInstanceName(instanceName), kind === "effort" ? "effort" : "model", value, result.message)}${result.accepted.length ? ` ${t("acp.setting_offered", result.accepted.join(", "))}` : ""}`;
+      }
+    }
+    const saved = kind === "effort"
+      ? (() => { const inst = this.fleetConfig?.instances[instanceName]; if (!inst) return false; (inst as { effort?: string }).effort = value; this.saveFleetConfig(); return true; })()
+      : this.persistInstanceModel(instanceName, value);
+    if (!saved) return `${warn}${t("model.persist_failed", instanceName)}`;
+    if (!runner) return `${warn}${t("acp.setting_saved", this.shownInstanceName(instanceName), kind === "effort" ? "effort" : "model", value)}`;
+    return `${warn}${t(kind === "effort" ? "effort.runtime_success" : "model.runtime_success", instanceName, value)}`;
   }
 
   /** Save an instance's model (fleet.yaml, or its ClassicBot channel). False when neither holds it. */
@@ -25690,7 +25997,10 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       // Raw failure/empty discovery never masquerades as a successful refresh of the retained catalog.
       if (!result || Array.isArray(result) || (!Array.isArray(result.models) || !result.models.length || result.catalogRefreshFailed)) return { models: this.modelCatalogFor(backend, instance, selection), refreshed: false };
       if (this.webModelCatalogs.size >= 64) this.webModelCatalogs.delete(this.webModelCatalogs.keys().next().value!);
+      const listed = (models: Array<{ id: string }>) => models.map(m => m.id).join("\0");
+      const before = listed(this.webModelEnv(backend, instance, selection)?.models ?? []);
       this.webModelCatalogs.set(binding.key, { ...result, backend, probedAt: Date.now() });
+      if (listed(result.models) !== before) this.announceModels(backend);   // AGEND-276
       return { models: this.modelCatalogFor(backend, instance, selection), refreshed: true };
     }).finally(() => { if (this.webModelRefreshes.get(binding.key) === work) this.webModelRefreshes.delete(binding.key); });
     this.webModelRefreshes.set(binding.key, work);
@@ -29138,7 +29448,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
           const backend = this.fleetConfig?.instances[name]?.backend
             ?? this.fleetConfig?.defaults?.backend
             ?? "claude-code";
-          const { context } = resolveInstanceContext(this.dataDir, name, backend, { source: this.getPaneContextSource(name) });
+          const { context } = resolveInstanceContext(this.dataDir, name, backend, { source: this.getPaneContextSource(name), reported: this.reportedContext(name) });
           return {
             name,
             status: this.getInstanceStatus(name),
@@ -29638,7 +29948,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         : (this.fleetConfig?.instances[name]?.backend
           ?? this.fleetConfig?.defaults?.backend
           ?? "claude-code");
-      const { context } = isNativePaneInstance(nativeConfig) ? { context: null } : resolveInstanceContext(this.dataDir, name, backend, { source: this.getPaneContextSource(name), statusline });
+      const { context } = isNativePaneInstance(nativeConfig) ? { context: null } : resolveInstanceContext(this.dataDir, name, backend, { source: this.getPaneContextSource(name), statusline, reported: this.reportedContext(name) });
       // context_pct: null when unavailable, not 0
       const context_pct = context ?? null;
       // Model: Only Claude Code has live statusline; others use the effective resolver.
@@ -29711,6 +30021,13 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         model_source,
         ...(backend === "claude-code" ? { model_observation: this.modelObservationForInstance(name) } : {}),
         backend,
+        // How it runs: the effective cli_adapter, whether it has a terminal pane, and (acp) the approve-all switch.
+        ...adapterUiView(this.daemons.get(name), classic ? undefined : this.fleetConfig?.instances[name], this.fleetConfig?.defaults),
+        // AGEND-279: whether a message sent as an interjection (Ctrl+Enter) can be taken into a running turn: every ACP agent (the
+        // CLI's own way, else cancel and send), a terminal agent whose backend steers. Others queue it (the chat says so).
+        // "Send now" on a message that waits: only an ACP agent's queue lets one message leave it.
+        send_now_supported: (() => { try { return this.instanceRunsAcp(name); } catch { return false; } })(),
+        steer_supported: (() => { try { return this.instanceRunsAcp(name) || instanceSupportsSteer(backend, this.instanceLaunchSupportsSteer(name)); } catch { return false; } })(),
         effort,
         effort_source,
         // Whether the chat header's effort chip is offered (shown as "auto" while none is set): the backend takes an

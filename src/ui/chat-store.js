@@ -45,7 +45,7 @@ const COMPACT_PAGE_LIMIT_MS = 11 * 60_000;
 export function createChatStore(deps) {
   const s = {
     msgs: {}, drafts: {}, replies: {}, pendingFiles: {}, sending: {}, outgoing: {}, instanceStatus: {}, waking: {},
-    prompts: {}, workingSince: {}, stopping: {}, cancelling: {}, scrollMemo: {}, historyRead: new Set(), gapped: new Set(), allHidden: new Set(), rbBusy: new Set(),
+    prompts: {}, workingSince: {}, stopping: {}, cancelling: {}, scrollMemo: {}, historyRead: new Set(), gapped: new Set(), allHidden: new Set(), rbBusy: new Set(), sendingNow: new Set(),
     pollMine: readPollMine(),
     // #1823 (#1828 review): the server's clock minus this device's. A poll's deadline is the server's; a page whose clock
     // is a few seconds off would count a 10 s poll wrong. Only the server's explicit `clock` sets it (#1830 review): a
@@ -146,7 +146,7 @@ export function createChatStore(deps) {
     for (const d of list) {
       if (!d || typeof d.instance !== "string") continue;
       const before = s.msgs[d.instance];
-      s.msgs[d.instance] = R().applyDelivery(before, d.messageId, d.delivery);
+      s.msgs[d.instance] = R().applyDelivery(before, d.messageId, d.delivery, { sentAt: d.sentAt, steer: d.steer });
       if (s.msgs[d.instance] !== before) touched.add(d.instance);
     }
     for (const i of touched) changed(i, "msgs");
@@ -178,6 +178,23 @@ export function createChatStore(deps) {
     if (r && r.answered && Array.isArray(r.options)) { s.pollMine[id] = r.options.filter(Number.isInteger); writePollMine(s.pollMine); }
     s.rbBusy.delete(id); changed(instance, "msgs");
     if (!r || !r.answered) deps.toast(r && r.error ? r.error : t("chat.disconnected"), false);
+  }
+
+  /**
+   * AGEND-279 "Send now": a message of mine that waits behind the running turn is taken out of the queue and interjected. One press per message
+   * (the button is off from the press on). The answer says how it went; a message that was no longer waiting (the turn ended meanwhile) was
+   * sent by the queue as any message and is left alone — nothing is sent twice.
+   */
+  async function sendNow(instance, messageId) {
+    if (!messageId || s.sendingNow.has(messageId)) return;
+    s.sendingNow.add(messageId); changed(instance, "msgs");
+    let r;
+    try { r = await api("POST", "/ui/send-now", { instance, messageId }); }
+    catch (err) { r = { error: err && err.message ? err.message : t("chat.disconnected") }; }
+    if (r && r.sent === true && typeof r.steer === "string") {
+      s.msgs[instance] = R().applyDelivery(s.msgs[instance], messageId, undefined, { steer: r.steer });   // (its `sentAt` comes from the server, on the fleet's clock)
+    } else if (!r || r.error) { s.sendingNow.delete(messageId); deps.toast(r && r.error ? r.error : t("chat.disconnected"), false); }
+    changed(instance, "msgs");
   }
 
   /**
@@ -348,7 +365,7 @@ export function createChatStore(deps) {
     });
   }
   /** Send what the composer holds: its bubble at once, then out in this chat's order. */
-  function send(target) {
+  function send(target, opts = {}) {
     const txt = (s.drafts[target] || "").trim();
     const files = (s.pendingFiles[target] || []).slice();
     if ((!txt && !files.length) || !target) return;
@@ -357,7 +374,7 @@ export function createChatStore(deps) {
       // "You" until the server's copy (with the person's name) replaces it: no request is made for a name.
       boot: "out", id: ++outSeq, instance: target, role: "user", sender: t("chat.you"), text: txt,
       ts: new Date().toISOString(), clientId: newClientId(), replyTo: quote ? { boot: quote.boot, id: quote.id, sender: quote.sender, text: quote.text, media: quote.media } : undefined,
-      quote, outgoing: { state: "queued" },
+      quote, outgoing: { state: "queued" }, ...(opts.steer ? { steerAsked: true } : {}),
       files: files.map((f) => ({ file: f, name: f.name || "file", size: f.size || 0, type: f.type || "", url: objectUrl(f), loaded: 0, total: f.size || 0, state: "waiting", id: null })),
     };
     (s.outgoing[target] = s.outgoing[target] || []).push(e);
@@ -401,6 +418,7 @@ export function createChatStore(deps) {
       const ids = e.files.map((f) => f.id);
       if (ids.length) body.attachments = ids;
       if (e.quote) body.replyTo = { boot: e.quote.boot, id: e.quote.id };
+      if (e.steerAsked) body.steer = true;                              // AGEND-279: Ctrl+Enter, the Interject button, `/steer text`
       r = await api("POST", "/ui/send", body);
     } catch (err) {
       const f = e.files.find((x) => x.state === "uploading");
@@ -413,6 +431,11 @@ export function createChatStore(deps) {
     if (r && !r.error && r.sent !== false) {
       e.outgoing = { state: "sent" };
       if (typeof r.messageId === "string") e.messageId = r.messageId;
+      // AGEND-279: how the interjection went. Only a message that did not go as asked is said in a line; the rest is the bubble's mark.
+      if (typeof r.steer === "string") {
+        e.steer = r.steer;
+        if (r.steer === "interrupted" || r.steer === "unsupported") deps.toast(t(r.steer === "interrupted" ? "chat.steerNoteInterrupted" : "chat.steerNoteUnsupported"), false);
+      }
       settleOutgoing(target);
       changed(target, "msgs"); changed(target);
       return;
@@ -676,7 +699,7 @@ export function createChatStore(deps) {
     attach, applyStatus, applyActivity, ingest, applyDeliveries, openHistory, onGap,
     onPrompt, applyPrompts, resolvePrompt, answerPrompt, answerByNonce, holdPrompt, releasePrompt, promptsFor,
     applyReplyButtons, clickReplyButton,
-    uploadFile, send, retryOutgoing, deleteOutgoing, putBackOutgoing, threadRows, addFiles, removeFile, attachPastedText, fileBackAsText, isPasted, setDraft,
+    uploadFile, send, sendNow, retryOutgoing, deleteOutgoing, putBackOutgoing, threadRows, addFiles, removeFile, attachPastedText, fileBackAsText, isPasted, setDraft,
     startReply, clearReply, findQuoted, addToDraft, captureDraft, draftCurrent, clearCapturedDraft, acceptDraft,
     cancelReply, isUser, runCommand, dismissCommand, commandFree,
     allHidden: (name) => s.allHidden.has(name),

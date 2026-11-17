@@ -47,6 +47,19 @@ export interface LogSource {
   format: LogFormat | null;
   /** Why there is nothing to read: "not_running" (its transcript is found while it runs), "no_transcript", "unsupported". */
   reason?: string;
+  /** Set for an instance that produces its steps live (no file): they are served from here, `path` and `format` unused. */
+  live?: LiveSteps;
+}
+
+/**
+ * Steps an instance produces itself, live, instead of a transcript file (an `acp` instance, #3731). The cursor is a
+ * revision counter; `key` names this run's timeline, so a page holding a cursor of another run starts again.
+ */
+export interface LiveSteps {
+  readonly key: string;
+  snapshot(after: number | undefined, opts: { thoughts: boolean; limit?: number }): { steps: LogStep[]; rev: number; older: boolean };
+  /** Told when a step is added or changed; returns the way to stop being told. */
+  subscribe(listener: () => void): () => void;
 }
 
 export interface LogEventRow { id: number; event_type: string; payload: unknown; created_at: string }
@@ -87,7 +100,12 @@ export interface LogQuery {
    * on the local dashboard, and only with `web.log_thinking` on (off by default); absent: the parser does not make them,
    * so they are never in an answer for anyone else (filtered here on the server, not hidden by the page).
    */
-  thinking?: boolean }
+  thinking?: boolean;
+  /**
+   * The reader is an admin of this fleet (not a guest, not the public link): the only reader a permission request's answer
+   * buttons are for (#3731, `cli_adapter: acp`). Set by the route from the session, never read from the query string.
+   */
+  admin?: boolean }
 
 /** A fleet event as the page shows it: its type (the page words it) and its details, masked. */
 export interface LogEvent { id: number; ts: number; type: string; detail?: string;
@@ -175,13 +193,25 @@ export class LogService {
     const chat = q.chat === true;
     // The Log tab is `web.log_tab`'s. The chat's block is the instance's own `tool_progress`'s (AGEND-197): with log_tab off it
     // still works, and with log_tab on but tool_progress off it shows nothing.
-    if (!chat && !this.deps.enabled()) { this.unwatchAll(false); return { enabled: false }; }
+    if (!chat && !this.deps.enabled()) {
+      this.unwatchAll(false);
+      // An ACP instance's permission request is a step a person has to answer, so it reaches an admin's page even with the
+      // Log switched off — and nothing else of the Log does.
+      if (q.admin === true && this.deps.known(name)) {
+        const src = this.deps.source(name);
+        if (src.live) {
+          const base = { enabled: true as const, instance: name, backend: src.backend, events: [] as LogEvent[], ev: q.ev ?? 0, thinking: false };
+          return this.liveAnswer(name, src.live, q, base, (a) => ({ ...a, thinking: false }), () => ({ enabled: false }), false, "permission");
+        }
+      }
+      return { enabled: false };
+    }
     if (!this.deps.known(name)) return null;
     const level: ToolProgressLevel = chat ? (this.deps.toolProgress?.(name) ?? "off") : "verbose";
     const src = this.deps.source(name);
     if (chat && level === "off") {
       // Only the chat's own hold on the watch ends — the Log tab, when it is watching this instance, keeps its (AGEND-210).
-      this.unwatch(name, "chat");
+      this.unwatch(name, "chat"); this.releaseLive(name, "chat");
       return { enabled: true, instance: name, backend: src.backend, supported: !!src.format, level, thinking: false, steps: [], events: [], ev: q.ev ?? 0, before: null, after: null };
     }
     const evs = chat ? { events: [] as LogEvent[], ev: q.ev ?? 0 } : this.eventsFor(name, q.ev);
@@ -209,6 +239,7 @@ export class LogService {
       const steps = chat && now !== "off" ? kept.map((x) => chatStep(x, now)) : kept;
       return { ...a, steps, thinking: thinkingNow, ...(chat ? { level: now } : {}) };
     };
+    if (src.live) return this.liveAnswer(name, src.live, q, base, settle, offAnswer, chat);
     if (!src.format || !src.path) {
       return { ...base, supported: !!src.format, reason: src.reason ?? (src.format ? "no_transcript" : "unsupported"), steps: [], before: null, after: null };
     }
@@ -230,6 +261,70 @@ export class LogService {
     if (q.before !== undefined && !fresh) return done(settle(await this.backward(src.path, src.format, q.before, Math.min(q.limit ?? LOG_OLDER_LIMIT, LOG_OLDER_LIMIT), thinking)), { after: null });
     return done(settle(await this.backward(src.path, src.format, undefined, Math.min(q.limit ?? LOG_STEPS_LIMIT, LOG_STEPS_LIMIT), thinking)),
       (fresh || past) && (q.after !== undefined || q.before !== undefined) ? { reset: true } : {});
+  }
+
+  private readonly liveWatches = new Map<string, { logUntil: number; chatUntil: number; stop: () => void; timer: unknown }>();
+
+  /**
+   * An instance's own live steps (an `acp` instance): only what changed since the page's cursor. Thought text and the chat's
+   * summary cut follow the same rules as a transcript's (`settle`); the answer buttons of a permission request are for an admin alone.
+   */
+  private liveAnswer(name: string, live: LiveSteps, q: LogQuery, base: { enabled: true; instance: string; backend: string; events: LogEvent[]; ev: number; thinking: boolean },
+    settle: (a: { steps: LogStep[] }) => ({ steps: LogStep[]; thinking: boolean; level?: ToolProgressLevel }) | null, offAnswer: () => LogAnswer, chat: boolean, only?: "permission"): LogAnswer {
+    if (q.watch) this.watchLive(name, live, chat || only !== undefined);
+    const thoughts = base.thinking;
+    const stale = (q.key !== undefined && q.key !== live.key) || (q.after !== undefined && q.after > live.snapshot(undefined, { thoughts, limit: 1 }).rev);
+    const after = stale ? undefined : q.after;
+    const got = live.snapshot(after, { thoughts, ...(q.limit !== undefined ? { limit: Math.min(q.limit, LOG_STEPS_LIMIT) } : {}) });
+    // A person who is not an admin sees that a request is waiting, and never its answer buttons. (The chat's block is admin-only already.)
+    const wanted = only ? got.steps.filter(s => s.kind === only) : got.steps;
+    const mine = chat || q.admin === true ? wanted : wanted.map(s => { if (s.kind !== "permission" || !s.options) return s; const { options: _options, ...rest } = s; return rest; });
+    const settled = settle({ steps: mine });
+    if (!settled) { this.releaseLive(name, "chat"); return offAnswer(); }
+    return {
+      ...base, supported: true, key: live.key, ...settled, steps: fitBytes(settled.steps), before: null, after: got.rev,
+      ...(stale && (q.after !== undefined || q.before !== undefined) ? { reset: true } : {}),
+    };
+  }
+
+  /** Tell the page (`steps_tick`) when the live timeline moved, while it holds a watch lease (the Log's or the chat's own). */
+  private watchLive(name: string, live: LiveSteps, chat: boolean): void {
+    const until = this.now() + WATCH_LEASE_MS;
+    let held = this.liveWatches.get(name);
+    if (!held) {
+      const setT = this.deps.setInterval ?? ((fn: () => void, ms: number) => { const t = setInterval(fn, ms); (t as { unref?: () => void }).unref?.(); return t; });
+      const entry = { logUntil: 0, chatUntil: 0, stop: () => undefined as void, timer: null as unknown };
+      const wanted = (): boolean => entry.chatUntil > this.now() || (entry.logUntil > this.now() && this.deps.enabled());
+      let queued = false;
+      entry.stop = live.subscribe(() => {
+        if (!wanted()) { this.stopLive(name); return; }
+        if (queued) return;
+        queued = true;
+        // Coalesce a burst of chunks into one tick: the page fetches what changed after it.
+        setTimeout(() => { queued = false; this.deps.emit("steps_tick", { instance: name }); }, 200).unref?.();
+      });
+      // A lease that nobody renews ends even when the timeline is quiet.
+      entry.timer = setT(() => { if (!wanted()) this.stopLive(name); }, WATCH_POLL_MS);
+      this.liveWatches.set(name, entry);
+      held = entry;
+    }
+    if (chat) held.chatUntil = until; else held.logUntil = until;
+  }
+
+  /** One hold ends (the chat's block went off); the watch itself ends when nothing holds it. */
+  private releaseLive(name: string, hold: "chat" | "log"): void {
+    const w = this.liveWatches.get(name);
+    if (!w) return;
+    if (hold === "chat") w.chatUntil = 0; else w.logUntil = 0;
+    if (w.chatUntil <= this.now() && w.logUntil <= this.now()) this.stopLive(name);
+  }
+
+  private stopLive(name: string): void {
+    const w = this.liveWatches.get(name);
+    if (!w) return;
+    w.stop();
+    (this.deps.clearInterval ?? ((h: unknown) => clearInterval(h as ReturnType<typeof setInterval>)))(w.timer);
+    this.liveWatches.delete(name);
   }
 
   /**
@@ -416,10 +511,13 @@ export class LogService {
    * Every watch ends (the fleet stops). `all` false: the Log was turned off — only what the Log held ends, and a chat's
    * block (gated by tool_progress, not log_tab) keeps its watch.
    */
-  unwatchAll(all = true): void { for (const name of [...this.watches.keys()]) this.unwatch(name, all ? "all" : "log"); }
+  unwatchAll(all = true): void {
+    for (const name of [...this.watches.keys()]) this.unwatch(name, all ? "all" : "log");
+    for (const [name, w] of [...this.liveWatches]) { w.logUntil = 0; if (all || w.chatUntil <= this.now()) this.stopLive(name); }
+  }
 
   /** How many instances are watched now (for tests and diagnostics). */
-  watched(): number { return this.watches.size; }
+  watched(): number { return this.watches.size + this.liveWatches.size; }
 }
 
 /** The newest steps whose JSON fits LOG_RESPONSE_MAX_BYTES (each step is already bounded; this bounds their number). */

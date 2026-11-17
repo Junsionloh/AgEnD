@@ -50,6 +50,7 @@ import { SetupWizard } from "./settings-wizard.js";
 import { CreateInstanceDialog } from "./panel-fleet.js";
 import { RuntimesPanel } from "./panel-runtimes.js";
 import { NativeInstanceSettings } from "./native-instance-settings.js";
+import { ModeBadge, askModeConfirm, isModeConfirm, modeConfirms } from "./adapter-mode.js";
 import { FirstRunCard, takeWizardRequest } from "./first-run.js";
 import { takeAgentRequest } from "./settings-request.js";
 // #1604: This device — the preview opt-in (one path: the app's confirm, then preview.js) and the tour, from the chat.
@@ -348,7 +349,7 @@ export function SettingsPanel({ route, navKey }) {
       // A panel that went while a question was open asks nothing more, and says nothing.
       for (const c of [...stagedRef.current.values()]) {
         for (const k of c.confirms || []) {
-          const yes = await ask(k.includes(".") ? t(k) : tn(k));
+          const yes = isModeConfirm(k) ? await askModeConfirm(k) : await ask(k.includes(".") ? t(k) : tn(k));
           if (!mount.current()) return;
           if (!yes) { toast(tn("accessChangeCancelled"), false); return; }
         }
@@ -783,7 +784,8 @@ export function makeCtx(data, setData, stage, unstage, reload, reloadLive, alive
       stage(`agent:${name}`, {
         label: tn("updateAgent", shortName(name, { ...inst, ...patch })),
         // turning the MCP proxy reply on is asked about first (agent-page-strings.js).
-        ...(patch.mcp_proxy_reply === true ? { confirms: ["agentPage.confirmMcpProxy"] } : {}),
+        ...(patch.mcp_proxy_reply === true || "cli_adapter" in patch
+          ? { confirms: [...(patch.mcp_proxy_reply === true ? ["agentPage.confirmMcpProxy"] : []), ...modeConfirms(shortName(name, inst), patch)] } : {}),
         impact: inst.runtime === "windows" ? "now" : batchImpact(schema, Object.keys(patch), (k) => impactOf(schema, `instance.${k}`)),
         request: { method: "PATCH", url: inst.runtime === "windows" ? `/ui/instances/${encodeURIComponent(name)}` : `/api/settings/fleet/instances/${encodeURIComponent(name)}`, body: patch },
       });
@@ -883,7 +885,8 @@ function Agents({ ctx, search, clearSearch, openDialog }) {
         return html`<div key=${name} class="s-row s-agent-row">
           <div class="s-agent-identity"><span class="s-name" title=${name}>${shortName(name, inst)}</span>
             <div class="s-agent-context">${inst.runtime !== "windows" || ctx.live[name]?.capabilities?.effort === true ? html`<span class="tag">${tn("effortTag", sum.effort)}</span>` : null}
-              ${ch ? html`<span class=${`tag${ch.includes("persona") ? " persona" : ""}`}>${ch}</span>` : null}</div>
+              <${ModeBadge} inst=${inst} />
+               ${ch ? html`<span class=${`tag${ch.includes("persona") ? " persona" : ""}`}>${ch}</span>` : null}</div>
           </div>
           <div class="s-agent-runtime"><span class=${`tag${runtimeTarget.gone ? " warn" : ""}`} title=${runtimeTarget.title || runtimeTarget.label}>${runtimeTarget.label}</span></div>
           <div class="s-agent-cli"><${CliProductMark} id=${sum.backend} size=${20} /><span><strong>${cliLabel(sum.backend)}</strong><span class="s-meta" title=${sum.model}>${sum.model}</span></span></div>

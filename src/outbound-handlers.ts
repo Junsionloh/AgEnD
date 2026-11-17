@@ -155,6 +155,8 @@ export interface OutboundContext {
   hasPendingIdleGatedDelivery?(instanceName: string): boolean;
   /** The running launch's own steer capability (CliBackend.supportsSteer, #1405); undefined when it has none to give. */
   instanceLaunchSupportsSteer?(instanceName: string): boolean | undefined;
+  /** The instance runs over ACP (AGEND-279): `steer: true` interrupts its running turn instead of joining the queue behind earlier sends. */
+  instanceRunsAcp?(instanceName: string): boolean;
   saveFleetConfig(): void;
   queueMirrorMessage?(text: string): void;
   /** #2293: a cross-instance message to index for the dashboard's search (sender → target; never forwards or paths). */
@@ -513,7 +515,9 @@ const sendToInstance: Handler = async (ctx, rawArgs, respond, meta) => {
   // A supplement must not jump ahead of the work it is meant to amend. The
   // facade publishes its idle-gated tail synchronously, so a send immediately
   // followed by steer observes the predecessor and joins the same FIFO queue.
+  // An ACP target is the exception (AGEND-279): its steer is an interruption, which by design goes in front of what is queued.
   const queuedPredecessor = steerCapable
+    && ctx.instanceRunsAcp?.(targetInstanceName) !== true
     && ctx.hasPendingIdleGatedDelivery?.(targetInstanceName) === true;
   const useSteer = steerCapable && !queuedPredecessor;
   let steerFallbackWarning = steer === true && !useSteer

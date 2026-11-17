@@ -1,0 +1,36 @@
+{
+ "jsonrpc": "2.0",
+ "method": "session/request_permission",
+ "params": {
+  "sessionId": "SESSION",
+  "toolCall": {
+   "sessionUpdate": "tool_call",
+   "toolCallId": "call_1",
+   "name": "mcp_agend_reply",
+   "args": {
+    "text": "OK",
+    "toolSummary": "Reply OK to user"
+   },
+   "status": "pending",
+   "kind": "other",
+   "title": "Run mcp_agend_reply",
+   "rawInput": {
+    "text": "OK",
+    "toolSummary": "Reply OK to user"
+   }
+  },
+  "options": [
+   {
+    "optionId": "allow",
+    "name": "Allow",
+    "kind": "allow_once"
+   },
+   {
+    "optionId": "deny",
+    "name": "Deny",
+    "kind": "reject_once"
+   }
+  ]
+ },
+ "id": "2"
+}

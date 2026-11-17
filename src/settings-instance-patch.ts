@@ -1,7 +1,10 @@
 import { officeInputPatch } from "./dashboard-permissions.js";
 import { SettingsConfirmationError } from "./settings-confirmation.js";
-export const NULLABLE_INSTANCE_OVERRIDES = new Set(["quota_notice", "model", "auto_pause_after", "hang_detector", "agent_mode", "tool_set", "tool_progress", "reply_completion_guard", "log_level", "lightweight", "model_failover", "display_name", "status_emojis", "cross_instance_visibility", "dashboard", "office_access", "office_pack_access"]);
+export const NULLABLE_INSTANCE_OVERRIDES = new Set(["quota_notice", "model", "auto_pause_after", "hang_detector", "agent_mode", "tool_set", "tool_progress", "reply_completion_guard", "log_level", "lightweight", "model_failover", "display_name", "status_emojis", "cross_instance_visibility", "dashboard", "office_access", "office_pack_access", "cli_adapter"]);
 export function removesInstanceOverride(key: string, value: unknown): boolean {
+  // #3731: `tmux` is what an unset cli_adapter means: switching back removes the field instead of leaving a redundant default
+  // in fleet.yaml. skipPermissions is never removed this way: an unset one follows defaults.skipPermissions, so true is written as true.
+  if (key === "cli_adapter" && value === "tmux") return true;
   return NULLABLE_INSTANCE_OVERRIDES.has(key) && (value === null || key === "model" && typeof value === "string" && value.trim() === "");
 }
 const isPlainObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);

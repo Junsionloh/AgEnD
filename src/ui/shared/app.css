@@ -521,6 +521,22 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .act-block .log-item.k-error .log-text { color: var(--danger); }
 .act-block .log-sub { margin: 0 0 var(--s-1); }
 .act-block .log-sub .log-item { --row-h: 22px; }
+/* #3731: an ACP agent's permission requests (a card with the buttons), in the Log and in the chat's activity block. */
+.p-log .log-item.k-permission { background: var(--warn-bg); border: 1px solid var(--warn-line); }
+.p-log .log-item.k-permission.s-done { background: var(--surface); border-color: var(--border); }
+.act-block .log-item.k-permission .perm-card { margin: 0 0 var(--s-1); padding: var(--s-2); border-radius: var(--r-sm); background: var(--warn-bg); border: 1px solid var(--warn-line); }
+.act-block .log-item.k-permission.s-done .perm-card, .act-block .log-item.k-permission.s-interrupted .perm-card { background: var(--surface-2); border-color: var(--border); }
+.log-auto { flex: none; align-self: center; font-size: var(--fs-xs); color: var(--text-3); border: 1px solid var(--border); border-radius: var(--r-full); padding: 0 var(--s-1); line-height: 1.3; margin-right: var(--s-1); }
+.perm-card { display: flex; flex-direction: column; gap: var(--s-2); margin-top: var(--s-1); min-width: 0; }
+.perm-what { font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.perm-label { color: var(--text-3); }
+.perm-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.perm-card .err { color: var(--danger); }
+/* #3731: the mode marker of an agent that runs over ACP (sidebar row, chat header, details) and the form's warning. */
+.mode-badge { flex: none; font-size: var(--fs-xs); line-height: var(--lh-xs); font-weight: var(--fw-semibold); padding: 0 var(--s-1); border-radius: var(--r-full); border: 1px solid var(--border); color: var(--text-3); white-space: nowrap; }
+.mode-badge.hd-mode { margin-left: var(--s-2); align-self: center; }
+.v-nopane { padding: var(--s-6) var(--s-4); }
+.p-details .d-edit { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-2); }
 /* The header's controls are one height, the icon buttons' (36 px): its small buttons, and the instance tabs when they share
    its row (a phone puts them on a row of their own, under it). */
 .panel-head .btn-sm { min-height: 36px; }
@@ -668,6 +684,7 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .seg-item { display: inline-flex; align-items: center; gap: var(--s-2); min-height: 34px; padding: 0 var(--s-3); border-radius: var(--r-full); color: var(--text-2); font-size: var(--fs-sm); white-space: nowrap; }
 .seg-item:hover { background: var(--surface); color: var(--text); }
 .seg-item.active { background: var(--surface-2); color: var(--text); font-weight: var(--fw-semibold); }
+.seg-item.disabled, .seg-item.disabled:hover { background: transparent; color: var(--text-3); cursor: not-allowed; opacity: 0.6; }
 /* #1629: Settings has eight sections (Appearance added): they wrap to a second row rather than hide behind a scroll. */
 .p-settings .seg { flex-wrap: wrap; row-gap: var(--s-1); overflow-x: visible; }
 /* #2347: the sections in two groups, "You" and "Fleet", each with its name; a column on the left on a wide screen. */
@@ -952,6 +969,11 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .tick-delivered { color: var(--ok); }
 .tick-failed { color: var(--danger); font-weight: var(--fw-bold); }
 .tick-cancelled { color: var(--text-3); }
+/* AGEND-279: a message that asked to interject (with how it went), and one waiting for the running turn. */
+.steer-mark, .queue-mark { display: inline-block; margin-left: var(--s-1); padding: 0 6px; border-radius: 999px; font-size: var(--fs-xs); line-height: 1.6; border: 1px solid var(--border); color: var(--text-2); }
+.steer-mark { color: var(--accent, var(--text-2)); }
+.steer-unsupported, .steer-refused, .steer-interrupted { color: var(--warn, var(--text-2)); }
+.queue-mark { color: var(--text-3); border-style: dashed; }
 .msg .atts { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-2); }
 .msg.user .atts { justify-content: flex-end; }
 .msg .att-img img { max-width: 260px; max-height: 220px; border-radius: var(--r-sm); display: block; }
@@ -1169,6 +1191,17 @@ img.amb-p { object-fit: contain; }
   background: var(--surface); box-shadow: var(--shadow-1); opacity: 0; pointer-events: none; transition: opacity var(--t-fast); }
 .msg:hover > .msg-actions, .msg:focus-within > .msg-actions { opacity: 1; pointer-events: auto; }
 @media (hover: none) { .msg-actions { display: none; } }
+/* AGEND-279: "Send now" on a message that waits for the running turn, in its meta line right after the "Queued" mark. A solid accent button,
+   so it is never taken for the dashed mark beside it; the line is for reading, the button for pressing (a touch screen gets a 32px target). */
+.msg .meta .send-now { align-self: center; flex: none; min-height: 24px; padding: 0 var(--s-2); border: 0; border-radius: 999px;
+  background: var(--accent-fill); color: var(--on-accent); font: inherit; font-weight: var(--fw-semibold); white-space: nowrap; cursor: pointer; }
+.msg .meta .send-now:hover:not(:disabled) { opacity: .88; }
+.msg .meta .send-now:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: 2px; }
+.msg .meta .send-now:disabled { opacity: .5; cursor: default; }
+@media (pointer: coarse) { .msg .meta .send-now { min-height: 32px; padding: 0 var(--s-3); } }
+/* A narrow screen: the name and the marks keep their words whole, and the button goes to the next line, at the right, rather than squeezing them. */
+.msg .meta:has(.send-now) { flex-wrap: wrap; justify-content: flex-end; row-gap: var(--s-1); }
+.msg .meta:has(.send-now) .sender, .msg .meta:has(.send-now) .queue-mark { white-space: nowrap; }
 .msg-quote { display: flex; align-items: center; gap: 4px; max-width: 100%; margin: 0 0 4px; padding: 2px var(--s-2) 2px calc(var(--s-2) + 3px); border: 0;
   --lbar-color: var(--border-strong, var(--border)); --lbar-inset: 4px; --lbar-left: 2px; border-radius: var(--r-sm); background: transparent; color: var(--text-3);
   font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer; overflow: hidden; }

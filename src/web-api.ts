@@ -57,6 +57,8 @@ import { fileURLToPath } from "node:url";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import type { LifecycleCreateArgs } from "./instance-lifecycle.js";
 import { CreateInstanceArgs, CreateScheduleArgs, UpdateScheduleArgs, validateArgs } from "./outbound-schemas.js";
+import { adaptersForBackend } from "./adapters/config.js";
+import { createInstanceAdapterFields } from "./adapters/create-fields.js";
 import { scheduleView } from "./web-schedules.js";
 import { DEFAULT_SCHEDULER_CONFIG } from "./scheduler/index.js";
 import type { Schedule, ScheduleRetry } from "./scheduler/types.js";
@@ -68,7 +70,7 @@ import { STRUCTURED_SIGNIN_BACKENDS } from "./structured-signin.js";
 import { isRuntimeDefaultLoginCli, type RuntimeDefaultLoginCli } from "./cli-registry.js";
 import { evaluateWebRequest, isPassiveWebRead, isSecureRequest, isWebRequestAuthorized, WEB_TOKEN_INVALID_MESSAGE, type WebGateRequest } from "./web-auth.js";
 import { dashboardOriginFor, type PreviewAvailability } from "./web-preview.js";
-import { WEB_CHAT_CARDS_OVERFLOW, catchUpWindow, newWebMessageId, parseLastEventId, webChatReplyRef, webChatReplyText, type WebChatAttachment, type WebChatHistory, type WebChatMessage, type WebChatPost } from "./web-chat-history.js";
+import { WEB_CHAT_CARDS_OVERFLOW, catchUpWindow, newWebMessageId, parseLastEventId, webChatReplyRef, webChatReplyText, type WebChatAttachment, type WebChatHistory, type WebChatMessage, type WebChatPost, type WebSteerState } from "./web-chat-history.js";
 import { PAGE_SHARE_LIMITS, htmlFences, htmlTitle } from "./page-share.js";
 import { attachmentDelivery, createPartFile, displayName, fileTooLargeText, INLINE_MIME, isFileId, MEDIA_RANGE_MAX, publicAttachment, removeQuietly, UPLOAD_LIMITS, UPLOAD_MAX_MS, UPLOAD_STALL_MS, UploadSniffer, uploadLimits, wellFormed, type ServedFile, type UploadEntry, type WebFileLedger } from "./web-upload.js";
 import { getAgendHome } from "./paths.js";
@@ -234,6 +236,8 @@ const SendMessageSchema = z.object({
   /** The sending page's own id for its pending bubble: echoed on the live event only (never recorded), so that page
    *  swaps its "sending" bubble for the real one even when the stream beats this answer. */
   clientId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/).optional(),
+  /** AGEND-279: send as an interjection (Ctrl+Enter, `/steer`): into the running turn where the agent can take it; else as any message. */
+  steer: z.boolean().optional(),
 }).strict().refine(v => v.message.trim().length > 0 || (v.attachments?.length ?? 0) > 0, { message: "a message or at least one file", path: ["message"] });
 
 /** An instance name that is safe as one path segment (no separator, no NUL, not a dot name). */
@@ -396,6 +400,8 @@ export interface WebApiContext {
   modelCatalogForWeb?(backend: string, instance: string | null, selection?:{profile?:string}): import("./web-model-groups.js").WebModelOption[];
   /** Async, account-safe fallback from existing CLI metadata; never launch a CLI or refresh a vendor catalog. */
   cliModelCatalogFor?(backend: string, instance: string | null): Promise<Array<{ id: string; label: string; description?: string }>>;
+  /** AGEND-276: discover an empty (or refresh a stale) model list once, bounded, before GET /ui/models answers; never throws. */
+  ensureModelCatalog?(backend: string, instance: string | null, selection?:{profile?:string}): Promise<void>;
   refreshModelCatalogFor?(backend: string, instance: string | null, selection?:{profile?:string}): Promise<{ models: Array<{ id: string; label: string; description?: string }>; refreshed: boolean }>;
   /** Absent in a hand-built context: cookies are then simply not a credential, the header token still is. */
   readonly webSessions?: WebSessionStore | null;
@@ -462,10 +468,17 @@ export interface WebApiContext {
   /** false: definitely not delivered (the instance's IPC is gone, or it was restarted meanwhile). */
   generalLocationDeliveryHold?(instanceName: string): string | null;
   deliverToInstance(instanceName: string, payload: Record<string, unknown>, options?: { stillCurrent?: () => boolean; authorityCurrent?: () => boolean }): Promise<boolean | void>;
+  /** AGEND-279: how a message that asks to interject would go now, and handing one to the agent as an interjection. */
+  /** AGEND-279 "Send now": a message still waiting in the agent's queue is taken out and interjected (null: it is not waiting any more, so it is not sent again). */
+  sendQueuedNow?(instanceName: string, messageId: string): "added" | "interrupted" | "idle" | null;
+  webSteerMode?(instanceName: string): "add" | "interrupt" | "native" | "idle" | "unsupported";
+  sendWebSteer?(instanceName: string, payload: Record<string, unknown>, origin: HumanOrigin, originalBody: string): boolean;
   deliverHumanToInstance?(instanceName: string, payload: Record<string, unknown>, origin: HumanOrigin, originalBody: string, options?: { stillCurrent?: () => boolean; authorityCurrent?: () => boolean }): Promise<boolean | void>;
   getUiStatus(): unknown;
   /** Current owned pane reader shared with status; absent means context is unavailable. */
   getPaneContextSource?(name: string): PaneContextSource | null;
+  /** The context an ACP agent reports itself (no screen to read), or null. */
+  reportedContext?(name: string): { context: number; tokenRatio: import("./context-percent.js").TokenContextRatio | null } | null;
   /** #1306: which preview origin this /ui load may frame (Host and the TLS signal only); absent: previews off. */
   previewForUi?(hostHeader: string | undefined, secure: boolean): PreviewAvailability & { boot: string | null };
   /** #1723: the same for a page of the public link (exposure `exposureId`, at `dashboardOrigin`); absent: none there. */
@@ -556,6 +569,10 @@ export interface WebApiContext {
   /** #1218: an instance's Log steps, read on demand (null: no such instance; `{ enabled: false }`: the Log is off). */
   subagentRuns?(name: string): Promise<import("./subagent-service.js").SubagentAnswer>;
   logSteps?(name: string, q: import("./log-service.js").LogQuery): Promise<unknown>;
+  /** #3731: the same read for a fleet admin: an ACP instance's thought text (when `web.log_thinking`) and answer buttons come with it. */
+  logStepsAsAdmin?(name: string, q: import("./log-service.js").LogQuery): Promise<unknown>;
+  /** #3731: a person's answer to an ACP instance's permission request; an error text, or null when applied. */
+  answerAcpPermission?(instance: string, requestId: string, decision: "allow" | "deny" | "cancel"): string | null;
   /** #1468: the prompt-cache expiry analysis for a window ("24h" | "7d" | "30d"); absent: not offered. */
   cacheReport?(window: string): Promise<unknown>;
   /** #2661: every instance's Office level (office-levels.ts), reused for a minute; null: web.office_levels is off. Absent: not offered. */
@@ -680,6 +697,27 @@ function webCatalog(ctx: WebApiContext, backend: string, instance: string | null
   if (ctx.modelCatalogForWeb) return profile !== null ? ctx.modelCatalogForWeb(backend, instance, { profile }) : ctx.modelCatalogForWeb(backend, instance);
   const flat = plain ?? (profile !== null ? ctx.modelCatalogFor?.(backend, instance, { profile }) : ctx.modelCatalogFor?.(backend, instance)) ?? [];
   return shapeWebModelCatalog(backend, flat);
+}
+
+/** GET /ui/models' answer: the cached catalog of this instance/account, else the CLI's own cache, else (claude) the documented ids. */
+function answerModelCatalog(res: ServerResponse, ctx: WebApiContext, backend: string, instance: string | null, profile: string | null, canAnswer: () => boolean): void {
+  const models = webCatalog(ctx, backend, instance, profile);
+  // claude with no account list — with or without a credential profile — is answered with the documentation's ids.
+  const answerCatalog = (): void => {
+    if (backend === "claude-code" && !models.length) json(res, 200, { backend, models: documentedClaudeCatalog(ctx), source: "official-catalog" });
+    else json(res, 200, { backend, models });
+  };
+  // The existing catalog belongs to this instance/account and always wins.
+  if (models.length || !ctx.cliModelCatalogFor || profile !== null) { answerCatalog(); return; }
+  void (async () => {
+    const cliModels = await ctx.cliModelCatalogFor?.(backend, instance) ?? [];
+    if (!canAnswer()) return;
+    const shaped = shapeWebModelCatalog(backend, cliModels);
+    if (shaped.length) json(res, 200, { backend, models: shaped, source: "cli-cache" });
+    else answerCatalog();
+  })().catch(() => {
+    if (canAnswer()) json(res, 503, { error: "CLI model cache unavailable" });
+  });
 }
 
 /** claude's fallback when no account list is readable: the documentation's `claude-*` ids for the host's CLI version, unverified. */
@@ -2243,24 +2281,15 @@ export function handleWebRequest(
     const profile=url.searchParams.get("profile");
     if(profile!==null && profile!=="" && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(profile)){json(res,400,{error:"Invalid model account"});return true;}
     if (handleNativeModelCatalog(req, res, url, ctx)) return true;
-    const models = webCatalog(ctx, backend, instance, profile);
-    // claude with no account list — with or without a credential profile — is answered with the documentation's ids.
-    const answerCatalog = (): void => {
-      if (backend === "claude-code" && !models.length) json(res, 200, { backend, models: documentedClaudeCatalog(ctx), source: "official-catalog" });
-      else json(res, 200, { backend, models });
-    };
-    // The existing catalog belongs to this instance/account and always wins.
-    if (models.length || !ctx.cliModelCatalogFor || profile!==null) { answerCatalog(); return true; }
     const canAnswer = (): boolean => !res.headersSent && !res.destroyed && !res.writableEnded && stillAuthorized(req, res, url, ctx);
+    const answer = (): void => answerModelCatalog(res, ctx, backend, instance, profile, canAnswer);
+    // AGEND-276: an empty (or stale) list is discovered once, bounded, before the answer — the page shows its loading state
+    // meanwhile — rather than answered as "no models" until someone presses Refresh. A cached fresh list is answered at once.
+    if (!ctx.ensureModelCatalog) { answer(); return true; }
     void (async () => {
-      const cliModels = await ctx.cliModelCatalogFor?.(backend, instance) ?? [];
-      if (!canAnswer()) return;
-      const shaped = shapeWebModelCatalog(backend, cliModels);
-      if (shaped.length) json(res, 200, { backend, models: shaped, source: "cli-cache" });
-      else answerCatalog();
-    })().catch(() => {
-      if (canAnswer()) json(res, 503, { error: "CLI model cache unavailable" });
-    });
+      await ctx.ensureModelCatalog?.(backend, instance, profile !== null ? { profile } : undefined);
+      if (canAnswer()) answer();
+    })().catch(() => { if (canAnswer()) json(res, 503, { error: "model catalog unavailable" }); });
     return true;
   }
 
@@ -2293,7 +2322,7 @@ export function handleWebRequest(
       const binaryOf = new Map(BACKENDS.map(b => [b.name, b]));
       const backends = ctx.backendAvailabilityRows().filter(r => binaryOf.has(r.backend)).map(r => ({
         name: r.backend, binary: binaryOf.get(r.backend)!.binary, installed: r.state !== "not_installed" && r.path !== null, path: r.path ?? "",
-        deprecated: binaryOf.get(r.backend)!.deprecated ?? false, state: r.state, minVersion: r.minVersion, ...(r.state === "unknown" ? { unknown: true } : {}),
+        deprecated: binaryOf.get(r.backend)!.deprecated ?? false, state: r.state, minVersion: r.minVersion, adapters: adaptersForBackend(r.backend), ...(r.state === "unknown" ? { unknown: true } : {}),
       }));
       json(res, 200, { backends, defaultBackend });
       return true;
@@ -2304,7 +2333,7 @@ export function handleWebRequest(
     void Promise.all(BACKENDS.map(async (b) => {
       const found = await binaryProbe.probe(b.binary);
       const path = found.known ? found.path : null;
-      return { name: b.name, binary: b.binary, installed: path !== null, path: path ?? "", deprecated: b.deprecated ?? false,
+      return { name: b.name, binary: b.binary, installed: path !== null, path: path ?? "", deprecated: b.deprecated ?? false, adapters: adaptersForBackend(b.name),
         ...(found.known ? {} : { unknown: true }) };
     })).then(
       (backends) => { if (!res.headersSent) json(res, 200, { backends, defaultBackend }); },
@@ -2608,7 +2637,9 @@ export function handleWebRequest(
     const chat = p.get("chat") === "1";
     if (chat && !admin) { json(res, 403, { error: "admin_only" }); return true; }
     const thinking = p.get("thinking") === "1" && admin;
-    ctx.logSteps(instance, {
+    // The answer buttons of an ACP permission request are an admin's alone: the service learns that from this call, never from the query.
+    const read = admin && ctx.logStepsAsAdmin ? ctx.logStepsAsAdmin.bind(ctx) : ctx.logSteps.bind(ctx);
+    read(instance, {
       ...(chat ? { chat: true } : {}),
       ...(thinking ? { thinking: true } : {}),
       ...(after !== undefined ? { after } : {}), ...(before !== undefined ? { before } : {}), ...(ev !== undefined ? { ev } : {}),
@@ -2631,10 +2662,59 @@ export function handleWebRequest(
     return true;
   }
 
+  // ── #3731: answer an ACP instance's permission request (chat button) ──
+
+  if (method === "POST" && path === "/ui/permission") {
+    (async () => {
+      try {
+        const body = await parseBody(req);
+        if (!permitWebContinuation(req, res, ctx)) return;
+        if (adminAdmissionOf(req, url, ctx) === null || gatewayRequestContext(req) || guestRequestOf(req)) { json(res, 403, { error: "admin_only" }); return; }
+        const instance = typeof body.instance === "string" ? body.instance : "";
+        const requestId = typeof body.request_id === "string" ? body.request_id : "";
+        const decision = body.decision;
+        if (!instance || instance.length > 128 || !requestId || requestId.length > 64 || (decision !== "allow" && decision !== "deny" && decision !== "cancel")) {
+          json(res, 400, { error: "instance, request_id and decision (allow | deny | cancel) are required" });
+          return;
+        }
+        if (!ctx.answerAcpPermission) { json(res, 404, { error: "not available" }); return; }
+        const problem = ctx.answerAcpPermission(instance, requestId, decision);
+        if (problem) { json(res, 409, { error: problem }); return; }
+        json(res, 200, { ok: true });
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+    })();
+    return true;
+  }
+
   // ── Send message ───────────────────────────────────────
 
   if (method === "POST" && path === "/ui/send") {
     handleSendMessage(req, res, ctx);
+    return true;
+  }
+
+  // AGEND-279: "Send now" on a message that waits for the running turn — interject it instead of leaving it in the queue.
+  if (method === "POST" && path === "/ui/send-now") {
+    (async () => {
+      let body: Record<string, unknown>;
+      try { body = await parseBody(req); } catch { json(res, 400, { error: "Invalid JSON" }); return; }
+      if (!permitWebContinuation(req, res, ctx)) return;
+      const instance = body && typeof body.instance === "string" ? body.instance : "", messageId = body && typeof body.messageId === "string" ? body.messageId : "";
+      if (!instance || instance.length > 128 || !/^web-[A-Za-z0-9_-]{4,80}$/.test(messageId)) { json(res, 400, { error: "instance and messageId (a web message's) are required" }); return; }
+      const guest = guestRequestOf(req);
+      // Interjecting is a command: not for a guest, whatever its page shows.
+      if (guest) { json(res, 403, { error: "guest_no_commands" }); return; }
+      if (!webPersonOf(req, url, ctx)) { json(res, 401, { error: WEB_TOKEN_INVALID_MESSAGE }); return; }
+      if (isWindowsInstance(ctx.fleetConfig?.instances[instance]) || !ctx.sendQueuedNow) { json(res, 404, { error: "not available for this agent" }); return; }
+      const row = ctx.webChatHistory?.findByMessageId(instance, messageId);
+      // Only a message of this chat that still waits: one that went meanwhile (the turn ended, it was delivered) is not sent again.
+      if (!row || row.role !== "user" || row.delivery !== "queued") { json(res, 200, { sent: false, reason: "not_queued" }); return; }
+      const steer = ctx.sendQueuedNow(instance, messageId);
+      if (steer === null) { json(res, 200, { sent: false, reason: "not_queued" }); return; }
+      json(res, 200, { sent: true, ...(steer === "idle" ? {} : { steer }) });
+    })().catch((err) => { ctx.logger.error({ err }, "send-now failed"); if (!res.headersSent) json(res, 500, { error: "send-now failed" }); });
     return true;
   }
 
@@ -3495,7 +3575,7 @@ export function handleWebRequest(
     // Backend: instance → fleet default → claude-code
     const backend = config.backend ?? ctx.fleetConfig?.defaults?.backend ?? "claude-code";
     // Context: aligned with /ctx — resolveInstanceContext, not statusline
-    const { context } = resolveInstanceContext(ctx.dataDir, name, backend, { source: ctx.getPaneContextSource?.(name) });
+    const { context } = resolveInstanceContext(ctx.dataDir, name, backend, { source: ctx.getPaneContextSource?.(name), reported: ctx.reportedContext?.(name) });
     const context_pct = context; // null when unavailable, not 0
     // Model: Claude Code has live statusline, others use the effective resolver (aligned with /ctx).
     const statuslineModel = backend === "claude-code" ? readStatuslineModel(ctx.dataDir, name) : null;
@@ -3583,12 +3663,16 @@ export function handleWebRequest(
         if (!account.ok) { const { ok: _ok, status, ...rest } = account; json(res, status, rest); return; }
         delete (v.data as Record<string, unknown>).credentialProfile;
         if (account.backendOptions) v.data.backend_options = account.backendOptions;
+        // How the new agent runs (#3731): `cli_adapter`, judged against the backend it will use.
+        const adapterFields = createInstanceAdapterFields(v.data, ctx.fleetConfig?.defaults?.backend);
+        if (!adapterFields.ok) { json(res, 400, { error: adapterFields.error }); return; }
+        const createArgs = adapterFields.args;
         let result: unknown = null;
         let error: string | undefined;
         const respond = (r: unknown, e?: string): void => { result = r; error = e; };
         const execution = settingsRequestExecution(req);
-        if (execution) await ctx.lifecycle.handleCreate(v.data, respond, undefined, execution);
-        else await ctx.lifecycle.handleCreate(v.data, respond);
+        if (execution) await ctx.lifecycle.handleCreate(createArgs, respond, undefined, execution);
+        else await ctx.lifecycle.handleCreate(createArgs, respond);
         if (error) {
           json(res, 400, { error });
         } else {
@@ -4236,7 +4320,7 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
         json(res, 400, { error: `${issue.path.join(".") || "body"}: ${issue.message}` });
         return;
       }
-      const { instance, message: typed, attachments = [], replyTo, clientId } = parsed.data;
+      const { instance, message: typed, attachments = [], replyTo, clientId, steer: steerAsked } = parsed.data;
       const native = isWindowsInstance(ctx.fleetConfig?.instances[instance]);
       if (native && !nativeCliAuthorization(req,new URL(req.url ?? "/","http://localhost"),ctx)) {
         json(res,403,{error:"Windows runtime requires an administrator on the local dashboard"});return;
@@ -4374,9 +4458,17 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
           ? [{ adapter: reacting, adapterId: syncAdapter.id, chatId: String(groupId), threadId: String(topicId), messageId: copyId }] : []);
         return sent;
       }) : undefined;
+      // AGEND-279: an interjection goes into the running turn where the agent can take one; an agent that cannot gets it queued (and the
+      // bubble says so); an idle one just receives it. Never for a Windows runtime (no terminal input to steer).
+      // A guest never interjects (`/steer` is a command, which a guest may not run): its `steer` is ignored and the message is queued like any.
+      const steerMode = steerAsked && !native && !guest ? ctx.webSteerMode?.(instance) ?? "idle" : "idle";
+      const asSteer = steerMode === "add" || steerMode === "interrupt" || steerMode === "native";
+      const steerMark: WebSteerState | undefined = steerMode === "add" ? "added" : steerMode === "interrupt" ? "interrupted" : steerMode === "native" ? "sent" : steerMode === "unsupported" ? "unsupported" : undefined;
       let delivered: boolean | void;
       try {
-        const deliver = (name: string, payload: Record<string, unknown>) => ctx.deliverHumanToInstance
+        const deliver = (name: string, payload: Record<string, unknown>) => asSteer && ctx.sendWebSteer
+          ? ctx.sendWebSteer(name, payload, webHumanOrigin(false, authority), typed)
+          : ctx.deliverHumanToInstance
           ? ctx.deliverHumanToInstance(name, payload, webHumanOrigin(false, authority), typed, { stillCurrent, ...(native ? { authorityCurrent } : {}) })
           : ctx.deliverToInstance(name, payload, { stillCurrent, ...(native ? { authorityCurrent } : {}) });
         delivered = await deliver(instance, {
@@ -4434,8 +4526,8 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
       ctx.eventLog?.logActivity("message", person.name, (message || `[${files.length} file(s)]`).slice(0, 200), instance);
       // #1920: the account that wrote it (a guest sees its own); channel-visible once its copy was sent (above).
       ctx.emitSseEvent("message", { instance, sender: person.name, role: "user", text: message, ts, attachments: files.map(publicAttachment), messageId, ...(person.bound ? { from: person.voterKey } : {}),
-        ...(quoted ? { replyTo: webChatReplyRef(quoted) } : {}), ...(clientId ? { clientId } : {}) });
-      json(res, 200, { sent: true, messageId });
+        ...(quoted ? { replyTo: webChatReplyRef(quoted) } : {}), ...(clientId ? { clientId } : {}), ...(steerMark ? { steer: steerMark } : {}) });
+      json(res, 200, { sent: true, messageId, ...(steerMark ? { steer: steerMark } : {}) });
     } catch {
       // A failure after the agent has it is no failed send: the page is told it went (a Retry would only find it).
       if (res.headersSent) { /* answered already: the failure was in or after the answer */ }

@@ -240,7 +240,21 @@ export function agentPatch(form, inst, defaults, visibilityBaseline, statusEmoji
     board_cards_at_once: boardCardsOf(inst),
     resume_interrupted_work: resumeWorkOf(inst, defaults),
     mcp_proxy_reply: proxyReplyOf(inst, defaults),
-  }), codexSpeedPatch(form, inst));
+  }), codexSpeedPatch(form, inst), executionModePatch(form, inst, defaults));
+}
+/** Whether the agent runs its tools without asking: its own `skipPermissions`, else the fleet default's, on unless it says false. */
+const skipsPermissions = (inst, defaults) => (inst.skipPermissions ?? (defaults || {}).skipPermissions) !== false;
+/**
+ * #3731: how the agent runs. "tmux" is the default, so going back to it sends null (the key is removed from fleet.yaml),
+ * never a written default; skipPermissions (the agent's own, else the fleet default's, on unless it says false) only matters to an ACP agent here and goes
+ * with it, written as true or false (an unset one would follow the fleet default). Only what changed is named.
+ */
+function executionModePatch(form, inst, defaults) {
+  const mode = form.cli_adapter === "acp" ? "acp" : null;
+  const out = {};
+  if (mode !== (inst.cli_adapter === "acp" ? "acp" : null)) out.cli_adapter = mode;
+  if (mode === "acp" && (form.skipPermissions !== false) !== (skipsPermissions(inst, defaults))) out.skipPermissions = form.skipPermissions !== false;
+  return out;
 }
 /**
  * M-2446: only the Codex speed key, merged per backend by the server (settings-instance-patch.ts), so the agent's other
@@ -258,6 +272,7 @@ export function agentForm(inst, defaults, name = "") {
   return {
     backend: inst.backend || defaults.backend || "claude-code",
     model: inst.model || "", working_directory: inst.working_directory || "", channel_id: inst.channel_id || "",
+    cli_adapter: inst.cli_adapter === "acp" ? "acp" : "tmux", skipPermissions: skipsPermissions(inst, defaults),
     description: inst.description || "", systemPrompt: inst.systemPrompt || "", tags: [...(inst.tags || [])],
     general_topic: !!inst.general_topic,
     auto_pause_after: String(inst.auto_pause_after ?? defaults.auto_pause_after ?? 0),

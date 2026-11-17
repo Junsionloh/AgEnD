@@ -56,6 +56,10 @@ type ExecutionFleetContext = FleetContext & {
   getInstanceExecutionState?(instanceName: string): "idle" | "working" | "stuck" | null;
   /** The running launch's own steer capability (CliBackend.supportsSteer, #1405); undefined when it has none to give. */
   instanceLaunchSupportsSteer?(instanceName: string): boolean | undefined;
+  /** The instance runs over ACP: it has no terminal, so what is typed into a pane is answered, not sent. */
+  instanceRunsAcp?(instanceName: string): boolean;
+  /** How a `/steer` sent now to an ACP instance would be delivered (the runner knows: the CLI's own way in, cancel and a new prompt, or nothing is running). */
+  acpSteerMode?(instanceName: string): "add" | "interrupt" | "idle" | undefined;
 };
 
 /** Sanitize a directory name into a valid instance name. Keeps Unicode letters (incl. CJK). */
@@ -512,8 +516,11 @@ export function resolveInstanceContext(
   dataDir: string,
   instanceName: string,
   backend: string,
-  opts?: { bypassCache?: boolean; source?: import("./pane-context-cache.js").PaneContextSource | null; statusline?: unknown },
+  opts?: { bypassCache?: boolean; source?: import("./pane-context-cache.js").PaneContextSource | null; statusline?: unknown;
+    /** What the instance itself reports (an ACP agent has no screen to read): used as it is, before anything else is tried. */
+    reported?: { context: number; tokenRatio: TokenContextRatio | null } | null },
 ): { context: number | null; tokenRatio: TokenContextRatio | null } {
+  if (opts?.reported) return opts.reported;
   if (backend === "claude-code") {
     // #1956: a caller that already read the statusline passes it (`statusline` present, even undefined: no file).
     const fromFile = opts && "statusline" in opts ? statuslineContextPct(opts.statusline) : readStatuslineContextPct(dataDir, instanceName);
@@ -1065,10 +1072,17 @@ export class TopicCommands {
     // `/raw <text>` is pasted into the CLI as typed, with no [user:] envelope (daemon.ts): it is CLI input, so only
     // the owning bot's fleet admin may send it (#754 audit). An admin's falls through to delivery unchanged.
     if (command === "raw") {
-      if (this.ctx.isFleetAdmin(msg.userId, msg.adapterId)) return false;
       const adapter = this.getReplyAdapter(msg);
-      if (adapter) await adapter.sendText(msg.chatId, t("permission.denied"), { threadId: msg.threadId });
-      return true;
+      if (!this.ctx.isFleetAdmin(msg.userId, msg.adapterId)) {
+        if (adapter) await adapter.sendText(msg.chatId, t("permission.denied"), { threadId: msg.threadId });
+        return true;
+      }
+      // An ACP agent has no terminal to type into: `/raw` would reach it as a question.
+      if (this.runsAcp(instanceName)) {
+        if (adapter) await adapter.sendText(msg.chatId, t("acp.unsupported_command", "/raw", instanceName), { threadId: msg.threadId });
+        return true;
+      }
+      return false;
     }
 
     if (command !== "ctx") return false;
@@ -1094,6 +1108,8 @@ export class TopicCommands {
     }
   }
 
+  private runsAcp(instanceName: string): boolean { return this.ctx.instanceRunsAcp?.(instanceName) === true; }
+
   /** Resolve the effective backend name for fleet or classic instances. */
   private effectiveBackend(instanceName: string): string {
     const classicBackend = this.ctx.classicChannels?.getChannelIdByInstance(instanceName)
@@ -1114,7 +1130,7 @@ export class TopicCommands {
       this.ctx.dataDir,
       instanceName,
       backend,
-      { bypassCache: true, source: this.ctx.getPaneContextSource?.(instanceName) },
+      { bypassCache: true, source: this.ctx.getPaneContextSource?.(instanceName), reported: this.ctx.reportedContext?.(instanceName) },
     );
     const contextLine = context == null ? null : formatContextUsageLine(context, tokenRatio);
     // Effective model (resolves per-instance → fleet default → classic channel →
@@ -1200,6 +1216,7 @@ export class TopicCommands {
    * the command reached the pane (`raw_paste_written`). A write the IPC refuses is not sent.
    */
   compactInstance(instanceName: string, instructions?: string, notify?: () => string | null): { sent: boolean; text: string } {
+    if (this.runsAcp(instanceName)) return { sent: false, text: t("acp.unsupported_command", "/compact", instanceName) };
     const ipc = this.ctx.instanceIpcClients.get(instanceName);
     if (ipc?.connected) {
       const classicBackend = this.ctx.classicChannels?.getChannelIdByInstance(instanceName)
@@ -1236,6 +1253,7 @@ export class TopicCommands {
 
   /** Whether the instance backend exposes a verified full-reset command. */
   supportsClear(instanceName: string): boolean {
+    if (this.runsAcp(instanceName)) return false;
     return clearCommandForBackend(this.effectiveBackend(instanceName)) !== null;
   }
 
@@ -1259,8 +1277,12 @@ export class TopicCommands {
     msg: Pick<InboundMessage, "chatId" | "messageId" | "username" | "userId" | "threadId" | "adapterId" | "source" | "humanOrigin" | "humanOriginalBody"> & { webGuest?: boolean },
   ): string {
     const backend = this.effectiveBackend(instanceName);
-    const launchSupportsSteer = this.ctx.instanceLaunchSupportsSteer?.(instanceName);
-    if (!instanceSupportsSteer(backend, launchSupportsSteer)) {
+    // ACP defines no mid-turn input (AGEND-279): `/steer` interrupts. The runner adds the message to the running turn where the CLI has its own way
+    // (grok), else cancels the turn and runs this message next in the same session; a message that is not a `/steer` is queued as ever. An idle
+    // agent just receives it, and the reply says which of the three it is.
+    const acp = this.runsAcp(instanceName);
+    const launchSupportsSteer = acp ? true : this.ctx.instanceLaunchSupportsSteer?.(instanceName);
+    if (!acp && !instanceSupportsSteer(backend, launchSupportsSteer)) {
       // A backend that answers per launch (kiro, #1405) can steer, just not as this instance runs now.
       return launchSupportsSteer === false ? t("steer.unsupported_launch", backend) : t("steer.unsupported", backend);
     }
@@ -1285,7 +1307,10 @@ export class TopicCommands {
       ? this.ctx.sendHumanControl(instanceName, payload, msg.humanOrigin, msg.humanOriginalBody ?? content)
       : ipc.send(payload) !== false;
     if (!sent) return t("steer.not_connected");
-    return t("steer.sent", instanceName);
+    if (!acp) return t("steer.sent", instanceName);
+    const mode = this.ctx.acpSteerMode?.(instanceName)
+      ?? (["working", "stuck"].includes(this.ctx.getInstanceExecutionState?.(instanceName) ?? "") ? "interrupt" : "idle");
+    return t(mode === "add" ? "steer.added_acp" : mode === "interrupt" ? "steer.interrupted_acp" : "steer.idle_acp", instanceName);
   }
 
   /** Ask a Claude Code side question without folding it into the active turn. */
@@ -1327,6 +1352,7 @@ export class TopicCommands {
 
   /** sendClear, saying whether the command was handed to the daemon (board 003648ac: the web chat's card then leaves). */
   clearInstance(instanceName: string): { sent: boolean; text: string } {
+    if (this.runsAcp(instanceName)) return { sent: false, text: t("acp.unsupported_command", "/clear", instanceName) };
     const backend = this.effectiveBackend(instanceName);
     const cmd = clearCommandForBackend(backend);
     if (!cmd) return { sent: false, text: t("clear.unsupported") };
@@ -1346,6 +1372,7 @@ export class TopicCommands {
 
   /** Send a backend-appropriate session-save command to a fleet-topic instance. */
   async sendSave(instanceName: string, filename: string): Promise<string> {
+    if (this.runsAcp(instanceName)) return t("acp.unsupported_command", "/save", instanceName);
     const classicBackend = this.ctx.classicChannels?.getChannelIdByInstance(instanceName)
       ? this.ctx.classicChannels.getBackendByInstance(instanceName, this.ctx.fleetConfig?.defaults?.backend)
       : undefined;
@@ -1578,7 +1605,7 @@ export class TopicCommands {
       // Without this, kiro/grok/codex always showed "-" in the Ctx column.
       const { context } = backend === "-"
         ? { context: null as number | null }
-        : resolveInstanceContext(this.ctx.dataDir, name, backend, { source: this.ctx.getPaneContextSource?.(name) });
+        : resolveInstanceContext(this.ctx.dataDir, name, backend, { source: this.ctx.getPaneContextSource?.(name), reported: this.ctx.reportedContext?.(name) });
       const contextStr = context == null ? "-" : `${Math.round(context)}%`;
 
       const costCents = this.ctx.costGuard?.getDailyCostCents(name) ?? 0;

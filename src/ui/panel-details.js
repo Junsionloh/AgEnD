@@ -37,6 +37,7 @@ import { pt } from "./agent-page-strings.js";
 
 // Local registration also works when this lazy page is paired with retained string modules.
 register("agentNavigation", { en: { backToChat: "Back to chat" }, "zh-TW": { backToChat: "回到聊天" } });
+import { modeFieldLabel, modeText } from "./adapter-mode.js";
 
 export function DetailsPanel({ route, navKey }) {
   const pane = paneContext.usePane?.();
@@ -164,6 +165,7 @@ function DetailsView({ name, inst, navKey, exec, awaiting }) {
         ${row(t("chat.dTags"), Array.isArray(d.tags) && d.tags.length ? html`<span class="d-tags">${d.tags.map((x) => html`<span key=${x} class="tag">${x}</span>`)}</span>` : "--")}</section>
       <section class="card"><h3>${t("chat.dRuntime")}</h3>
         ${row(t("chat.dBackend"), d.backend || "--")}
+        ${inst.cli_adapter === "acp" ? row(modeFieldLabel(), modeText(inst)) : null}
         ${row(observed ? observationLabel("selection") : t("chat.dModel"), observed ? modelName(observed.session) || observationLabel("unresolved") : `${(d.model && modelText(d)) || sl.model?.display_name || "--"}${d.model_source === "live" ? "" : src(d.model_source)}`)}
         ${observed ? html`${row(observationLabel("configured"), modelName(observed.configured) || observationLabel("unresolved"))}
           ${row(observationLabel("served"), modelName(observed.lastServed) || observationLabel("unresolved"))}

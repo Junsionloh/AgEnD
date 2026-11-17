@@ -1,0 +1,140 @@
+/**
+ * #3731 on the alpha line: an ACP instance's live steps feed the chat's activity timeline (#3648) — the same grouping the
+ * transcript backends use, with nothing ACP-specific in the page: the user step and the `reply` call carry the same anchors a
+ * transcript's do, thinking is the `thinking` kind, and a waiting permission request is a step of the block.
+ */
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { AcpStepStore } from "../src/adapters/acp/steps.js";
+import { chatStep } from "../src/log-steps.js";
+// @ts-expect-error — a JS module of the app, with no types
+import { groupSteps, isReplyStep } from "../src/ui/chat-activity-groups.js";
+
+const dirs: string[] = [];
+afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
+const store = () => { const d = mkdtempSync(join(tmpdir(), "acp-chat-")); dirs.push(d); let t = 1_000; return new AcpStepStore(d, () => (t += 10)); };
+
+const WIRE = "[agend-human-id:hmsg-1111-aaaa]\nhello\n(message_id: web-m1 | verification_id: v1)";
+const replyCall = (rawOutput?: unknown, status: "in_progress" | "completed" = "completed") =>
+  ({ kind: "tool" as const, id: "c2", title: "agend__reply", toolKind: "other", status, rawInput: { variant: "UseTool", tool_name: "agend__reply", tool_input: { text: "Hi there" } }, ...(rawOutput !== undefined ? { rawOutput } : {}) });
+
+describe("an ACP turn in the chat's timeline", () => {
+  it("the user step carries the ids written into the prompt, though its body is what the person typed", () => {
+    const s = store();
+    s.beginTurn("1", "hello", undefined, WIRE);
+    const user = s.snapshot(undefined, { thoughts: true }).steps[0];
+    expect(user.anchor).toEqual({ messageId: "web-m1", humanId: "hmsg-1111-aaaa" });
+    expect(user.body).toBe("hello");
+  });
+
+  it("the reply call is AgEnD's reply by name and anchor, whatever the CLI calls it, and learns its message id from the result", () => {
+    for (const title of ["agend__reply", "mcp_agend_reply", "Run mcp_agend_reply"]) {
+      const s = store();
+      s.beginTurn("1", "hello", undefined, WIRE);
+      s.apply({ kind: "tool", id: "c2", title, toolKind: "other", status: "completed", rawInput: { text: "Hi there" }, rawOutput: '{"chatId":"web","messageId":"web-r1"}' });
+      const call = s.snapshot(undefined, { thoughts: true }).steps.find(x => x.kind === "tool")!;
+      expect(isReplyStep(call)).toBe(true);
+      expect(call.anchor).toEqual({ replyText: "Hi there", messageId: "web-r1" });
+    }
+  });
+
+  it("grok's MCP result nests the reply's message id in output.OkayOutput; it still anchors the call by id", () => {
+    const s = store();
+    s.beginTurn("1", "hello", undefined, WIRE);
+    s.apply({ kind: "tool", id: "c2", title: "agend__reply", toolKind: "other", status: "completed",
+      rawInput: { variant: "UseTool", tool_name: "agend__reply", tool_input: { text: "OK", reply_to: "web-m1" } },
+      rawOutput: { type: "MCP", tool_name: "reply", server_name: "agend", output: { OkayOutput: "{\"chatId\":\"web\",\"messageId\":\"web-r9\"}" } } });
+    const call = s.snapshot(undefined, { thoughts: true }).steps.find(x => x.kind === "tool")!;
+    expect(call.anchor).toEqual({ replyText: "OK", messageId: "web-r9" });
+  });
+
+  it("another server's reply-looking tool is not taken for AgEnD's", () => {
+    const s = store();
+    s.beginTurn("1", "hello", undefined, WIRE);
+    s.apply({ kind: "tool", id: "c2", title: "other__reply", toolKind: "other", status: "completed", rawInput: { text: "x" } });
+    expect(isReplyStep(s.snapshot(undefined, { thoughts: true }).steps.find(x => x.kind === "tool")!)).toBe(false);
+  });
+
+  it("thinking, a tool and the reply group above the reply's row by its id; the tool is cut to `standard` like any backend's", () => {
+    const s = store();
+    s.beginTurn("1", "hello", undefined, WIRE);
+    s.apply({ kind: "thought", text: "Let me look." });
+    s.apply({ kind: "tool", id: "c1", title: "ls", toolKind: "execute", status: "completed", rawInput: { command: "ls -la /secret" }, rawOutput: "files" });
+    s.apply(replyCall('{"chatId":"web","messageId":"web-r1"}'));
+    s.apply({ kind: "turn_end", stopReason: "end_turn" });
+    const steps = s.snapshot(undefined, { thoughts: true }).steps.map(x => chatStep(x, "standard"));
+    const rows = [
+      { boot: "b", id: 1, role: "user", anchor: "web-m1", text: "hello", ts: new Date(1_000).toISOString() },
+      { boot: "b", id: 2, role: "agent", anchor: "web-r1", text: "Hi there", ts: new Date(1_100).toISOString() },
+    ];
+    const { groups } = groupSteps(rows, steps, { now: 1_200 });
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ rowKey: "b-2", level: "id" });
+    expect(groups[0].items.map((x: any) => x.kind)).toEqual(["thinking", "tool"]);
+    const tool = groups[0].items.find((x: any) => x.kind === "tool");
+    expect(tool.input).toBeUndefined();            // `standard` never sends the arguments or the output
+    expect(tool.body).toBeUndefined();
+  });
+
+  it("a waiting permission request is a step of the live block, with its buttons' options", () => {
+    const s = store();
+    s.beginTurn("1", "hello", undefined, WIRE);
+    s.apply({ kind: "permission", requestId: "7", tool: { title: "agend__send_to_instance", kind: "other", rawInput: { x: 1 } },
+      options: [{ id: "once", name: "allow once", kind: "allow_once" }, { id: "no", name: "reject once", kind: "reject_once" }, { id: "always", name: "always", kind: "allow_always" }] });
+    const steps = s.snapshot(undefined, { thoughts: false }).steps.map(x => chatStep(x, "standard"));
+    const rows = [{ boot: "b", id: 1, role: "user", anchor: "web-m1", text: "hello", ts: new Date(1_000).toISOString() }];
+    const { live } = groupSteps(rows, steps, { now: 1_100 });
+    const perm = live.items.find((x: any) => x.kind === "permission");
+    expect(perm).toBeDefined();
+    expect(perm.status).toBe("running");
+    expect(perm.options.map((o: any) => o.kind)).toEqual(["allow_once", "reject_once"]);   // never an *_always choice
+  });
+
+  it("a request AgEnD's policy allowed (skipPermissions) is no step: its tool call carries auto, whichever of the two came first", () => {
+    for (const first of ["tool", "permission"] as const) {
+      const s = store();
+      s.beginTurn("1", "hello", undefined, WIRE);
+      const tool = { kind: "tool" as const, id: "w1", title: "write", toolKind: "edit", status: "in_progress" as const, rawInput: { file_path: "a" } };
+      if (first === "tool") s.apply(tool);
+      s.noteAuto("w1");                                  // what the runner does after answering allow-once
+      if (first === "permission") s.apply(tool);
+      s.apply({ ...tool, status: "completed" });
+      const steps = s.snapshot(undefined, { thoughts: false }).steps;
+      expect(steps.filter(x => x.kind === "permission")).toHaveLength(0);
+      expect(steps.find(x => x.kind === "tool")).toMatchObject({ status: "done", auto: true });
+      // chat's `standard` cut keeps the mark
+      expect(chatStep(steps.find(x => x.kind === "tool")!, "standard").auto).toBe(true);
+    }
+  });
+
+  it("a request a person has to answer is a step of the live block, and an auto-allowed tool is not mistaken for one", () => {
+    const s = store();
+    s.beginTurn("1", "hello", undefined, WIRE);
+    const opts = [{ id: "once", name: "allow once", kind: "allow_once" as const }, { id: "no", name: "reject once", kind: "reject_once" as const }];
+    s.apply({ kind: "tool", id: "w1", title: "write", toolKind: "edit", status: "in_progress" });
+    s.noteAuto("w1");
+    s.apply({ kind: "permission", requestId: "2", tool: { toolCallId: "b1", title: "Bash rm x", kind: "execute" }, options: opts });
+    const steps = s.snapshot(undefined, { thoughts: false }).steps;
+    const rows = [{ boot: "b", id: 1, role: "user", anchor: "web-m1", text: "hello", ts: new Date(1_000).toISOString() }];
+    const { live } = groupSteps(rows, steps, { now: 1_100 });
+    expect(live.items.filter((x: any) => x.kind === "permission")).toHaveLength(1);
+    expect(live.items.find((x: any) => x.kind === "tool").auto).toBe(true);
+  });
+
+  it("while permissions are skipped the CLI never asks, so every tool call is marked auto — except the plan and AgEnD's reply, which are the agent talking", () => {
+    const d = mkdtempSync(join(tmpdir(), "acp-chat-")); dirs.push(d);
+    let skipping = true;
+    const s = new AcpStepStore(d, () => 1_000, () => skipping);
+    s.beginTurn("1", "hello", undefined, WIRE);
+    s.apply({ kind: "tool", id: "e1", title: "write", toolKind: "edit", status: "completed", rawInput: { file_path: "a" } });
+    s.apply({ kind: "tool", id: "x1", title: "agend__set_display_name", toolKind: "other", status: "completed" });
+    s.apply({ ...replyCall('{"chatId":"web","messageId":"web-r1"}') });
+    s.apply({ kind: "plan", entries: [{ content: "do it", status: "pending" }] });
+    skipping = false;                                   // a settings change is seen by the next tool
+    s.apply({ kind: "tool", id: "e2", title: "write", toolKind: "edit", status: "completed", rawInput: { file_path: "b" } });
+    const by = Object.fromEntries(s.snapshot(undefined, { thoughts: false }).steps.filter(x => x.kind === "tool").map(x => [x.id, x.auto === true]));
+    expect(by).toEqual({ "t-e1": true, "t-x1": true, "t-c2": false, "p-1": false, "t-e2": false });
+  });
+});

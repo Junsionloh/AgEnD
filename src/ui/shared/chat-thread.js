@@ -193,15 +193,23 @@ export function createThread(list, scroller, opts) {
     const u = opts.isUser(x);
     // renderMarkdown escapes the whole text before it adds any tag of its own (chat-render.js).
     const ticks = u && x.delivery ? R().deliveryHtml(x.delivery, TICKS()) : "";
+    // AGEND-279: a message that asked to interject says so, and how it went; one waiting for the running turn says when it will go — and, while the
+    // agent works and can let that message leave its queue, offers "Send now" right after it (always shown: no hover, a target a thumb can hit).
+    // Waiting for the running turn: queued, and not an interjection that was taken (which is part of the turn it went into).
+    const waiting = u && x.delivery === "queued" && !["added", "interrupted", "sent"].includes(x.steer);
+    const sendNow = u && x.delivery === "queued" && !x.steer && typeof x.messageId === "string" && opts.canSendNow?.() === true;
+    const sendNowBtn = sendNow ? `<button type="button" data-trust="thread-control" class="send-now" data-act="sendNow" data-arg="${escAttr(x.messageId)}" title="${escAttr(tr("chat.sendNowTitle"))}" aria-label="${escAttr(tr("chat.sendNowTitle"))}"${opts.sendNowBusy?.(x.messageId) ? " disabled" : ""}>${escAttr(tr("chat.sendNow"))}</button>` : "";
+    const marks = u ? steerMarkHtml(x.steer, false) + (waiting ? `<span class="queue-mark" role="status">${escAttr(tr("chat.queuedMark"))}</span>` : "") + sendNowBtn : "";
     const tools = u ? "" : `<div data-trust="thread-control" class="msg-tools"><button type="button" class="chip-btn icon-only" data-act="copyMsg" data-arg="${escAttr(msgKey(x))}" title="${escAttr(tr("chat.copyMessage"))}" aria-label="${escAttr(tr("chat.copyMessage"))}">${COPY}</button></div>`;
     const buttons = x.role === "agent" ? replyButtonsHtml(x.buttons) : "";
     // A person's click on a reply button shows as the button's label, never the line the agent was given (its value).
     const clicked = x.role === "user" && x.click && typeof x.click.label === "string";
     // #2272: reply to it — a hover strip at its top right (phones: swipe left or long-press; R on a focused message).
     const key = msgKey(x);
-    const act = opts.canReply?.() === false ? "" : `<div data-trust="thread-control" class="msg-actions"><button type="button" class="chip-btn icon-only" data-act="reply" data-arg="${escAttr(key)}" title="${escAttr(tr("chat.reply"))}" aria-label="${escAttr(tr("chat.reply"))}">${REPLY}</button></div>`;
+    // A message that still waits has no hover strip: nothing was sent yet to reply to, and the strip floats over the meta line's right end, where "Send now" is.
+    const act = opts.canReply?.() === false || waiting ? "" : `<div data-trust="thread-control" class="msg-actions"><button type="button" class="chip-btn icon-only" data-act="reply" data-arg="${escAttr(key)}" title="${escAttr(tr("chat.reply"))}" aria-label="${escAttr(tr("chat.reply"))}">${REPLY}</button></div>`;
     // M-3092 (Hub rooms): another person's message, a bubble on the left (`msg-person`); the fleet never sets x.person.
-    return `<div class="msg ${u ? "user" : "agent"}${x.person ? " msg-person" : ""}" data-key="${escAttr(key)}" tabindex="-1">${act}<div class="meta"><span class="sender">${escAttr(x.sender)}</span>${time}${ticks}</div>${quoteHtml(x.replyTo)}<div class="body">${clicked ? clickHtml(x.click) : `<div class="md">${renderedMarkdown(x.text, x.role === "agent", opts.emojis, opts.mentions, opts.mentionLabels?.())}</div>`}${R().attachmentsHtml(x.attachments, { htmlCards: x.role === "agent", goneTitle: tr("chat.attGone"), goneLabel: tr("chat.attUnavailable"), inlinePreviews: !PUBLIC_LINK(), textPreviews: true })}${buttons}</div>${R().reactionsHtml(x.reactions, tr("chat.reactedBy", x.instance || ""))}${tools}</div>`;
+    return `<div class="msg ${u ? "user" : "agent"}${x.person ? " msg-person" : ""}" data-key="${escAttr(key)}" tabindex="-1">${act}<div class="meta"><span class="sender">${escAttr(x.sender)}</span>${time}${ticks}${marks}</div>${quoteHtml(x.replyTo)}<div class="body">${clicked ? clickHtml(x.click) : `<div class="md">${renderedMarkdown(x.text, x.role === "agent", opts.emojis, opts.mentions, opts.mentionLabels?.())}</div>`}${R().attachmentsHtml(x.attachments, { htmlCards: x.role === "agent", goneTitle: tr("chat.attGone"), goneLabel: tr("chat.attUnavailable"), inlinePreviews: !PUBLIC_LINK(), textPreviews: true })}${buttons}</div>${R().reactionsHtml(x.reactions, tr("chat.reactedBy", x.instance || ""))}${tools}</div>`;
   }
   /**
    * A message this page is sending (chat-store.js): its own bubble at once, dimmed with "Sending…" until the server
@@ -210,6 +218,13 @@ export function createThread(list, scroller, opts) {
    * progress() (the html does not hold the numbers, so a moving bar never redraws the bubble). No data-key: it is no
    * message yet (nothing replies to it, links to it or copies it).
    */
+  /** AGEND-279: the "Interjection" tag of a message that asked to interject, with how it went (`steer`) once that is known. */
+  function steerMarkHtml(steer, asked) {
+    if (!steer && !asked) return "";
+    const how = steer ? tr(`chat.steer_${steer}`) : "";
+    const label = how && how !== `chat.steer_${steer}` ? `${tr("chat.steerMark")} · ${how}` : tr("chat.steerMark");
+    return `<span class="steer-mark${steer ? ` steer-${escAttr(steer)}` : ""}" role="status">${escAttr(label)}</span>`;
+  }
   function outgoingHtml(x) {
     const st = x.outgoing.state, going = st === "queued" || st === "sending";
     const files = (x.files || []).map((f, i) => {
@@ -223,7 +238,7 @@ export function createThread(list, scroller, opts) {
       + `<button type="button" class="btn btn-sm" data-act="putBackOut" data-arg="${escAttr(x.clientId)}">${escAttr(tr("chat.putBack"))}</button>`
       + `<button type="button" class="btn btn-sm" data-act="deleteOut" data-arg="${escAttr(x.clientId)}">${escAttr(tr("chat.deleteUnsent"))}</button></span></div>` : "";
     const state = going ? `<span class="out-state" role="status"><span class="out-spin" aria-hidden="true"></span>${escAttr(tr("chat.sending"))}</span>` : "";
-    return `<div class="msg user out out-${st}" data-out="${escAttr(x.clientId)}"${going ? ' aria-busy="true"' : ""} tabindex="-1"><div class="meta"><span class="sender">${escAttr(x.sender)}</span>${state}</div>`
+    return `<div class="msg user out out-${st}" data-out="${escAttr(x.clientId)}"${going ? ' aria-busy="true"' : ""} tabindex="-1"><div class="meta"><span class="sender">${escAttr(x.sender)}</span>${state}${steerMarkHtml(x.steer, !!x.steerAsked)}</div>`
       + `${quoteHtml(x.replyTo)}<div class="body">${x.text ? `<div class="md">${renderedMarkdown(x.text, false, opts.emojis, opts.mentions, opts.mentionLabels?.())}</div>` : ""}`
       + `${files ? `<div class="out-files">${files}</div>` : ""}</div>${failed}</div>`;
   }
@@ -934,6 +949,7 @@ export function createThread(list, scroller, opts) {
       if (m && opts.clickReplyButton) opts.clickReplyButton(m[1], Number(m[2]));
     } else if (act === "showButtons") { const x = msgs.find(y => y.buttons && y.buttons.id === el.dataset.arg); if (x) reveal(msgKey(x)); }
     else if (act === "reply") { const x = msgs.find(y => msgKey(y) === el.dataset.arg); if (x) opts.startReply?.(x); }
+    else if (act === "sendNow") opts.sendNow?.(el.dataset.arg);                       // AGEND-279: a waiting message, interjected now
     else if (act === "jumpQuote") void jumpTo(el.dataset.arg);
     else if (act === "retryOut") opts.retryOutgoing?.(el.dataset.arg);                 // a failed send, again
     else if (act === "putBackOut") opts.putBackOutgoing?.(el.dataset.arg);              // back in the composer, to change it

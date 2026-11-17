@@ -146,7 +146,9 @@ export function ActivityBlock({ group, ctx, now: clock }) {
   const now = clock ?? tick;
   // The reply's own steps, then what the agent said after sending it (the turn's close-out): one run, in order.
   const rows = collapse([...group.items, ...group.trailing].filter((s) => !(hide && s.kind === "thinking")));
-  const open = user ?? false;
+  // A permission request waiting for a person opens the block (until they choose otherwise): its buttons are the one thing in here to act on.
+  const waiting = live && rows.some((s) => s.kind === "permission" && s.status === "running");
+  const open = user ?? waiting;
   const all = rows.length;
   const limit = SHOWN_MAX + more;
   const skipped = Math.max(0, all - limit);
@@ -173,7 +175,7 @@ export function ActivityBlock({ group, ctx, now: clock }) {
     const folded = foldRuns(items, (x) => x === newest);
     return html`<ol class="log-list" role="list">${folded.map((x, i) => (x.group
       ? html`<${StepGroup} key=${`g:${x.items[0].id}`} g=${x} paths=${ctx.paths} />`
-      : html`<${LogRow} key=${`${x.kind}:${x.id}`} x=${x} prev=${folded[i - 1]} paths=${ctx.paths} chat=${true} compact=${true} latest=${x === newest} />`))}</ol>`;
+      : html`<${LogRow} key=${`${x.kind}:${x.id}`} x=${x} prev=${folded[i - 1]} paths=${ctx.paths} chat=${true} compact=${true} latest=${x === newest} instance=${ctx.instance} />`))}</ol>`;
   };
   const icon = live && last ? (last.kind === "tool" ? CAT_ICON[last.cat || "other"] : KIND_ICON[last.kind]) : null;
   return html`<details class=${`card act-block${live ? " live" : " done"}`} open=${open}>

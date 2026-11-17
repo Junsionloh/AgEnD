@@ -1,0 +1,49 @@
+{
+ "jsonrpc": "2.0",
+ "id": 1,
+ "method": "session/request_permission",
+ "params": {
+  "sessionId": "SESSION",
+  "toolCall": {
+   "toolCallId": "call-1",
+   "kind": "other",
+   "title": "agend__reply",
+   "rawInput": {
+    "variant": "UseTool",
+    "tool_name": "agend__reply",
+    "tool_input": {
+     "text": "OK",
+     "reply_to": "web-msg"
+    }
+   },
+   "_meta": {
+    "x.ai/tool": {
+     "version": 1,
+     "name": "use_tool",
+     "kind": "use_tool",
+     "namespace": "grok_build",
+     "label": "Use Tool",
+     "read_only": false
+    },
+    "x.ai/requestingSessionId": "SESSION"
+   }
+  },
+  "options": [
+   {
+    "optionId": "always-allow",
+    "name": "always allow",
+    "kind": "allow_always"
+   },
+   {
+    "optionId": "allow-once",
+    "name": "allow once",
+    "kind": "allow_once"
+   },
+   {
+    "optionId": "reject-once",
+    "name": "reject once",
+    "kind": "reject_once"
+   }
+  ]
+ }
+}

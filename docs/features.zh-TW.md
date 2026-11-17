@@ -368,7 +368,11 @@ Tasks 分頁就是看板本身（設計：[task-board](design/task-board.md)，�
 - **篩選和顯示。** **篩選**可以只看某些狀態、負責人（或沒人負責）、優先度或大小；每個條件是一個標籤，寫著**是**或**不是**（點一下切換），後面是選的項目和移除鈕，所有條件都要符合。主任務本身或它的任一張子任務符合，就會留著，所以篩某個 instance 會看到它在做的主任務。專案和篩選條件都在網址裡（`?tp=1&tf=assignee:atlas`），把網址傳給別人，打開就是同一個篩好的看板。**顯示**可以把專案看成看板或**清單**：一張主任務一行，依狀態、負責人或優先度分組（也可以不分組），照看板順序、優先度、最近變動、最新建立或標題排序。勾**子任務也各列一行**會連每個步驟都列出來；依負責人分組時，每個 instance 手上的工作一眼就看得到。已完成的卡可以只看近 7 天、全部，或隱藏（不顯示完成欄）。這些選擇和最後的篩選條件會記在這台裝置上。
 - 卡片在對話框裡打開，每個欄位都能直接編輯：目標、範圍、完成定義（子任務是驗收條件）、背景、目前狀態、產出，以及負責人、專案、優先度、大小、相依和**做完要停在待確認，等我確認**；下面是子任務（輸入標題就能新增）、留言、進度紀錄和變更歷史。**搜尋卡片**會找標題、各欄位、驗收條件和留言。
 - **你確認。** 在網頁上開的主任務做完會停在待確認；子任務只有勾了才會。agent 開的主任務不需要你確認（#2434）：agent 自己完成內部工作（審查、接手、修正）；agent 勾了要確認的卡，由派工的 agent 確認（沒有派工者時由負責人確認），你也仍然可以確認。只有人能把卡從待確認改成完成或退回（附上要改什麼，負責人會看到）：在網頁登入的人，或在聊天室「待你處理」裡的 fleet 管理員（按確認；退回則是回覆 bot 發的提示）；取消勾選或重新打開已完成的工作，只有在網頁登入的人可以：instance 對這種卡的 `done` 會變成 `review`，只帶 web token 的請求也照 instance 的規則處理。agent 把自己的卡移到待確認、而且沒有別人要確認時，卡會直接完成；最後一張子任務完成而自動進入待確認的卡，由它的 agent 確認，也會通知那個 agent（#2756）。有子任務的主任務會跟著子任務變化：有子任務開始就進行中，全部完成就等你確認；你也可以把它標成卡住，在已確認的主任務底下新增子任務（只有你可以）會把它重新打開。
-- **版本。** 每張卡都有版本。你開始編輯之後 instance 才寫入的話，你的修改會被拒絕；畫面會載入最新內容、保留你的修改，再存一次就會覆蓋。
+- **切換 ACP agent 的 Runtime 或 CLI**（設定 → 該 agent → Runtime & model → 切換 Runtime／CLI）：ACP 只在這台主機上、只支援 grok 與 antigravity，所以把 agent 移到 Windows 電腦、或換成沒有 ACP 的 CLI，會改回終端機模式（移除 `cli_adapter`，`skipPermissions` 保留）；換成另一個有 ACP 的 CLI 則保持 ACP。對話框會說明是哪一種。儲存前會用和載入設定時相同的規則檢查結果，停止任何東西之前就拒絕，所以絕不會存出載入不了的 `fleet.yaml`。
+
+**沒登入。** CLI 沒登入的 ACP instance 會維持停止，並說明在這台主機上哪裡可以登入（啟動失敗的提示和 Log 都有）：儀表板在這裡能連接該 CLI 時是 **設定 → AI 帳號**；否則是同一個 CLI 的終端模式 agent 的 **檢視** 分頁，或在聊天頻道傳 `/login`（例如 agy 在擋掉 `unshare` 的主機上讀不到版本時）。
+
+**版本。** 每張卡都有版本。你開始編輯之後 instance 才寫入的話，你的修改會被拒絕；畫面會載入最新內容、保留你的修改，再存一次就會覆蓋。
 - **聊天室也能處理（需開啟）。** 設定 `needs_you.task_board: true`（自 2.3.0 起預設關閉）後，等你確認的卡片，以及你派出去而卡住的卡片（卡片在問你），會出現在**等你處理**：每個 bot 在 General 的那則訊息會列出自己 agent 的卡，等你確認的卡有**確認**和**退回**按鈕，卡住的卡有**回覆**按鈕（一次最多三張卡，fleet 管理員才按得動）。退回和回覆需要寫內容：回覆 bot 發的那則提示訊息，你的回覆就是退回理由或答案。只有你派出去的卡會等你（#2434）：agent 派出去的卡由那個 agent 確認或回覆，不會出現在任何「等你處理」。
 - **不用拖曳也能操作。** 卡片標題本身是按鈕：Enter 打開，Alt+← / Alt+→ 移到前一欄或後一欄，Alt+↑ / Alt+↓ 在同一欄裡上下移。手機上可以用卡片裡的**移到…**和**位置**（上移、下移）。
 - **卡片選單和下一張。** 在卡片上按右鍵（看板的卡、清單的一行、等你處理的一列），或在卡片上按選單鍵（Shift+F10），會出現它的選單：**打開**；等你處理時的**確認**、**退回**或**回覆**；**移到**別的狀態（規則跟拖曳一樣）；改**負責人**和**優先度**；**複製連結**、**複製卡號**；**取消這張卡…**。每一項要填的東西都跟卡片視窗一樣（卡住的原因、退回要改什麼）。按住 Shift 再按右鍵，或在選取的文字上按右鍵，仍然是瀏覽器自己的選單。卡片打開時，卡號旁的箭頭（或 **K** / **J**）可以跳到上一張／下一張，順序跟頁面顯示的一樣：看板的各欄，或首頁等你處理的卡；從主任務打開的子任務，會在同一張主任務的子任務之間切換。
@@ -1592,3 +1596,49 @@ General、coordinator 與 full 權限組合的 instance，可以用 `get_web_set
 - 還原預設值：主機設定與那個人的自訂 CSS（這台裝置上的自訂 CSS 開關留給本人決定）。
 
 只能在頁面上做的事：從那個人的電腦選檔案（mod、效果資料夾、CSS 素材、身分卡圖片）、這個瀏覽器自己的開關（只在這台裝置關閉自訂 CSS、暫停播放）、下載匯出檔，以及身分卡上傳限制。`get_web_settings` 會把這些列在 `page_only`。`web-appearance` skill 會帶 General 一步步完成。
+
+## ACP 模式（`cli_adapter: acp`）
+
+**grok** 或 **antigravity**（`agy`）的 instance 可以不開終端機 pane，改為透過 CLI 自己的 [Agent Client Protocol](https://agentclientprotocol.com) 伺服器執行（#3731）。這是每個 instance 自行選擇的功能；其他 instance 完全照舊，tmux 仍是預設。
+
+```yaml
+instances:
+  grok-acp:
+    backend: grok            # 或：antigravity
+    cli_adapter: acp
+    working_directory: /path/to/project
+    tool_progress: standard      # 聊天的活動區塊依各 agent 的 tool_progress 顯示（off：沒有區塊）
+    # skipPermissions: false     # 預設開啟（和 tmux 一樣）；false：權限請求會在聊天裡等人回答
+web:
+  log_thinking: true         # 選填：admin 也能看到思考文字（和任何 backend 一樣，顯示在聊天區塊）
+  log_tab: true              # 選填：Log 分頁也顯示同樣的步驟和權限卡片
+```
+
+在網頁上，這兩種 backend 的 instance 表單有 **執行方式**（終端機／ACP）可選；切換前會先確認，因為會重啟 instance、並失去終端機畫面。
+
+**你會得到什麼。** 每則回覆上方的聊天活動區塊（#3648）即時顯示思考（只有 admin，而且要開 `web.log_thinking`）、工具呼叫與進度、agent 的文字，內容依該 agent 的 `tool_progress` 裁切，和任何 backend 一樣。預設（`skipPermissions`）下需要權限的工具呼叫會直接執行並標 **auto**；`skipPermissions: false` 時，權限請求是區塊裡的一張卡片，有 **允許**、**拒絕**、**取消這回合**，有請求在等的時候區塊會自己展開。兩個頁面都是即時取得 ACP instance 的步驟，不是從逐字稿檔案讀。**取消** 會中斷這回合，並把所有等待中的權限請求以「已取消」回答。重啟之後 instance 會用儲存的對話繼續（`session/load`），聊天也還看得到之前的內容。
+
+**有什麼不同。**
+
+| | tmux | acp |
+|---|---|---|
+| 終端機畫面、`agend attach`、直接對 CLI 打字 | 有 | 沒有（隱藏並拒絕） |
+| 閒置／忙碌 | 讀畫面 | 有一個未完成的 `session/prompt` |
+| 卡住 | 畫面不再變動 | 回合進行中、超過 `hang_detector.timeout_minutes`（預設 10）沒有 agent 的任何訊息（等人回答權限請求不算卡住） |
+| 權限 | 預設跳過（`skipPermissions`，用 CLI 自己的旗標） | 預設跳過，同一個設定；`skipPermissions: false` 才在聊天裡詢問 |
+| 回合中途送訊息 | 排隊到回合結束；`/steer` 可插入（grok） | 由送的人決定：一般訊息排隊到回合結束、依序送出（預設）；`/steer <訊息>`（或其他 instance 在 `send_to_instance`／`delegate_task` 帶 `steer: true`）**插話**：兩個 CLI 都把訊息加進進行中的回合、不取消（grok 用它自己的 `_x.ai/interject`，agy 把第二個 `session/prompt` 折進這一輪）；CLI 不收時才取消進行中的回合，再在同一個 session 接著送這則 |
+| context % | 讀畫面 | 依 CLI 自己回報的內容：agy 的 `usage_update`，grok 則是它每次模型呼叫的 token 回報，除以該模型的視窗（顯示在儀表板、`/ctx`、`/status`；第一次模型呼叫之前是空的） |
+| 額度通知 | 讀畫面上的額度上限訊息 | 不支援：ACP 沒有額度或上限事件（grok 的 `usage` 是另一個指令，`/usage` 仍然讀得到）；失敗的回合會在聊天裡顯示成一行錯誤 |
+| 回覆聊天 | agent 的 `reply` 工具 | 同一個工具；人發起的回合若沒用它就結束，agent 的文字會當作回覆送出 |
+| `checkout_repo`、`release_repo`、網頁主題／Office 工具 | 有 | 尚未支援（工具回傳錯誤） |
+| 閒置自動暫停（`auto_pause_after`） | 有 | 有：同一個計時（距離上次有工作送到 agent 或上一回合結束的分鐘數，重啟後仍保留），閒置改由回合狀態判斷、不看畫面；回合進行中或有權限請求在等人時不會暫停，General 也不會。暫停時 agent 行程會停止，下一則訊息會再啟動並接續對話 |
+
+**安全。** 權限用和終端機模式同一個設定 `skipPermissions`，**沒設成 `false` 就是跳過**。跳過時：CLI 以它自己的開關啟動（grok `agent --always-approve`、agy `acp --dangerously-skip-permissions`），AgEnD 另外把每個 `session/request_permission` 都自己用「僅此一次允許」回答，當作保底。它絕不選「永遠允許」或「永遠拒絕」（那會改變 CLI 自己保存的狀態）；請求裡沒有「僅此一次允許」時也不會改選別的，那個請求和沒跳過時一樣等人回答。不會有權限卡片；這樣執行的每個工具呼叫（CLI 帶了旗標會自己放行，所以不會來問）都會在聊天區塊與 Log 上標 **auto**，計畫與 AgEnD 自己的 `reply` 除外。`skipPermissions: false`（設定 → 該 agent → Runtime & model → **跳過工具權限詢問**）：請求會以卡片停在聊天裡，有 **允許**、**拒絕**、**取消這回合**（有 Telegram 或 Discord 連線的 fleet 也會在該 agent 的話題裡貼一張帶按鈕的卡片：**僅此一次允許**、**拒絕**、**取消這回合**；只採用該連線所屬 fleet admin 的回答，非 admin 點了會被拒絕，請求在任何地方被回答或回合結束時卡片會收合，請求裡的機密在那裡會和其他 CLI 對話框一樣被遮蔽——從儀表板回答也一樣有效；只用網頁的 fleet 沒有聊天可貼，儀表板的卡片就是唯一的地方）；但 instance 自己的 `agend` MCP 工具（`reply`、`react`、`task`、`send_to_instance`…）會直接「僅此一次允許」，不然聊天無法運作。判斷只看 CLI 自己設定的欄位（grok：`UseTool` variant、`use_tool` meta 與 `agend__<tool>` 名稱；agy：種類為 `other` 的工具、其註冊名稱 `mcp_agend_<tool>`），絕不看模型寫的參數或標題文字，所以只是提到 agend 工具的 shell 或檔案呼叫仍會詢問；認不出來的一律詢問。會啟動、取代或移除 instance 的工具（`create_instance`、`delete_instance`、`replace_instance`、`start_instance`、`restart_instance`）以及 `checkout_repo`／`release_repo` 也一樣會詢問，只有 `skipPermissions` 會放行，和終端機模式相同。取消、停止或當機都會把所有等待中的請求以「已取消」回答——絕不會變成允許。只有 fleet admin 能回答請求或看到思考文字。AgEnD 不宣告任何 `fs/*` 或 `terminal/*` capability，CLI 自己處理檔案與程序，agent 對這兩者的請求都會收到「method not found」。CLI 以不經 shell、明確指定環境變數的方式啟動（不含 fleet 或網頁的 token），並在 `session/new` 收到這個 instance 專屬的 `agend` MCP server（stdio），絕不與其他 instance 共用。
+
+**排隊或插話。** ACP 沒辦法把輸入放進進行中的回合，所以送給忙碌 agent 的訊息只有兩種：排隊，或插話，由送的人決定。一般訊息排隊，這一輪結束才送（預設，和終端機一樣）。聊天或儀表板的 `/steer <訊息>`，或其他 instance 帶 `steer: true`（和終端機 agent 用的是同一個欄位）則是插話。**標準 ACP 沒有把輸入加進進行中回合的方法，所以看 CLI 而定。** **grok** 有自己的擴充 `_x.ai/interject`（`{sessionId, text}` → `{status: "queued"}`，grok 1.0.14 起，`initialize` 不會宣告）：訊息加進進行中的回合，grok 做完目前這一步就讀到；什麼都不取消（正在跑的工具會繼續跑），這一輪只結束一次。**agy** 沒有這個方法，但它會把同一個 session 在第一個還在跑時送來的第二個 `session/prompt` 折進進行中的回合（agy 1.5.9 實測：進行中的工具不會被取消，第一個請求立刻回 `end_turn`、工作繼續，第二個請求在全部做完才回）。AgEnD 就這樣送，而且要兩個請求都回應了才算這一輪結束，所以佇列和閒置自動暫停的計時不會在第一個回應時就往前走。**否則**（CLI 拒絕、發生錯誤、grok 回的不是 `queued`）AgEnD 才取消：對進行中的回合送 `session/cancel`（正在等人回答的權限請求以「取消」收掉，Telegram／Discord 的卡片也會收合），等回合以 `cancelled` 結束，就在**同一個 session** 把這則當下一個 prompt 送出，前面加一句話說明上一輪被打斷（被使用者或另一個 agent）、這是同一段對話；這種做法排在已經排隊的訊息前面，那些訊息照原順序留在它後面。agent 閒置時兩種都直接送出（沒有進行中的回合時兩種都不用：grok 會從 `_x.ai/interject` 自己開一輪）。`/steer` 的回覆會說是這三種的哪一種。終端機 agent 的 `/steer` 和 `steer` 完全不變。
+
+**具名帳號。** ACP instance 可以像終端機模式一樣用具名帳號執行：`backend_options.<cli>.credential_profile: work`（grok 或 antigravity）。CLI 會以該帳號自己的資料夾啟動，也就是 AgEnD home 底下的 `credential-profiles/<cli>/<名稱>`：grok 用 `GROK_HOME` 指向它（登入、對話和設定都在裡面），agy 在執行檔後面直接帶 `--app_data_dir` 並加上 registry 的 `SSH_CONNECTION` pin，與終端機 backend 的啟動方式相同。每個帳號的資料夾都是各自真實的資料夾（路徑上任何一層若是連結都會被拒絕），具名帳號的子行程也不會拿到 daemon 自己的帳號變數（`XAI_API_KEY`、`GROK_*`、`GEMINI_API_KEY`、`GOOGLE_*`、`ANTIGRAVITY_*`），所以不可能用預設帳號的登入執行。新帳號要先登入一次；登入前 instance 會維持停止，並說明要在主機上執行的指令（`GROK_HOME="<資料夾>" grok login --device-auth`，或 `agy --app_data_dir … acp --login`）。
+
+**版本。** 每個 CLI 有一個 profile，內含的是最低版本，不是清單：能運作的最舊版本（grok `1.0.77`、agy `1.5.8`），以及驗證過的最新版本（grok `1.0.77`、agy `1.5.9`）。低於最低版本會以訊息拒絕，說明最低版本與升級方式，instance 維持停止（不會改用 tmux 啟動）。其他版本一律照常啟動——比驗證過的最新版更新時，只在 log 記一行「未驗證的版本」，不跳卡、不拒絕——依版本決定的功能（插進進行中的回合：grok ≥ `1.0.14`、agy ≥ `1.5.0`）另外按版本判斷，不支援就退回取消這一輪。grok 以 `--no-auto-update`（和終端機模式相同）與 `--no-leader` 啟動。CLI 必須已登入；未登入的 CLI 會回報並讓 instance 維持停止。
+
+**要知道的限制。** 在 tmux 模式建立的對話不會在 ACP 模式接續（儲存的 session id 是分開的），所以切換會開始新的對話。grok 與 agy 只有部分回合會送出思考；沒有時，時間軸就不顯示。ACP 模式下 agy 的模型尚不能選擇（grok 的 `model` 與 `effort` 以啟動參數傳入）。

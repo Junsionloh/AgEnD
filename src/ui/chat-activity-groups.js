@@ -20,6 +20,8 @@
 //   turn  the turn has no `reply` at all (a backend that has none): its steps go above the last agent row between its
 //         user row and the next user row;
 //   none  nothing matched: an "activity" group of its own, between the rows by time. Never attached to a guess.
+// An assistant step marked `sent` (an ACP agent that used no reply tool: AgEnD sent its closing text as the reply, and left a
+// reply step with the bubble's messageId) is that bubble's own text, and is not repeated as a step.
 // A `reply` call that failed or was interrupted sent nothing: it claims no row (a retry that worked would lose its row to
 // it); its steps join the next segment, and the failed call shows there as an ordinary tool step.
 // What a step must be to be shown (AGEND-197): a text with nothing in it — blank, or only punctuation (the `.` Claude Code
@@ -38,13 +40,17 @@ export const TIME_SLACK_MS = 5000;
 /** A reply call this recent, with no row yet, is assumed to be about to get one. */
 export const AWAIT_ROW_MS = 15000;
 /** The steps a timeline shows (the rest — the user's prompt, the turn's end, compaction notes — are bubbles or noise). */
-const SHOWN = new Set(["thinking", "assistant", "tool", "error"]);
+// A permission request (an ACP agent waiting for a person's answer, #3731) is shown: the buttons are in the block. A request AgEnD's
+// own policy allowed (`skipPermissions`) never becomes a step: its tool call carries `auto` instead.
+const SHOWN = new Set(["thinking", "assistant", "tool", "error", "permission"]);
 const REPLY_TOOL = /^(?:mcp__agend[\w-]*__|agend[\w-]*:)?reply$/;
 const REPLY_TEXT = 200;
 
 /** A text step with words in it: not blank, not only punctuation (letters, digits and symbols such as emoji count). */
 export const hasSubstance = (s) => s.kind !== "assistant" || /[^\s\p{P}]/u.test(String(s.body == null ? "" : s.body));
 
+/** The CLI's own notice (agy retrying a malformed tool call, AGEND-279): a line in the block, never something the agent said. */
+export const isNotice = (s) => s.kind === "state" && s.note === "malformed_call";
 export const rowKeyOf = (x) => `${x.boot}-${x.id}`;
 export const isReplyStep = (s) => s.kind === "tool" && typeof s.tool === "string" && REPLY_TOOL.test(s.tool);
 /** A reply call that sent nothing (its result was an error, or the turn was interrupted before it finished). */
@@ -140,9 +146,10 @@ export function groupSteps(rows, steps, opts = {}) {
     const segs = [];
     const flush = (replyStep) => { segs.push({ n: n++, items: seg, reply: replyStep, from }); from = replyStep.ts || from; seg = []; };
     for (const s of turn.steps) {
-      if (s.kind === "user" || s.kind === "turn_end" || s.kind === "state") continue;
+      if (s.kind === "user" || s.kind === "turn_end" || (s.kind === "state" && !isNotice(s))) continue;
+      if (s.sent) continue;                                // text AgEnD sent as a bubble: the bubble is where it is shown
       if (isReplyStep(s) && !isLostReply(s)) { replied++; flush(s); continue; }
-      if (SHOWN.has(s.kind) && hasSubstance(s)) seg.push(s);
+      if ((SHOWN.has(s.kind) || isNotice(s)) && hasSubstance(s)) seg.push(s);
     }
     const tail = seg;                                      // after the last reply (or the whole turn when it had none)
     const partial = ti === 0 && opts.complete === false && !first;
@@ -222,4 +229,37 @@ export function composeRows(rows, { groups, live }) {
   for (const g of looseLeft) out.push(act(g));
   if (live) out.push(act(live));
   return out;
+}
+
+/** A message that waited and was handed to the agent less than this long after it was typed is where it was typed (no move). */
+export const SENT_SLACK_MS = 1000;
+
+/**
+ * AGEND-279: where a person's message that has to wait for the running turn belongs in the thread.
+ *  • While it waits (`delivery: "queued"`; an interjection that was taken does not wait) it is at the bottom, below everything the running turn shows (the work block included): it is
+ *    not part of this turn, and a message typed later (a pending bubble) comes after it. `tail` holds them, to be put after the composed rows.
+ *  • Once it was handed to the agent (`sentAt`, the fleet's clock) it is where THAT happened — after what was written before that moment, the
+ *    previous turn's last reply included — not where it was typed. A message that was never kept waiting stays where it is.
+ * Apply before grouping, so the turn windows (between one person's message and the next) are the ones the thread shows.
+ * @returns { main: rows without the waiting ones, tail: the waiting rows then the pending bubbles }
+ */
+export function splitQueued(rows) {
+  let end = rows.length;
+  while (end > 0 && rows[end - 1].outgoing) end--;
+  const queued = [], main = [];
+  // An interjection that was taken (`added`, `interrupted`, `sent`) is part of the turn it went into: it stays where it happened, even while its tick still says queued.
+  const interjected = (x) => x.steer === "added" || x.steer === "interrupted" || x.steer === "sent";
+  for (const x of rows.slice(0, end)) (x.role === "user" && x.delivery === "queued" && !x.outgoing && !interjected(x) ? queued : main).push(x);
+  for (const x of main.slice()) {
+    if (x.role !== "user" || !x.sentAt) continue;
+    const at = Date.parse(x.sentAt), typed = rowTs(x);
+    if (!Number.isFinite(at) || !typed || !(at > typed + SENT_SLACK_MS)) continue;
+    const from = main.indexOf(x);
+    let to = main.length;
+    for (let i = from + 1; i < main.length; i++) { const t = rowTs(main[i]); if (t && t > at) { to = i; break; } }
+    if (to === from + 1) continue;
+    main.splice(from, 1);
+    main.splice(to - 1, 0, x);
+  }
+  return { main, tail: queued.concat(rows.slice(end)) };
 }

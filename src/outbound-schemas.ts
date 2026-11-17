@@ -630,7 +630,7 @@ export const SendToInstanceArgs = z.object({
   message: NonEmptyString.describe("The message to send to the target instance."),
   forwards: ForwardMessageIds,
   steer: z.boolean().optional().describe(
-    "Inject as a supplement into the target's CURRENT turn — for correcting or adding to work you just sent. Omit for a new task. Safe: an idle target receives it normally; an unsupported backend falls back to the idle queue.",
+    "Inject as a supplement into the target's CURRENT turn — for correcting or adding to work you just sent. Omit for a new task. Safe: an idle target receives it normally; an unsupported backend falls back to the idle queue. A target that runs over ACP (no terminal) has no standard way to take input mid-turn: grok and antigravity targets take the message into their running turn without cancelling it (grok through its own interjection, antigravity as a second prompt it folds in; they read it at their next step); if one does not take it, the running turn is interrupted (cancelled) and the target continues the same conversation with this message first. Messages already queued for it stay behind. Without steer the message is queued until the turn ends.",
   ),
   request_kind: z.enum(["query", "task", "report", "update"]).optional().describe(
     "Categorizes the message intent. 'query' = asking a question, 'task' = delegating work, 'report' = returning results, 'update' = status notification.",
@@ -683,7 +683,7 @@ export const DelegateTaskArgs = z.object({
   task: NonEmptyString.describe("Description of the task to perform."),
   forwards: ForwardMessageIds,
   steer: z.boolean().optional().describe(
-    "Inject as a supplement into the target's CURRENT turn — for correcting or adding to work you just sent. Omit for a new task. Safe: an idle target receives it normally; an unsupported backend falls back to the idle queue.",
+    "Inject as a supplement into the target's CURRENT turn — for correcting or adding to work you just sent. Omit for a new task. Safe: an idle target receives it normally; an unsupported backend falls back to the idle queue. A grok or antigravity target over ACP (no terminal) takes it into its running turn without cancelling (it reads it at its next step), or, if it does not take it, has the turn interrupted (cancelled) and continues the same conversation with this message first; without steer the message is queued until the turn ends.",
   ),
   success_criteria: z.string().optional()
     .describe("How the recipient should judge if the task is complete."),

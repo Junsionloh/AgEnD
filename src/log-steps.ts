@@ -17,7 +17,7 @@ import { open, type FileHandle } from "node:fs/promises";
 import { LINE_MAX_BYTES, LONG_HEAD_BYTES, boundaryBefore, openTranscript, type LongLine } from "./transcript-jsonl.js";
 import { redactSecrets, shellProgramName, type ToolProgressLevel } from "./tool-progress.js";
 
-export type StepKind = "user" | "assistant" | "thinking" | "tool" | "error" | "turn_end" | "state";
+export type StepKind = "user" | "assistant" | "thinking" | "tool" | "error" | "turn_end" | "state" | "permission";
 /** What a tool call does, for its icon and words on the page. */
 export type StepCat = "read" | "edit" | "search" | "run" | "web" | "mcp" | "agent" | "plan" | "message" | "other";
 export type StepStatus = "running" | "done" | "failed" | "interrupted";
@@ -50,12 +50,24 @@ export interface LogStep {
   /** Characters cut from `body` (0 or absent: nothing), or the bytes of a result too long to read (`bodyBytes`). */
   bodyCut?: number;
   bodyBytes?: number;
-  /** state: what happened ("compacted"); error: a status code. */
+  /** state: what happened ("compacted"); error: a status code; permission: the chosen option's name once answered ("cancelled" when the turn was). */
   note?: string;
+  /** tool (#3731, `cli_adapter: acp`): the CLI asked to run it and AgEnD's policy allowed it (`skipPermissions`), not a person. */
+  auto?: boolean;
   /** AGEND-181: what ties this step to a row of the chat ledger (see StepAnchor). Only user steps and `reply` calls carry one. */
   anchor?: StepAnchor;
+  /**
+   * assistant (`cli_adapter: acp`): this text went to the chat as a bubble (AgEnD sent the turn's closing text as the reply,
+   * the agent having used no `reply` tool). The bubble is the text's place; the chat's activity block does not repeat it.
+   */
+  sent?: true;
   modelSwitch?: ModelSwitch;
   servedModel?: string;
+  /**
+   * permission: the choices the CLI offered (#3731, `cli_adapter: acp`). The page offers Allow (the `allow_once` one) and
+   * Deny (`reject_once`), never an `*_always` choice; the step's `id` is the request id the answer names.
+   */
+  options?: { id: string; name: string; kind: "allow_once" | "allow_always" | "reject_once" | "reject_always" }[];
 }
 
 /**
@@ -1147,3 +1159,6 @@ export function chatStep(step: LogStep, level: Exclude<ToolProgressLevel, "off">
   }
   return { ...rest, ...(keep ? { subject: keep } : {}) };
 }
+
+/** The masking and bounding every step's strings go through, for a producer that is not a transcript parser (#3731). */
+export { subjectOf as stepSubject, inputOf as stepInput, bodyOf as stepBody };

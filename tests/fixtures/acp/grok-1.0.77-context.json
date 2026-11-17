@@ -1,0 +1,108 @@
+{
+ "comment": "grok 1.0.77, a real short turn (a trimmed capture: ids and signatures replaced). `models` is the `models` member of the session/new result; `response_completed` is the _x.ai/session_notification that ends each model call; `turn_completed` is the turn total. input 14877 + cache read 2176 = the 17053 of the turn total.",
+ "models": {
+  "currentModelId": "grok-4.7",
+  "availableModels": [
+   {
+    "modelId": "grok-4.7",
+    "name": "Grok 4.7",
+    "_meta": {
+     "totalContextTokens": 256000,
+     "contextWindows": [
+      256000,
+      500000
+     ]
+    }
+   },
+   {
+    "modelId": "grok-4.7-build-fast",
+    "name": "Grok 4.7 Fast",
+    "_meta": {
+     "totalContextTokens": 256000,
+     "contextWindows": [
+      256000,
+      500000
+     ]
+    }
+   },
+   {
+    "modelId": "grok-4.6",
+    "name": "Grok 4.6",
+    "_meta": {
+     "totalContextTokens": 256000,
+     "contextWindows": [
+      256000,
+      500000
+     ]
+    }
+   },
+   {
+    "modelId": "grok-4.5",
+    "name": "Grok 4.5",
+    "_meta": {
+     "totalContextTokens": 256000,
+     "contextWindows": [
+      256000,
+      500000
+     ]
+    }
+   }
+  ]
+ },
+ "response_completed": {
+  "jsonrpc": "2.0",
+  "method": "_x.ai/session_notification",
+  "params": {
+   "sessionId": "SESSION",
+   "update": {
+    "sessionUpdate": "response_completed",
+    "usage": {
+     "input_tokens": 14877,
+     "output_tokens": 19,
+     "cache_read_input_tokens": 2176,
+     "cache_creation_input_tokens": 0,
+     "reasoning_tokens": 18
+    },
+    "signature": "SIGNATURE"
+   }
+  }
+ },
+ "turn_completed": {
+  "jsonrpc": "2.0",
+  "method": "_x.ai/session_notification",
+  "params": {
+   "sessionId": "SESSION",
+   "update": {
+    "sessionUpdate": "turn_completed",
+    "prompt_id": "PROMPT",
+    "stop_reason": "end_turn",
+    "usage": {
+     "inputTokens": 17053,
+     "outputTokens": 19,
+     "totalTokens": 17072,
+     "cachedReadTokens": 2176,
+     "cacheCreationTokens": 0,
+     "reasoningTokens": 18,
+     "modelCalls": 1,
+     "apiDurationMs": 1569,
+     "costUsdTicks": 105250400,
+     "modelUsage": {
+      "grok-4.7-build": {
+       "inputTokens": 17053,
+       "outputTokens": 19,
+       "totalTokens": 17072,
+       "cachedReadTokens": 2176,
+       "cacheCreationTokens": 0,
+       "reasoningTokens": 18,
+       "modelCalls": 1,
+       "apiDurationMs": 1569,
+       "costUsdTicks": 105250400
+      }
+     },
+     "numTurns": 1
+    },
+    "elapsed_ms": 1608
+   }
+  }
+ }
+}

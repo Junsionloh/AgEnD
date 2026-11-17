@@ -156,6 +156,7 @@ export function instanceTooltip(it) {
   if (it.runtime) lines.push(`Runtime: ${runtimeLabel(it.runtime)}`);
   if (it.machine_id) lines.push(line("tooltipMachine",machineName(it.machine_id,it.machine_name)));
   if (it.machine_id && it.machine_status !== "online") lines.push(tn(it.machine_status === "revoked" ? "machineRevoked" : "machineOffline"));
+  if (it.cli_adapter === "acp") lines.push(line("tooltipMode", tn("modeAcpTooltip")));
   const src = (s) => (s === "instance" || s === "classic" ? tn("srcConfigured") : s === "fleet-default" ? tn("srcFleetDefault") : "");
   lines.push(line("tooltipModel", (modelText(it) || tn("tooltipUnavailable")) + src(it.model_source)));
   lines.push(line("tooltipStatus", status));
@@ -677,6 +678,7 @@ export function InstanceNav({ route, items, loaded = true, exec = {}, awaiting =
         aria-current=${on ? "page" : undefined} onClick=${onPick} ...${dragProps({ type: "instance", name, group: g }, !fav)}>
       <${InstanceAvatar} it=${it} state=${dotState(it, own(exec, name) ? exec[name] : null, waiting)} cli=${true} />
       <span class="inst-text"><span class="inst-line"><span class="inst-name" title=${label}>${label}</span>
+          ${it.cli_adapter === "acp" ? html`<span class="mode-badge" title=${tn("modeAcpTitle")}>${tn("modeAcp")}</span>` : null}
           <span class="v-meta">${it.runtime === "windows" ? "Windows" : it.context_pct != null ? `${Math.round(it.context_pct)}%` : ""}</span></span>
         ${two ? html`<span class="inst-line inst-line2"><span class="inst-alt" title=${secondary || undefined}>${secondary || ""}</span>
           ${mins != null ? html`<span class=${`inst-when${fade > 0 ? " fresh" : ""}`} title=${tn("replyTitle", { time: new Date(Date.parse(it.last_reply)).toLocaleString() })}>${replyText(mins)}</span>` : null}</span>` : null}

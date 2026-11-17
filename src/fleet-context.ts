@@ -56,6 +56,8 @@ export interface FleetContext {
 
   /** A read-only, bounded pane capture tied to the current daemon/launch. */
   getPaneContextSource?(name: string): PaneContextSource | null;
+  /** The context an ACP agent reports itself (it has no screen to read), or null: not an ACP agent, or nothing reported yet. */
+  reportedContext?(name: string): { context: number; tokenRatio: import("./context-percent.js").TokenContextRatio | null } | null;
   getSysInfo(): SysInfo;
   /** Read cached CLI versions without triggering a probe. */
   getBackendCliVersionSnapshot?(): BackendCliVersionSnapshot;

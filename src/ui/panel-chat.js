@@ -97,6 +97,7 @@ function CardMenu({ card, ownerKey }) {
 import "/assets/chat-strings.js";
 import { confirmedWrite, selfConfirmed } from "./settings-confirm.js";
 import { createChatStore } from "./chat-store.js";
+import { ModeBadge } from "./adapter-mode.js";
 import { createThread, msgKey } from "/assets/chat-thread.js";
 import { ComposerInput, WorkBarView, touchScreen } from "/assets/chat-composer.js";
 import { installMessageActions } from "./chat-msg-actions.js";
@@ -131,6 +132,7 @@ export function linkWorkBarCss(doc = typeof document !== "undefined" ? document 
 linkWorkBarCss();
 
 import { activityInfo, activityInfoStore, activityOffered, activityPrefs, composeActivity, mountActivity, observeActivity, setActivityOn, setActivityThinking } from "./chat-activity.js";
+import { splitQueued } from "./chat-activity-groups.js";
 /** The composer's textarea (#2342: text put back into it is a step Ctrl+Z goes back from). */
 const composers = new Map(); // agent → current mounted refs, never a retained thread's stale closure
 const composerField = (name) => composers.get(name)?.input.current || null;
@@ -252,11 +254,15 @@ const activityShown = () => activityOffered() && activityPrefs.get().on;
 const agentBusy = (name) => R().isBusy(store.state.exec[name]);
 /** Epoch ms the agent began working, by the working bar's own clock (a monotonic one), or null. */
 const agentSince = (name) => { const t = store.state.workingSince[name]; return t == null ? null : Date.now() - (performance.now() - t); };
-const rowsOf = (name) => (activityShown() ? composeActivity(name, store.threadRows(name), Date.now(), { busy: agentBusy(name), since: agentSince(name) }) : store.threadRows(name));
-/** What a chat's activity blocks need to draw: its paths to shorten, and whether thinking is shown. */
+// AGEND-279: a message waiting for the running turn is at the bottom, below the work block; one that has been handed over is where that happened.
+const rowsOf = (name) => {
+  const { main, tail } = splitQueued(store.threadRows(name));
+  return (activityShown() ? composeActivity(name, main, Date.now(), { busy: agentBusy(name), since: agentSince(name) }) : main).concat(tail);
+};
+/** What a chat's activity blocks need to draw: its paths to shorten, and whether thinking is shown (`instance`: where a permission card posts its answer). */
 const activityCtx = (name) => () => {
   const info = activityInfo(name);
-  return { paths: info ? { cwd: info.cwd, home: info.home } : null, thinking: activityPrefs.get().thinking && !!info && info.thinking === true };
+  return { instance: name, paths: info ? { cwd: info.cwd, home: info.home } : null, thinking: activityPrefs.get().thinking && !!info && info.thinking === true };
 };
 
 // ── Announcements: one polite, visually hidden line for the coarse events only (a reply arrived, the agent started,
@@ -556,6 +562,7 @@ function ChatView({ name, inst, lease, navKey, exec, awaiting }) {
   const pick = (command) => store.runCommand(name, command, "", { alive: () => lease.current() });
   modelPickerStyles();
   const sub = html`<span class="status"><span class=${`dot ${cls}`} aria-hidden="true"></span>${statusLabel(inst, exec, awaiting)}</span>
+    <${ModeBadge} inst=${inst} className="hd-mode" />
     ${inst.runtime === "windows" ? html`<span class="tag">Windows</span>` : null}
     ${nativeCliTag(inst)}${inst.machine_id ? html`<span class="tag runtime-machine-tag" title=${t("chat.machineName",machineName(inst.machine_id,inst.machine_name))}>${machineName(inst.machine_id,inst.machine_name)}</span>${inst.machine_status !== "online" ? html`<span class="tag runtime-machine-offline">${t(inst.machine_status === "revoked" ? "chat.machineRevoked" : "chat.machineOffline")}</span>` : null}` : null}
     ${!guest && supportsInstanceFeature(inst,"commands") ? html`<button type="button" class="hd-chip chat-model-entry" title=${mw("backend")} aria-label=${mw("backend")} onClick=${() => inst.runtime === "windows" ? navigate(sectionPath("agents")) : pick("backend")}>${backendLabel(inst.backend)} ▾</button>
@@ -666,6 +673,10 @@ function threadEntry(name, doc) {
     findQuoted: (key) => store.findQuoted(name, key),
     notice: (text) => toast(text, false),
     replyButtonBusy: (id) => store.state.rbBusy.has(id),
+    // AGEND-279: "Send now" on a message that waits for the running turn — only while the agent works, for an agent whose queue lets one message leave it, never for a guest.
+    canSendNow: () => !guestPage() && agentBusy(name) && appStore.get().instances.find((i) => i.name === name)?.send_now_supported === true,
+    sendNow: (messageId) => store.sendNow(name, messageId),
+    sendNowBusy: (messageId) => store.state.sendingNow.has(messageId),
     pollMine: (id) => store.state.pollMine[id],                            // #1823: this device's own vote
     serverNow: () => Date.now() + store.state.clockSkew,                   // #1823: the deadline is the server's
     panel: { shown: shownKey, open: (spec, o) => openPanel(spec, o), version: panelVersion, claim: claimPanel, claims: panelClaims,   // #1481, #1704
@@ -714,7 +725,8 @@ function follow(name, thread) {
     // A fleet-wide status poll says `null`; an activity event, the instance.
     if ((instance === null || instance === name) && wasBusy !== agentBusy(name)) {
       wasBusy = !wasBusy;
-      if (feed) { thread.render(rowsOf(name)); feed.nudge(); }
+      thread.render(rowsOf(name));                                       // (a waiting message's "Send now" goes with the work)
+      if (feed) feed.nudge();
     }
     if (instance !== name) return;
     if (kind === "msgs") { thread.render(rowsOf(name)); wantEmojis(store.state.msgs[name]); if (feed) feed.nudge(); }   // a message came or went: read the steps now
@@ -850,6 +862,14 @@ function SubagentProgress({ name }) {
   return offered && Component ? html`<${Component} key=${name} name=${name} />` : null;
 }
 
+/** The key that interjects, as this machine words it (⌘ on a Mac, Ctrl elsewhere). */
+const steerKeyName = () => (/Mac|iPhone|iPad/.test((typeof navigator === "object" && navigator && (navigator.userAgentData?.platform || navigator.platform)) || "") ? "⌘" : "Ctrl");
+/** The small text under the composer: while an agent that can take an interjection works, it says what Enter and the interject key do (AGEND-279). */
+function composerHint(inst, busy) {
+  if (busy && inst?.steer_supported && !guestPage()) return touchScreen() ? t("chat.composerHintBusyTouch") : t("chat.composerHintBusy", steerKeyName());
+  return t(supportsInstanceFeature(inst,"commands") ? touchScreen() ? "chat.composerHintTouch" : "chat.composerHint" : touchScreen() ? "chat.nativeComposerHintTouch" : "chat.nativeComposerHint");
+}
+
 /** Everything under the thread: prompts, the working line, a failed send, files waiting, and the composer. */
 function Dock({ name, inst, lease, exec, awaiting, workingLabel, bindings, ids, focused }) {
   useChatTick(name, ["state"]);
@@ -863,7 +883,7 @@ function Dock({ name, inst, lease, exec, awaiting, workingLabel, bindings, ids, 
     ${s.waking[name] ? html`<p class="send-waking" role="status">${t("chat.waking", name)}</p>` : null}
     <${Composer} name=${name} inst=${inst} bindings=${bindings} ids=${ids} focused=${focused} label=${composerLabel(inst, name)} lease=${lease} busy=${R().isBusy(exec)} />
     <div class="composer-row">${guestPage() ? html`<span class="guest-note" title=${t("chat.guestNote")}>${t("chat.guestNote")}</span>` : html`<${ComposerAuth} />`}<span
-      class="hint" title=${t(guestPage() || !supportsInstanceFeature(inst,"commands") ? "chat.guestMore" : "chat.composerMore")}>${t(supportsInstanceFeature(inst,"commands") ? touchScreen() ? "chat.composerHintTouch" : "chat.composerHint" : touchScreen() ? "chat.nativeComposerHintTouch" : "chat.nativeComposerHint")}</span></div>
+      class="hint" title=${t(guestPage() || !supportsInstanceFeature(inst,"commands") ? "chat.guestMore" : "chat.composerMore")}>${composerHint(inst, R().isBusy(exec))}</span></div>
   </div></div>`;
 }
 
@@ -1022,7 +1042,8 @@ function Composer({ name, inst, label = name, lease, busy, bindings, ids = {}, f
   };
   // #2342: a completion is a step Ctrl+Z goes back from (to what was typed); a command that runs consumes the line.
   const complete = (c) => { recordEdit(input.current); setValue(`/${c.name}${c.arg ? " " : ""}`); };
-  const submit = () => {
+  // `o.steer` (AGEND-279): Ctrl+Enter or the Interject button while the agent works — the message goes into the running turn.
+  const submit = (o = {}) => {
     // M-2738 (D3): AgEnD's own Update, whatever the agent's runtime can take (it never reaches the agent).
     if (!guest && !files.length && isUpdateLine(value)) { setValue(""); openUpdateDialog(); return; }
     if (sendingBlocked) return;
@@ -1040,8 +1061,10 @@ function Composer({ name, inst, label = name, lease, busy, bindings, ids = {}, f
       toast(cmd ? t("chat.guestCommandNotAllowed", `/${cmd.command}`) : t("chat.guestNoCommands"), false); return;
     }
     if (cmd && needsArgument(cmd.command) && !cmd.args) { recordEdit(input.current); setValue(`/${cmd.command} `); return; }
+    // AGEND-279: `/steer text` is an interjection: its result is a mark on the message's own bubble, not a card.
+    if (cmd && cmd.command === "steer" && cmd.args && !guest) { store.setDraft(name, cmd.args); store.send(name, { steer: true }); return; }
     if (cmd) { runLine(cmd); return; }
-    store.send(name);
+    store.send(name, o.steer ? { steer: true } : undefined);
   };
   const onKeyDown = (e) => {
     if (palette && palette.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
@@ -1052,7 +1075,10 @@ function Composer({ name, inst, label = name, lease, busy, bindings, ids = {}, f
     if (pick && e.key === "Tab" && !e.shiftKey) { e.preventDefault(); complete(pick); return; }
     if (palette && e.key === "Escape" && !e.isComposing) { e.preventDefault(); setClosedFor(value); return; }
     if (reply && e.key === "Escape" && !e.isComposing) { e.preventDefault(); store.clearReply(name); return; }   // #2272
-    if (R().composerKey(e, { touch: touchScreen() }) === "send") { e.preventDefault(); submit(); }
+    // Enter: send (a working agent queues it). Ctrl+Enter / ⌘+Enter: an interjection while it works, a plain send when it is idle.
+    const key = R().composerKey(e, { touch: touchScreen(), steer: true });
+    if (key === "send") { e.preventDefault(); submit(); }
+    else if (key === "steer") { e.preventDefault(); submit(busy && !guest ? { steer: true } : {}); }
   };
   // Files in a paste are attached; a very long text paste goes as a text file — only once it is really attached.
   const onPaste = (e) => {
@@ -1085,7 +1111,7 @@ function Composer({ name, inst, label = name, lease, busy, bindings, ids = {}, f
       onKeyDown=${onKeyDown} onPaste=${onPaste} controls=${palette ? paletteId : undefined} expanded=${!!palette} activeDescendant=${pick ? optId(pick) : undefined}
       attach=${attachmentsSupported ? { title: t("chat.attachTitle"), onFiles: (list) => store.addFiles(name, list) } : null}
       stop=${HIDDEN_STOP}
-      send=${{ hidden: false, disabled: !content || sendingBlocked, label: t("chat.send"), onClick: submit }} />
+      send=${{ hidden: false, disabled: !content || sendingBlocked, label: t("chat.send"), onClick: () => submit() }} />
     </div>`;
 }
 

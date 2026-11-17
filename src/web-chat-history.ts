@@ -52,6 +52,15 @@ export function nextDeliveryState(prev: WebDeliveryState | undefined, next: WebD
   return DELIVERY_RANK[next] > DELIVERY_RANK[prev] ? next : prev;
 }
 
+/**
+ * AGEND-279: how a person's message that asked to interject (Ctrl+Enter, `/steer`) went: `added` into the running turn, `interrupted`
+ * (the turn was cancelled and the message runs next), `sent` (a terminal agent's own steer), `unsupported` (the agent has no way
+ * to interject: the message was queued), `refused` (the CLI took it and then refused it: it is sent again as the next message).
+ */
+export type WebSteerState = "added" | "interrupted" | "sent" | "unsupported" | "refused";
+const STEER_STATES: ReadonlySet<string> = new Set(["added", "interrupted", "sent", "unsupported", "refused"]);
+export const isWebSteerState = (v: unknown): v is WebSteerState => typeof v === "string" && STEER_STATES.has(v);
+
 export type WebChatRole = "agent" | "user" | "status";
 const ROLES: ReadonlySet<string> = new Set(["agent", "user", "status"]);
 
@@ -110,6 +119,13 @@ export interface WebChatMessage {
   boot: string;
   /** Where a web user's message has got (absent: nothing reported yet, or not the web user's). */
   delivery?: WebDeliveryState;
+  /**
+   * When a message that had waited (`queued`) was handed to the agent, as the fleet's clock saw it: where the thread puts it
+   * (after the turn that kept it waiting, not where it was typed). Live only; absent for a message that never waited.
+   */
+  sentAt?: string;
+  /** AGEND-279: a message that asked to interject, and how it went (see WebSteerState). A person's messages only. */
+  steer?: WebSteerState;
   id: number;
   instance: string;
   /** A live web delivery id, or a native runtime turn's durable history identity. */
@@ -285,6 +301,8 @@ export interface WebChatHistoryOptions {
 
 /** #1565: a message as it is kept on disk — what was said, never the interactive state; files with their paths. */
 export interface StoredWebChatMessage {
+  /** AGEND-279: see WebChatMessage.steer. */
+  steer?: WebSteerState;
   boot: string;
   id: number;
   instance: string;
@@ -401,7 +419,7 @@ export class WebChatHistory {
   private stored(m: WebChatMessage): StoredWebChatMessage {
     const row: StoredWebChatMessage = { boot: m.boot, id: m.id, instance: m.instance, role: m.role, sender: m.sender, text: m.text, ts: m.ts, ...(m.anchor ? { anchor: m.anchor } : {}), ...(m.click ? { click: { label: m.click.label } } : {}), ...(m.links ? { links: m.links } : {}),
       ...(m.channel ? { channel: true as const } : {}), ...(m.from ? { from: m.from } : {}), ...(m.seenSeq !== undefined ? { seenSeq: m.seenSeq } : {}),
-      ...(m.replyTo ? { replyTo: m.replyTo } : {}), ...(m.reactions?.length ? { reactions: [...m.reactions] } : {}), ...(m.cards?.length ? { cards: [...m.cards] } : {}) };
+      ...(m.steer ? { steer: m.steer } : {}), ...(m.replyTo ? { replyTo: m.replyTo } : {}), ...(m.reactions?.length ? { reactions: [...m.reactions] } : {}), ...(m.cards?.length ? { cards: [...m.cards] } : {}) };
     if (nativeHistoryMessageId(m.messageId, m.role)) row.messageId = m.messageId;
     const posts = this.posts.get(m);
     if (posts?.length) row.posts = posts.map(p => ({ ...p }));
@@ -508,7 +526,7 @@ export class WebChatHistory {
   get lastId(): number { return this.nextId - 1; }
 
   /** Record one message; returns it with its id. Text beyond WEB_CHAT_TEXT_MAX is cut. */
-  record(msg: { instance: string; sender: string; text: string; ts: string; attachments?: WebChatAttachment[]; messageId?: string; anchor?: string; role?: string; buttons?: unknown; click?: unknown; links?: unknown; channel?: unknown; from?: unknown; replyTo?: unknown; cards?: unknown; posts?: unknown; reserved?: unknown }): WebChatMessage {
+  record(msg: { instance: string; sender: string; text: string; ts: string; steer?: unknown; attachments?: WebChatAttachment[]; messageId?: string; anchor?: string; role?: string; buttons?: unknown; click?: unknown; links?: unknown; channel?: unknown; from?: unknown; replyTo?: unknown; cards?: unknown; posts?: unknown; reserved?: unknown }): WebChatMessage {
     return this.recordEntry(msg);
   }
 
@@ -554,6 +572,7 @@ export class WebChatHistory {
     // #2272: only a person's message replies to another.
     const replyTo = entry.role === "user" ? webChatReplyRefOf(msg.replyTo) : undefined;
     if (replyTo) entry.replyTo = replyTo;
+    if (entry.role === "user" && isWebSteerState(msg.steer)) entry.steer = msg.steer;
     // #2281: where it is on a platform, beside the row (the caller that sent or received it knows).
     const posts = webChatPosts(msg.posts);
     if (posts.length) this.posts.set(entry, posts);
@@ -771,7 +790,35 @@ export class WebChatHistory {
     if (!m) return null;
     const next = nextDeliveryState(m.delivery, state);
     if (next === m.delivery) return null;
+    // A message that waited and is now with the agent: its place in the thread is this moment (AGEND-279).
+    if (m.delivery === "queued" && !m.sentAt && (next === "processing" || next === "delivered")) m.sentAt = new Date().toISOString();
     m.delivery = next;
+    this.persist(instance);
+    return m;
+  }
+
+  /**
+   * AGEND-279 "Send now": a message that waited was taken out of the queue and interjected now. It says how, and that it was handed over
+   * this moment (`sentAt`: the thread puts it in the turn it went into). Null when there is no such message, or it was no longer waiting.
+   */
+  markSentNow(instance: string, messageId: string, steer: WebSteerState): WebChatMessage | null {
+    const messages = this.byInstance.get(instance)?.messages ?? [];
+    let m: WebChatMessage | undefined;
+    for (let i = messages.length - 1; i >= 0 && !m; i--) if (messages[i]!.messageId === messageId) m = messages[i];
+    if (!m || m.role !== "user" || m.delivery !== "queued") return null;
+    m.steer = steer;
+    if (!m.sentAt) m.sentAt = new Date().toISOString();
+    this.persist(instance);
+    return m;
+  }
+
+  /** AGEND-279: how a message that asked to interject went. Returns the message when it changed, null when there is no such message or nothing changed. */
+  setSteer(instance: string, messageId: string, steer: WebSteerState): WebChatMessage | null {
+    const messages = this.byInstance.get(instance)?.messages ?? [];
+    let m: WebChatMessage | undefined;
+    for (let i = messages.length - 1; i >= 0 && !m; i--) if (messages[i]!.messageId === messageId) m = messages[i];
+    if (!m || m.role !== "user" || m.steer === steer) return null;
+    m.steer = steer;
     this.persist(instance);
     return m;
   }
@@ -787,10 +834,10 @@ export class WebChatHistory {
    * the stream sends it on every (re)connect and each poll carries it (#1253 review). Ticks only move forward on
    * the page, so receiving it twice changes nothing.
    */
-  deliveries(): Array<{ instance: string; messageId: string; delivery: WebDeliveryState }> {
-    const out: Array<{ instance: string; messageId: string; delivery: WebDeliveryState }> = [];
+  deliveries(): Array<{ instance: string; messageId: string; delivery: WebDeliveryState; sentAt?: string; steer?: WebSteerState }> {
+    const out: Array<{ instance: string; messageId: string; delivery: WebDeliveryState; sentAt?: string; steer?: WebSteerState }> = [];
     for (const [instance, slot] of this.byInstance) {
-      for (const m of slot.messages) if (m.messageId !== undefined && m.delivery !== undefined) out.push({ instance, messageId: m.messageId, delivery: m.delivery });
+      for (const m of slot.messages) if (m.messageId !== undefined && m.delivery !== undefined) out.push({ instance, messageId: m.messageId, delivery: m.delivery, ...(m.sentAt ? { sentAt: m.sentAt } : {}), ...(m.steer ? { steer: m.steer } : {}) });
     }
     return out;
   }
@@ -896,6 +943,7 @@ function restoredRow(raw: unknown, instance: string, thisBoot: string): { messag
   if (typeof r.anchor === "string" && ANCHOR_ID.test(r.anchor)) message.anchor = r.anchor;
   const replyTo = role === "user" ? webChatReplyRefOf(r.replyTo) : undefined;
   if (replyTo) message.replyTo = replyTo;
+  if (role === "user" && isWebSteerState(r.steer)) message.steer = r.steer;
   const reactions = webReactionsOf(r.reactions);
   if (reactions) message.reactions = reactions;
   const files = !Array.isArray(r.attachments) ? [] : r.attachments.slice(0, 20).flatMap((a): RestoredFile[] => {

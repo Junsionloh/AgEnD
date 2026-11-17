@@ -1,0 +1,461 @@
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { AcpClient, AcpRpcError, AcpTransportError, type PermissionRequest } from "./client.js";
+import { UpdateTranslator } from "./translate.js";
+import { buildChildEnv, checkVersion, versionAtLeast, type AcpProfile } from "./profiles.js";
+import type {
+  AdapterCapabilities, AdapterEvent, AdapterHealth, AdapterStartContext, CliAdapter, InstanceRunner,
+  PermissionDecision, PromptAck, PromptRequest,
+} from "../types.js";
+
+/** The CLI's version is older than the profile's floor (`AcpProfile.minVersion`). The instance stays stopped. */
+export class AcpVersionRefusedError extends Error {
+  constructor(message: string) { super(message); this.name = "AcpVersionRefusedError"; }
+}
+
+/** The CLI is not signed in (`auth_required`). The instance stays stopped until a person signs in. */
+export class AcpAuthRequiredError extends Error {
+  constructor(message: string) { super(message); this.name = "AcpAuthRequiredError"; }
+}
+
+/** One MCP server for `session/new`: stdio form, the only one every agent must accept. */
+export interface AcpMcpServer {
+  readonly name: string;
+  readonly command: string;
+  readonly args: readonly string[];
+  readonly env: readonly { name: string; value: string }[];
+}
+
+export interface AcpAdapterOptions {
+  readonly profile: AcpProfile;
+  /** The CLI's binary (absolute path when it could be resolved). */
+  readonly command: string;
+  /** The instance's working directory; absolute. */
+  readonly cwd: string;
+  readonly instanceDir: string;
+  readonly model?: string;
+  readonly effort?: string;
+  /** `skipPermissions` of the instance (unset = true): the CLI is started with its own auto-approve flag. */
+  readonly skipPermissions?: boolean;
+  /** Where a person can sign this CLI in on this host (a sentence ending the "not signed in" message); read when the failure happens. */
+  readonly signInHint?: (label: string) => string;
+  /** This instance's own MCP servers, passed in `session/new` / `session/load` (never shared with another instance). */
+  readonly mcpServers: readonly AcpMcpServer[];
+  /** Text put in front of the first prompt of a new session (fleet instructions). Not repeated after a resume. */
+  readonly preamble?: string;
+  /** Read at each start instead of `mcpServers` / `preamble` when given (a respawn sees current decisions). */
+  readonly resolveLaunch?: () => { mcpServers: readonly AcpMcpServer[]; preamble?: string };
+  /** Where the child's allow-listed environment is taken from (default: this process's). */
+  readonly env?: NodeJS.ProcessEnv;
+  /** Variables set on the child on top of the allow-listed ones. */
+  readonly childEnv?: Readonly<Record<string, string>>;
+  /**
+   * A named account's launch (`profile.accountLaunch` of its folder): its variables, and the arguments put right after the
+   * binary. Given, the child is a NAMED account's: the daemon's own account variables are not passed on (`buildChildEnv`).
+   */
+  readonly account?: { readonly env: Readonly<Record<string, string>>; readonly args: readonly string[] };
+  readonly logger: { info(o: object, m?: string): void; warn(o: object, m?: string): void; error(o: object, m?: string): void; debug?(o: object, m?: string): void };
+  /** Builds the runner this adapter is bound to (the fleet's per-instance object). */
+  readonly makeRunner: (adapter: AcpAdapter) => InstanceRunner;
+  /** Receives every wire frame (debugging; the frames carry thinking text and file contents, so it is never on by default). */
+  readonly trace?: (direction: "in" | "out", line: string) => void;
+  /** Test seam. */
+  readonly spawn?: ConstructorParameters<typeof AcpClient>[0]["spawn"];
+}
+
+export interface TurnResult { readonly stopReason: string }
+
+/** One selectable setting the agent advertises for its session (ACP `configOptions`): its id, kind, and accepted values. */
+export interface AcpConfigOption {
+  readonly id: string;
+  /** ACP's category: `model`, `thought_level` (reasoning effort), `mode`, or an agent's own. */
+  readonly category: string;
+  readonly currentValue: string;
+  readonly values: readonly string[];
+}
+
+export type SetConfigResult = { ok: true; value: string } | { ok: false; reason: "not_running" | "not_offered" | "invalid" | "failed"; message: string; accepted: readonly string[] };
+
+/** The options of an ACP `configOptions` list: flat `{value}` entries or grouped `{options:[{value}]}`; anything else is skipped. */
+export function parseConfigOptions(raw: unknown): AcpConfigOption[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AcpConfigOption[] = [];
+  for (const o of raw) {
+    if (!o || typeof o !== "object") continue;
+    const r = o as Record<string, unknown>;
+    if (typeof r.id !== "string" || typeof r.category !== "string" || !Array.isArray(r.options)) continue;
+    const values: string[] = [];
+    for (const v of r.options) {
+      if (!v || typeof v !== "object") continue;
+      const e = v as Record<string, unknown>;
+      if (typeof e.value === "string") values.push(e.value);
+      else if (Array.isArray(e.options)) for (const g of e.options) { const gv = g && typeof g === "object" ? (g as Record<string, unknown>).value : undefined; if (typeof gv === "string") values.push(gv); }
+    }
+    out.push({ id: r.id, category: r.category, currentValue: typeof r.currentValue === "string" ? r.currentValue : "", values });
+  }
+  return out;
+}
+
+type Listener = (event: AdapterEvent) => void;
+const SESSION_FILE = "acp-session-id";
+const INIT_TIMEOUT_MS = 30_000;
+const SESSION_TIMEOUT_MS = 120_000;
+
+/**
+ * The `acp` adapter: one agent process, one session, for one instance. It speaks the protocol (initialize, version
+ * gate, session/new or session/load, prompt turns, cancel, permission requests) and translates what the agent sends
+ * into `AdapterEvent`s. Everything the fleet needs to know about an instance — busy and idle, crash and respawn,
+ * permission policy, chat steps, delivery receipts — is the runner's job (`AcpRunner`), written once for every ACP CLI.
+ */
+export class AcpAdapter implements CliAdapter {
+  readonly id = "acp" as const;
+  readonly capabilities: AdapterCapabilities;
+  readonly runner: InstanceRunner;
+
+  private client: AcpClient | null = null;
+  private readonly translator = new UpdateTranslator();
+  private readonly listeners = new Set<Listener>();
+  private readonly exitListeners = new Set<(info: { code: number | null; signal: NodeJS.Signals | null; expected: boolean }) => void>();
+  private session: string | null = null;
+  private replaying = false;
+  private turn: Promise<TurnResult> | null = null;
+  private lastEvent: number | null = null;
+  private stopping = false;
+  private preambleSent = true;
+  private preamble: string | undefined;
+  private _newSession = true;
+  private _agentVersion: string | null = null;
+  private configOptions: AcpConfigOption[] = [];
+  /** The session's context window when the CLI names it apart from its usage reports (`profile.contextWindowOf`). */
+  private contextWindow: number | null = null;
+
+  constructor(private readonly opts: AcpAdapterOptions) {
+    this.capabilities = opts.profile.capabilities;
+    this.session = this.readStoredSession();
+    this.runner = opts.makeRunner(this);
+  }
+
+  get profile(): AcpProfile { return this.opts.profile; }
+  /** Whether the current session was created by this start (false: an earlier conversation was loaded). */
+  get isNewSession(): boolean { return this._newSession; }
+  get agentVersion(): string | null { return this._agentVersion; }
+  private _versionVerified = true;
+  /** False when the release is newer than the newest one this profile was checked against (or gave no readable version): it runs, with a warning in the log. */
+  get versionVerified(): boolean { return this._versionVerified; }
+  get pid(): number | undefined { return this.client?.pid; }
+  get busy(): boolean { return this.turn !== null; }
+  get pendingPermissionKeys(): string[] { return this.client?.pendingPermissionKeys ?? []; }
+  /** The last stderr text of the agent process, for failure messages. */
+  get stderr(): string { return this.client?.stderr ?? ""; }
+
+  onEvent(listener: Listener): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+  onExit(listener: (info: { code: number | null; signal: NodeJS.Signals | null; expected: boolean }) => void): () => void {
+    this.exitListeners.add(listener); return () => this.exitListeners.delete(listener);
+  }
+
+  async start(ctx: AdapterStartContext = {}): Promise<void> {
+    if (this.client) throw new Error("the ACP adapter is already started");
+    this.stopping = false;
+    ctx.admission?.();
+    const { profile } = this.opts;
+    const client = new AcpClient({
+      command: this.opts.command,
+      args: [...(this.opts.account?.args ?? []), ...profile.args({ model: this.opts.model, effort: this.opts.effort, skipPermissions: this.opts.skipPermissions })],
+      env: buildChildEnv(profile, this.opts.env ?? process.env, { ...this.opts.childEnv, ...this.opts.account?.env }, !!this.opts.account),
+      cwd: this.opts.cwd,
+      spawn: this.opts.spawn,
+      onNotification: (method, params) => this.onNotification(method, params),
+      onPermissionRequest: request => this.onPermission(request),
+      trace: this.opts.trace,
+      onWarning: (message, detail) => this.opts.logger.warn({ ...detail }, `acp: ${message}`),
+    });
+    this.client = client;
+    client.on("exit", ({ code, signal }: { code: number | null; signal: NodeJS.Signals | null }) => {
+      if (this.client !== client) return;
+      const expected = this.stopping;
+      this.client = null;
+      this.turn = null;
+      for (const l of this.exitListeners) l({ code, signal, expected });
+    });
+    try {
+      await client.start();
+      ctx.admission?.();
+      const init = await client.request<Record<string, unknown>>("initialize", { protocolVersion: 1, clientCapabilities: {} }, { timeoutMs: INIT_TIMEOUT_MS });
+      ctx.admission?.();
+      const verdict = checkVersion(profile, init);
+      if (!verdict.ok) throw new AcpVersionRefusedError(verdict.message);
+      this._agentVersion = verdict.version;
+      this._versionVerified = verdict.verified;
+      if (verdict.warning) this.opts.logger.warn({ version: verdict.version, verifiedUpTo: profile.verifiedVersion, minVersion: profile.minVersion }, verdict.warning);
+      await this.openSession(client, init);
+      ctx.admission?.();
+    } catch (err) {
+      this.stopping = true; // the failed start's exit is not a crash
+      this.client = null;
+      await client.close(1500).catch(() => undefined);
+      this.stopping = false;
+      if (err instanceof AcpRpcError && err.authRequired) {
+        this.emit({ kind: "auth_required" });
+        throw new AcpAuthRequiredError(`${profile.label} is not signed in (${err.message}). ${this.opts.signInHint?.(profile.label) ?? `Sign in to ${profile.label}, then restart the instance.`}`);
+      }
+      throw err;
+    }
+  }
+
+  private async openSession(client: AcpClient, init: Record<string, unknown>): Promise<void> {
+    const caps = (init.agentCapabilities ?? {}) as Record<string, unknown>;
+    const launch = this.opts.resolveLaunch?.() ?? { mcpServers: this.opts.mcpServers, preamble: this.opts.preamble };
+    this.preamble = launch.preamble;
+    const mcpServers = launch.mcpServers.map(s => ({ name: s.name, command: s.command, args: [...s.args], env: s.env.map(e => ({ ...e })) }));
+    const params = { cwd: this.opts.cwd, mcpServers };
+    if (this.session && (caps.loadSession === true || caps.load_session === true)) {
+      this.replaying = true;
+      try {
+        const loaded = await client.request<Record<string, unknown> | null>("session/load", { sessionId: this.session, ...params }, { timeoutMs: SESSION_TIMEOUT_MS });
+        this.configOptions = parseConfigOptions(loaded?.configOptions);
+        this.readContextWindow(loaded?.models);
+        this._newSession = false;
+        this.preambleSent = true;
+        this.opts.logger.info({ sessionId: this.session }, "acp: resumed the stored session");
+        return;
+      } catch (err) {
+        if (err instanceof AcpTransportError) throw err;
+        if (err instanceof AcpRpcError && err.authRequired) throw err;
+        // The stored session is gone (or the CLI refuses it): say so and start a new conversation.
+        this.opts.logger.warn({ sessionId: this.session, error: (err as Error).message }, "acp: the stored session could not be loaded; starting a new one");
+        this.session = null;
+      } finally {
+        this.replaying = false;
+      }
+    }
+    const created = await client.request<Record<string, unknown>>("session/new", params, { timeoutMs: SESSION_TIMEOUT_MS });
+    if (typeof created?.sessionId !== "string" || !created.sessionId) throw new Error("session/new did not return a session id");
+    this.session = created.sessionId;
+    this.configOptions = parseConfigOptions(created.configOptions);
+    this.readContextWindow(created.models);
+    this._newSession = true;
+    this.preambleSent = !this.preamble;
+    this.storeSession(this.session);
+  }
+
+  async stop(): Promise<void> {
+    const client = this.client;
+    if (!client) return;
+    this.stopping = true;
+    client.cancelAllPermissions();
+    if (this.session && this.turn) client.notify("session/cancel", { sessionId: this.session });
+    await client.close();
+    this.client = null;
+    this.turn = null;
+  }
+
+  health(): AdapterHealth {
+    return { process: this.client?.isRunning ? "running" : this.stopping ? "stopped" : "crashed", lastEventAt: this.lastEvent };
+  }
+
+  /** Run one turn. Rejects when the agent process is gone before the answer; resolves with the stop reason otherwise. */
+  prompt(content: string): Promise<TurnResult> {
+    const client = this.client;
+    if (!client?.isRunning || !this.session) return Promise.reject(new AcpTransportError("the agent is not running"));
+    if (this.turn) return Promise.reject(new Error("a turn is already running"));
+    const text = !this.preambleSent && this.preamble ? `${this.preamble}\n\n${content}` : content;
+    this.preambleSent = true;
+    const sessionId = this.session;
+    this.translator.reset();
+    this.extraPrompts.length = 0;
+    this.interjectionTexts.length = 0;
+    // The turn is over when its prompt and every prompt added to it (`interject`, for a CLI that folds a second prompt in) have answered: the last answer is the turn's.
+    const turn = this.request(client, sessionId, text)
+      .then(async first => { let last = first; while (this.extraPrompts.length) { const prev = last; last = await this.extraPrompts.shift()!.catch(() => prev); } return last; })
+      .catch(err => {
+        if (err instanceof AcpRpcError && err.authRequired) this.emit({ kind: "auth_required" });
+        throw err;
+      })
+      .finally(() => { this.extraPrompts.length = 0; if (this.turn === turn) this.turn = null; });
+    this.turn = turn;
+    return turn;
+  }
+
+  /** The prompts added to the running turn that have not answered yet (see `interject`). */
+  private readonly extraPrompts: Promise<TurnResult>[] = [];
+  /** Texts grok announced as interjected (`_x.ai/session/interjection`, sent the moment it takes one): tells a late `queued` from a refusal when the answer timed out. */
+  private readonly interjectionTexts: string[] = [];
+
+  private request(client: AcpClient, sessionId: string, text: string): Promise<TurnResult> {
+    return client.request<Record<string, unknown>>("session/prompt", { sessionId, prompt: [{ type: "text", text }] })
+      .then(result => ({ stopReason: typeof result?.stopReason === "string" ? result.stopReason : "end_turn" }));
+  }
+
+  sendPrompt(request: PromptRequest): PromptAck {
+    void this.prompt(request.content).then(r => this.emit({ kind: "turn_end", stopReason: r.stopReason }), () => undefined);
+    return { accepted: true };
+  }
+
+  /** This CLI can add a message to the turn that is running (its own extension) and a turn is running now. */
+  get canInterject(): boolean {
+    const profile = this.opts.profile;
+    // …and this release has that way of adding to a turn (an older one is cancelled and sent next, as for a CLI with none).
+    return !!profile.interject && versionAtLeast(this._agentVersion, profile.interjectFrom) && !!this.client?.isRunning && !!this.session && this.turn !== null;
+  }
+
+  /**
+   * Add `text` to the running turn without cancelling it (`profile.interject`): with the CLI's own method (grok: true only when it says it took
+   * it), or as a second `session/prompt` that the CLI folds into the turn (agy: true unless it refuses at once). An error, a refusal or no
+   * running turn is false and the caller falls back to cancel and a new prompt. Never called without a running turn. The turn then ends when
+   * its prompt and the added one have both answered (`prompt`). `onLateRefusal`: after this returned true for `prompt`, the CLI refused the second
+   * prompt after all (agy answers within a moment or not at all; a refusal later than the 400 ms looked at here): the caller sends the message again.
+   */
+  async interject(text: string, onLateRefusal?: (error: Error) => void): Promise<false | "taken" | "announced"> {
+    const spec = this.opts.profile.interject, client = this.client, sessionId = this.session;
+    if (!spec || !versionAtLeast(this._agentVersion, this.opts.profile.interjectFrom) || !client?.isRunning || !sessionId || this.turn === null) return false;
+    try {
+      if (spec.via === "method") {
+        try { return spec.accepted(await client.request(spec.method, spec.params(sessionId, text), { timeoutMs: 5000 })) ? "taken" : false; }
+        catch (err) {
+          // No answer in time: grok announces an interjection the moment it takes one, so an announcement of this very text means it was taken (and must not be sent again).
+          const announced = this.interjectionTexts.indexOf(text);
+          if (announced >= 0) { this.interjectionTexts.splice(announced, 1);   // one announcement counts for one message
+            this.opts.logger.warn({ error: (err as Error).message }, "acp: the interjection was announced although its answer did not come in time; counted as taken"); return "announced"; }
+          throw err;
+        }
+      }
+      const added = this.request(client, sessionId, text);
+      // Registered before anything is awaited: the CLI answers the first prompt the moment it takes the second, and the turn must not end then.
+      this.extraPrompts.push(added);
+      const refused = await Promise.race([added.then(() => false, () => true), new Promise<boolean>(r => { const t = setTimeout(() => r(false), 400); t.unref?.(); })]);
+      if (refused) throw new Error("the CLI refused a second prompt while one runs");
+      added.catch(err => { this.opts.logger.warn({ error: (err as Error).message }, "acp: the CLI refused the added prompt after taking it"); onLateRefusal?.(err as Error); });
+      return "taken";
+    } catch (err) { this.opts.logger.warn({ error: (err as Error).message }, "acp: the CLI did not take the interjection"); return false; }
+  }
+
+  /** ACP defines no mid-turn input: not offered (capabilities.steer is false). */
+  steer = undefined;
+
+  /** Interrupt the running turn. Waiting permission requests are answered "cancelled" first, as the protocol asks. */
+  async cancel(): Promise<void> {
+    const client = this.client;
+    if (!client?.isRunning || !this.session) return;
+    client.cancelAllPermissions();
+    if (this.turn) client.notify("session/cancel", { sessionId: this.session });
+  }
+
+  answerPermission(requestId: string, decision: PermissionDecision): boolean {
+    return this.client?.answerPermission(requestId, "cancelled" in decision ? { cancelled: true } : { optionId: decision.optionId }) ?? false;
+  }
+
+  events(): AsyncIterable<AdapterEvent> {
+    const queue: AdapterEvent[] = [];
+    let wake: (() => void) | null = null;
+    const off = this.onEvent(e => { queue.push(e); wake?.(); });
+    const self = this;
+    return {
+      [Symbol.asyncIterator]: () => ({
+        async next(): Promise<IteratorResult<AdapterEvent>> {
+          while (!queue.length) {
+            if (!self.client && self.stopping) { off(); return { done: true, value: undefined }; }
+            await new Promise<void>(r => { wake = r; setTimeout(r, 250).unref?.(); });
+          }
+          return { done: false, value: queue.shift()! };
+        },
+        async return(): Promise<IteratorResult<AdapterEvent>> { off(); return { done: true, value: undefined }; },
+      }),
+    };
+  }
+
+  sessionId(): string | null { return this.session; }
+
+  /** The agent's own setting of a category (`model`, `thought_level`) for the live session, or null when it offers none. */
+  configOption(category: string): AcpConfigOption | null { return this.configOptions.find(o => o.category === category) ?? null; }
+
+  /**
+   * Change one of the agent's session settings through ACP's `session/set_config_option` (the protocol's own way: no
+   * restart, no text typed into anything). The value must be one the agent lists; a value it does not take is answered
+   * with what it does, never sent.
+   */
+  async setConfigOption(category: string, value: string): Promise<SetConfigResult> {
+    const client = this.client;
+    if (!client?.isRunning || !this.session) return { ok: false, reason: "not_running", message: "the agent is not running", accepted: [] };
+    const option = this.configOption(category);
+    if (!option) return { ok: false, reason: "not_offered", message: `${this.opts.profile.label} offers no ${category} setting over ACP`, accepted: [] };
+    if (!option.values.includes(value)) return { ok: false, reason: "invalid", message: `${value} is not one of the values ${this.opts.profile.label} offers`, accepted: option.values };
+    try {
+      const result = await client.request<Record<string, unknown> | null>("session/set_config_option", { sessionId: this.session, configId: option.id, value }, { timeoutMs: 30_000 });
+      // The answer is the full list again, with the new current values.
+      const next = parseConfigOptions(result?.configOptions);
+      if (next.length) this.configOptions = next;
+      else this.configOptions = this.configOptions.map(o => o.id === option.id ? { ...o, currentValue: value } : o);
+      return { ok: true, value };
+    } catch (err) {
+      if (err instanceof AcpTransportError) return { ok: false, reason: "not_running", message: err.message, accepted: [] };
+      return { ok: false, reason: "failed", message: (err as Error).message, accepted: option.values };
+    }
+  }
+
+  /** Forget the stored conversation: the next start opens a new session. */
+  forgetSession(): void {
+    this.session = null;
+    try { writeFileSync(join(this.opts.instanceDir, SESSION_FILE), ""); } catch { /* best effort */ }
+  }
+
+  private emit(event: AdapterEvent): void {
+    this.lastEvent = Date.now();
+    for (const l of this.listeners) {
+      try { l(event); } catch (err) { this.opts.logger.warn({ error: (err as Error).message }, "acp: an event listener threw"); }
+    }
+  }
+
+  private onNotification(method: string, params: unknown): void {
+    // Any frame is proof of life for the hang timer, even those that carry nothing we show.
+    this.lastEvent = Date.now();
+    if (method === "_x.ai/models/update") { this.readContextWindow(params); return; }
+    if (method === "_x.ai/session/interjection") {
+      const text = (params as { text?: unknown } | null)?.text;
+      if (typeof text === "string") { this.interjectionTexts.push(text); if (this.interjectionTexts.length > 20) this.interjectionTexts.shift(); }
+      return;
+    }
+    if (method === "_x.ai/session_notification" && this.opts.profile.id === "grok") {
+      if (this.replaying) return;
+      const p = params && typeof params === "object" ? params as Record<string, unknown> : null;
+      if (!p || (typeof p.sessionId === "string" && this.session && p.sessionId !== this.session)) return;
+      for (const event of this.translator.translateGrokNotification(params)) this.emit(event.kind === "usage" && event.size === undefined && this.contextWindow ? { ...event, size: this.contextWindow } : event);
+      return;
+    }
+    if (method !== "session/update") return;
+    if (this.replaying) return; // session/load replays the old conversation: it is history, not live work
+    const p = params && typeof params === "object" ? params as Record<string, unknown> : null;
+    if (!p || (typeof p.sessionId === "string" && this.session && p.sessionId !== this.session)) return;
+    for (const event of this.translator.translate(p.update)) this.emit(event);
+  }
+
+  private readContextWindow(models: unknown): void {
+    const size = this.opts.profile.contextWindowOf?.(models);
+    if (size) this.contextWindow = size;
+  }
+
+  private onPermission(request: PermissionRequest): void {
+    this.emit({
+      kind: "permission",
+      requestId: request.key,
+      tool: request.toolCall,
+      options: request.options.map(o => ({ id: o.optionId, name: o.name, kind: o.kind })),
+    });
+  }
+
+  private readStoredSession(): string | null {
+    try {
+      const file = join(this.opts.instanceDir, SESSION_FILE);
+      if (!existsSync(file)) return null;
+      const id = readFileSync(file, "utf8").trim();
+      return /^[\w.:-]{1,200}$/.test(id) ? id : null;
+    } catch { return null; }
+  }
+
+  private storeSession(id: string): void {
+    try {
+      const file = join(this.opts.instanceDir, SESSION_FILE);
+      writeFileSync(`${file}.tmp`, id, { mode: 0o600 });
+      renameSync(`${file}.tmp`, file);
+    } catch (err) { this.opts.logger.warn({ error: (err as Error).message }, "acp: could not store the session id"); }
+  }
+}
