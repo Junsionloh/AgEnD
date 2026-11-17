@@ -117,6 +117,13 @@ async function turn(id, sessionId, text) {
       update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "refused" } });
       if (outcome?.outcome === "cancelled") { turnActive = false; answerTurn({ stopReason: "cancelled" }); return; }
     }
+  } else if (text.includes("#malformed-reworded") || text.includes("#malformed-joined")) {
+    // The notice as agy might one day word or chunk it: its closing count line worded another way, or the agent's answer in the very chunk that ends it.
+    const notice = JSON.parse(readFileSync(new URL("./agy-malformed-call-update.json", import.meta.url), "utf8")).content.text;
+    if (text.includes("#malformed-reworded")) {
+      update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: notice.replace("Retries remaining: 3", "Retries left: 3") } });
+      update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "OK" } });
+    } else update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: `${notice}OK` } });
   } else if (text.includes("#malformed")) {
     // agy's own notice about a malformed tool call, as it was captured on the wire (agy-malformed-call-update.json), then the agent's plain answer.
     update(sessionId, JSON.parse(readFileSync(new URL("./agy-malformed-call-update.json", import.meta.url), "utf8")));

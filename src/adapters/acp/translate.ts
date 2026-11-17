@@ -13,7 +13,17 @@ const asObject = (v: unknown): Record<string, unknown> | null => (v && typeof v 
  * function call\nRetries remaining: 3\n". It is not something the agent said, and agy has already retried it.
  */
 const MALFORMED_CALL = /^\s*(?:⚠\s*)?Your previous response contained an improperly formatted function call/;
-const MALFORMED_END = /Retries remaining:\s*\d+\s*$/;
+/**
+ * Where it ends: agy's closing request, with the "Retries …" line that follows it when that is there too (so a different wording of that
+ * line, or the line in a chunk of its own, does not leave the notice open); or, failing that sentence, the "Retries remaining: N" line.
+ */
+const MALFORMED_END_REQUEST = /Please retry with a properly formatted function call[^\n]*(?:\r?\n|$)(?:[ \t]*Retries[^\n]*(?:\r?\n|$))?/;
+const MALFORMED_END_COUNT = /Retries remaining:\s*\d+[ \t]*\r?\n?/;
+/** The "Retries …" line when it comes alone, after a chunk that ended at the request. */
+const MALFORMED_TRAILER = /^\s*Retries[^\n]*\s*$/;
+/** The most an unfinished notice takes: agy's own is about 1.5 KB in one or two chunks. */
+const NOTICE_MAX_CHARS = 4000;
+const NOTICE_MAX_CHUNKS = 20;
 
 function textOf(content: unknown): string {
   const c = asObject(content);
@@ -40,14 +50,21 @@ export class UpdateTranslator {
   private readonly tools = new Map<string, ToolState>();
   /** Inside an agy notice whose last chunk has not come (it ends with "Retries remaining: N"). */
   private noticeOpen = false;
+  /** What the open notice has taken so far (a notice whose ending never comes must not take the agent's answer with it). */
+  private noticeChars = 0;
+  private noticeChunks = 0;
+  /** The last chunk ended at agy's closing request: a lone "Retries …" line may still follow, and is the notice's. */
+  private noticeTrailer = false;
 
-  reset(): void { this.tools.clear(); this.noticeOpen = false; }
+  /** A new prompt: the tool records and any unfinished notice end here. */
+  reset(): void { this.tools.clear(); this.closeNotice(); }
+  private closeNotice(): void { this.noticeOpen = false; this.noticeChars = 0; this.noticeChunks = 0; this.noticeTrailer = false; }
 
   /** `update` is the `update` member of `session/update` params. Unknown update kinds yield nothing. */
   translate(update: unknown): AdapterEvent[] {
     const u = asObject(update);
     // Anything but the notice's own message chunks ends one that was never finished.
-    if (this.noticeOpen && u?.sessionUpdate !== "agent_message_chunk") this.noticeOpen = false;
+    if ((this.noticeOpen || this.noticeTrailer) && u?.sessionUpdate !== "agent_message_chunk") this.closeNotice();
     if (!u || typeof u.sessionUpdate !== "string") return [];
     switch (u.sessionUpdate) {
       case "agent_thought_chunk": { const text = textOf(u.content); return text ? [{ kind: "thought", text }] : []; }
@@ -55,10 +72,27 @@ export class UpdateTranslator {
         const text = textOf(u.content);
         if (!text) return [];
         // agy reports its own retry of a malformed tool call as message text (no marker on the update: only its words tell it apart).
-        if (MALFORMED_CALL.test(text) || this.noticeOpen) {
+        // An unfinished notice takes the chunks that follow only up to a bound: agy may word its ending otherwise one day, and a
+        // notice that never ends must not swallow the agent's answer.
+        if (this.noticeOpen && (this.noticeChars + text.length > NOTICE_MAX_CHARS || this.noticeChunks >= NOTICE_MAX_CHUNKS)) this.closeNotice();
+        if (this.noticeTrailer) {
+          this.noticeTrailer = false;
+          if (MALFORMED_TRAILER.test(text)) return [{ kind: "notice", code: "malformed_call", text, more: true }];
+        }
+        const starts = !this.noticeOpen && MALFORMED_CALL.test(text);
+        if (starts || this.noticeOpen) {
           const more = this.noticeOpen;
-          this.noticeOpen = !MALFORMED_END.test(text);
-          return [{ kind: "notice", code: "malformed_call", text, ...(more ? { more: true } : {}) }];
+          // The ending sentence closes it, wherever in the chunk it is: what is before it (and the sentence) is the notice, what follows is said.
+          const end = MALFORMED_END_REQUEST.exec(text) ?? MALFORMED_END_COUNT.exec(text);
+          const cut = end ? end.index + end[0].length : text.length;
+          const notice = text.slice(0, cut), rest = text.slice(cut);
+          if (end) {
+            this.closeNotice();
+            this.noticeTrailer = !rest.trim() && !/Retries/.test(end[0]) && MALFORMED_END_REQUEST.test(end[0]);    // it ended at the request: a lone "Retries …" line may come
+          } else { this.noticeOpen = true; this.noticeChars += text.length; this.noticeChunks++; }
+          const events: AdapterEvent[] = [{ kind: "notice", code: "malformed_call", text: notice, ...(more ? { more: true } : {}) }];
+          if (rest.trim()) events.push({ kind: "message", text: rest.replace(/^\s+/, "") });
+          return events;
         }
         return [{ kind: "message", text }];
       }

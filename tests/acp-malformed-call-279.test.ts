@@ -97,6 +97,58 @@ describe("the translator tells agy's notice from what the agent said", () => {
   });
 });
 
+describe("a notice cannot swallow what the agent says next", () => {
+  const msg = (t: UpdateTranslator, text: string) => t.translate({ sessionUpdate: "agent_message_chunk", content: { type: "text", text } });
+  const kinds = (events: Array<{ kind: string }>) => events.map((e) => e.kind);
+  it("its closing count worded another way: agy's closing request still ends it, and the answer after it is said", () => {
+    const t = new UpdateTranslator();
+    const reworded = NOTICE.replace("Retries remaining: 3", "Retries left: 3");
+    expect(kinds(msg(t, reworded))).toEqual(["notice"]);
+    expect(msg(t, "OK")).toEqual([{ kind: "message", text: "OK" }]);
+  });
+  it("the answer in the very chunk that ends it: the notice up to its end, then the answer as a message", () => {
+    const t = new UpdateTranslator();
+    const events = msg(t, `${NOTICE}The command printed A.`);
+    expect(events).toEqual([{ kind: "notice", code: "malformed_call", text: NOTICE }, { kind: "message", text: "The command printed A." }]);
+    expect(msg(t, "More.")).toEqual([{ kind: "message", text: "More." }]);                     // and the notice is closed
+  });
+  it("a lone `Retries …` line after a chunk that ended at the request is the notice's; the text after that is said", () => {
+    const t = new UpdateTranslator();
+    const cut = NOTICE.indexOf("Retries remaining");
+    expect(kinds(msg(t, NOTICE.slice(0, cut)))).toEqual(["notice"]);
+    expect(msg(t, NOTICE.slice(cut))).toEqual([{ kind: "notice", code: "malformed_call", text: NOTICE.slice(cut), more: true }]);
+    expect(msg(t, "Done.")).toEqual([{ kind: "message", text: "Done." }]);
+    // …but a line that is not one is said, not taken
+    const u = new UpdateTranslator();
+    msg(u, NOTICE.slice(0, cut));
+    expect(msg(u, "The answer.")).toEqual([{ kind: "message", text: "The answer." }]);
+  });
+  it("an ending that never comes: it takes at most 20 chunks, and after that what follows is said", () => {
+    const t = new UpdateTranslator();
+    msg(t, "Your previous response contained an improperly formatted function call: Malformed function call: ");
+    const out = Array.from({ length: 30 }, (_, i) => kinds(msg(t, `piece ${i}\n`))[0]);
+    expect(out.filter((k) => k === "notice")).toHaveLength(19);                                    // the opening chunk and these 19: 20
+    expect(out.slice(19)).toEqual(Array(11).fill("message"));
+  });
+  it("…or 4000 characters", () => {
+    const t = new UpdateTranslator();
+    msg(t, "Your previous response contained an improperly formatted function call: " + "x".repeat(3000));
+    expect(kinds(msg(t, "y".repeat(900)))).toEqual(["notice"]);                                    // 3.9K so far
+    expect(msg(t, "z".repeat(900))).toEqual([{ kind: "message", text: "z".repeat(900) }]);          // would pass 4K: said
+    expect(msg(t, "after")).toEqual([{ kind: "message", text: "after" }]);
+  });
+  it("the next prompt (reset) ends a notice that never ended", () => {
+    const t = new UpdateTranslator();
+    msg(t, NOTICE.slice(0, 200));
+    t.reset();
+    expect(msg(t, "The next turn's answer.")).toEqual([{ kind: "message", text: "The next turn's answer." }]);
+  });
+  it("a lone `Retries …` line is nothing special when no notice came before it", () => {
+    const t = new UpdateTranslator();
+    expect(msg(t, "Retries remaining: 3")).toEqual([{ kind: "message", text: "Retries remaining: 3" }]);
+  });
+});
+
 describe("in the timeline: a line, not 'Said'; the reply's block stays anchored", () => {
   const WIRE = "[agend-human-id:hmsg-1111-aaaa]\ngo\n(message_id: web-m1 | verification_id: v)";
   function replay(parts: Array<Record<string, unknown>>) {
@@ -143,6 +195,21 @@ describe("in the timeline: a line, not 'Said'; the reply's block stays anchored"
     const again = new AcpStepStore((s as unknown as { dir: string }).dir);
     expect(again.snapshot(undefined, { thoughts: true }).steps.filter((x) => x.kind === "state").map((x) => x.note)).toEqual(["malformed_call"]);
   });
+});
+
+describe("through the runner, with the notice worded or chunked another way", () => {
+  for (const [mode, what] of [["#malformed-reworded", "its count line worded another way"], ["#malformed-joined", "the answer in the chunk that ends it"]]) {
+    it(`${what}: the answer is still the agent's, and is sent as the reply`, async () => {
+      const h = await boot();
+      h.fleet.send({ type: "fleet_inbound", content: `go ${mode}`, meta: { chat_id: "chat-1", message_id: "msg-1", user: "alice", source: "web" } });
+      await until(() => h.runner.getInstanceState() === "idle" && h.runner.steps.snapshot(undefined, { thoughts: true }).steps.some((s) => s.kind === "turn_end"), 6000, "the turn");
+      await until(() => h.outbound.length === 1, 3000, "the proxy reply");
+      expect(h.outbound[0].args.text).toBe("OK");
+      const steps = h.runner.steps.snapshot(undefined, { thoughts: true }).steps;
+      expect(steps.filter((s) => s.kind === "state").map((s) => s.note)).toEqual(["malformed_call"]);
+      expect(steps.filter((s) => s.kind === "assistant").map((s) => s.body)).toEqual(["OK"]);
+    });
+  }
 });
 
 describe("through the runner, with the notice as agy sends it", () => {
