@@ -55,6 +55,12 @@ describe("a message that waits is at the bottom, below the running turn (the sec
     const { main, tail } = splitQueued([rows[0], waiting, more, row(5, "agent", "reply", "07:10"), pending]);
     expect([ids(main), ids(tail)]).toEqual([[1, 5], [2, 4, 9]]);
   });
+  it("an interjection that was taken stays in its turn, even while its tick still says queued (a terminal agent's own steer)", () => {
+    const steered = row(2, "user", "S", "06:50", { delivery: "queued", steer: "sent" });
+    const refused = row(3, "user", "R", "06:51", { delivery: "queued", steer: "unsupported" });
+    const { main, tail } = splitQueued([rows[0], steered, refused, row(4, "agent", "r", "07:10")]);
+    expect([ids(main), ids(tail)]).toEqual([[1, 2, 4], [3]]);                    // `unsupported` was queued like any: it waits
+  });
   it("only a person's queued message waits: an agent's row, or a message with another tick, stays", () => {
     const { main, tail } = splitQueued([row(1, "user", "a", "06:00", { delivery: "processing" }), row(2, "agent", "b", "06:01", { delivery: "queued" }), row(3, "user", "c", "06:02")]);
     expect([ids(main), tail.length]).toEqual([[1, 2, 3], 0]);
@@ -122,6 +128,10 @@ describe("the bubble's marks (no card)", () => {
   it("in Chinese too", async () => {
     const out = await draw([row(1, "user", "hi", "06:00", { steer: "added" }), row(2, "user", "hi", "06:01", { delivery: "queued" })], "zh-TW");
     expect(out.map((o) => o.marks)).toEqual([["steer-mark steer-added|插話 · 已加進這一輪"], ["queue-mark|排隊中・這一輪結束後送出"]]);
+  });
+  it("an interjection that was taken is not also labelled as waiting", async () => {
+    const out = await draw([row(1, "user", "hi", "06:00", { steer: "sent", delivery: "queued" }), row(2, "user", "hi", "06:01", { steer: "unsupported", delivery: "queued" })]);
+    expect(out.map((o) => o.marks)).toEqual([["steer-mark steer-sent|Interjection · sent into the running turn"], ["steer-mark steer-unsupported|Interjection · this agent does not take interjections, queued", "queue-mark|Queued · sent when this turn ends"]]);
   });
   it("an ordinary message, and an agent's row, carry no mark", async () => {
     const out = await draw([row(1, "user", "hi", "06:00", { delivery: "delivered" }), row(2, "agent", "yo", "06:01", { steer: "added", delivery: "queued" })]);

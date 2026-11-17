@@ -194,7 +194,7 @@ export function createThread(list, scroller, opts) {
     // renderMarkdown escapes the whole text before it adds any tag of its own (chat-render.js).
     const ticks = u && x.delivery ? R().deliveryHtml(x.delivery, TICKS()) : "";
     // AGEND-279: a message that asked to interject says so, and how it went; one waiting for the running turn says when it will go.
-    const marks = u ? steerMarkHtml(x.steer, false) + (x.delivery === "queued" ? `<span class="queue-mark" role="status">${escAttr(tr("chat.queuedMark"))}</span>` : "") : "";
+    const marks = u ? steerMarkHtml(x.steer, false) + (x.delivery === "queued" && !["added", "interrupted", "sent"].includes(x.steer) ? `<span class="queue-mark" role="status">${escAttr(tr("chat.queuedMark"))}</span>` : "") : "";
     const tools = u ? "" : `<div data-trust="thread-control" class="msg-tools"><button type="button" class="chip-btn icon-only" data-act="copyMsg" data-arg="${escAttr(msgKey(x))}" title="${escAttr(tr("chat.copyMessage"))}" aria-label="${escAttr(tr("chat.copyMessage"))}">${COPY}</button></div>`;
     const buttons = x.role === "agent" ? replyButtonsHtml(x.buttons) : "";
     // A person's click on a reply button shows as the button's label, never the line the agent was given (its value).

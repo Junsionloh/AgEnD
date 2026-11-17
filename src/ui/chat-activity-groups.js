@@ -234,7 +234,7 @@ export const SENT_SLACK_MS = 1000;
 
 /**
  * AGEND-279: where a person's message that has to wait for the running turn belongs in the thread.
- *  • While it waits (`delivery: "queued"`) it is at the bottom, below everything the running turn shows (the work block included): it is
+ *  • While it waits (`delivery: "queued"`; an interjection that was taken does not wait) it is at the bottom, below everything the running turn shows (the work block included): it is
  *    not part of this turn, and a message typed later (a pending bubble) comes after it. `tail` holds them, to be put after the composed rows.
  *  • Once it was handed to the agent (`sentAt`, the fleet's clock) it is where THAT happened — after what was written before that moment, the
  *    previous turn's last reply included — not where it was typed. A message that was never kept waiting stays where it is.
@@ -245,7 +245,9 @@ export function splitQueued(rows) {
   let end = rows.length;
   while (end > 0 && rows[end - 1].outgoing) end--;
   const queued = [], main = [];
-  for (const x of rows.slice(0, end)) (x.role === "user" && x.delivery === "queued" && !x.outgoing ? queued : main).push(x);
+  // An interjection that was taken (`added`, `interrupted`, `sent`) is part of the turn it went into: it stays where it happened, even while its tick still says queued.
+  const interjected = (x) => x.steer === "added" || x.steer === "interrupted" || x.steer === "sent";
+  for (const x of rows.slice(0, end)) (x.role === "user" && x.delivery === "queued" && !x.outgoing && !interjected(x) ? queued : main).push(x);
   for (const x of main.slice()) {
     if (x.role !== "user" || !x.sentAt) continue;
     const at = Date.parse(x.sentAt), typed = rowTs(x);
