@@ -64,7 +64,7 @@ async function boot(profile: typeof GROK_PROFILE, backend: string, env: Record<s
   const config = { working_directory: dir, backend, cli_adapter: "acp" } as InstanceConfig;
   const holder: { runner?: AcpRunner } = {};
   const adapter = new AcpAdapter({
-    profile: { ...profile, supportedVersions: ["1.5.8"], versionOf: AGY_PROFILE.versionOf, args: () => [FAKE] }, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger,
+    profile: { ...profile, versionOf: AGY_PROFILE.versionOf, args: () => [FAKE] }, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger,
     env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8", ...env },
     makeRunner: a => (holder.runner = new AcpRunner(a, { name: "worker", config, instanceDir: dir, topicMode: true, backend, logger })),
   });

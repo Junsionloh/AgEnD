@@ -99,7 +99,7 @@ async function boot(opts: { config?: Partial<InstanceConfig>; runner?: Partial<A
   const dir = tmp(), state = tmp();
   const config = { working_directory: dir, backend: "antigravity", cli_adapter: "acp", skipPermissions: false, ...opts.config } as InstanceConfig;
   // The MCP tests below are about a CLI that starts its server with the session (grok) unless a test says it starts with the first prompt (agy).
-  const profile = { ...AGY_PROFILE, supportedVersions: ["1.5.8"], args: () => [FAKE], mcpConnects: opts.mcpConnects ?? "with_session" };
+  const profile = { ...AGY_PROFILE, args: () => [FAKE], mcpConnects: opts.mcpConnects ?? "with_session" };
   const holder: { runner?: AcpRunner } = {};
   const adapter = new AcpAdapter({
     profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger,

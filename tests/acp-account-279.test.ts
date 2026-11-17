@@ -31,7 +31,7 @@ afterEach(async () => {
 async function launched(base: AcpProfile, backendOptions: Record<string, unknown> | undefined, source: NodeJS.ProcessEnv, home: string) {
   const seen: { command: string; args: string[]; env: Record<string, string> }[] = [];
   // The fake agent reports its version the way agy does; everything else (args, env, account launch) is the real profile's.
-  const profile: AcpProfile = { ...base, supportedVersions: ["9.9.9"], versionOf: AGY_PROFILE.versionOf };
+  const profile: AcpProfile = { ...base, versionOf: AGY_PROFILE.versionOf };
   const account = acpAccountLaunch(profile, home, backendOptions);
   const instanceDir = tmp();
   const adapter = new AcpAdapter({

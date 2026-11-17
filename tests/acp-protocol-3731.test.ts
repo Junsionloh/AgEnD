@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { LineFramer, decodeFrame } from "../src/adapters/acp/frames.js";
 import { AcpAdapter, AcpAuthRequiredError, AcpVersionRefusedError, type AcpMcpServer } from "../src/adapters/acp/acp-adapter.js";
 import { AcpTransportError } from "../src/adapters/acp/client.js";
-import { AGY_PROFILE, GROK_PROFILE, buildChildEnv, checkVersion, type AcpProfile } from "../src/adapters/acp/profiles.js";
+import { AGY_PROFILE, GROK_PROFILE, buildChildEnv, checkVersion, compareVersions, versionAtLeast, type AcpProfile } from "../src/adapters/acp/profiles.js";
 import { UpdateTranslator } from "../src/adapters/acp/translate.js";
 import type { AdapterEvent, InstanceRunner } from "../src/adapters/types.js";
 
@@ -30,10 +30,10 @@ afterEach(async () => {
 /** A profile that runs `script` under node, claiming to be `base` (same version rules, same events). */
 const profileFor = (base: AcpProfile, script: string, ...scriptArgs: string[]): AcpProfile => ({ ...base, args: () => [script, ...scriptArgs] });
 
-function adapterFor(profile: AcpProfile, opts: { instanceDir?: string; env?: NodeJS.ProcessEnv; mcpServers?: AcpMcpServer[]; preamble?: string; signInHint?: (label: string) => string; trace?: (d: "in" | "out", line: string) => void } = {}) {
+function adapterFor(profile: AcpProfile, opts: { instanceDir?: string; env?: NodeJS.ProcessEnv; mcpServers?: AcpMcpServer[]; preamble?: string; signInHint?: (label: string) => string; logger?: { info(o: object, m?: string): void; warn(o: object, m?: string): void; error(o: object, m?: string): void }; trace?: (d: "in" | "out", line: string) => void } = {}) {
   const instanceDir = opts.instanceDir ?? tmp();
   const adapter = new AcpAdapter({
-    profile, command: process.execPath, cwd: instanceDir, instanceDir, mcpServers: opts.mcpServers ?? [], preamble: opts.preamble, logger,
+    profile, command: process.execPath, cwd: instanceDir, instanceDir, mcpServers: opts.mcpServers ?? [], preamble: opts.preamble, logger: opts.logger ?? logger,
     env: { PATH: process.env.PATH }, childEnv: opts.env as Record<string, string>, trace: opts.trace, ...(opts.signInHint ? { signInHint: opts.signInHint } : {}), makeRunner: () => ({}) as InstanceRunner,
   });
   adapters.push(adapter);
@@ -42,7 +42,7 @@ function adapterFor(profile: AcpProfile, opts: { instanceDir?: string; env?: Nod
   return { adapter, events, instanceDir };
 }
 
-const fakeProfile = (version = "1.5.8") => ({ ...profileFor(AGY_PROFILE, FAKE), supportedVersions: [version] });
+const fakeProfile = (over: Partial<AcpProfile> = {}): AcpProfile => ({ ...profileFor(AGY_PROFILE, FAKE), ...over });
 const fakeEnv = (state: string, extra: NodeJS.ProcessEnv = {}) => ({ FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8", ...extra });
 const calls = (state: string): any[] => readFileSync(join(state, "calls.jsonl"), "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l));
 
@@ -87,16 +87,36 @@ describe("frame decoding", () => {
 });
 
 describe("profiles and the version gate", () => {
-  it("lists exactly the versions that were checked", () => {
-    expect(GROK_PROFILE.supportedVersions).toEqual(["1.0.77"]);
-    expect(AGY_PROFILE.supportedVersions).toEqual(["1.5.8", "1.5.9"]);
+  it("the policy is a floor and the newest version checked, not a list", () => {
+    expect([GROK_PROFILE.minVersion, GROK_PROFILE.verifiedVersion]).toEqual(["1.0.77", "1.0.77"]);
+    expect([AGY_PROFILE.minVersion, AGY_PROFILE.verifiedVersion]).toEqual(["1.5.8", "1.5.9"]);
+    expect(Object.hasOwn(GROK_PROFILE, "supportedVersions") || Object.hasOwn(AGY_PROFILE, "supportedVersions")).toBe(false);
   });
-  it("refuses an unlisted or missing version with a message that says what to do and does not mention a fallback run", () => {
-    const v = checkVersion(GROK_PROFILE, { _meta: { agentVersion: "1.0.99" } });
-    expect(v.ok).toBe(false);
-    if (!v.ok) { expect(v.message).toContain("1.0.99"); expect(v.message).toContain("1.0.77"); expect(v.message).toMatch(/does not fall back to tmux/); }
-    expect(checkVersion(AGY_PROFILE, {}).ok).toBe(false);
-    expect(checkVersion(AGY_PROFILE, { agentInfo: { version: "1.5.8" } })).toEqual({ ok: true, version: "1.5.8" });
+  it("refuses a release older than the floor, saying the floor and how to upgrade, and not that it falls back to tmux", () => {
+    for (const [profile, version, floor, hint] of [[GROK_PROFILE, "1.0.76", "1.0.77", "grok update"], [AGY_PROFILE, "1.5.7", "1.5.8", "agy update"], [AGY_PROFILE, "1.4.99", "1.5.8", "agy update"]] as const) {
+      const v = checkVersion(profile, profile === GROK_PROFILE ? { _meta: { agentVersion: version } } : { agentInfo: { version } });
+      expect(v.ok, version).toBe(false);
+      if (!v.ok) { expect(v.message).toContain(version); expect(v.message).toContain(floor); expect(v.message).toContain(hint); expect(v.message).toMatch(/does not fall back to tmux/); }
+    }
+  });
+  it("starts a release at the floor or checked, newer ones too (with a warning to log), and one that gives no readable version (also warned)", () => {
+    expect(checkVersion(AGY_PROFILE, { agentInfo: { version: "1.5.8" } })).toEqual({ ok: true, version: "1.5.8", verified: true });
+    expect(checkVersion(AGY_PROFILE, { agentInfo: { version: "1.5.9" } })).toEqual({ ok: true, version: "1.5.9", verified: true });
+    for (const version of ["1.5.10", "1.6.0", "2.0.0", "1.5.10-beta.1"]) {
+      const v = checkVersion(AGY_PROFILE, { agentInfo: { version } });
+      expect(v, version).toMatchObject({ ok: true, verified: false });
+      expect((v as { warning: string }).warning).toContain(version);
+      expect((v as { warning: string }).warning).toContain("verified up to 1.5.9");
+    }
+    expect(checkVersion(AGY_PROFILE, {})).toMatchObject({ ok: true, version: null, verified: false });
+    expect(checkVersion(AGY_PROFILE, { agentInfo: { version: "nightly" } })).toMatchObject({ ok: true, verified: false });
+  });
+  it("compares numbers, not strings (1.5.10 is newer than 1.5.9, 1.10.0 than 1.9.9)", () => {
+    expect([compareVersions("1.5.10", "1.5.9"), compareVersions("1.10.0", "1.9.9"), compareVersions("1.5.9", "1.5.9"), compareVersions("1.0.99", "1.0.100"), compareVersions("x", "1.0.0")]).toEqual([1, 1, 0, -1, null]);
+  });
+  it("what depends on the release is decided by the release: a way of adding to a turn from its first release, none before; an unreadable release has none", () => {
+    expect([versionAtLeast("1.5.0", "1.5.0"), versionAtLeast("1.4.9", "1.5.0"), versionAtLeast("1.5.10", "1.5.0"), versionAtLeast(null, "1.5.0"), versionAtLeast("nightly", "1.5.0"), versionAtLeast(null, undefined)]).toEqual([true, false, true, false, false, true]);
+    expect([GROK_PROFILE.interjectFrom, AGY_PROFILE.interjectFrom]).toEqual(["1.0.14", "1.5.0"]);
   });
   it("starts grok without auto-update and without a shared leader, and passes effort and model", () => {
     expect(GROK_PROFILE.args({ model: "m", effort: "high", skipPermissions: false })).toEqual(["--no-auto-update", "agent", "--no-leader", "--model", "m", "--reasoning-effort", "high", "stdio"]);
@@ -190,8 +210,8 @@ describe("recorded real captures", () => {
     expect(events.filter(e => e.kind === "tool").at(-1)).toMatchObject({ status: "completed", toolKind: "edit" });
   });
 
-  it("refuses a recorded 1.0.77 handshake under a profile that does not list it", async () => {
-    const profile = { ...profileFor(GROK_PROFILE, REPLAY, join(FIX, "grok-1.0.77-short.jsonl")), supportedVersions: ["2.0.0"] };
+  it("refuses a recorded 1.0.77 handshake under a profile whose floor is newer", async () => {
+    const profile = { ...profileFor(GROK_PROFILE, REPLAY, join(FIX, "grok-1.0.77-short.jsonl")), minVersion: "2.0.0" };
     const { adapter } = adapterFor(profile);
     await expect(adapter.start()).rejects.toBeInstanceOf(AcpVersionRefusedError);
     expect(adapter.health().process).not.toBe("running");
@@ -376,9 +396,35 @@ describe("the adapter against the fake agent", () => {
     await expect(hinted.adapter.start()).rejects.toThrow(/agy is not signed in \(Authentication required\)\. Connect agy in Settings → Accounts\.$/);
   });
 
-  it("refuses to start under an unlisted version", async () => {
-    const { adapter } = adapterFor(fakeProfile("1.5.8"), { env: fakeEnv(tmp(), { FAKE_ACP_VERSION: "1.6.0" }) });
-    await expect(adapter.start()).rejects.toThrow(/1\.6\.0 is not on the supported list/);
+  it("refuses to start under a release older than the floor", async () => {
+    const { adapter } = adapterFor(fakeProfile(), { env: fakeEnv(tmp(), { FAKE_ACP_VERSION: "1.5.7" }) });
+    await expect(adapter.start()).rejects.toThrow(/agy 1\.5\.7 is older than agy 1\.5\.8/);
+    expect(adapter.health().process).not.toBe("running");
+  });
+
+  it("starts under a newer, unverified release, with one warning in the log and no refusal; a verified one logs none", async () => {
+    const warned: string[] = [];
+    const log = { info() {}, error() {}, warn: (_o: object, m?: string) => { warned.push(m ?? ""); } };
+    const newer = adapterFor(fakeProfile(), { env: fakeEnv(tmp(), { FAKE_ACP_VERSION: "1.5.10" }), logger: log });
+    await newer.adapter.start();
+    expect([newer.adapter.agentVersion, newer.adapter.versionVerified, newer.adapter.health().process]).toEqual(["1.5.10", false, "running"]);
+    expect(warned.filter((m) => /unverified version/.test(m))).toEqual([expect.stringMatching(/agy 1\.5\.10 is an unverified version \(verified up to 1\.5\.9\): starting anyway/)]);
+    warned.length = 0;
+    const checked = adapterFor(fakeProfile(), { env: fakeEnv(tmp(), { FAKE_ACP_VERSION: "1.5.9" }), logger: log });
+    await checked.adapter.start();
+    expect([checked.adapter.versionVerified, warned.filter((m) => /unverified version/.test(m))]).toEqual([true, []]);
+  });
+
+  it("adds to a running turn only from the release that can: an older one is cancelled and sent next", async () => {
+    for (const [version, expected] of [["1.5.9", true], ["1.5.10", true], ["1.4.9", false]] as const) {
+      const a = adapterFor(fakeProfile({ minVersion: "1.0.0" }), { env: fakeEnv(tmp(), { FAKE_ACP_VERSION: version, FAKE_ACP_CONCURRENT: "fold" }) });
+      await a.adapter.start();
+      const turn = a.adapter.prompt("work #slow");
+      await new Promise((r) => setTimeout(r, 300));
+      expect([version, a.adapter.canInterject, await a.adapter.interject("more") !== false]).toEqual([version, expected, expected]);
+      await a.adapter.cancel();
+      await turn.catch(() => undefined);
+    }
   });
 
   it("puts the instructions in front of the first prompt of a new session only", async () => {

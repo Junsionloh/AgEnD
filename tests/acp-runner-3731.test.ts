@@ -52,7 +52,7 @@ async function boot(opts: { dir?: string; state?: string; config?: Partial<Insta
   // The harness asks by default (`skipPermissions: false`) so the permission tests keep their meaning; the product's default
   // (skip) is tested with `config: { skipPermissions: undefined }`.
   const config = { working_directory: dir, backend: "antigravity", cli_adapter: "acp", skipPermissions: false, ...opts.config } as InstanceConfig;
-  const profile = { ...AGY_PROFILE, supportedVersions: ["1.5.8"], args: () => [FAKE] };
+  const profile = { ...AGY_PROFILE, args: () => [FAKE] };
   const holder: { runner?: AcpRunner } = {};
   const adapter = new AcpAdapter({
     profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger,

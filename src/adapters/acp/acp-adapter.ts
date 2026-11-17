@@ -2,13 +2,13 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AcpClient, AcpRpcError, AcpTransportError, type PermissionRequest } from "./client.js";
 import { UpdateTranslator } from "./translate.js";
-import { buildChildEnv, checkVersion, type AcpProfile } from "./profiles.js";
+import { buildChildEnv, checkVersion, versionAtLeast, type AcpProfile } from "./profiles.js";
 import type {
   AdapterCapabilities, AdapterEvent, AdapterHealth, AdapterStartContext, CliAdapter, InstanceRunner,
   PermissionDecision, PromptAck, PromptRequest,
 } from "../types.js";
 
-/** The CLI's version is not on the profile's list, or it did not report one. The instance stays stopped. */
+/** The CLI's version is older than the profile's floor (`AcpProfile.minVersion`). The instance stays stopped. */
 export class AcpVersionRefusedError extends Error {
   constructor(message: string) { super(message); this.name = "AcpVersionRefusedError"; }
 }
@@ -139,6 +139,9 @@ export class AcpAdapter implements CliAdapter {
   /** Whether the current session was created by this start (false: an earlier conversation was loaded). */
   get isNewSession(): boolean { return this._newSession; }
   get agentVersion(): string | null { return this._agentVersion; }
+  private _versionVerified = true;
+  /** False when the release is newer than the newest one this profile was checked against (or gave no readable version): it runs, with a warning in the log. */
+  get versionVerified(): boolean { return this._versionVerified; }
   get pid(): number | undefined { return this.client?.pid; }
   get busy(): boolean { return this.turn !== null; }
   get pendingPermissionKeys(): string[] { return this.client?.pendingPermissionKeys ?? []; }
@@ -182,6 +185,8 @@ export class AcpAdapter implements CliAdapter {
       const verdict = checkVersion(profile, init);
       if (!verdict.ok) throw new AcpVersionRefusedError(verdict.message);
       this._agentVersion = verdict.version;
+      this._versionVerified = verdict.verified;
+      if (verdict.warning) this.opts.logger.warn({ version: verdict.version, verifiedUpTo: profile.verifiedVersion, minVersion: profile.minVersion }, verdict.warning);
       await this.openSession(client, init);
       ctx.admission?.();
     } catch (err) {
@@ -287,7 +292,11 @@ export class AcpAdapter implements CliAdapter {
   }
 
   /** This CLI can add a message to the turn that is running (its own extension) and a turn is running now. */
-  get canInterject(): boolean { return !!this.opts.profile.interject && !!this.client?.isRunning && !!this.session && this.turn !== null; }
+  get canInterject(): boolean {
+    const profile = this.opts.profile;
+    // …and this release has that way of adding to a turn (an older one is cancelled and sent next, as for a CLI with none).
+    return !!profile.interject && versionAtLeast(this._agentVersion, profile.interjectFrom) && !!this.client?.isRunning && !!this.session && this.turn !== null;
+  }
 
   /**
    * Add `text` to the running turn without cancelling it (`profile.interject`): with the CLI's own method (grok: true only when it says it took
@@ -298,7 +307,7 @@ export class AcpAdapter implements CliAdapter {
    */
   async interject(text: string, onLateRefusal?: (error: Error) => void): Promise<false | "taken" | "announced"> {
     const spec = this.opts.profile.interject, client = this.client, sessionId = this.session;
-    if (!spec || !client?.isRunning || !sessionId || this.turn === null) return false;
+    if (!spec || !versionAtLeast(this._agentVersion, this.opts.profile.interjectFrom) || !client?.isRunning || !sessionId || this.turn === null) return false;
     try {
       if (spec.via === "method") {
         try { return spec.accepted(await client.request(spec.method, spec.params(sessionId, text), { timeoutMs: 5000 })) ? "taken" : false; }

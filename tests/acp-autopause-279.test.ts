@@ -34,7 +34,7 @@ const MIN = 60_000;
 async function boot(o: { config?: Partial<InstanceConfig>; name?: string; dir?: string; clock: { t: number }; hangCheckEveryMs?: number; lease?: () => boolean; env?: Record<string, string> }) {
   const dir = o.dir ?? tmp(), state = tmp();
   const config = { working_directory: dir, backend: "antigravity", cli_adapter: "acp", ...o.config } as InstanceConfig;
-  const profile = { ...AGY_PROFILE, supportedVersions: ["1.5.8"], args: () => [FAKE] };
+  const profile = { ...AGY_PROFILE, args: () => [FAKE] };
   const holder: { runner?: AcpRunner } = {};
   const adapter = new AcpAdapter({
     profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger, env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8", ...o.env },

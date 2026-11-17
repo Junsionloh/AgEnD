@@ -52,7 +52,7 @@ async function setup(type: "telegram" | "discord" | "web", config: Partial<Insta
   const full = { working_directory: dir, backend: "antigravity", cli_adapter: "acp", ...config } as InstanceConfig;
   const holder: { runner?: AcpRunner } = {};
   const acp = new AcpAdapter({
-    profile: { ...AGY_PROFILE, supportedVersions: ["1.5.8"], args: () => [FAKE] }, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger,
+    profile: { ...AGY_PROFILE, args: () => [FAKE] }, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger,
     env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8" },
     makeRunner: a => (holder.runner = new AcpRunner(a, { name: "worker", config: full, instanceDir: dir, topicMode: true, backend: "antigravity", logger })),
   });

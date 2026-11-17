@@ -1639,6 +1639,6 @@ web:
 
 **具名帳號。** ACP instance 可以像終端機模式一樣用具名帳號執行：`backend_options.<cli>.credential_profile: work`（grok 或 antigravity）。CLI 會以該帳號自己的資料夾啟動，也就是 AgEnD home 底下的 `credential-profiles/<cli>/<名稱>`：grok 用 `GROK_HOME` 指向它（登入、對話和設定都在裡面），agy 在執行檔後面直接帶 `--app_data_dir` 並加上 registry 的 `SSH_CONNECTION` pin，與終端機 backend 的啟動方式相同。每個帳號的資料夾都是各自真實的資料夾（路徑上任何一層若是連結都會被拒絕），具名帳號的子行程也不會拿到 daemon 自己的帳號變數（`XAI_API_KEY`、`GROK_*`、`GEMINI_API_KEY`、`GOOGLE_*`、`ANTIGRAVITY_*`），所以不可能用預設帳號的登入執行。新帳號要先登入一次；登入前 instance 會維持停止，並說明要在主機上執行的指令（`GROK_HOME="<資料夾>" grok login --device-auth`，或 `agy --app_data_dir … acp --login`）。
 
-**版本。** 每個 CLI 有一個 profile，內含經過測試的版本精確清單：grok `1.0.77`、agy `1.5.8`、`1.5.9`。其他版本會以訊息拒絕，instance 維持停止（不會改用 tmux 啟動）。grok 以 `--no-auto-update` 與 `--no-leader` 啟動。CLI 必須已登入；未登入的 CLI 會回報並讓 instance 維持停止。
+**版本。** 每個 CLI 有一個 profile，內含的是最低版本，不是清單：能運作的最舊版本（grok `1.0.77`、agy `1.5.8`），以及驗證過的最新版本（grok `1.0.77`、agy `1.5.9`）。低於最低版本會以訊息拒絕，說明最低版本與升級方式，instance 維持停止（不會改用 tmux 啟動）。其他版本一律照常啟動——比驗證過的最新版更新時，只在 log 記一行「未驗證的版本」，不跳卡、不拒絕——依版本決定的功能（插進進行中的回合：grok ≥ `1.0.14`、agy ≥ `1.5.0`）另外按版本判斷，不支援就退回取消這一輪。grok 以 `--no-auto-update`（和終端機模式相同）與 `--no-leader` 啟動。CLI 必須已登入；未登入的 CLI 會回報並讓 instance 維持停止。
 
 **要知道的限制。** 在 tmux 模式建立的對話不會在 ACP 模式接續（儲存的 session id 是分開的），所以切換會開始新的對話。grok 與 agy 只有部分回合會送出思考；沒有時，時間軸就不顯示。ACP 模式下 agy 的模型尚不能選擇（grok 的 `model` 與 `effort` 以啟動參數傳入）。

@@ -37,7 +37,7 @@ async function boot(o: { grok?: boolean; plain?: boolean; env?: Record<string, s
   const dir = tmp(), state = tmp();
   const config = { working_directory: dir, backend: o.grok ? "grok" : "antigravity", cli_adapter: "acp" } as InstanceConfig;
   const base = o.grok ? GROK_PROFILE : AGY_PROFILE;
-  const profile = { ...base, ...(o.plain ? { interject: undefined } : {}), supportedVersions: ["1.5.8"], versionOf: AGY_PROFILE.versionOf, args: () => [FAKE] };
+  const profile = { ...base, ...(o.plain ? { interject: undefined } : {}), versionOf: AGY_PROFILE.versionOf, args: () => [FAKE] };
   const holder: { runner?: AcpRunner } = {};
   const adapter = new AcpAdapter({
     profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger: o.log ?? logger, env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8", ...o.env },
@@ -530,7 +530,7 @@ describe("an interruption (/steer, steer: true)", () => {
     const dir = tmp(), state = tmp();
     const config = { working_directory: dir, backend: "antigravity", cli_adapter: "acp", skipPermissions: false } as InstanceConfig;
     const holder: { runner?: AcpRunner } = {};
-    const profile = { ...AGY_PROFILE, interject: undefined, supportedVersions: ["1.5.8"], args: () => [FAKE] };   // no way of adding to a turn: the cancel path
+    const profile = { ...AGY_PROFILE, interject: undefined, args: () => [FAKE] };   // no way of adding to a turn: the cancel path
     new AcpAdapter({ profile, command: process.execPath, cwd: dir, instanceDir: dir, mcpServers: [], logger, env: { PATH: process.env.PATH }, childEnv: { FAKE_ACP_STATE: state, FAKE_ACP_VERSION: "1.5.8" },
       makeRunner: a => (holder.runner = new AcpRunner(a, { name: "worker", config, instanceDir: dir, topicMode: true, backend: "antigravity", logger })) });
     const runner = holder.runner!; runners.push(runner);
