@@ -81,7 +81,6 @@ export class AcpStepStore {
   /** The turn's own id and the person's message. `wire`: what was sent to the CLI — the ids the chat joins by are in it. */
   beginTurn(turnId: string, text: string, ts = this.now(), wire = text): void {
     this.closeOpen();
-    this.pendingReplies.length = 0;
     this.turn = turnId;
     const step: LogStep = { id: `u-${turnId}`, turn: turnId, ts, kind: "user" };
     stepBody(step, text, TEXT_MAX);
@@ -112,10 +111,16 @@ export class AcpStepStore {
     if (!head || !messageId) return;
     const step = this.turnReplies().reverse().find(s => s.anchor?.replyText === head);
     if (step) { this.setReplyId(step, messageId); return; }
-    this.pendingReplies.push({ head, messageId });
+    this.pendingReplies.push({ head, messageId, at: this.turn, ends: 0 });
     if (this.pendingReplies.length > 20) this.pendingReplies.shift();
   }
-  private readonly pendingReplies: { head: string; messageId: string }[] = [];
+  /**
+   * Ids waiting for their call's update. `at`: the turn the fleet's answer came in. An agent that works while no prompt is running
+   * (agy, after a command it left in the background finished) calls `reply` then, but its updates only come with its next prompt: an
+   * id is matched by its words in whichever turn the update arrives. Only an id from this turn is handed to a step by order or given a step
+   * of its own (`settlePendingReplies`), and one nothing claimed in two turns' ends is dropped.
+   */
+  private readonly pendingReplies: { head: string; messageId: string; at: string; ends: number }[] = [];
 
   /** This turn's reply steps (calls that did not fail) that no message is named for yet, oldest first. */
   private turnReplies(): Mutable<LogStep>[] {
@@ -342,6 +347,7 @@ export class AcpStepStore {
   private settlePendingReplies(): void {
     const waiting = this.pendingReplies.splice(0);
     for (const p of waiting) {
+      if (p.at !== this.turn) { if (++p.ends < 2) this.pendingReplies.push(p); continue; }
       const step = this.turnReplies()[0];
       if (step) { this.setReplyId(step, p.messageId); continue; }
       const made: LogStep = { id: `pr-${this.turn || "x"}-${++this.seq}`, turn: this.turn, ts: this.now(), kind: "tool", tool: REPLY_TOOL_NAME, cat: "message", status: "done", anchor: { replyText: p.head, messageId: p.messageId } };

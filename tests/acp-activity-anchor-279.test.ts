@@ -118,6 +118,34 @@ describe("the exact anchor, not the text, names the row", () => {
     expect(ids).toEqual(["web-k1", "web-k2"]);                                  // the second call is not given the first's id
   });
 
+  it("a reply made between prompts (agy, once a command it left running finished) is matched when its update arrives with the next prompt", () => {
+    const d = mkdtempSync(join(tmpdir(), "acp-anchor-")); dirs.push(d);
+    const s = new AcpStepStore(d);
+    s.beginTurn("T1", "go", undefined, "[agend-human-id:hmsg-9999-cccc]\ngo\n(message_id: web-u1 | verification_id: v)");
+    s.apply({ kind: "message", text: "Waiting." });
+    s.apply({ kind: "turn_end", stopReason: "end_turn" });
+    s.anchorReply("The command finished: A", "web-late");                    // the fleet's answer: no prompt is running, nothing is announced yet
+    s.beginTurn("T2", "and the date?", undefined, "[agend-human-id:hmsg-8888-dddc]\nand the date?\n(message_id: web-u2 | verification_id: v)");
+    s.apply({ kind: "tool", id: "x1", title: "mcp_agend_reply", toolKind: "other", status: "completed", rawInput: { text: "The command finished: A" } });   // agy's updates, flushed with the new prompt
+    s.apply({ kind: "tool", id: "x2", title: "mcp_agend_reply", toolKind: "other", status: "completed", rawInput: { text: "Today is the 17th." } });
+    s.anchorReply("Today is the 17th.", "web-date");
+    s.apply({ kind: "turn_end", stopReason: "end_turn" });
+    const ids = s.snapshot(undefined, { thoughts: true }).steps.filter(x => x.cat === "message").map(x => [x.anchor?.replyText, x.anchor?.messageId]);
+    expect(ids).toEqual([["The command finished: A", "web-late"], ["Today is the 17th.", "web-date"]]);
+  });
+
+  it("an id that no step claimed is never given to another turn's reply by order", () => {
+    const d = mkdtempSync(join(tmpdir(), "acp-anchor-")); dirs.push(d);
+    const s = new AcpStepStore(d);
+    s.beginTurn("T1", "go", undefined, "[agend-human-id:hmsg-9999-cccc]\ngo\n(message_id: web-u1 | verification_id: v)");
+    s.apply({ kind: "turn_end", stopReason: "end_turn" });
+    s.anchorReply("never announced", "web-stray");
+    s.beginTurn("T2", "next", undefined, "[agend-human-id:hmsg-8888-dddc]\nnext\n(message_id: web-u2 | verification_id: v)");
+    s.apply({ kind: "tool", id: "x1", title: "mcp_agend_reply", toolKind: "other", status: "completed", rawInput: { text: "something else" } });
+    s.apply({ kind: "turn_end", stopReason: "end_turn" });
+    expect(s.snapshot(undefined, { thoughts: true }).steps.filter(x => x.cat === "message").map(x => x.anchor)).toEqual([{ replyText: "something else" }]);
+  });
+
   it("a reply the CLI never announced as a tool call still gets a step of its own when the turn ends", () => {
     const d = mkdtempSync(join(tmpdir(), "acp-anchor-")); dirs.push(d);
     const s = new AcpStepStore(d);
