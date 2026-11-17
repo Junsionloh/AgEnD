@@ -969,6 +969,11 @@ html:has(.shell), html:has(.shell) body { overflow: hidden; }
 .tick-delivered { color: var(--ok); }
 .tick-failed { color: var(--danger); font-weight: var(--fw-bold); }
 .tick-cancelled { color: var(--text-3); }
+/* AGEND-279: a message that asked to interject (with how it went), and one waiting for the running turn. */
+.steer-mark, .queue-mark { display: inline-block; margin-left: var(--s-1); padding: 0 6px; border-radius: 999px; font-size: var(--fs-xs); line-height: 1.6; border: 1px solid var(--border); color: var(--text-2); }
+.steer-mark { color: var(--accent, var(--text-2)); }
+.steer-unsupported, .steer-refused, .steer-interrupted { color: var(--warn, var(--text-2)); }
+.queue-mark { color: var(--text-3); border-style: dashed; }
 .msg .atts { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-2); }
 .msg.user .atts { justify-content: flex-end; }
 .msg .att-img img { max-width: 260px; max-height: 220px; border-radius: var(--r-sm); display: block; }
@@ -1287,6 +1292,8 @@ img.amb-p { object-fit: contain; }
 .composer-ph { position: absolute; left: var(--s-1); right: var(--s-1); top: 7px; pointer-events: none; color: var(--text-3);
   font-size: var(--fs-md); line-height: var(--lh-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .composer-field textarea:not(:placeholder-shown) + .composer-ph { display: none; }   /* text in the box, composing text too */
+/* AGEND-279: the Interject button beside Send while the agent works (a phone has no Ctrl+Enter). */
+.btn-steer { align-self: flex-end; height: 36px; flex: none; white-space: nowrap; }
 .btn-send { width: 36px; padding: 0; }
 .btn-send .send-label { display: none; }
 /* A narrow phone: Stop reply beside Send leaves the message box no room — the label is for screen readers there. */

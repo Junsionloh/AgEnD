@@ -132,6 +132,7 @@ export function linkWorkBarCss(doc = typeof document !== "undefined" ? document 
 linkWorkBarCss();
 
 import { activityInfo, activityInfoStore, activityOffered, activityPrefs, composeActivity, mountActivity, observeActivity, setActivityOn, setActivityThinking } from "./chat-activity.js";
+import { splitQueued } from "./chat-activity-groups.js";
 /** The composer's textarea (#2342: text put back into it is a step Ctrl+Z goes back from). */
 const composers = new Map(); // agent → current mounted refs, never a retained thread's stale closure
 const composerField = (name) => composers.get(name)?.input.current || null;
@@ -253,7 +254,11 @@ const activityShown = () => activityOffered() && activityPrefs.get().on;
 const agentBusy = (name) => R().isBusy(store.state.exec[name]);
 /** Epoch ms the agent began working, by the working bar's own clock (a monotonic one), or null. */
 const agentSince = (name) => { const t = store.state.workingSince[name]; return t == null ? null : Date.now() - (performance.now() - t); };
-const rowsOf = (name) => (activityShown() ? composeActivity(name, store.threadRows(name), Date.now(), { busy: agentBusy(name), since: agentSince(name) }) : store.threadRows(name));
+// AGEND-279: a message waiting for the running turn is at the bottom, below the work block; one that has been handed over is where that happened.
+const rowsOf = (name) => {
+  const { main, tail } = splitQueued(store.threadRows(name));
+  return (activityShown() ? composeActivity(name, main, Date.now(), { busy: agentBusy(name), since: agentSince(name) }) : main).concat(tail);
+};
 /** What a chat's activity blocks need to draw: its paths to shorten, and whether thinking is shown (`instance`: where a permission card posts its answer). */
 const activityCtx = (name) => () => {
   const info = activityInfo(name);
@@ -852,6 +857,14 @@ function SubagentProgress({ name }) {
   return offered && Component ? html`<${Component} key=${name} name=${name} />` : null;
 }
 
+/** The key that interjects, as this machine words it (⌘ on a Mac, Ctrl elsewhere). */
+const steerKeyName = () => (/Mac|iPhone|iPad/.test((typeof navigator === "object" && navigator && (navigator.userAgentData?.platform || navigator.platform)) || "") ? "⌘" : "Ctrl");
+/** The small text under the composer: while an agent that can take an interjection works, it says what Enter and the interject key do (AGEND-279). */
+function composerHint(inst, busy) {
+  if (busy && inst?.steer_supported && !guestPage()) return touchScreen() ? t("chat.composerHintBusyTouch") : t("chat.composerHintBusy", steerKeyName());
+  return t(supportsInstanceFeature(inst,"commands") ? touchScreen() ? "chat.composerHintTouch" : "chat.composerHint" : touchScreen() ? "chat.nativeComposerHintTouch" : "chat.nativeComposerHint");
+}
+
 /** Everything under the thread: prompts, the working line, a failed send, files waiting, and the composer. */
 function Dock({ name, inst, lease, exec, awaiting, workingLabel, bindings, ids, focused }) {
   useChatTick(name, ["state"]);
@@ -865,7 +878,7 @@ function Dock({ name, inst, lease, exec, awaiting, workingLabel, bindings, ids, 
     ${s.waking[name] ? html`<p class="send-waking" role="status">${t("chat.waking", name)}</p>` : null}
     <${Composer} name=${name} inst=${inst} bindings=${bindings} ids=${ids} focused=${focused} label=${composerLabel(inst, name)} lease=${lease} busy=${R().isBusy(exec)} />
     <div class="composer-row">${guestPage() ? html`<span class="guest-note" title=${t("chat.guestNote")}>${t("chat.guestNote")}</span>` : html`<${ComposerAuth} />`}<span
-      class="hint" title=${t(guestPage() || !supportsInstanceFeature(inst,"commands") ? "chat.guestMore" : "chat.composerMore")}>${t(supportsInstanceFeature(inst,"commands") ? touchScreen() ? "chat.composerHintTouch" : "chat.composerHint" : touchScreen() ? "chat.nativeComposerHintTouch" : "chat.nativeComposerHint")}</span></div>
+      class="hint" title=${t(guestPage() || !supportsInstanceFeature(inst,"commands") ? "chat.guestMore" : "chat.composerMore")}>${composerHint(inst, R().isBusy(exec))}</span></div>
   </div></div>`;
 }
 
@@ -1024,7 +1037,8 @@ function Composer({ name, inst, label = name, lease, busy, bindings, ids = {}, f
   };
   // #2342: a completion is a step Ctrl+Z goes back from (to what was typed); a command that runs consumes the line.
   const complete = (c) => { recordEdit(input.current); setValue(`/${c.name}${c.arg ? " " : ""}`); };
-  const submit = () => {
+  // `o.steer` (AGEND-279): Ctrl+Enter or the Interject button while the agent works — the message goes into the running turn.
+  const submit = (o = {}) => {
     // M-2738 (D3): AgEnD's own Update, whatever the agent's runtime can take (it never reaches the agent).
     if (!guest && !files.length && isUpdateLine(value)) { setValue(""); openUpdateDialog(); return; }
     if (sendingBlocked) return;
@@ -1042,8 +1056,10 @@ function Composer({ name, inst, label = name, lease, busy, bindings, ids = {}, f
       toast(cmd ? t("chat.guestCommandNotAllowed", `/${cmd.command}`) : t("chat.guestNoCommands"), false); return;
     }
     if (cmd && needsArgument(cmd.command) && !cmd.args) { recordEdit(input.current); setValue(`/${cmd.command} `); return; }
+    // AGEND-279: `/steer text` is an interjection: its result is a mark on the message's own bubble, not a card.
+    if (cmd && cmd.command === "steer" && cmd.args) { store.setDraft(name, cmd.args); store.send(name, { steer: true }); return; }
     if (cmd) { runLine(cmd); return; }
-    store.send(name);
+    store.send(name, o.steer ? { steer: true } : undefined);
   };
   const onKeyDown = (e) => {
     if (palette && palette.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
@@ -1054,7 +1070,10 @@ function Composer({ name, inst, label = name, lease, busy, bindings, ids = {}, f
     if (pick && e.key === "Tab" && !e.shiftKey) { e.preventDefault(); complete(pick); return; }
     if (palette && e.key === "Escape" && !e.isComposing) { e.preventDefault(); setClosedFor(value); return; }
     if (reply && e.key === "Escape" && !e.isComposing) { e.preventDefault(); store.clearReply(name); return; }   // #2272
-    if (R().composerKey(e, { touch: touchScreen() }) === "send") { e.preventDefault(); submit(); }
+    // Enter: send (a working agent queues it). Ctrl+Enter / ⌘+Enter: an interjection while it works, a plain send when it is idle.
+    const key = R().composerKey(e, { touch: touchScreen(), steer: true });
+    if (key === "send") { e.preventDefault(); submit(); }
+    else if (key === "steer") { e.preventDefault(); submit(busy ? { steer: true } : {}); }
   };
   // Files in a paste are attached; a very long text paste goes as a text file — only once it is really attached.
   const onPaste = (e) => {
@@ -1087,7 +1106,8 @@ function Composer({ name, inst, label = name, lease, busy, bindings, ids = {}, f
       onKeyDown=${onKeyDown} onPaste=${onPaste} controls=${palette ? paletteId : undefined} expanded=${!!palette} activeDescendant=${pick ? optId(pick) : undefined}
       attach=${attachmentsSupported ? { title: t("chat.attachTitle"), onFiles: (list) => store.addFiles(name, list) } : null}
       stop=${HIDDEN_STOP}
-      send=${{ hidden: false, disabled: !content || sendingBlocked, label: t("chat.send"), onClick: submit }} />
+      steer=${busy && inst?.steer_supported && !guest ? { label: t("chat.steerButton"), title: t("chat.steerButtonTitle"), disabled: !content || sendingBlocked, onClick: () => submit({ steer: true }) } : null}
+      send=${{ hidden: false, disabled: !content || sendingBlocked, label: t("chat.send"), onClick: () => submit() }} />
     </div>`;
 }
 

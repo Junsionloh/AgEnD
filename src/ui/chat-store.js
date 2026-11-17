@@ -146,7 +146,7 @@ export function createChatStore(deps) {
     for (const d of list) {
       if (!d || typeof d.instance !== "string") continue;
       const before = s.msgs[d.instance];
-      s.msgs[d.instance] = R().applyDelivery(before, d.messageId, d.delivery);
+      s.msgs[d.instance] = R().applyDelivery(before, d.messageId, d.delivery, { sentAt: d.sentAt, steer: d.steer });
       if (s.msgs[d.instance] !== before) touched.add(d.instance);
     }
     for (const i of touched) changed(i, "msgs");
@@ -348,7 +348,7 @@ export function createChatStore(deps) {
     });
   }
   /** Send what the composer holds: its bubble at once, then out in this chat's order. */
-  function send(target) {
+  function send(target, opts = {}) {
     const txt = (s.drafts[target] || "").trim();
     const files = (s.pendingFiles[target] || []).slice();
     if ((!txt && !files.length) || !target) return;
@@ -357,7 +357,7 @@ export function createChatStore(deps) {
       // "You" until the server's copy (with the person's name) replaces it: no request is made for a name.
       boot: "out", id: ++outSeq, instance: target, role: "user", sender: t("chat.you"), text: txt,
       ts: new Date().toISOString(), clientId: newClientId(), replyTo: quote ? { boot: quote.boot, id: quote.id, sender: quote.sender, text: quote.text, media: quote.media } : undefined,
-      quote, outgoing: { state: "queued" },
+      quote, outgoing: { state: "queued" }, ...(opts.steer ? { steerAsked: true } : {}),
       files: files.map((f) => ({ file: f, name: f.name || "file", size: f.size || 0, type: f.type || "", url: objectUrl(f), loaded: 0, total: f.size || 0, state: "waiting", id: null })),
     };
     (s.outgoing[target] = s.outgoing[target] || []).push(e);
@@ -401,6 +401,7 @@ export function createChatStore(deps) {
       const ids = e.files.map((f) => f.id);
       if (ids.length) body.attachments = ids;
       if (e.quote) body.replyTo = { boot: e.quote.boot, id: e.quote.id };
+      if (e.steerAsked) body.steer = true;                              // AGEND-279: Ctrl+Enter, the Interject button, `/steer text`
       r = await api("POST", "/ui/send", body);
     } catch (err) {
       const f = e.files.find((x) => x.state === "uploading");
@@ -413,6 +414,11 @@ export function createChatStore(deps) {
     if (r && !r.error && r.sent !== false) {
       e.outgoing = { state: "sent" };
       if (typeof r.messageId === "string") e.messageId = r.messageId;
+      // AGEND-279: how the interjection went. Only a message that did not go as asked is said in a line; the rest is the bubble's mark.
+      if (typeof r.steer === "string") {
+        e.steer = r.steer;
+        if (r.steer === "interrupted" || r.steer === "unsupported") deps.toast(t(r.steer === "interrupted" ? "chat.steerNoteInterrupted" : "chat.steerNoteUnsupported"), false);
+      }
       settleOutgoing(target);
       changed(target, "msgs"); changed(target);
       return;

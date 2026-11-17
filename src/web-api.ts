@@ -70,7 +70,7 @@ import { STRUCTURED_SIGNIN_BACKENDS } from "./structured-signin.js";
 import { isRuntimeDefaultLoginCli, type RuntimeDefaultLoginCli } from "./cli-registry.js";
 import { evaluateWebRequest, isPassiveWebRead, isSecureRequest, isWebRequestAuthorized, WEB_TOKEN_INVALID_MESSAGE, type WebGateRequest } from "./web-auth.js";
 import { dashboardOriginFor, type PreviewAvailability } from "./web-preview.js";
-import { WEB_CHAT_CARDS_OVERFLOW, catchUpWindow, newWebMessageId, parseLastEventId, webChatReplyRef, webChatReplyText, type WebChatAttachment, type WebChatHistory, type WebChatMessage, type WebChatPost } from "./web-chat-history.js";
+import { WEB_CHAT_CARDS_OVERFLOW, catchUpWindow, newWebMessageId, parseLastEventId, webChatReplyRef, webChatReplyText, type WebChatAttachment, type WebChatHistory, type WebChatMessage, type WebChatPost, type WebSteerState } from "./web-chat-history.js";
 import { PAGE_SHARE_LIMITS, htmlFences, htmlTitle } from "./page-share.js";
 import { attachmentDelivery, createPartFile, displayName, fileTooLargeText, INLINE_MIME, isFileId, MEDIA_RANGE_MAX, publicAttachment, removeQuietly, UPLOAD_LIMITS, UPLOAD_MAX_MS, UPLOAD_STALL_MS, UploadSniffer, uploadLimits, wellFormed, type ServedFile, type UploadEntry, type WebFileLedger } from "./web-upload.js";
 import { getAgendHome } from "./paths.js";
@@ -236,6 +236,8 @@ const SendMessageSchema = z.object({
   /** The sending page's own id for its pending bubble: echoed on the live event only (never recorded), so that page
    *  swaps its "sending" bubble for the real one even when the stream beats this answer. */
   clientId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/).optional(),
+  /** AGEND-279: send as an interjection (Ctrl+Enter, `/steer`): into the running turn where the agent can take it; else as any message. */
+  steer: z.boolean().optional(),
 }).strict().refine(v => v.message.trim().length > 0 || (v.attachments?.length ?? 0) > 0, { message: "a message or at least one file", path: ["message"] });
 
 /** An instance name that is safe as one path segment (no separator, no NUL, not a dot name). */
@@ -466,6 +468,9 @@ export interface WebApiContext {
   /** false: definitely not delivered (the instance's IPC is gone, or it was restarted meanwhile). */
   generalLocationDeliveryHold?(instanceName: string): string | null;
   deliverToInstance(instanceName: string, payload: Record<string, unknown>, options?: { stillCurrent?: () => boolean; authorityCurrent?: () => boolean }): Promise<boolean | void>;
+  /** AGEND-279: how a message that asks to interject would go now, and handing one to the agent as an interjection. */
+  webSteerMode?(instanceName: string): "add" | "interrupt" | "native" | "idle" | "unsupported";
+  sendWebSteer?(instanceName: string, payload: Record<string, unknown>, origin: HumanOrigin, originalBody: string): boolean;
   deliverHumanToInstance?(instanceName: string, payload: Record<string, unknown>, origin: HumanOrigin, originalBody: string, options?: { stillCurrent?: () => boolean; authorityCurrent?: () => boolean }): Promise<boolean | void>;
   getUiStatus(): unknown;
   /** Current owned pane reader shared with status; absent means context is unavailable. */
@@ -4290,7 +4295,7 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
         json(res, 400, { error: `${issue.path.join(".") || "body"}: ${issue.message}` });
         return;
       }
-      const { instance, message: typed, attachments = [], replyTo, clientId } = parsed.data;
+      const { instance, message: typed, attachments = [], replyTo, clientId, steer: steerAsked } = parsed.data;
       const native = isWindowsInstance(ctx.fleetConfig?.instances[instance]);
       if (native && !nativeCliAuthorization(req,new URL(req.url ?? "/","http://localhost"),ctx)) {
         json(res,403,{error:"Windows runtime requires an administrator on the local dashboard"});return;
@@ -4428,9 +4433,16 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
           ? [{ adapter: reacting, adapterId: syncAdapter.id, chatId: String(groupId), threadId: String(topicId), messageId: copyId }] : []);
         return sent;
       }) : undefined;
+      // AGEND-279: an interjection goes into the running turn where the agent can take one; an agent that cannot gets it queued (and the
+      // bubble says so); an idle one just receives it. Never for a Windows runtime (no terminal input to steer).
+      const steerMode = steerAsked && !native ? ctx.webSteerMode?.(instance) ?? "idle" : "idle";
+      const asSteer = steerMode === "add" || steerMode === "interrupt" || steerMode === "native";
+      const steerMark: WebSteerState | undefined = steerMode === "add" ? "added" : steerMode === "interrupt" ? "interrupted" : steerMode === "native" ? "sent" : steerMode === "unsupported" ? "unsupported" : undefined;
       let delivered: boolean | void;
       try {
-        const deliver = (name: string, payload: Record<string, unknown>) => ctx.deliverHumanToInstance
+        const deliver = (name: string, payload: Record<string, unknown>) => asSteer && ctx.sendWebSteer
+          ? ctx.sendWebSteer(name, payload, webHumanOrigin(false, authority), typed)
+          : ctx.deliverHumanToInstance
           ? ctx.deliverHumanToInstance(name, payload, webHumanOrigin(false, authority), typed, { stillCurrent, ...(native ? { authorityCurrent } : {}) })
           : ctx.deliverToInstance(name, payload, { stillCurrent, ...(native ? { authorityCurrent } : {}) });
         delivered = await deliver(instance, {
@@ -4488,8 +4500,8 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
       ctx.eventLog?.logActivity("message", person.name, (message || `[${files.length} file(s)]`).slice(0, 200), instance);
       // #1920: the account that wrote it (a guest sees its own); channel-visible once its copy was sent (above).
       ctx.emitSseEvent("message", { instance, sender: person.name, role: "user", text: message, ts, attachments: files.map(publicAttachment), messageId, ...(person.bound ? { from: person.voterKey } : {}),
-        ...(quoted ? { replyTo: webChatReplyRef(quoted) } : {}), ...(clientId ? { clientId } : {}) });
-      json(res, 200, { sent: true, messageId });
+        ...(quoted ? { replyTo: webChatReplyRef(quoted) } : {}), ...(clientId ? { clientId } : {}), ...(steerMark ? { steer: steerMark } : {}) });
+      json(res, 200, { sent: true, messageId, ...(steerMark ? { steer: steerMark } : {}) });
     } catch {
       // A failure after the agent has it is no failed send: the page is told it went (a Retry would only find it).
       if (res.headersSent) { /* answered already: the failure was in or after the answer */ }

@@ -46,7 +46,8 @@ async function boot(o: { grok?: boolean; plain?: boolean; env?: Record<string, s
   const runner = holder.runner!;
   runners.push(runner);
   if (o.outbox) runner.setDeliveryOutboxPort(o.outbox as never);
-  const queued: unknown[] = [], delivered: unknown[] = [], confirmed: unknown[] = [];
+  const queued: unknown[] = [], delivered: unknown[] = [], confirmed: unknown[] = [], steered: unknown[] = [];
+  runner.on("message_steered", (d: unknown) => steered.push(d));
   runner.on("message_queued", (d: unknown) => queued.push(d));
   runner.on("message_delivered", (d: unknown) => delivered.push(d));
   runner.on("message_confirmed", (d: unknown) => confirmed.push(d));
@@ -55,7 +56,7 @@ async function boot(o: { grok?: boolean; plain?: boolean; env?: Record<string, s
   clients.push(fleet);
   await fleet.connect();
   fleet.on("message", (m: any) => { if (m.type === "fleet_outbound") fleet.send({ type: "fleet_outbound_response", fleetRequestId: m.fleetRequestId, result: { messageId: "m1" } }); });
-  return { runner, fleet, state, queued, delivered, confirmed };
+  return { runner, fleet, state, queued, delivered, confirmed, steered };
 }
 const meta = (id: string, extra: Record<string, string> = {}) => ({ chat_id: "chat-1", message_id: id, user: "alice", source: "web", ...extra });
 const steps = (h: { runner: AcpRunner }) => h.runner.steps.snapshot(undefined, { thoughts: false }).steps;
@@ -198,6 +199,54 @@ class FakeOutbox {
   retryBeforeBegin(id: string, _b: string, attempt: number, reason: string) { this.calls.push(`retry:${id}#${attempt}:${reason}`); return true; }
 }
 const durable = (id: string, attempt = 1) => ({ chat_id: "", message_id: "x1", user: "instance:planner", source: "cross_instance", from_instance: "planner", delivery_id: id, delivery_attempt: String(attempt) });
+
+describe("the bubble of a message that asked to interject hears how it went (AGEND-279)", () => {
+  it("added to the running turn by the CLI: nothing to correct, no event", async () => {
+    const h = await boot({ grok: true });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B joins", meta("b"));
+    await until(() => turnEnds(h).length === 1, 10000, "A's turn");
+    expect(h.steered).toEqual([]);
+  });
+  it("the CLI does not take it and the turn is cancelled for it: the message was `interrupted`", async () => {
+    const h = await boot({ grok: true, env: { FAKE_ACP_INTERJECT: "reject" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B instead", meta("b"));
+    await until(() => turnEnds(h).length === 2, 10000, "both turns");
+    expect(h.steered).toEqual([{ chatId: "chat-1", messageId: "b", steer: "interrupted" }]);
+  });
+  it("an agent with no way of adding to a turn cancels it: `interrupted`; an idle one just receives it: nothing", async () => {
+    const h = await boot({ plain: true });
+    h.runner.interruptMessage("idle first", meta("i"));
+    await until(() => turnEnds(h).length === 1, 5000, "the idle send");
+    expect(h.steered).toEqual([]);
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B interrupts", meta("b"));
+    await until(() => turnEnds(h).length === 3, 10000, "all turns");
+    expect(h.steered).toEqual([{ chatId: "chat-1", messageId: "b", steer: "interrupted" }]);
+  });
+  it("the CLI took it and then refused it: the message is `refused` and goes again as its own", async () => {
+    const h = await boot({ env: { FAKE_ACP_CONCURRENT: "late-error" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B late", meta("b"));
+    await until(() => h.steered.some((e: any) => e.steer === "refused"), 8000, "the refusal");
+    expect(h.steered.at(-1)).toEqual({ chatId: "chat-1", messageId: "b", steer: "refused" });
+    await h.runner.adapter.cancel();
+    await until(() => turnEnds(h).length >= 1, 10000, "A ends");
+  }, 30000);
+  it("a message of someone else (no message id to tell) says nothing", async () => {
+    const h = await boot({ grok: true, env: { FAKE_ACP_INTERJECT: "reject" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.interruptMessage("B instead", { chat_id: "chat-1", user: "alice", source: "web" });
+    await until(() => turnEnds(h).length === 2, 10000, "both turns");
+    expect(h.steered).toEqual([]);
+  });
+});
 
 describe("durable deliveries added to a running turn (second review)", () => {
   it("the verdict waits for the turn's end: nothing is completed while the turn runs, then delivered once", async () => {

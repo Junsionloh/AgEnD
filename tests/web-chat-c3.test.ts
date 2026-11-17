@@ -148,9 +148,10 @@ describe("FleetManager: delivery reports for web messages", () => {
     fm.reactMessageStatus("w", "-100", "web-a", "queued");          // late: no event
     fm.finishDeliveryStatus("w", "-100", "web-a", "delivered");
     fm.reactMessageStatus("w", "-100", "web-a", "received");        // not a web state
-    expect(events.filter(e => e.event === "delivery").map(e => e.data)).toEqual([
+    // (a message that waited also says when it was handed over: `sentAt`, AGEND-279)
+    expect(events.filter(e => e.event === "delivery").map(e => e.data)).toMatchObject([
       { instance: "w", messageId: "web-a", delivery: "queued" },
-      { instance: "w", messageId: "web-a", delivery: "processing" },
+      { instance: "w", messageId: "web-a", delivery: "processing", sentAt: expect.any(String) },
       { instance: "w", messageId: "web-a", delivery: "delivered" },
     ]);
     expect(fm.webChatHistory.list("w")[0]!.delivery).toBe("delivered");

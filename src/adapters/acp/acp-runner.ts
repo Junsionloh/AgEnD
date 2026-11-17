@@ -835,6 +835,7 @@ export class AcpRunner extends EventEmitter {
         this.log.warn({ name: this.name, error: error.message }, "acp: the interjection was refused after being taken; sending the message again");
         const { delivery_id: _id, delivery_attempt: _attempt, ...plain } = meta;
         this.admit(content, durable ? plain : meta, deliveryEpoch, false, true, false, true);
+        if (status) this.emit("message_steered", { ...status, steer: "refused" });     // the bubble says it goes again as the next message
       });
     } catch { taken = false; }
     if (!taken) {
@@ -886,6 +887,7 @@ export class AcpRunner extends EventEmitter {
     const item: InboundItem = { content, meta, epoch: deliveryEpoch, turnId: `${this.bootId.slice(0, 8)}-${++this.turnSeq}`, ...(raw ? { raw: true } : {}), ...(interrupts ? { interrupts } : {}), ...(resent ? { resent: true as const } : {}) };
     this.queued++;
     if (interrupts) {
+      { const status = statusOf(meta); if (status) this.emit("message_steered", { ...status, steer: "interrupted" }); }   // the bubble says the turn was cut short for it
       // In front of everything waiting, but behind an interruption that is already waiting (they keep their own order).
       const first = this.inbox.findIndex(i => !i.interrupts);
       this.inbox.splice(first < 0 ? this.inbox.length : first, 0, item);

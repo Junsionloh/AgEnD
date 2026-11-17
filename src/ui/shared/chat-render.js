@@ -418,6 +418,8 @@
         var had = out[seen[k]];
         var next = nextDeliveryState(had.delivery, m.delivery);
         if (next !== had.delivery) out[seen[k]] = had = Object.assign({}, had, { delivery: next });
+        // AGEND-279: …and the copy that knows when it was handed over, or how its interjection went.
+        if ((m.sentAt && !had.sentAt) || (m.steer && m.steer !== had.steer)) out[seen[k]] = had = Object.assign({}, had, { sentAt: had.sentAt || m.sentAt, steer: m.steer || had.steer });
         // #1266: …and the copy whose buttons got further (open → chosen / expired) shows them.
         if (m.buttons && (!had.buttons || buttonsRank(m.buttons) > buttonsRank(had.buttons) || (buttonsRank(m.buttons) === buttonsRank(had.buttons) && m.buttons.poll && had.buttons.poll && m.buttons.poll.rev > had.buttons.poll.rev))) out[seen[k]] = Object.assign({}, had, { buttons: m.buttons });
         return;
@@ -449,15 +451,22 @@
     return DELIVERY_RANK[next] > DELIVERY_RANK[prev] ? next : prev;
   }
 
-  /** The list after a delivery report for `messageId`: the same list when nothing moved, else a copy. */
-  function applyDelivery(list, messageId, delivery) {
+  /**
+   * The list after a delivery report for `messageId`: the same list when nothing moved, else a copy. `extra` (AGEND-279): what the
+   * report says besides the tick — `sentAt` (when a message that waited was handed to the agent) and `steer` (how an interjection went).
+   */
+  function applyDelivery(list, messageId, delivery, extra) {
     var msgs = list || [];
     for (var i = msgs.length - 1; i >= 0; i--) {
       if (!msgs[i] || msgs[i].messageId !== messageId) continue;
       var next = nextDeliveryState(msgs[i].delivery, delivery);
-      if (next === msgs[i].delivery) return msgs;
+      var patch = {};
+      if (next !== msgs[i].delivery) patch.delivery = next;
+      if (extra && typeof extra.sentAt === "string" && extra.sentAt && msgs[i].sentAt !== extra.sentAt) patch.sentAt = extra.sentAt;
+      if (extra && typeof extra.steer === "string" && extra.steer && msgs[i].steer !== extra.steer) patch.steer = extra.steer;
+      if (!Object.keys(patch).length) return msgs;
       var out = msgs.slice();
-      out[i] = Object.assign({}, msgs[i], { delivery: next });
+      out[i] = Object.assign({}, msgs[i], patch);
       return out;
     }
     return msgs;
@@ -547,6 +556,9 @@
   function composerKey(ev, opts) {
     if (!ev || ev.key !== "Enter" || ev.isComposing || ev.keyCode === 229) return "none";
     if (opts && opts.touch) return "newline";
+    // AGEND-279: a composer that interjects (`opts.steer`) takes Ctrl+Enter (⌘+Enter on a Mac) as "steer"; its owner decides what that does
+    // (an agent that is working takes the message into its turn, an idle one just sends). Any other composer keeps it as it was.
+    if (opts && opts.steer && (ev.ctrlKey || ev.metaKey) && !ev.shiftKey && !ev.altKey) return "steer";
     if (ev.shiftKey || ev.altKey || ev.ctrlKey || ev.metaKey) return "newline";
     return "send";
   }

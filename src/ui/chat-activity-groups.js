@@ -228,3 +228,34 @@ export function composeRows(rows, { groups, live }) {
   if (live) out.push(act(live));
   return out;
 }
+
+/** A message that waited and was handed to the agent less than this long after it was typed is where it was typed (no move). */
+export const SENT_SLACK_MS = 1000;
+
+/**
+ * AGEND-279: where a person's message that has to wait for the running turn belongs in the thread.
+ *  • While it waits (`delivery: "queued"`) it is at the bottom, below everything the running turn shows (the work block included): it is
+ *    not part of this turn, and a message typed later (a pending bubble) comes after it. `tail` holds them, to be put after the composed rows.
+ *  • Once it was handed to the agent (`sentAt`, the fleet's clock) it is where THAT happened — after what was written before that moment, the
+ *    previous turn's last reply included — not where it was typed. A message that was never kept waiting stays where it is.
+ * Apply before grouping, so the turn windows (between one person's message and the next) are the ones the thread shows.
+ * @returns { main: rows without the waiting ones, tail: the waiting rows then the pending bubbles }
+ */
+export function splitQueued(rows) {
+  let end = rows.length;
+  while (end > 0 && rows[end - 1].outgoing) end--;
+  const queued = [], main = [];
+  for (const x of rows.slice(0, end)) (x.role === "user" && x.delivery === "queued" && !x.outgoing ? queued : main).push(x);
+  for (const x of main.slice()) {
+    if (x.role !== "user" || !x.sentAt) continue;
+    const at = Date.parse(x.sentAt), typed = rowTs(x);
+    if (!Number.isFinite(at) || !typed || !(at > typed + SENT_SLACK_MS)) continue;
+    const from = main.indexOf(x);
+    let to = main.length;
+    for (let i = from + 1; i < main.length; i++) { const t = rowTs(main[i]); if (t && t > at) { to = i; break; } }
+    if (to === from + 1) continue;
+    main.splice(from, 1);
+    main.splice(to - 1, 0, x);
+  }
+  return { main, tail: queued.concat(rows.slice(end)) };
+}

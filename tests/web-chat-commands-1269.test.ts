@@ -305,13 +305,72 @@ describe("the chat's commands (the real page modules)", () => {
     c.fx.respond = (path: string) => (path === "/ui/command" ? new Promise((r) => { release = () => r({ text: "ok" }); }) : {});
     await c.type("/ctx"); await c.key("Enter");
     expect(c.box().value, "an admitted command consumes its line").toBe("");
-    await c.type("/steer please preserve this complete directive"); await c.key("Enter");
+    await c.type("/btw please preserve this complete directive"); await c.key("Enter");
     expect(c.commands()).toHaveLength(1);
-    expect(c.box().value).toBe("/steer please preserve this complete directive");
+    expect(c.box().value).toBe("/btw please preserve this complete directive");
     release(); await settle();
     await c.key("Enter");                                                      // now free: it runs, and is consumed
-    expect(c.commands().map((x) => x.body.command)).toEqual(["ctx", "steer"]);
+    expect(c.commands().map((x) => x.body.command)).toEqual(["ctx", "btw"]);
     expect(c.box().value).toBe("");
+  });
+
+  describe("AGEND-279: interjecting by key (Enter queues, Ctrl+Enter / ⌘+Enter interjects while the agent works)", () => {
+    const sentFlags = (c: { sends: () => Array<{ body?: any }> }) => c.sends().map((x) => [x.body?.message, x.body?.steer]);
+    const working = { state: "working", steer_supported: true };
+    it("working: Enter is a plain send (queued), Ctrl+Enter and ⌘+Enter are interjections — never a command card", async () => {
+      const c = await chatPage(working);
+      c.fx.respond = (path: string) => (path.startsWith("/ui/history") ? { messages: [] } : path === "/ui/send" ? { sent: true, messageId: "web-1" } : {});
+      await c.type("queue me"); await c.key("Enter");
+      await c.type("interject me"); await c.key("Enter", { ctrlKey: true });
+      await c.type("and me"); await c.key("Enter", { metaKey: true });
+      expect(sentFlags(c)).toEqual([["queue me", undefined], ["interject me", true], ["and me", true]]);
+      expect([c.commands(), c.card()]).toEqual([[], null]);
+    });
+    it("Shift+Enter and Alt+Enter are still a new line: nothing is sent", async () => {
+      const c = await chatPage(working);
+      await c.type("line"); await c.key("Enter", { shiftKey: true }); await c.key("Enter", { altKey: true }); await c.key("Enter", { ctrlKey: true, shiftKey: true });
+      expect(c.sends()).toEqual([]);
+    });
+    it("idle: Ctrl+Enter is a plain send, like Enter", async () => {
+      const c = await chatPage({ state: "idle", steer_supported: true });
+      c.fx.respond = (path: string) => (path.startsWith("/ui/history") ? { messages: [] } : path === "/ui/send" ? { sent: true, messageId: "web-1" } : {});
+      await c.type("one"); await c.key("Enter", { ctrlKey: true });
+      await c.type("two"); await c.key("Enter");
+      expect(sentFlags(c)).toEqual([["one", undefined], ["two", undefined]]);
+    });
+    it("an agent that cannot take one still gets the request (the server queues it and the bubble says so)", async () => {
+      const c = await chatPage({ state: "working", steer_supported: false });
+      c.fx.respond = (path: string) => (path.startsWith("/ui/history") ? { messages: [] } : path === "/ui/send" ? { sent: true, messageId: "web-1", steer: "unsupported" } : {});
+      await c.type("hello"); await c.key("Enter", { ctrlKey: true });
+      expect(sentFlags(c)).toEqual([["hello", true]]);
+      expect(c.p.root.querySelector(".btn-steer")).toBeNull();                      // …and no Interject button is offered
+    });
+    it("`/steer text` is an interjection through the same door: one send, no command, no card", async () => {
+      const c = await chatPage(working);
+      c.fx.respond = (path: string) => (path.startsWith("/ui/history") ? { messages: [] } : path === "/ui/send" ? { sent: true, messageId: "web-1" } : {});
+      await c.type("/steer also the date"); await c.key("Enter");
+      expect(sentFlags(c)).toEqual([["also the date", true]]);
+      expect([c.commands(), c.card(), c.box().value]).toEqual([[], null, ""]);
+    });
+    it("the Interject button (a phone has no Ctrl+Enter) is beside Send only while the agent works and can take one; it interjects", async () => {
+      const c = await chatPage(working);
+      c.fx.respond = (path: string) => (path.startsWith("/ui/history") ? { messages: [] } : path === "/ui/send" ? { sent: true, messageId: "web-1" } : {});
+      const btn = () => c.p.root.querySelector(".btn-steer");
+      expect(btn()).not.toBeNull();
+      expect(btn()!.disabled, "nothing to send yet").toBe(true);
+      await c.type("by tap"); expect(btn()!.disabled).toBe(false);
+      fire(btn(), "click"); await settle();
+      expect(sentFlags(c)).toEqual([["by tap", true]]);
+      c.stream.emit("status", { uptime: 2, instances: [inst("w", { state: "idle", steer_supported: true })] }); await settle();
+      expect(btn(), "idle: gone").toBeNull();
+    });
+    it("the small text under the box says what the keys do while it works (and the usual words when idle)", async () => {
+      const c = await chatPage(working);
+      const hint = () => c.p.root.querySelector(".composer-row .hint")!.textContent;
+      expect(hint()).toBe("Enter queues · Ctrl+Enter interjects · Shift+Enter for a new line");
+      c.stream.emit("status", { uptime: 2, instances: [inst("w", { state: "idle", steer_supported: true })] }); await settle();
+      expect(hint()).toBe("Enter to send · Shift+Enter for a new line");
+    });
   });
 
   it("one command at a time: a second Enter while one is out sends nothing", async () => {
@@ -482,7 +541,8 @@ describe("the chat's commands (the real page modules)", () => {
     expect(c.card().querySelector(".cmd-text").textContent).toBe("cancel.not_running");
   });
 
-  it.each(["steer x", "btw x", "pause", "wake", "save notes.md"])("an answer not marked sent (/%s) stays until dismissed", async (command) => {
+  // (`/steer x` is no longer a card: AGEND-279 sends it as an interjection, and its bubble carries the result.)
+  it.each(["btw x", "pause", "wake", "save notes.md"])("an answer not marked sent (/%s) stays until dismissed", async (command) => {
     const c = await chatPage();
     c.fx.respond = (path: string) => (path === "/ui/command" ? { text: "sent" } : {});
     await c.type(`/${command}`); await c.key("Enter"); await settle();

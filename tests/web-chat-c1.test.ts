@@ -20,7 +20,7 @@ interface Render {
   renderMarkdown(text: unknown): string;
   escapeHtml(text: unknown): string;
   mergeMessages(existing: unknown[] | undefined, incoming: unknown[], cap?: number): Array<{ id: number }>;
-  composerKey(ev: unknown, opts?: { touch?: boolean }): "send" | "newline" | "none";
+  composerKey(ev: unknown, opts?: { touch?: boolean; steer?: boolean }): "send" | "newline" | "none" | "steer";
 }
 const SRC = readFileSync(join(process.cwd(), "src", "ui", "shared", "chat-render.js"), "utf8");
 function asScript(): Render { const c = vm.createContext({}); vm.runInContext(SRC, c); return (c as { AgendChatRender: Render }).AgendChatRender; }
@@ -280,6 +280,14 @@ describe.each([["a classic script", asScript], ["a CommonJS module", asModule]])
     it.each([
       [{ key: "Enter" }, "newline"], [{ key: "Enter", shiftKey: true }, "newline"], [{ key: "Enter", isComposing: true }, "none"], [{ key: "a" }, "none"],
     ])("touch: %j → %s", (ev, expected) => { expect(composerKey(ev, { touch: true })).toBe(expected); });
+    // AGEND-279: a composer that interjects (`steer`) reads Ctrl+Enter / ⌘+Enter as "steer"; every other key, and every composer that does not ask, is as before.
+    it.each([
+      [{ key: "Enter", ctrlKey: true }, "steer"], [{ key: "Enter", metaKey: true }, "steer"],
+      [{ key: "Enter" }, "send"], [{ key: "Enter", shiftKey: true }, "newline"], [{ key: "Enter", altKey: true }, "newline"],
+      [{ key: "Enter", ctrlKey: true, shiftKey: true }, "newline"], [{ key: "Enter", ctrlKey: true, altKey: true }, "newline"],
+      [{ key: "Enter", ctrlKey: true, isComposing: true }, "none"], [{ key: "Enter", ctrlKey: true, keyCode: 229 }, "none"], [{ key: "a", ctrlKey: true }, "none"],
+    ])("steer: %j → %s", (ev, expected) => { expect(composerKey(ev, { steer: true })).toBe(expected); });
+    it("a touch screen has no Ctrl+Enter: Return is a new line there even for a composer that interjects", () => { expect(composerKey({ key: "Enter", ctrlKey: true }, { touch: true, steer: true })).toBe("newline"); });
     it("no touch flag: as before", () => { expect([composerKey({ key: "Enter" }, {}), composerKey({ key: "Enter" }, { touch: false })]).toEqual(["send", "send"]); });
   });
 });
@@ -650,7 +658,7 @@ describe("chat page: the composer and the history", () => {
     expect(panel).toContain("<${ComposerInput} inputRef=${input}");
     expect(composer).toMatch(/<textarea id=\$\{ids\.msgIn \|\| "msgIn"\}/);
     expect(composer).not.toMatch(/<input id="msgIn"/);
-    expect(panel).toContain("R().composerKey(e, { touch: touchScreen() })");
+    expect(panel).toContain("R().composerKey(e, { touch: touchScreen(), steer: true })");
     expect(panel).toContain("store.openHistory(name, lease, ac?.signal)");   // #2188: aborted when the chat is left before it answers
     const store = readFileSync(join(process.cwd(), "src", "ui", "chat-store.js"), "utf8");
     expect(store).toContain("R().mergeMessages(");
@@ -672,7 +680,7 @@ describe("chat page: the composer and the history", () => {
     const store = readFileSync(join(process.cwd(), "src", "ui", "chat-store.js"), "utf8");
     // A send never writes into a composer: the composer is emptied when it goes, and a failed text stays in its bubble —
     // back in the composer only by the person's Put back (putBackOutgoing, the one writer).
-    const sendFn = store.slice(store.indexOf("  function send(target) {"), store.indexOf("  /** Take this chat's waiting sends"));
+    const sendFn = store.slice(store.indexOf("  function send(target, opts = {}) {"), store.indexOf("  /** Take this chat's waiting sends"));
     const putBack = store.slice(store.indexOf("  function putBackOutgoing("), store.indexOf("  function addFiles("));
     expect([sendFn.match(/s\.drafts\[target\] = [^;]+;/g), /s\.drafts\[target\] = (txt|e\.text)/.test(store.replace(putBack, "")), /s\.drafts\[target\] = e\.text/.test(putBack)])
       .toEqual([['s.drafts[target] = "";'], false, true]);

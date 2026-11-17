@@ -354,6 +354,8 @@ export interface LifecycleContext {
   stopStatuslineWatcher(name: string): void;
   reactMessageStatus(instanceName: string, chatId: string, messageId: string, status: DeliveryStatus, threadId?: string): void;
   finishDeliveryStatus?(instanceName: string, chatId: string, messageId: string, status: DeliveryStatus, threadId?: string): void;
+  /** AGEND-279: a web message that asked to interject went another way (see WebSteerState). */
+  reportSteer?(instanceName: string, messageId: string, steer: "interrupted" | "refused"): void;
   /** #1005: the instance's own status emojis, for the instructions' "avoid these" line. */
   statusEmojiAvoidList?(instanceName: string): string[];
   startPersistedPausedInstance(name: string, transition?: TransitionHandle): Promise<void>;
@@ -981,6 +983,10 @@ export class InstanceLifecycle {
     daemon.on("message_delivered", (data: { chatId: string; messageId: string; threadId?: string }) => {
       this.ctx.reactMessageStatus(name, data.chatId, data.messageId, "processing", data.threadId);
     });
+    // AGEND-279: a message that asked to interject went another way than first said (the turn was cut short for it; the CLI refused it).
+    daemon.on("message_steered", safeHandler((data: { messageId: string; steer: string }) => {
+      if (data && (data.steer === "interrupted" || data.steer === "refused")) this.ctx.reportSteer?.(name, data.messageId, data.steer);
+    }, this.ctx.logger, `daemon.message_steered[${name}]`));
     daemon.on("message_confirmed", (data: { chatId: string; messageId: string; threadId?: string }) => {
       if (this.ctx.finishDeliveryStatus) this.ctx.finishDeliveryStatus(name, data.chatId, data.messageId, "delivered", data.threadId);
       else this.ctx.reactMessageStatus(name, data.chatId, data.messageId, "delivered", data.threadId);

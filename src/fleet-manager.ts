@@ -287,7 +287,8 @@ import { createNativeWindowsInstance, updateNativeWindowsInstance } from "./nati
 import { NativeInstanceConfigEdit, parseNativeInstanceCreate, type NativeInstanceCreateInput } from "./native-instance-input.js";
 import { LogService, thinkingOn, type LiveSteps, type LogAnswer, type LogQuery, type LogSource } from "./log-service.js";
 import { viewHistory, type ViewHistoryAnswer, type ViewHistoryQuery } from "./view-history.js";
-import { WebChatHistory, WEB_CHAT_TEXT_MAX, isWebMessageId, newWebMessageId, webChatFrom, type WebChatAttachment, type WebChatPost } from "./web-chat-history.js";
+import { WebChatHistory, WEB_CHAT_TEXT_MAX, isWebMessageId, newWebMessageId, webChatFrom, type WebChatAttachment, type WebChatPost, type WebSteerState } from "./web-chat-history.js";
+import { instanceSupportsSteer } from "./steer-capability.js";
 import { WEB_ECHO_COPIES_MAX, WEB_MIRROR_TIMEOUT_MS, webReactionEmoji, webReactionProblem, type WebEchoCopy } from "./web-reactions.js";
 import { WebChatDiskStore, isSafeInstanceDirName } from "./web-chat-store.js";
 import { SeenUsers, resolveMentions, type MentionNames, type MentionQuery, type MentionSource } from "./web-mentions.js";
@@ -17072,7 +17073,38 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   private reportWebDelivery(instanceName: string, messageId: string, status: DeliveryStatus): void {
     if (status !== "queued" && status !== "processing" && status !== "delivered" && status !== "failed") return;
     const m = this.webChatHistory.setDelivery(instanceName, messageId, status);
-    if (m) this.emitSseEvent("delivery", { instance: instanceName, messageId, delivery: m.delivery });
+    if (m) this.emitSseEvent("delivery", { instance: instanceName, messageId, delivery: m.delivery, ...(m.sentAt ? { sentAt: m.sentAt } : {}), ...(m.steer ? { steer: m.steer } : {}) });
+  }
+
+  private readonly earlySteer = new Map<string, WebSteerState>();
+
+  /** AGEND-279: a message that asked to interject went another way (the turn was cancelled for it; the CLI refused it): the bubble says so. Web messages only. */
+  reportSteer(instanceName: string, messageId: string, steer: WebSteerState): void {
+    if (!isWebMessageId(messageId)) return;
+    // The row is recorded once the send is answered, which can be after the runner has already said how it went: kept for it.
+    if (!this.webChatHistory.findByMessageId(instanceName, messageId)) {
+      this.earlySteer.set(messageId, steer);
+      if (this.earlySteer.size > 50) this.earlySteer.delete(this.earlySteer.keys().next().value as string);
+      return;
+    }
+    const m = this.webChatHistory.setSteer(instanceName, messageId, steer);
+    if (m) this.emitSseEvent("delivery", { instance: instanceName, messageId, ...(m.delivery ? { delivery: m.delivery } : {}), ...(m.sentAt ? { sentAt: m.sentAt } : {}), steer });
+  }
+
+  /**
+   * How a message that asks to interject would go now (AGEND-279): `add` into the running turn, `interrupt` (cancel, then it runs next),
+   * `native` (a terminal agent's own steer), `idle` (nothing runs: sent as any message), `unsupported` (queued: the agent has no way to interject).
+   */
+  webSteerMode(instanceName: string): "add" | "interrupt" | "native" | "idle" | "unsupported" {
+    const acp = this.acpSteerMode(instanceName);
+    if (acp) return acp;
+    if (!["working", "stuck"].includes(this.getInstanceExecutionState(instanceName) ?? "")) return "idle";
+    return instanceSupportsSteer(this.backendNameForInstance(instanceName), this.instanceLaunchSupportsSteer(instanceName)) ? "native" : "unsupported";
+  }
+
+  /** AGEND-279: a web message sent as an interjection, handed to the agent the way `/steer` hands one (the same receipt and epoch). */
+  sendWebSteer(instanceName: string, payload: Record<string, unknown>, origin: HumanOrigin | undefined, originalBody: string): boolean {
+    return this.sendHumanControl(instanceName, { ...payload, type: "steer", delivery_epoch: this.getDeliveryEpoch(instanceName) ?? undefined }, origin, originalBody);
   }
 
   /**
@@ -23224,12 +23256,13 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       // #2861: an Office share's dialogue box hears that someone talked to an instance (never what was said).
       this.officeTalk.noteMessage(data);
       // A chat message: record it, and send it WITH its id so a reconnecting stream can ask for what it missed.
-      const m = data as { instance?: unknown; sender?: unknown; text?: unknown; ts?: unknown; attachments?: unknown; messageId?: unknown; anchor?: unknown; role?: unknown; buttons?: unknown; click?: unknown; links?: unknown; channel?: unknown; from?: unknown; replyTo?: unknown; cards?: unknown; posts?: unknown; reserved?: unknown };
+      const m = data as { instance?: unknown; sender?: unknown; text?: unknown; ts?: unknown; steer?: unknown; attachments?: unknown; messageId?: unknown; anchor?: unknown; role?: unknown; buttons?: unknown; click?: unknown; links?: unknown; channel?: unknown; from?: unknown; replyTo?: unknown; cards?: unknown; posts?: unknown; reserved?: unknown };
       const recorded = this.webChatHistory.record({
         instance: String(m.instance ?? ""), sender: String(m.sender ?? ""), text: String(m.text ?? ""), ts: String(m.ts ?? new Date().toISOString()),
         attachments: Array.isArray(m.attachments) ? m.attachments as WebChatAttachment[] : undefined,
         messageId: typeof m.messageId === "string" ? m.messageId : undefined,
         anchor: typeof m.anchor === "string" ? m.anchor : undefined,
+        steer: (typeof m.messageId === "string" ? this.earlySteer.get(m.messageId) : undefined) ?? m.steer,
         role: typeof m.role === "string" ? m.role : undefined,
         buttons: m.buttons,
         click: m.click,
@@ -29975,6 +30008,9 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         backend,
         // How it runs: the effective cli_adapter, whether it has a terminal pane, and (acp) the approve-all switch.
         ...adapterUiView(this.daemons.get(name), classic ? undefined : this.fleetConfig?.instances[name], this.fleetConfig?.defaults),
+        // AGEND-279: whether a message sent as an interjection (Ctrl+Enter) can be taken into a running turn: every ACP agent (the
+        // CLI's own way, else cancel and send), a terminal agent whose backend steers. Others queue it (the chat says so).
+        steer_supported: (() => { try { return this.instanceRunsAcp(name) || instanceSupportsSteer(backend, this.instanceLaunchSupportsSteer(name)); } catch { return false; } })(),
         effort,
         effort_source,
         // Whether the chat header's effort chip is offered (shown as "auto" while none is set): the backend takes an
