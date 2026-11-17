@@ -387,13 +387,19 @@ describe("the chat's commands (the real page modules)", () => {
       expect(kids.slice(-2)).toEqual(["queue-mark", "send-now"]);                                                  // the mark, then the button: `Queued … | Send now`
       expect(b.closest(".msg-actions"), "not in the hover strip").toBeNull();
     });
-    it("the hover strip is the reply icon alone, as it was (no Send now there, no special case for a waiting bubble)", async () => {
+    it("a waiting message has no hover strip (it floats over the meta line's right end, where Send now is); one that is not waiting has the reply icon, as ever", async () => {
+      const c = await chatPage(busy, [row(1), row(2, { delivery: "processing" }), row(3, { delivery: undefined }), row(4, { role: "agent", delivery: undefined })]);
+      const keyed = [...c.p.root.querySelectorAll(".msg[data-key]")].map((m: any) => [m.dataset.key, m.querySelectorAll(".msg-actions").length, [...m.querySelectorAll(".msg-actions [data-act]")].map((e: any) => e.dataset.act).join()]);
+      expect(keyed).toEqual([["b-2", 1, "reply"], ["b-3", 1, "reply"], ["b-4", 1, "reply"], ["b-1", 0, ""]]);   // (the waiting one is last, and has no strip)
+      expect(sendNowBtn(c)).not.toBeNull();                                                                          // (the button is still there)
+    });
+    it("when it is sent (or interjected) the reply icon comes back", async () => {
       const c = await chatPage(busy, [row(1)]);
-      const strip = c.p.root.querySelector(".msg.user .msg-actions");
-      expect([...strip.children].map((e: any) => e.dataset.act)).toEqual(["reply"]);
-      expect(strip.className).toBe("msg-actions");
-      const css = readFileSync(join(process.cwd(), "src", "ui", "shared", "app.css"), "utf8");
-      expect(css).not.toMatch(/has-sendnow|\.sendnow/);
+      expect(c.p.root.querySelectorAll(".msg-actions")).toHaveLength(0);
+      const prev = c.fx.respond;
+      c.fx.respond = (path: string, body: any) => path === "/ui/send-now" ? { sent: true, steer: "added" } : prev(path, body);
+      fire(sendNowBtn(c), "click"); await settle();
+      expect([...c.p.root.querySelectorAll(".msg.user .msg-actions [data-act]")].map((e: any) => e.dataset.act)).toEqual(["reply"]);
     });
     it.each([
       ["idle", { ...busy, state: "idle" }, {}],
