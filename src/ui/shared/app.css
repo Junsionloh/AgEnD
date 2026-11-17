@@ -1191,6 +1191,11 @@ img.amb-p { object-fit: contain; }
   background: var(--surface); box-shadow: var(--shadow-1); opacity: 0; pointer-events: none; transition: opacity var(--t-fast); }
 .msg:hover > .msg-actions, .msg:focus-within > .msg-actions { opacity: 1; pointer-events: auto; }
 @media (hover: none) { .msg-actions { display: none; } }
+/* AGEND-279: "Send now" on a message that waits for the running turn, beside the reply icon. A touch screen has no hover, so a waiting bubble shows it always. */
+.msg-actions .send-now { width: auto; padding: 0 var(--s-2); font-size: var(--fs-xs); white-space: nowrap; }
+.msg-actions .send-now:disabled { opacity: .5; cursor: default; }
+.msg.sendnow { margin-top: 14px; }
+@media (hover: none) { .msg-actions.has-sendnow { display: flex; opacity: 1; pointer-events: auto; } .msg-actions.has-sendnow [data-act="reply"] { display: none; } }
 .msg-quote { display: flex; align-items: center; gap: 4px; max-width: 100%; margin: 0 0 4px; padding: 2px var(--s-2) 2px calc(var(--s-2) + 3px); border: 0;
   --lbar-color: var(--border-strong, var(--border)); --lbar-inset: 4px; --lbar-left: 2px; border-radius: var(--r-sm); background: transparent; color: var(--text-3);
   font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer; overflow: hidden; }
@@ -1292,8 +1297,6 @@ img.amb-p { object-fit: contain; }
 .composer-ph { position: absolute; left: var(--s-1); right: var(--s-1); top: 7px; pointer-events: none; color: var(--text-3);
   font-size: var(--fs-md); line-height: var(--lh-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .composer-field textarea:not(:placeholder-shown) + .composer-ph { display: none; }   /* text in the box, composing text too */
-/* AGEND-279: the Interject button beside Send while the agent works (a phone has no Ctrl+Enter). */
-.btn-steer { align-self: flex-end; height: 36px; flex: none; white-space: nowrap; }
 .btn-send { width: 36px; padding: 0; }
 .btn-send .send-label { display: none; }
 /* A narrow phone: Stop reply beside Send leaves the message box no room — the label is for screen readers there. */

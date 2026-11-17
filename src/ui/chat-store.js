@@ -45,7 +45,7 @@ const COMPACT_PAGE_LIMIT_MS = 11 * 60_000;
 export function createChatStore(deps) {
   const s = {
     msgs: {}, drafts: {}, replies: {}, pendingFiles: {}, sending: {}, outgoing: {}, instanceStatus: {}, waking: {},
-    prompts: {}, workingSince: {}, stopping: {}, cancelling: {}, scrollMemo: {}, historyRead: new Set(), gapped: new Set(), allHidden: new Set(), rbBusy: new Set(),
+    prompts: {}, workingSince: {}, stopping: {}, cancelling: {}, scrollMemo: {}, historyRead: new Set(), gapped: new Set(), allHidden: new Set(), rbBusy: new Set(), sendingNow: new Set(),
     pollMine: readPollMine(),
     // #1823 (#1828 review): the server's clock minus this device's. A poll's deadline is the server's; a page whose clock
     // is a few seconds off would count a 10 s poll wrong. Only the server's explicit `clock` sets it (#1830 review): a
@@ -178,6 +178,23 @@ export function createChatStore(deps) {
     if (r && r.answered && Array.isArray(r.options)) { s.pollMine[id] = r.options.filter(Number.isInteger); writePollMine(s.pollMine); }
     s.rbBusy.delete(id); changed(instance, "msgs");
     if (!r || !r.answered) deps.toast(r && r.error ? r.error : t("chat.disconnected"), false);
+  }
+
+  /**
+   * AGEND-279 "Send now": a message of mine that waits behind the running turn is taken out of the queue and interjected. One press per message
+   * (the button is off from the press on). The answer says how it went; a message that was no longer waiting (the turn ended meanwhile) was
+   * sent by the queue as any message and is left alone — nothing is sent twice.
+   */
+  async function sendNow(instance, messageId) {
+    if (!messageId || s.sendingNow.has(messageId)) return;
+    s.sendingNow.add(messageId); changed(instance, "msgs");
+    let r;
+    try { r = await api("POST", "/ui/send-now", { instance, messageId }); }
+    catch (err) { r = { error: err && err.message ? err.message : t("chat.disconnected") }; }
+    if (r && r.sent === true && typeof r.steer === "string") {
+      s.msgs[instance] = R().applyDelivery(s.msgs[instance], messageId, undefined, { steer: r.steer });   // (its `sentAt` comes from the server, on the fleet's clock)
+    } else if (!r || r.error) { s.sendingNow.delete(messageId); deps.toast(r && r.error ? r.error : t("chat.disconnected"), false); }
+    changed(instance, "msgs");
   }
 
   /**
@@ -682,7 +699,7 @@ export function createChatStore(deps) {
     attach, applyStatus, applyActivity, ingest, applyDeliveries, openHistory, onGap,
     onPrompt, applyPrompts, resolvePrompt, answerPrompt, answerByNonce, holdPrompt, releasePrompt, promptsFor,
     applyReplyButtons, clickReplyButton,
-    uploadFile, send, retryOutgoing, deleteOutgoing, putBackOutgoing, threadRows, addFiles, removeFile, attachPastedText, fileBackAsText, isPasted, setDraft,
+    uploadFile, send, sendNow, retryOutgoing, deleteOutgoing, putBackOutgoing, threadRows, addFiles, removeFile, attachPastedText, fileBackAsText, isPasted, setDraft,
     startReply, clearReply, findQuoted, addToDraft, captureDraft, draftCurrent, clearCapturedDraft, acceptDraft,
     cancelReply, isUser, runCommand, dismissCommand, commandFree,
     allHidden: (name) => s.allHidden.has(name),

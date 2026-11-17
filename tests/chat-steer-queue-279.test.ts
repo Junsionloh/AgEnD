@@ -176,16 +176,17 @@ describe("the composer", () => {
   it("Enter queues (a plain send) and Ctrl+Enter / ⌘+Enter interjects while the agent works, sends plainly when it does not", () => {
     expect(panel).toContain('const key = R().composerKey(e, { touch: touchScreen(), steer: true });');
     expect(panel).toContain('if (key === "send") { e.preventDefault(); submit(); }');
-    expect(panel).toContain('else if (key === "steer") { e.preventDefault(); submit(busy ? { steer: true } : {}); }');
+    expect(panel).toContain('else if (key === "steer") { e.preventDefault(); submit(busy && !guest ? { steer: true } : {}); }');   // a guest's Ctrl+Enter is a plain send
     expect(panel).toContain("store.send(name, o.steer ? { steer: true } : undefined);");
   });
   it("`/steer text` goes the same way: its result is the bubble's mark, not a card", () => {
-    expect(panel).toContain('if (cmd && cmd.command === "steer" && cmd.args) { store.setDraft(name, cmd.args); store.send(name, { steer: true }); return; }');
+    expect(panel).toContain('if (cmd && cmd.command === "steer" && cmd.args && !guest) { store.setDraft(name, cmd.args); store.send(name, { steer: true }); return; }');
   });
-  it("the Interject button is beside Send only while the agent works and can take one; the hint under the box says what the keys do", () => {
-    expect(panel).toContain("steer=${busy && inst?.steer_supported && !guest ?");
+  it("there is no Interject button; the hint under the box says what the keys do", () => {
     expect(panel).toContain("composerHint(inst, R().isBusy(exec))");
-    expect(read("shared", "chat-composer.js")).toContain("btn-steer");
+    expect(panel).not.toContain("btn-steer");
+    expect(read("shared", "chat-composer.js")).not.toContain("btn-steer");
+    expect(read("shared", "app.css")).not.toContain(".btn-steer");
   });
   it("the hint's words, in both languages, name the key that interjects", async () => {
     const strings = await import("/ui/js/chat-strings.js");

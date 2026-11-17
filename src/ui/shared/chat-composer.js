@@ -18,10 +18,9 @@ export const touchScreen = () => typeof matchMedia === "function" && matchMedia(
  * The composer's row. `value`: the draft; `onValue(text)`: the draft changed (never while composing). `placeholder`: the
  * words drawn in the empty box (also its accessible name). `inputRef`: the caller's ref to the box (focus, undo).
  * `attach`: { title, onFiles(fileList) } or null (no Attach). `stop`: accepted from older callers and not drawn (M-2904).
- * `steer` (AGEND-279): { label, title, disabled, onClick } — a small button beside Send that interjects while the agent works (a phone has no Ctrl+Enter); null: none.
  * `send`: { hidden, disabled, label, onClick } — keep it shown (disabled when there is nothing to send) so the box keeps one width. `controls` / `expanded` / `activeDescendant`: the box's palette ARIA.
  */
-export function ComposerInput({ inputRef, value, placeholder, onValue, onKeyDown, onPaste, attach = null, stop, send, steer = null,
+export function ComposerInput({ inputRef, value, placeholder, onValue, onKeyDown, onPaste, attach = null, stop, send,
   controls, expanded = false, activeDescendant, ids = {} }) {
   const own = useRef(null), input = inputRef || own, fileIn = useRef(null);
   const composing = useRef(false);
@@ -51,8 +50,6 @@ export function ComposerInput({ inputRef, value, placeholder, onValue, onKeyDown
         aria-activedescendant=${activeDescendant} onInput=${onInput} onKeyDown=${onKeyDown} onPaste=${onPaste}
         oncompositionstart=${onCompositionStart} oncompositionend=${onCompositionEnd} onBlur=${onCompositionEnd}
         placeholder=" "></textarea><span class="composer-ph" aria-hidden="true">${placeholder}</span></span>
-      ${steer ? html`<button type="button" class="btn btn-sm btn-steer" disabled=${steer.disabled} onMouseDown=${(e) => e.preventDefault()}
-        aria-label=${steer.title} title=${steer.title} onClick=${steer.onClick}>${steer.label}</button>` : null}
       <button id=${ids.sendBtn || "sendBtn"} type="button" class="btn btn-primary btn-send" hidden=${send.hidden} disabled=${send.disabled}
         onMouseDown=${(e) => e.preventDefault()}
         aria-label=${send.label} title=${send.label} onClick=${send.onClick}><${Icon} name="send" size=${16} /><span class="send-label">${send.label}</span></button>

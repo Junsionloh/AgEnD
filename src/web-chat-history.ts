@@ -797,6 +797,21 @@ export class WebChatHistory {
     return m;
   }
 
+  /**
+   * AGEND-279 "Send now": a message that waited was taken out of the queue and interjected now. It says how, and that it was handed over
+   * this moment (`sentAt`: the thread puts it in the turn it went into). Null when there is no such message, or it was no longer waiting.
+   */
+  markSentNow(instance: string, messageId: string, steer: WebSteerState): WebChatMessage | null {
+    const messages = this.byInstance.get(instance)?.messages ?? [];
+    let m: WebChatMessage | undefined;
+    for (let i = messages.length - 1; i >= 0 && !m; i--) if (messages[i]!.messageId === messageId) m = messages[i];
+    if (!m || m.role !== "user" || m.delivery !== "queued") return null;
+    m.steer = steer;
+    if (!m.sentAt) m.sentAt = new Date().toISOString();
+    this.persist(instance);
+    return m;
+  }
+
   /** AGEND-279: how a message that asked to interject went. Returns the message when it changed, null when there is no such message or nothing changed. */
   setSteer(instance: string, messageId: string, steer: WebSteerState): WebChatMessage | null {
     const messages = this.byInstance.get(instance)?.messages ?? [];

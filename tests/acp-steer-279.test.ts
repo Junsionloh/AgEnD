@@ -248,6 +248,62 @@ describe("the bubble of a message that asked to interject hears how it went (AGE
   });
 });
 
+describe("\"Send now\": a message that waits in the queue is taken out and interjected (AGEND-279)", () => {
+  const waiting = (h: Awaited<ReturnType<typeof boot>>) => h.runner.inboxOrder();
+  const prompts = (h: Awaited<ReturnType<typeof boot>>) => Object.values(sessions(h.state)).flat();
+  it("the CLI can add to a turn (grok): it is added to the running turn, left the queue, and is never prompted a second time", async () => {
+    const h = await boot({ grok: true });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.pushChannelMessage("C waits", meta("c"));
+    h.runner.pushChannelMessage("D waits", meta("d"));
+    expect(waiting(h)).toEqual(["C waits", "D waits"]);
+    expect(h.runner.interruptQueued("c")).toBe("add");
+    expect(waiting(h)).toEqual(["D waits"]);                                                  // gone from the queue
+    await until(() => turnEnds(h).length === 2, 10000, "A's turn and D's");
+    expect(calls(h.state).filter(c => "interject" in c).map(c => c.interject)).toEqual([expect.stringContaining("C waits")]);   // once, into the turn
+    expect(calls(h.state).filter(c => "cancelled" in c)).toEqual([]);
+    expect(prompts(h).filter(t => t.includes("C waits"))).toEqual([]);                        // never a prompt of its own
+    expect(prompts(h).filter(t => t.includes("D waits"))).toHaveLength(1);                    // the rest of the queue is untouched
+    expect(steps(h).filter(s => s.kind === "user").map(s => s.body)).toEqual(["A #slow", "C waits", "D waits"]);
+  });
+  it("agy folds a second prompt in: the same, one prompt for it and not a second", async () => {
+    const h = await boot({ env: { FAKE_ACP_CONCURRENT: "fold" } });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.pushChannelMessage("C waits", meta("c"));
+    expect(h.runner.interruptQueued("c")).toBe("add");
+    await until(() => turnEnds(h).length === 1, 10000, "the turn");
+    expect(waiting(h)).toEqual([]);
+    expect(prompts(h).filter(t => t.includes("C waits"))).toHaveLength(1);
+  });
+  it("a CLI with no way to add to a turn: the turn is cancelled, the message runs next, once", async () => {
+    const h = await boot({ plain: true });
+    h.fleet.send({ type: "fleet_inbound", content: "A #slow", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    h.runner.pushChannelMessage("C waits", meta("c"));
+    expect(h.runner.interruptQueued("c")).toBe("interrupt");
+    expect(waiting(h)).toEqual(["C waits"]);                                                  // now at the front, as an interruption (once)
+    await until(() => turnEnds(h).length === 2, 10000, "A cancelled, C run");
+    expect(turnEnds(h)).toEqual(["cancelled", "end_turn"]);
+    expect(prompts(h).filter(t => t.includes("C waits"))).toHaveLength(1);
+    expect(h.steered).toContainEqual({ chatId: "chat-1", messageId: "c", steer: "interrupted" });
+  });
+  it("it is not waiting any more (its turn has started, or it is gone): nothing is sent, and it is not sent twice", async () => {
+    const h = await boot();
+    h.fleet.send({ type: "fleet_inbound", content: "A #linger", meta: meta("a") });
+    await until(() => h.runner.getInstanceState() === "working", 3000, "A is working");
+    expect(h.runner.interruptQueued("a")).toBeNull();                                          // the running turn's own message: not in the queue
+    expect(h.runner.interruptQueued("nobody")).toBeNull();
+    h.runner.pushChannelMessage("C waits", meta("c"));
+    await until(() => turnEnds(h).length === 2, 10000, "both turns");                         // C ran as the next turn…
+    expect(h.runner.interruptQueued("c")).toBeNull();                                          // …so the press that comes now finds it gone
+    await sleep(100);
+    expect(prompts(h).filter(t => t.includes("C waits"))).toHaveLength(1);
+    expect(calls(h.state).filter(c => "cancelled" in c || "interject" in c)).toEqual([]);
+  });
+});
+
 describe("durable deliveries added to a running turn (second review)", () => {
   it("the verdict waits for the turn's end: nothing is completed while the turn runs, then delivered once", async () => {
     const outbox = new FakeOutbox();

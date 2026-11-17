@@ -287,6 +287,11 @@ describe.each([["a classic script", asScript], ["a CommonJS module", asModule]])
       [{ key: "Enter", ctrlKey: true, shiftKey: true }, "newline"], [{ key: "Enter", ctrlKey: true, altKey: true }, "newline"],
       [{ key: "Enter", ctrlKey: true, isComposing: true }, "none"], [{ key: "Enter", ctrlKey: true, keyCode: 229 }, "none"], [{ key: "a", ctrlKey: true }, "none"],
     ])("steer: %j → %s", (ev, expected) => { expect(composerKey(ev, { steer: true })).toBe(expected); });
+    it("a composer that does not ask for it (the Hub's, a caller passing only `touch`) keeps Ctrl+Enter / ⌘+Enter as a new line: it is never a steer", () => {
+      for (const opts of [undefined, {}, { touch: false }, { steer: false }, { touch: false, steer: undefined }]) {
+        expect([composerKey({ key: "Enter", ctrlKey: true }, opts), composerKey({ key: "Enter", metaKey: true }, opts)], JSON.stringify(opts)).toEqual(["newline", "newline"]);
+      }
+    });
     it("a touch screen has no Ctrl+Enter: Return is a new line there even for a composer that interjects", () => { expect(composerKey({ key: "Enter", ctrlKey: true }, { touch: true, steer: true })).toBe("newline"); });
     it("no touch flag: as before", () => { expect([composerKey({ key: "Enter" }, {}), composerKey({ key: "Enter" }, { touch: false })]).toEqual(["send", "send"]); });
   });

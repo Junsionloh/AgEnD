@@ -17102,6 +17102,21 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     return instanceSupportsSteer(this.backendNameForInstance(instanceName), this.instanceLaunchSupportsSteer(instanceName)) ? "native" : "unsupported";
   }
 
+  /**
+   * AGEND-279 "Send now": a web message that waits in an ACP agent's queue is taken out and interjected. Its row says how (and when), the pages are told.
+   * Null: it is not waiting in the queue (it started, or it is gone), nothing was sent. Only ACP agents have a queue that one message can leave.
+   */
+  sendQueuedNow(instanceName: string, messageId: string): "added" | "interrupted" | "idle" | null {
+    const runner = this.daemons.get(instanceName);
+    if (!runner || adapterOf(runner)?.id !== "acp") return null;
+    const mode = (runner as unknown as { interruptQueued?(id: string): "add" | "interrupt" | "idle" | null }).interruptQueued?.(messageId) ?? null;
+    if (mode === null || mode === "idle") return mode;
+    const steer: WebSteerState = mode === "add" ? "added" : "interrupted";
+    const m = this.webChatHistory.markSentNow(instanceName, messageId, steer);
+    if (m) this.emitSseEvent("delivery", { instance: instanceName, messageId, ...(m.delivery ? { delivery: m.delivery } : {}), ...(m.sentAt ? { sentAt: m.sentAt } : {}), steer });
+    return steer;
+  }
+
   /** AGEND-279: a web message sent as an interjection, handed to the agent the way `/steer` hands one (the same receipt and epoch). */
   sendWebSteer(instanceName: string, payload: Record<string, unknown>, origin: HumanOrigin | undefined, originalBody: string): boolean {
     return this.sendHumanControl(instanceName, { ...payload, type: "steer", delivery_epoch: this.getDeliveryEpoch(instanceName) ?? undefined }, origin, originalBody);
@@ -30010,6 +30025,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         ...adapterUiView(this.daemons.get(name), classic ? undefined : this.fleetConfig?.instances[name], this.fleetConfig?.defaults),
         // AGEND-279: whether a message sent as an interjection (Ctrl+Enter) can be taken into a running turn: every ACP agent (the
         // CLI's own way, else cancel and send), a terminal agent whose backend steers. Others queue it (the chat says so).
+        // "Send now" on a message that waits: only an ACP agent's queue lets one message leave it.
+        send_now_supported: (() => { try { return this.instanceRunsAcp(name); } catch { return false; } })(),
         steer_supported: (() => { try { return this.instanceRunsAcp(name) || instanceSupportsSteer(backend, this.instanceLaunchSupportsSteer(name)); } catch { return false; } })(),
         effort,
         effort_source,

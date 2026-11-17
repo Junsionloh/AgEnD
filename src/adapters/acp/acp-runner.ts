@@ -801,6 +801,21 @@ export class AcpRunner extends EventEmitter {
     this.admit(content, meta, deliveryEpoch, false, true);
   }
 
+  /**
+   * "Send now" (AGEND-279): the message with this id still waits in the queue — it is taken out and sent as an interruption (`interruptMessage`), so
+   * it is not in the queue a second time. Returns how it goes (`add`, `interrupt`, `idle`), or null when it is not waiting (it has started, or it is
+   * gone): then nothing is sent, and the message is left to go as the queue sends it.
+   */
+  interruptQueued(messageId: string): "add" | "interrupt" | "idle" | null {
+    const at = this.inbox.findIndex(i => !i.raw && i.meta.message_id === messageId);
+    if (at < 0) return null;
+    const [item] = this.inbox.splice(at, 1);
+    this.queued--;
+    const mode = this.interruptMode();
+    this.admit(item!.content, item!.meta, item!.epoch, false, true);
+    return mode;
+  }
+
   /** How an interruption sent now would be delivered: `add` (into the running turn, the CLI's own way), `interrupt` (cancel and a new prompt), `idle` (nothing runs: sent as it is). */
   interruptMode(): "add" | "interrupt" | "idle" {
     if (this.queued === 0) return "idle";

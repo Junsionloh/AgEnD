@@ -201,9 +201,13 @@ export function createThread(list, scroller, opts) {
     const clicked = x.role === "user" && x.click && typeof x.click.label === "string";
     // #2272: reply to it — a hover strip at its top right (phones: swipe left or long-press; R on a focused message).
     const key = msgKey(x);
-    const act = opts.canReply?.() === false ? "" : `<div data-trust="thread-control" class="msg-actions"><button type="button" class="chip-btn icon-only" data-act="reply" data-arg="${escAttr(key)}" title="${escAttr(tr("chat.reply"))}" aria-label="${escAttr(tr("chat.reply"))}">${REPLY}</button></div>`;
+    // AGEND-279: "Send now" — only on a message of this person that still waits, while the agent works and can let it leave its queue.
+    const sendNow = u && x.delivery === "queued" && !x.steer && typeof x.messageId === "string" && opts.canSendNow?.() === true;
+    const replyBtn = opts.canReply?.() === false ? "" : `<button type="button" class="chip-btn icon-only" data-act="reply" data-arg="${escAttr(key)}" title="${escAttr(tr("chat.reply"))}" aria-label="${escAttr(tr("chat.reply"))}">${REPLY}</button>`;
+    const sendNowBtn = sendNow ? `<button type="button" class="chip-btn send-now" data-act="sendNow" data-arg="${escAttr(x.messageId)}" title="${escAttr(tr("chat.sendNowTitle"))}" aria-label="${escAttr(tr("chat.sendNowTitle"))}"${opts.sendNowBusy?.(x.messageId) ? " disabled" : ""}>${escAttr(tr("chat.sendNow"))}</button>` : "";
+    const act = sendNowBtn || replyBtn ? `<div data-trust="thread-control" class="msg-actions${sendNow ? " has-sendnow" : ""}">${sendNowBtn}${replyBtn}</div>` : "";
     // M-3092 (Hub rooms): another person's message, a bubble on the left (`msg-person`); the fleet never sets x.person.
-    return `<div class="msg ${u ? "user" : "agent"}${x.person ? " msg-person" : ""}" data-key="${escAttr(key)}" tabindex="-1">${act}<div class="meta"><span class="sender">${escAttr(x.sender)}</span>${time}${ticks}${marks}</div>${quoteHtml(x.replyTo)}<div class="body">${clicked ? clickHtml(x.click) : `<div class="md">${renderedMarkdown(x.text, x.role === "agent", opts.emojis, opts.mentions, opts.mentionLabels?.())}</div>`}${R().attachmentsHtml(x.attachments, { htmlCards: x.role === "agent", goneTitle: tr("chat.attGone"), goneLabel: tr("chat.attUnavailable"), inlinePreviews: !PUBLIC_LINK(), textPreviews: true })}${buttons}</div>${R().reactionsHtml(x.reactions, tr("chat.reactedBy", x.instance || ""))}${tools}</div>`;
+    return `<div class="msg ${u ? "user" : "agent"}${x.person ? " msg-person" : ""}${sendNow ? " sendnow" : ""}" data-key="${escAttr(key)}" tabindex="-1">${act}<div class="meta"><span class="sender">${escAttr(x.sender)}</span>${time}${ticks}${marks}</div>${quoteHtml(x.replyTo)}<div class="body">${clicked ? clickHtml(x.click) : `<div class="md">${renderedMarkdown(x.text, x.role === "agent", opts.emojis, opts.mentions, opts.mentionLabels?.())}</div>`}${R().attachmentsHtml(x.attachments, { htmlCards: x.role === "agent", goneTitle: tr("chat.attGone"), goneLabel: tr("chat.attUnavailable"), inlinePreviews: !PUBLIC_LINK(), textPreviews: true })}${buttons}</div>${R().reactionsHtml(x.reactions, tr("chat.reactedBy", x.instance || ""))}${tools}</div>`;
   }
   /**
    * A message this page is sending (chat-store.js): its own bubble at once, dimmed with "Sending…" until the server
@@ -943,6 +947,7 @@ export function createThread(list, scroller, opts) {
       if (m && opts.clickReplyButton) opts.clickReplyButton(m[1], Number(m[2]));
     } else if (act === "showButtons") { const x = msgs.find(y => y.buttons && y.buttons.id === el.dataset.arg); if (x) reveal(msgKey(x)); }
     else if (act === "reply") { const x = msgs.find(y => msgKey(y) === el.dataset.arg); if (x) opts.startReply?.(x); }
+    else if (act === "sendNow") opts.sendNow?.(el.dataset.arg);                       // AGEND-279: a waiting message, interjected now
     else if (act === "jumpQuote") void jumpTo(el.dataset.arg);
     else if (act === "retryOut") opts.retryOutgoing?.(el.dataset.arg);                 // a failed send, again
     else if (act === "putBackOut") opts.putBackOutgoing?.(el.dataset.arg);              // back in the composer, to change it

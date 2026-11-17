@@ -673,6 +673,10 @@ function threadEntry(name, doc) {
     findQuoted: (key) => store.findQuoted(name, key),
     notice: (text) => toast(text, false),
     replyButtonBusy: (id) => store.state.rbBusy.has(id),
+    // AGEND-279: "Send now" on a message that waits for the running turn — only while the agent works, for an agent whose queue lets one message leave it, never for a guest.
+    canSendNow: () => !guestPage() && agentBusy(name) && appStore.get().instances.find((i) => i.name === name)?.send_now_supported === true,
+    sendNow: (messageId) => store.sendNow(name, messageId),
+    sendNowBusy: (messageId) => store.state.sendingNow.has(messageId),
     pollMine: (id) => store.state.pollMine[id],                            // #1823: this device's own vote
     serverNow: () => Date.now() + store.state.clockSkew,                   // #1823: the deadline is the server's
     panel: { shown: shownKey, open: (spec, o) => openPanel(spec, o), version: panelVersion, claim: claimPanel, claims: panelClaims,   // #1481, #1704
@@ -721,7 +725,8 @@ function follow(name, thread) {
     // A fleet-wide status poll says `null`; an activity event, the instance.
     if ((instance === null || instance === name) && wasBusy !== agentBusy(name)) {
       wasBusy = !wasBusy;
-      if (feed) { thread.render(rowsOf(name)); feed.nudge(); }
+      thread.render(rowsOf(name));                                       // (a waiting message's "Send now" goes with the work)
+      if (feed) feed.nudge();
     }
     if (instance !== name) return;
     if (kind === "msgs") { thread.render(rowsOf(name)); wantEmojis(store.state.msgs[name]); if (feed) feed.nudge(); }   // a message came or went: read the steps now
@@ -1057,7 +1062,7 @@ function Composer({ name, inst, label = name, lease, busy, bindings, ids = {}, f
     }
     if (cmd && needsArgument(cmd.command) && !cmd.args) { recordEdit(input.current); setValue(`/${cmd.command} `); return; }
     // AGEND-279: `/steer text` is an interjection: its result is a mark on the message's own bubble, not a card.
-    if (cmd && cmd.command === "steer" && cmd.args) { store.setDraft(name, cmd.args); store.send(name, { steer: true }); return; }
+    if (cmd && cmd.command === "steer" && cmd.args && !guest) { store.setDraft(name, cmd.args); store.send(name, { steer: true }); return; }
     if (cmd) { runLine(cmd); return; }
     store.send(name, o.steer ? { steer: true } : undefined);
   };
@@ -1073,7 +1078,7 @@ function Composer({ name, inst, label = name, lease, busy, bindings, ids = {}, f
     // Enter: send (a working agent queues it). Ctrl+Enter / ⌘+Enter: an interjection while it works, a plain send when it is idle.
     const key = R().composerKey(e, { touch: touchScreen(), steer: true });
     if (key === "send") { e.preventDefault(); submit(); }
-    else if (key === "steer") { e.preventDefault(); submit(busy ? { steer: true } : {}); }
+    else if (key === "steer") { e.preventDefault(); submit(busy && !guest ? { steer: true } : {}); }
   };
   // Files in a paste are attached; a very long text paste goes as a text file — only once it is really attached.
   const onPaste = (e) => {
@@ -1106,7 +1111,6 @@ function Composer({ name, inst, label = name, lease, busy, bindings, ids = {}, f
       onKeyDown=${onKeyDown} onPaste=${onPaste} controls=${palette ? paletteId : undefined} expanded=${!!palette} activeDescendant=${pick ? optId(pick) : undefined}
       attach=${attachmentsSupported ? { title: t("chat.attachTitle"), onFiles: (list) => store.addFiles(name, list) } : null}
       stop=${HIDDEN_STOP}
-      steer=${busy && inst?.steer_supported && !guest ? { label: t("chat.steerButton"), title: t("chat.steerButtonTitle"), disabled: !content || sendingBlocked, onClick: () => submit({ steer: true }) } : null}
       send=${{ hidden: false, disabled: !content || sendingBlocked, label: t("chat.send"), onClick: () => submit() }} />
     </div>`;
 }

@@ -469,6 +469,8 @@ export interface WebApiContext {
   generalLocationDeliveryHold?(instanceName: string): string | null;
   deliverToInstance(instanceName: string, payload: Record<string, unknown>, options?: { stillCurrent?: () => boolean; authorityCurrent?: () => boolean }): Promise<boolean | void>;
   /** AGEND-279: how a message that asks to interject would go now, and handing one to the agent as an interjection. */
+  /** AGEND-279 "Send now": a message still waiting in the agent's queue is taken out and interjected (null: it is not waiting any more, so it is not sent again). */
+  sendQueuedNow?(instanceName: string, messageId: string): "added" | "interrupted" | "idle" | null;
   webSteerMode?(instanceName: string): "add" | "interrupt" | "native" | "idle" | "unsupported";
   sendWebSteer?(instanceName: string, payload: Record<string, unknown>, origin: HumanOrigin, originalBody: string): boolean;
   deliverHumanToInstance?(instanceName: string, payload: Record<string, unknown>, origin: HumanOrigin, originalBody: string, options?: { stillCurrent?: () => boolean; authorityCurrent?: () => boolean }): Promise<boolean | void>;
@@ -2693,6 +2695,29 @@ export function handleWebRequest(
     return true;
   }
 
+  // AGEND-279: "Send now" on a message that waits for the running turn — interject it instead of leaving it in the queue.
+  if (method === "POST" && path === "/ui/send-now") {
+    (async () => {
+      let body: Record<string, unknown>;
+      try { body = await parseBody(req); } catch { json(res, 400, { error: "Invalid JSON" }); return; }
+      if (!permitWebContinuation(req, res, ctx)) return;
+      const instance = body && typeof body.instance === "string" ? body.instance : "", messageId = body && typeof body.messageId === "string" ? body.messageId : "";
+      if (!instance || instance.length > 128 || !/^web-[A-Za-z0-9_-]{4,80}$/.test(messageId)) { json(res, 400, { error: "instance and messageId (a web message's) are required" }); return; }
+      const guest = guestRequestOf(req);
+      // Interjecting is a command: not for a guest, whatever its page shows.
+      if (guest) { json(res, 403, { error: "guest_no_commands" }); return; }
+      if (!webPersonOf(req, url, ctx)) { json(res, 401, { error: WEB_TOKEN_INVALID_MESSAGE }); return; }
+      if (isWindowsInstance(ctx.fleetConfig?.instances[instance]) || !ctx.sendQueuedNow) { json(res, 404, { error: "not available for this agent" }); return; }
+      const row = ctx.webChatHistory?.findByMessageId(instance, messageId);
+      // Only a message of this chat that still waits: one that went meanwhile (the turn ended, it was delivered) is not sent again.
+      if (!row || row.role !== "user" || row.delivery !== "queued") { json(res, 200, { sent: false, reason: "not_queued" }); return; }
+      const steer = ctx.sendQueuedNow(instance, messageId);
+      if (steer === null) { json(res, 200, { sent: false, reason: "not_queued" }); return; }
+      json(res, 200, { sent: true, ...(steer === "idle" ? {} : { steer }) });
+    })().catch((err) => { ctx.logger.error({ err }, "send-now failed"); if (!res.headersSent) json(res, 500, { error: "send-now failed" }); });
+    return true;
+  }
+
   // ── Files (C2): upload one file for an instance; fetch a file by the id the fleet issued for it ──
 
   if (method === "POST" && path === "/ui/upload") {
@@ -4435,7 +4460,8 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
       }) : undefined;
       // AGEND-279: an interjection goes into the running turn where the agent can take one; an agent that cannot gets it queued (and the
       // bubble says so); an idle one just receives it. Never for a Windows runtime (no terminal input to steer).
-      const steerMode = steerAsked && !native ? ctx.webSteerMode?.(instance) ?? "idle" : "idle";
+      // A guest never interjects (`/steer` is a command, which a guest may not run): its `steer` is ignored and the message is queued like any.
+      const steerMode = steerAsked && !native && !guest ? ctx.webSteerMode?.(instance) ?? "idle" : "idle";
       const asSteer = steerMode === "add" || steerMode === "interrupt" || steerMode === "native";
       const steerMark: WebSteerState | undefined = steerMode === "add" ? "added" : steerMode === "interrupt" ? "interrupted" : steerMode === "native" ? "sent" : steerMode === "unsupported" ? "unsupported" : undefined;
       let delivered: boolean | void;
