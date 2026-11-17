@@ -165,6 +165,7 @@ export class AcpStepStore {
     switch (event.kind) {
       case "thought": return this.chunk("thinking", event.text);
       case "message": return this.chunk("assistant", event.text);
+      case "notice": return this.notice(event.code, event.text, event.more === true);
       case "tool": return this.tool(event);
       case "plan": return this.plan(event.entries);
       case "permission": return this.permission(event);
@@ -270,6 +271,27 @@ export class AcpStepStore {
     this.put(step, false);
   }
   private readonly rawOf = new Map<string, string>();
+
+  private lastNotice = "";
+  /**
+   * The CLI's own notice (agy retrying a malformed tool call): a state line with its code in `note` and the CLI's words as the body — not
+   * something the agent said, no chat bubble, and no part of what AgEnD would send as a reply. More of the same notice joins its step.
+   */
+  private notice(code: string, text: string, more: boolean): void {
+    const prior = more ? this.byId.get(this.lastNotice) : undefined;
+    if (prior && prior.kind === "state") {
+      const b = bounded((prior.body ?? "") + text, TEXT_MAX);
+      prior.body = b.text;
+      if (b.cut) prior.bodyCut = b.cut;
+      this.put(prior, true);
+      return;
+    }
+    this.closeOpen();
+    const step: LogStep = { id: `n-${this.turn || "x"}-${++this.seq}`, turn: this.turn, ts: this.now(), kind: "state", note: code, status: "done" };
+    stepBody(step, text, TEXT_MAX);
+    this.lastNotice = step.id;
+    this.put(step, true);
+  }
 
   private tool(e: Extract<AdapterEvent, { kind: "tool" }>): void {
     this.closeOpen();

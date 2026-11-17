@@ -61,6 +61,12 @@ export interface AdapterHealth {
 export type AdapterEvent =
   | { kind: "thought"; text: string }
   | { kind: "message"; text: string }
+  /**
+   * The CLI's own notice, sent as message text but not something the agent said (AGEND-279): `malformed_call` — agy's "Your previous response
+   * contained an improperly formatted function call … Retries remaining: N", which agy itself retries. `more`: the rest of a notice a
+   * chunk before began.
+   */
+  | { kind: "notice"; code: "malformed_call"; text: string; more?: boolean }
   /** The user's own message echoed back by the CLI (also how a resumed session replays history). */
   | { kind: "user"; text: string }
   | { kind: "tool"; id: string; title: string; toolKind: string; status: "pending" | "in_progress" | "completed" | "failed"; rawInput?: unknown; rawOutput?: unknown }

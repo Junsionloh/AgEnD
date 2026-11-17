@@ -1,5 +1,5 @@
 // A small ACP agent for tests: speaks the protocol on stdio, driven by keywords in the prompt text.
-// Keywords in the prompt text (written with a leading #: #crash #split #ordering #fsprobe #tool #onlyalways #owntool #spoof #slow #linger) pick the behaviour.
+// Keywords in the prompt text (written with a leading #: #crash #split #ordering #fsprobe #tool #onlyalways #owntool #spoof #slow #linger #malformed) pick the behaviour.
 // Environment: FAKE_ACP_VERSION (agentInfo.version), FAKE_ACP_STATE (a directory: known sessions + a call log),
 // FAKE_ACP_GROK_CONTEXT=<a grok-1.0.77-context.json>: session/new also answers grok's `models`, and each turn ends its model call with grok's `response_completed` notification (the real one, for the session).
 // FAKE_ACP_AUTH=1 (session/new answers -32000), FAKE_ACP_CONFIG=1 (session/new and session/load list `configOptions`: a `model` and a
@@ -117,6 +117,10 @@ async function turn(id, sessionId, text) {
       update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "refused" } });
       if (outcome?.outcome === "cancelled") { turnActive = false; answerTurn({ stopReason: "cancelled" }); return; }
     }
+  } else if (text.includes("#malformed")) {
+    // agy's own notice about a malformed tool call, as it was captured on the wire (agy-malformed-call-update.json), then the agent's plain answer.
+    update(sessionId, JSON.parse(readFileSync(new URL("./agy-malformed-call-update.json", import.meta.url), "utf8")));
+    update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "OK" } });
   } else if (text.includes("#slow")) {
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "thinking " } });
     update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "slowly" } });

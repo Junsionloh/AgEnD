@@ -7,6 +7,14 @@ interface ToolState { title: string; toolKind: string; status: ToolStatus; rawIn
 
 const asObject = (v: unknown): Record<string, unknown> | null => (v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : null);
 
+/**
+ * agy (1.5.x) tells the model — and the ACP client, as an `agent_message_chunk` with nothing else on it — that a tool call it wrote was not a call:
+ * "\n⚠ Your previous response contained an improperly formatted function call: Malformed function call: … Please retry with a properly formatted
+ * function call\nRetries remaining: 3\n". It is not something the agent said, and agy has already retried it.
+ */
+const MALFORMED_CALL = /^\s*(?:⚠\s*)?Your previous response contained an improperly formatted function call/;
+const MALFORMED_END = /Retries remaining:\s*\d+\s*$/;
+
 function textOf(content: unknown): string {
   const c = asObject(content);
   return c && c.type === "text" && typeof c.text === "string" ? c.text : "";
@@ -30,16 +38,30 @@ function normalizeStatus(v: unknown): ToolStatus | undefined {
  */
 export class UpdateTranslator {
   private readonly tools = new Map<string, ToolState>();
+  /** Inside an agy notice whose last chunk has not come (it ends with "Retries remaining: N"). */
+  private noticeOpen = false;
 
-  reset(): void { this.tools.clear(); }
+  reset(): void { this.tools.clear(); this.noticeOpen = false; }
 
   /** `update` is the `update` member of `session/update` params. Unknown update kinds yield nothing. */
   translate(update: unknown): AdapterEvent[] {
     const u = asObject(update);
+    // Anything but the notice's own message chunks ends one that was never finished.
+    if (this.noticeOpen && u?.sessionUpdate !== "agent_message_chunk") this.noticeOpen = false;
     if (!u || typeof u.sessionUpdate !== "string") return [];
     switch (u.sessionUpdate) {
       case "agent_thought_chunk": { const text = textOf(u.content); return text ? [{ kind: "thought", text }] : []; }
-      case "agent_message_chunk": { const text = textOf(u.content); return text ? [{ kind: "message", text }] : []; }
+      case "agent_message_chunk": {
+        const text = textOf(u.content);
+        if (!text) return [];
+        // agy reports its own retry of a malformed tool call as message text (no marker on the update: only its words tell it apart).
+        if (MALFORMED_CALL.test(text) || this.noticeOpen) {
+          const more = this.noticeOpen;
+          this.noticeOpen = !MALFORMED_END.test(text);
+          return [{ kind: "notice", code: "malformed_call", text, ...(more ? { more: true } : {}) }];
+        }
+        return [{ kind: "message", text }];
+      }
       case "user_message_chunk": { const text = textOf(u.content); return text ? [{ kind: "user", text }] : []; }
       case "tool_call": case "tool_call_update": return this.tool(u, u.sessionUpdate === "tool_call");
       case "plan": return [{ kind: "plan", entries: Array.isArray(u.entries) ? u.entries : [] }];

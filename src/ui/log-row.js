@@ -12,7 +12,7 @@ import { chatTime, chatTimeFull } from "/assets/chat-time.js";
 register("log", {
   en: {
     user: "Asked", assistant: "Replied", error: "Error", errorCode: "Error {0}", turnEnd: "Turn ended", turnEndIn: "Turn ended · {0}",
-    compacted: "Conversation compacted", turn: "Turn",
+    compacted: "Conversation compacted", malformedCall: "agy retried a malformed tool call", turn: "Turn",
     running: "running", done: "done", failed: "failed", interrupted: "interrupted", exit: "exit {0}",
     showScreen: "Show what was on screen", hideScreen: "Hide what was on screen",
     showOutput: "Show output", hideOutput: "Hide output", args: "Arguments", output: "Output", noOutput: "No output.",
@@ -26,7 +26,7 @@ register("log", {
   },
   "zh-TW": {
     user: "收到要求", assistant: "回覆", error: "錯誤", errorCode: "錯誤 {0}", turnEnd: "回合結束", turnEndIn: "回合結束 · {0}",
-    compacted: "對話已壓縮", turn: "回合",
+    compacted: "對話已壓縮", malformedCall: "agy 重試了一次格式錯誤的工具呼叫", turn: "回合",
     running: "執行中", done: "完成", failed: "失敗", interrupted: "中斷", exit: "結束碼 {0}",
     showScreen: "顯示當時的畫面", hideScreen: "隱藏當時的畫面",
     showOutput: "顯示輸出", hideOutput: "隱藏輸出", args: "參數", output: "輸出", noOutput: "沒有輸出。",
@@ -227,6 +227,7 @@ export function stepLine(x, paths) {
   if (x.kind === "permission") return `${tl("permission")}: ${short(x.subject || x.tool || "")}`.replace(/: $/, "");
   if (x.kind === "assistant") return `${tl("said")}: ${short(String(x.body || "").replace(/\s+/g, " ").trim()).slice(0, 80)}`;
   if (x.kind === "error") return x.note ? tl("errorCode", x.note) : tl("error");
+  if (x.kind === "state" && x.note === "malformed_call") return tl("malformedCall");
   const cat = x.cat || "other";
   const subject = cat === "plan" && x.subject ? tl("plan_items", x.subject) : short(x.subject || x.tool || "");
   return subject ? `${tl(`cat_${cat}`)} ${subject}` : tl(`cat_${cat}`);
@@ -279,6 +280,11 @@ export function LogRow({ x, prev, paths, chat, compact, latest, instance, fetche
     row = html`${line(KIND_ICON[x.kind], html`<span class=${`log-sum ${think ? "log-think" : "log-said"}${open ? " open" : ""}`}>${shown}</span>`,
       html`<span class="log-cat">${tl(think ? "thinking" : "said")}</span>`, more, "log-more")}
       ${open && x.bodyCut ? html`<p class="note">${tl("cut", x.bodyCut.toLocaleString())}</p>` : null}`;
+  } else if (compact && x.kind === "state" && x.note === "malformed_call") {
+    // The CLI's own notice (agy retrying a malformed tool call, AGEND-279): one quiet line; its words are the detail.
+    const has = !!x.body;
+    row = html`${line(KIND_ICON.state, html`<span class="log-sum log-notice">${tl("malformedCall")}</span>`, null, has)}
+      ${has && open ? html`<div class="log-detail"><div class="log-text mono">${short(x.body)}</div>${x.bodyCut ? note(x.bodyCut) : null}</div>` : null}`;
   } else if (compact && x.kind === "tool") {
     const cat = x.cat || "other";
     const raw = x.subject || "";
@@ -330,6 +336,7 @@ export function LogRow({ x, prev, paths, chat, compact, latest, instance, fetche
       x.status && x.status !== "done" ? html`<span class=${`log-status ${x.status}`}>${tl(x.status)}</span>` : null);
   } else if (x.kind === "state") {
     row = x.modelSwitch ? html`${head(KIND_ICON.state, observationLabel("title"))}${text(modelSwitchText(x.modelSwitch))}`
+      : x.note === "malformed_call" ? html`${head(KIND_ICON.state, tl("malformedCall"))}${text(x.body, x.bodyCut)}`
       : head(KIND_ICON.state, x.note === "compacted" ? tl("compacted") : x.note || "");
   } else {
     const cat = x.cat || "other";

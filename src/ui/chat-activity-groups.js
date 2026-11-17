@@ -49,6 +49,8 @@ const REPLY_TEXT = 200;
 /** A text step with words in it: not blank, not only punctuation (letters, digits and symbols such as emoji count). */
 export const hasSubstance = (s) => s.kind !== "assistant" || /[^\s\p{P}]/u.test(String(s.body == null ? "" : s.body));
 
+/** The CLI's own notice (agy retrying a malformed tool call, AGEND-279): a line in the block, never something the agent said. */
+export const isNotice = (s) => s.kind === "state" && s.note === "malformed_call";
 export const rowKeyOf = (x) => `${x.boot}-${x.id}`;
 export const isReplyStep = (s) => s.kind === "tool" && typeof s.tool === "string" && REPLY_TOOL.test(s.tool);
 /** A reply call that sent nothing (its result was an error, or the turn was interrupted before it finished). */
@@ -144,10 +146,10 @@ export function groupSteps(rows, steps, opts = {}) {
     const segs = [];
     const flush = (replyStep) => { segs.push({ n: n++, items: seg, reply: replyStep, from }); from = replyStep.ts || from; seg = []; };
     for (const s of turn.steps) {
-      if (s.kind === "user" || s.kind === "turn_end" || s.kind === "state") continue;
+      if (s.kind === "user" || s.kind === "turn_end" || (s.kind === "state" && !isNotice(s))) continue;
       if (s.sent) continue;                                // text AgEnD sent as a bubble: the bubble is where it is shown
       if (isReplyStep(s) && !isLostReply(s)) { replied++; flush(s); continue; }
-      if (SHOWN.has(s.kind) && hasSubstance(s)) seg.push(s);
+      if ((SHOWN.has(s.kind) || isNotice(s)) && hasSubstance(s)) seg.push(s);
     }
     const tail = seg;                                      // after the last reply (or the whole turn when it had none)
     const partial = ti === 0 && opts.complete === false && !first;
