@@ -70,7 +70,7 @@ import { HangDetector } from "./hang-detector.js";
 import { writeSecretFile } from "./secret-file.js";
 import { PaneWriteLock } from "./pane-write-lock.js";
 import { answerRemoteCard, type RemoteCardAction, type RemoteCardOutcome } from "./remote-card-answer.js";
-import type { Pane, PaneHost, PaneObservation, PaneOutputEvent, PaneOutputEventName } from "./pane-port.js";
+import type { Pane, PaneHost, PaneKey, PaneObservation, PaneOutputEvent, PaneOutputEventName } from "./pane-port.js";
 import { tmuxPaneHost } from "./tmux-pane-host.js";
 import { buildFleetInstructions, INBOUND_HEADER_RULE } from "./instructions.js";
 import { formatHumanInboundMessage, prepareDeliveryWire, steerInboundEnvelope, BTW_INBOUND_PREFIX,
@@ -3026,7 +3026,13 @@ export class Daemon extends EventEmitter {
    * what it last launched — no probe, no fork, safe on the fleet loop.
    */
   launchSupportsSteer(): boolean | undefined {
-    return this.backend?.supportsSteer?.();
+    const own = this.backend?.supportsSteer?.();
+    return own && this.steerKeyUnavailableOnPane() ? false : own;
+  }
+
+  /** AGEND-284: a steer that needs Alt+M (agy under its default Queued Messages) cannot go to a native pane, whose host takes no such key. */
+  private steerKeyUnavailableOnPane(): boolean {
+    return !!this.nativePaneLifecycle && this.backend?.steerSubmitKey?.() === "M-m";
   }
 
   /**
@@ -9656,7 +9662,7 @@ export class Daemon extends EventEmitter {
    * answer per launch leave it to the hub's name table.
    */
   private launchTakesSteer(): boolean {
-    return this.backend?.supportsSteer?.() !== false;
+    return this.backend?.supportsSteer?.() !== false && !this.steerKeyUnavailableOnPane();
   }
 
   /**
@@ -10436,9 +10442,10 @@ export class Daemon extends EventEmitter {
     stillCurrent?: () => boolean,
     durableAttempt?: DurableDeliveryAttempt,
     onInputHeld?: (why: EnterHeldReason) => void,
+    key: PaneKey = "Enter",
   ): Promise<boolean> {
     if (!(await this.waitForInputTransientToClear(phase))) return false;
-    return this.sendDeliveryEnterAfterAvailability(phase, stillCurrent, durableAttempt, onInputHeld);
+    return this.sendDeliveryEnterAfterAvailability(phase, stillCurrent, durableAttempt, onInputHeld, key);
   }
 
   /**
@@ -10473,6 +10480,7 @@ export class Daemon extends EventEmitter {
     stillCurrent?: () => boolean,
     durableAttempt?: DurableDeliveryAttempt,
     onInputHeld?: (why: EnterHeldReason) => void,
+    key: PaneKey = "Enter",
   ): Promise<boolean> {
     // A recovery Enter may have waited for a transient while cancel or spawn replaced the delivery: check here, and
     // again after every wait below, at the last point before the tmux write.
@@ -10576,7 +10584,7 @@ export class Daemon extends EventEmitter {
         return false;
       }
       enterMarked = true;
-      const sent = await (native && pane !== undefined ? tmux!.sendSpecialKey("Enter", undefined, { kind: "delivery", screen: pane, retryCount: positiveRefusals }) : tmux!.sendSpecialKey("Enter"));
+      const sent = await (native && pane !== undefined ? tmux!.sendSpecialKey(key, undefined, { kind: "delivery", screen: pane, retryCount: positiveRefusals }) : tmux!.sendSpecialKey(key));
       // A busy renderer can change seq after our capture. Only a positive zero-input ACK admits a NEW proof/key;
       // An Enter retry never re-pastes, retries an uncertain write, reuses stale proof or re-commits the durable boundary.
       if (!sent && native && tmux!.lastInputWasNotSent?.() === true
@@ -10954,7 +10962,10 @@ export class Daemon extends EventEmitter {
       const enterMono = performance.now();
       const steerEnterCurrent = () => steerCurrent() && performance.now() <= steerEnterDeadline;
       let inputHeld: EnterHeldReason | null = null;
-      if (!(await this.sendDeliveryEnter("initial-submit", steerComposerProof || nativeOwner ? steerEnterCurrent : undefined, durableAttempt, (why) => { inputHeld = why; }))) {
+      // AGEND-284: an agy steer is submitted with the key that sends against its own queue setting (Alt+M under "queue"), asked of the backend now.
+      // Every other message, and every recovery Enter below, is a plain Enter.
+      const submitKey: PaneKey = steer && handingOffToNativeQueue && this.backend?.steerSubmitKey?.() === "M-m" ? "M-m" : "Enter";
+      if (!(await this.sendDeliveryEnter("initial-submit", steerComposerProof || nativeOwner ? steerEnterCurrent : undefined, durableAttempt, (why) => { inputHeld = why; }, submitKey))) {
         if (inputHeld) {
           // #2971: held in a tmux mode past the bound; M-2290: a recognised dialog on the pane. The paste may still be in
           // the CLI: keep it uncertain (Needs-you), never re-paste, never answer the dialog.

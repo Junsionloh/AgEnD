@@ -75,7 +75,7 @@ export type RuntimePaneRequest =
   | { action: "transcript"; paneId: string; launchId: string; cursor: PaneTranscriptCursor }
   | { action: "transcript-baseline"; paneId: string; launchId: string; cursor: PaneTranscriptCursor }
   | { action: "input"; paneId: string; launchId: string; operationId: string; sequence: number; expectedSeq: number; kind: "literal" | "paste"; text: string }
-  | { action: "key"; paneId: string; launchId: string; operationId: string; sequence: number; expectedSeq: number; key: PaneKey }
+  | { action: "key"; paneId: string; launchId: string; operationId: string; sequence: number; expectedSeq: number; key: Exclude<PaneKey, "M-m"> }
   | { action: "resize"; paneId: string; launchId: string; operationId: string; sequence: number; columns: number; rows: number }
   | { action: "edit"; paneId: string; launchId: string; operationId: string; sequence: number; expectedSeq: number; keys: PaneEditKey[]; repeat?: number }
   | { action: "reconcile"; paneId: string; launchId: string; operationId: string; sequence: number; digest: string }

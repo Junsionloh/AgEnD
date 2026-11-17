@@ -259,7 +259,11 @@ export class RuntimePanePort implements Pane {
     if (!keys.length || keys.length > 64 || keys.some(key => !Object.hasOwn(PANE_EDIT_KEYS, key))) return false;
     return this.mutate((snapshot, expectedSeq) => ({ action: "edit", ...this.target(snapshot), expectedSeq, keys: [...keys] as PaneEditKey[] }));
   }
-  sendSpecialKey(key: PaneKey, _timeoutMs?: number, proof?: PaneInputProof): Promise<boolean> { return this.mutate((snapshot, expectedSeq) => ({ action: "key", ...this.target(snapshot), expectedSeq, key }), proof); }
+  async sendSpecialKey(key: PaneKey, _timeoutMs?: number, proof?: PaneInputProof): Promise<boolean> {
+    // AGEND-284: Alt+M is a tmux key only; nothing is sent (the daemon does not offer an agy steer on a native pane either).
+    if (key === "M-m") { this.error = "The native pane host takes no Alt+M key"; this.inputNotSent = true; return false; }
+    return this.mutate((snapshot, expectedSeq) => ({ action: "key", ...this.target(snapshot), expectedSeq, key }), proof);
+  }
   async deleteBackward(count: number): Promise<boolean> {
     if (!Number.isInteger(count) || count <= 0) return true;
     if (count > 8192) return false;
