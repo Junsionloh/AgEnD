@@ -1194,7 +1194,8 @@ img.amb-p { object-fit: contain; }
 /* AGEND-279: "Send now" on a message that waits for the running turn, beside the reply icon. A touch screen has no hover, so a waiting bubble shows it always. */
 .msg-actions .send-now { width: auto; padding: 0 var(--s-2); font-size: var(--fs-xs); white-space: nowrap; }
 .msg-actions .send-now:disabled { opacity: .5; cursor: default; }
-.msg.sendnow { margin-top: 14px; }
+.msg.sendnow { margin-top: 34px; }                 /* room above the bubble's meta line for the strip, so it never covers the "Queued" mark */
+.msg.sendnow > .msg-actions { top: -32px; }
 @media (hover: none) { .msg-actions.has-sendnow { display: flex; opacity: 1; pointer-events: auto; } .msg-actions.has-sendnow [data-act="reply"] { display: none; } }
 .msg-quote { display: flex; align-items: center; gap: 4px; max-width: 100%; margin: 0 0 4px; padding: 2px var(--s-2) 2px calc(var(--s-2) + 3px); border: 0;
   --lbar-color: var(--border-strong, var(--border)); --lbar-inset: 4px; --lbar-left: 2px; border-radius: var(--r-sm); background: transparent; color: var(--text-3);
