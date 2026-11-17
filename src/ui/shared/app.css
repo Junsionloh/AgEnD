@@ -1199,6 +1199,9 @@ img.amb-p { object-fit: contain; }
 .msg .meta .send-now:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: 2px; }
 .msg .meta .send-now:disabled { opacity: .5; cursor: default; }
 @media (pointer: coarse) { .msg .meta .send-now { min-height: 32px; padding: 0 var(--s-3); } }
+/* A narrow screen: the name and the marks keep their words whole, and the button goes to the next line, at the right, rather than squeezing them. */
+.msg .meta:has(.send-now) { flex-wrap: wrap; justify-content: flex-end; row-gap: var(--s-1); }
+.msg .meta:has(.send-now) .sender, .msg .meta:has(.send-now) .queue-mark { white-space: nowrap; }
 .msg-quote { display: flex; align-items: center; gap: 4px; max-width: 100%; margin: 0 0 4px; padding: 2px var(--s-2) 2px calc(var(--s-2) + 3px); border: 0;
   --lbar-color: var(--border-strong, var(--border)); --lbar-inset: 4px; --lbar-left: 2px; border-radius: var(--r-sm); background: transparent; color: var(--text-3);
   font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer; overflow: hidden; }
