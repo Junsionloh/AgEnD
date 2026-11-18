@@ -110,7 +110,7 @@ const fullTime = (iso) => { const d = new Date(iso); return Number.isFinite(d.ge
 function Entry({ entry, describe }) {
   const time = html`<time class="muted tl-time" dateTime=${entry.at} title=${fullTime(entry.at)}>${relTime(entry.at)}</time>`;
   const agent = entry.by === "instance";
-  const mark = agent ? " by-agent" : "";
+  const mark = agent ? " by-agent lbar" : "";   // the shared straight bar (app.css `.lbar`), as the app draws a coloured left edge
   if (entry.type === "comment") {
     return html`<li class=${`tl-item tl-comment${entry.authorKind === "person" ? " person" : ""}${mark}`}>
       <div class="tl-head"><${Who} name=${entry.who} />${agent ? html`<${AgentTag} />` : null}

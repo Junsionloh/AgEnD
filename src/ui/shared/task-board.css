@@ -281,10 +281,11 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tr-title { margin: 0; font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
 .tr-note { margin: 0; font-size: var(--fs-sm); }
 .tr-run .act-block { margin: 0; }
-/* The timeline marks what an agent did: a bar beside it and an "Agent" tag after its name. */
+/* The timeline marks what an agent did: the shared straight bar (`.lbar`, app.css; the 3px it takes are added to the
+   padding) and an "Agent" tag after its name. */
 .tr-by { background: var(--surface-2); color: var(--text-2); }
-.tl-comment.by-agent { border-left: 3px solid var(--accent); }
-.tl-line.by-agent { padding-left: var(--s-2); box-shadow: inset 2px 0 0 var(--accent); }
+.tl-comment.by-agent { --lbar-color: var(--accent); padding-left: calc(var(--s-3) + 3px); }
+.tl-line.by-agent { --lbar-color: var(--accent); --lbar-inset: var(--s-1); padding-left: calc(var(--s-2) + 3px); }
 @media (max-width: 899px), (pointer: coarse) and (max-height: 500px) and (max-width: 1023px) {
   .tr-open { min-height: var(--tap); }
 }
