@@ -336,15 +336,19 @@ describe("a card's page: Agent activity", () => {
     const link = block.querySelector("a.tr-open");
     expect(link.getAttribute("href")).toBe("/ui/chat/alpha");
     expect(text(link)).toBe("Open conversation");
-    expect(qa(".tp-body > *")[0], "first in the body, above the card's text").toBe(block);
+    expect(qa(".tp-body > *").map((el) => el.className.split(" ")[0]), "AGEND-314: after the spec the people wrote (here every field is empty: its buttons), before the sub tasks").toEqual(["tp-adders", "card", "tp-subs"]);
+    expect(block.className, "open: it is running").not.toContain("is-strip");
     expect(calls.filter((c) => c.path.startsWith("/ui/steps")), "nothing is read for a viewer who is not an admin").toEqual([]);
   });
   it("idle while the card is in progress says so; with several cards in progress it says which it cannot know", async () => {
     fleetIs({ alpha: "idle", beta: "idle", gamma: "idle" });
     await mount();
     await openCard("M-1");
-    expect(text(q(".tr-state"))).toBe("Idle");
-    expect(text(q(".tr-note"))).toBe("alpha has this card in progress but is idle right now.");
+    // AGEND-314: idle with nothing written is one line (not the open block), which still names the situation and the conversation.
+    expect(q(".tr-run").className).toContain("is-strip");
+    expect(q(".tr-state")).toBeNull();
+    expect(text(q(".tp-agent-note"))).toBe("alpha has this card in progress but is idle right now.");
+    expect(q("a.tr-open").getAttribute("href")).toBe("/ui/chat/alpha");
     CARDS = [M1, card({ id: "M-6", title: "Second", status: "claimed", assignee: "alpha", sort: 6 })];
     fleetIs({ alpha: "working", beta: "idle", gamma: "idle" });
     (globalThis as any).history.replaceState(null, "", "/ui/fleet");
@@ -363,20 +367,26 @@ describe("a card's page: Agent activity", () => {
     expect(q(".tr-state")).toBeNull();
     expect(q("a.tr-open").getAttribute("href")).toBe("/ui/chat/alpha");
   });
-  it("no block for a card nobody has, an assignee the viewer does not see, or a main task that follows its sub tasks", async () => {
+  it("no agent, no state, no conversation link for a card nobody has, an assignee the viewer does not see, or a main task that follows its sub tasks: only the line", async () => {
     await mount();
     await openCard("M-5");
-    expect(q(".tr-run")).toBeNull();
+    expect(q(".tr-run").className).toContain("is-strip");
+    expect(text(q(".tp-agent-note"))).toBe("Not started: whoever takes the card will update this");
+    expect(q(".tr-run .tb-who")).toBeNull();
+    expect(q("a.tr-open")).toBeNull();
     (globalThis as any).history.replaceState(null, "", "/ui/fleet");
     await mount();
     await openCard("M-2");
-    expect(q(".tr-run"), "its sub tasks' pages have it").toBeNull();
+    expect(q(".tr-run").className, "its sub tasks' pages have the agent").toContain("is-strip");
+    expect(text(q(".tp-agent-note"))).toBe("The work is in its sub tasks: each one's agent updates its own card");
+    expect(q("a.tr-open")).toBeNull();
     app.applyStatus({ uptime: 1, instances: [{ name: "beta", status: "running", state: "idle", execution_state: "idle" }] });
     (globalThis as any).history.replaceState(null, "", "/ui/fleet");
     await mount();
     await openCard("M-1");
-    expect(q(".tr-run")).toBeNull();
-    expect(q(".tp-body .tc-field"), "the rest of the page is there").toBeTruthy();
+    expect(q(".tr-run .tb-who")).toBeNull();
+    expect(q("a.tr-open")).toBeNull();
+    expect(q(".tp-spec, .tp-adders"), "the rest of the page is there").toBeTruthy();
   });
   it("a sub task's page has it, with its own assignee's state", async () => {
     fleetIs({ alpha: "idle", beta: "working", gamma: "idle" });

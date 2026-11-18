@@ -65,12 +65,8 @@ export function leaderCaveat({ leader, assignee, names, boardOff = [], followsPr
   return null;
 }
 
-/**
- * The Watchers and Leader rows. `detail`: the card as the board reads it (`watchers`, `inheritedWatchers`, `leader`,
- * `followsProgress`); `names`: the fleet's instance names; `can`: false over a read-only link (the lists only); `follow`:
- * `({ add?, remove? }) => Promise`, the page's write.
- */
-export function FollowRows({ detail, names, boardOff = [], can, follow }) {
+/** What both rows read from the board's detail (`names`: the fleet's instance names). */
+function followModel({ detail, names, boardOff = [], can, follow }) {
   const { card, parent } = detail;
   const watchers = detail.watchers || [];
   const inherited = (detail.inheritedWatchers || []).filter((n) => !watchers.includes(n));
@@ -80,16 +76,23 @@ export function FollowRows({ detail, names, boardOff = [], can, follow }) {
   const caveat = leaderCaveat({ leader, assignee: card.assignee, names, boardOff, followsProgress: detail.followsProgress !== false });
   // Over a read-only link, an instance kept out of sight is not named at all (the server leaves it out).
   const nameOf = (n) => html`<${Who} name=${n} title=${names.includes(n) ? n : t("taskfollow.gone", n)} />`;
+  return { parent, watchers, inherited, leader, full, choices, caveat, nameOf, can, follow };
+}
 
+/**
+ * The Watchers row (the card page puts it in the "Project and people" group, after the dispatcher). `detail`: the card as the
+ * board reads it (`watchers`, `inheritedWatchers`); `names`: the fleet's instance names; `can`: false over a read-only link
+ * (the list only); `follow`: `({ add?, remove? }) => Promise`, the page's write.
+ */
+export function WatchersRow(props) {
+  const { parent, watchers, inherited, full, choices, nameOf, can, follow } = followModel(props);
   const addMenu = !can ? null : full
     ? html`<span class="tc-hint muted tp-watch-note">${t("taskfollow.full", WATCH_MAX)}</span>`
     : choices.length
       ? html`<${Menu} cls="tp-chip-menu tp-watch-add" label=${t("taskfollow.addTitle")} fit triggerClass="btn btn-ghost btn-sm" items=${choices}
           trigger=${html`<${Icon} name="plus" size=${14} />${t("taskfollow.add")}`} />`
       : html`<span class="tc-hint muted tp-watch-note">${t("taskfollow.noneToAdd")}</span>`;
-
-  return html`
-    <div class="tp-row tp-block" data-follow="watchers">
+  return html`<div class="tp-row tp-block" data-follow="watchers">
       <dt title=${t("taskfollow.watchersHint")}>${t("taskfollow.watchers")}${watchers.length ? html` <span class="muted">(${watchers.length}/${WATCH_MAX})</span>` : null}</dt>
       <dd class="tp-watchers">
         ${watchers.length ? html`<ul class="tp-watch-list">${watchers.map((n) => html`<li key=${n} class="tp-watch" data-watcher=${n}>${nameOf(n)}
@@ -98,8 +101,13 @@ export function FollowRows({ detail, names, boardOff = [], can, follow }) {
         ${addMenu}
         ${inherited.length && parent ? html`<span class="muted tc-hint tp-watch-note">${t("taskfollow.fromMain", parent.id, inherited.join(", "))}</span>` : null}
       </dd>
-    </div>
-    <div class="tp-row" data-follow="leader">
+    </div>`;
+}
+
+/** The Leader row (read-only: a project's lead is set on the project, the default in Settings). Same props as {@link WatchersRow}. */
+export function LeaderRow(props) {
+  const { leader, caveat, nameOf } = followModel(props);
+  return html`<div class="tp-row" data-follow="leader">
       <dt title=${t("taskfollow.leaderHint")}>${t("taskfollow.leader")}</dt>
       <dd class="tp-leader">
         ${leader ? html`${nameOf(leader.name)}<span class="tp-leader-via muted">${t(leader.via === "project" ? "taskfollow.viaProject" : "taskfollow.viaBoard")}</span>
@@ -107,4 +115,9 @@ export function FollowRows({ detail, names, boardOff = [], can, follow }) {
           : html`<span class="muted" title=${t("taskfollow.leaderNoneHint")}>${t("taskfollow.leaderNone")}</span>`}
       </dd>
     </div>`;
+}
+
+/** Both rows, watchers first (the order before the card page grouped its properties). */
+export function FollowRows(props) {
+  return html`<${WatchersRow} ...${props} /><${LeaderRow} ...${props} />`;
 }

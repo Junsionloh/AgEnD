@@ -1,0 +1,4 @@
+---
+section: Changed
+---
+- **A card's page is lighter (AGEND-314).** A goal, scope, definition of done or context nobody filled in is now a small **+ Add** button instead of an empty block, and opens in place when clicked. The state and result an agent writes sit with **Agent activity**, apart from the spec — one quiet line while there is nothing to show. The sub tasks are a bordered list with done / total, a bar and a line to add one. The properties are in three groups, **Needs my confirmation** is a switch, the repeated "Now" row is gone, and **Mark blocked** moved to the toolbar at the top of the page. On a phone the page is one column: title, spec, agent line, sub tasks, properties, activity. Layout and style only: every field is still readable and editable, and nothing about the API, the stored data, permissions or the public link changed.

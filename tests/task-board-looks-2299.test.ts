@@ -82,7 +82,7 @@ describe("#2299 the task board's looks", () => {
     await settle(8);
     fire(p.root.querySelector(".tb-tile-title"), "click");
     await settle(8);
-    const meta = p.root.querySelector(".tp-props");
+    const meta = p.root.querySelector(".tp-side");   // AGEND-314: the properties are three groups (the switch is in the last)
     expect(meta, "the card is open as a page").toBeTruthy();
     expect(meta.querySelectorAll("button.tp-chip").length, "the properties are chips that open menus").toBeGreaterThan(0);
     expect(meta.querySelectorAll("input[type=checkbox]").length).toBeGreaterThan(0);

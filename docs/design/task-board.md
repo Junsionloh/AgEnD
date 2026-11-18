@@ -185,14 +185,32 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   that opens the card's menu (Move to…): a phone has no right click and HTML5 dragging does not fire there. The card's
   page has a Status chip and a Position row (up, down).
 - **The card is a page (AGEND-294, after Multica's issue page).** It replaces the board in the tab instead of a drawer
-  over it, so a desk's width is used: a main column (title, goal, scope, definition of done, context, state, result, sub
-  tasks, then the activity — comments, progress log and history merged into one timeline, oldest first, with the comment
-  box last) and a side column of properties (status, assignee, dispatcher, project, priority, size, your confirmation,
-  dependencies) that stays in view; one column on a phone (≤ 899 px, the app's breakpoint) with the properties right
-  under the title. The merge is the page's: the card API still returns `comments`, `logs` and `history` apart, and the
+  over it, so a desk's width is used: a main column (title, the spec, the agent's block, sub tasks, then the activity —
+  comments, progress log and history merged into one timeline, oldest first, with the comment box last) and a side column
+  of properties that stays in view; one column on a phone (≤ 899 px, the app's breakpoint). The merge is the page's: the card API still returns `comments`, `logs` and `history` apart, and the
   history lines that only repeat a comment or a log entry are dropped from it — except a change of the card's watchers (a
   `logged` event carrying `data.watchers`, which has no log entry of its own; AGEND-309): it stays, as "changed watchers: +ops,
   −dev-b" (a true minus sign, so a narrow line does not split it from the name) in the same line style, under the History filter. No API, schema or column changed.
+- **The page, laid lighter (AGEND-314, scheme A).** Only layout and style: no API, schema, permission or stored value changed,
+  and every field is still readable and editable. (1) *The spec folds what is empty.* Goal, scope, definition of done (a sub
+  task's acceptance) and context are fields only while they hold text; an empty one is a **+ Add** button in one row under
+  them (a writer's way in; over a read-only link an empty one is not there at all). A button opens its field in place with
+  the focus (`open` on `EditableText` / `Checklist`, `useInlineEdit`'s `open`/`onClose`); closed still empty — Esc, or leaving
+  it unchanged — it folds back into its button, and a saved one is a field like the rest (also a filled one whose text is
+  emptied). The page keeps which ones it opened, per card. (2) *The agent's handoff is apart from the spec.* **State** and
+  **Result** (written by the assignee, `fleet-task-run.js` `AgentRun`) are in the same block as the **Agent activity**
+  (#92), marked with the accent's straight bar and a tint: while there is nothing to show (no state, no result, the assignee
+  not running) it is one line — "Not started: dev-b will update this once it takes the card", the idle note, the work being in the
+  sub tasks, or "No state or result written yet" — with the buttons for the two fields and the way to the conversation; with
+  a state or result, or while the assignee works, it opens: who, state, **Open conversation**, the live steps, the fields. (3) *The
+  sub tasks are a bordered list*: a header with done / total (the card's own `progress`) and the shared `ProgressBar`, the rows,
+  and the quick-create line last (same `QuickAdd`). (4) *The properties are three groups* with a thin line between: core (status,
+  assignee, priority, size); project and people (project — or a sub task's main task — leader, dispatched by, watchers); flow
+  (**Needs my confirmation** as a switch, the app's `.s-ui-toggle` look, then dependencies, and the position arrows where
+  they apply). The "Now" row is gone (the sub task list says it). (5) *Mark blocked* — a main task that follows its sub
+  tasks, by hand — moved to the header toolbar, beside Previous / Next, the copy-link button and ⋯ (which keeps Cancel); the
+  note that the status follows the sub tasks is a chip beside the title. (6) *A phone* (one column): title, spec, the agent's
+  line, sub tasks, properties, activity — the grid's areas are that order.
 - **A card in the address.** The open card is `?card=` in the page's address, beside `?tp=` and `?tf=`. Opening a card
   from the board adds one history entry, so Back returns to the board or the list (its scroll and the card's tile focus
   come back); opening another from the card (a sub task, a dependency) adds one more, and "Back" on the page goes all the
@@ -256,7 +274,7 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   an optional note). Agents read the same in `get` and `mine`.
 - **Who works on a main task now (step 2).** Its owner is not always the one at work (a review step is the
   reviewer's): a main task with sub tasks shows the sub task in progress and its worker, else a blocked one, else the
-  next one that can start; waiting for you, it says so. The owner is in the tooltip; the card has a "Now" row.
+  next one that can start; waiting for you, it says so. The owner is in the tooltip (the card's page does not repeat it: AGEND-314, its sub task list says it).
 
 ## Agents: the `task` tool on the board
 
@@ -477,8 +495,8 @@ and another's only on a card it may edit (assignee, creator, dispatcher, or an u
 the task board on (an instance that left the fleet can still be removed). The card's detail (`GET /ui/tasks/cards/<id>`) lists them
 (`watchers`); over the public link a read-only session does not see hidden instances among them.
 
-**On the page (AGEND-301).** A card's page lists them in its property column, after *Dispatched by*, with the *Leader* under them
-(`fleet-task-follow.js`). *Watchers*: one chip per instance with a ✕, and an Add menu of the fleet's other instances — one with the
+**On the page (AGEND-301).** A card's page lists them in its property column, under *Project and people* (AGEND-314: *Leader*, *Dispatched by*, then *Watchers*;
+`fleet-task-follow.js` — `LeaderRow` and `WatchersRow`). *Watchers*: one chip per instance with a ✕, and an Add menu of the fleet's other instances — one with the
 task board off is listed greyed with why (the board refuses it), and at ten the menu gives way to the reason; a sub task shows its
 main task's watchers as "Also from M-n", read-only, since they follow it too. A write is `POST …/watchers` with no `version` (a watch is
 not an edit), then the card and the board are read again; a refusal is the page's toast in its own words (`tasks.err.watcher_unknown`,
