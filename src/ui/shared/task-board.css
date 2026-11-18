@@ -143,7 +143,7 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tp-crumbs { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1) var(--s-2); min-width: 0; font-size: var(--fs-sm); color: var(--text-2); }
 .tp-crumbs > .tp-crumb + .tp-crumb::before { content: "›"; margin-right: var(--s-2); color: var(--text-3); }
 .tp-crumb { overflow-wrap: anywhere; }
-.tp-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-areas: "head side" "body side" "activity side"; column-gap: var(--s-6); row-gap: var(--s-4); align-items: start; }
+.tp-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto auto 1fr; grid-template-areas: "head side" "body side" "activity side"; column-gap: var(--s-6); row-gap: var(--s-4); align-items: start; }
 .tp-head { grid-area: head; display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
 .tp-body { grid-area: body; display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
 .tp-activity { grid-area: activity; display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
@@ -262,7 +262,7 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tp-subs .tc-quick-add:hover { background: var(--surface); }
 .tp-subs .tc-quick-add:focus { border-color: var(--focus); background: var(--bg); }
 /* The side column: a chip's (or a plain value's) text on the value column's edge. */
-.tp-side .tp-chip, .tp-side .tp-static { margin-left: calc(-1 * var(--tp-inset)); }
+.tp-side .tp-row:not(.tp-block) .tp-chip-menu, .tp-side .tp-static { margin-left: calc(-1 * var(--tp-inset)); }
 
 /* Text edited in place: the title, the fields, the checklist (fleet-task-edit.js). No buttons unless a conflict asks. */
 .tc-title-edit { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
@@ -286,11 +286,15 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tl-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-bottom: var(--s-1); font-size: var(--fs-xs); }
 .tl-time { margin-left: auto; font-size: var(--fs-xs); white-space: nowrap; }
 .tl-body { white-space: pre-wrap; }
-.tl-line { display: grid; grid-template-columns: 1rem 9rem minmax(0, 1fr) auto; align-items: baseline; column-gap: var(--s-2); padding: 0 0 0 calc(var(--s-2) + 3px); color: var(--text-2); font-size: var(--fs-xs); }
+/* A line is four columns — mark, who, words, time — and its words start on the page's value column (the mark and the who fill the label column). */
+.tl-line { display: grid; grid-template-columns: 1rem calc(var(--tp-label) + var(--tp-gap) - 1rem - 2 * var(--s-2)) minmax(0, 1fr) auto; align-items: baseline; column-gap: var(--s-2); padding: 0; color: var(--text-2); font-size: var(--fs-xs); }
 .tl-line > .icon { align-self: center; justify-self: center; color: var(--ok); }
 .tl-line > .tb-dot { align-self: center; justify-self: center; }
 .tl-who { display: flex; align-items: baseline; gap: var(--s-1); min-width: 0; }
 .tl-who > b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-who > .tb-tag { flex: none; }
+/* The label column is narrow: an agent's tag in a line is its robot mark (the word is its tooltip and its text for a screen reader). */
+@media (min-width: 900px) { .tl-line .tr-by { font-size: 0; padding-inline: var(--s-1); } }
 .tl-text { min-width: 0; }
 .tl-line > .tl-time { justify-self: end; margin-left: 0; }
 .tl-none { margin: 0; }
@@ -318,7 +322,7 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 
 /* ── A phone: one column (the properties right under the title), one status at a time, ⋯ on every card ───────── */
 @media (max-width: 899px), (pointer: coarse) and (max-height: 500px) and (max-width: 1023px) {
-  .tp-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "body" "side" "activity"; }
+  .tp-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "head" "body" "side" "activity"; }
   .tp-side { position: static; padding: var(--s-3); }
   .tp-row { grid-template-columns: 88px minmax(0, 1fr); min-height: var(--tap); }
   .tp-chip { min-height: var(--tap); }
@@ -394,7 +398,7 @@ button.tb-row-progress:hover { background: var(--surface-2); }
    padding) and an "Agent" tag after its name. */
 .tr-by { background: var(--surface-2); color: var(--text-2); }
 .tl-comment.by-agent { --lbar-color: var(--accent); padding-left: calc(var(--s-3) + 3px); }
-.tl-line.by-agent { --lbar-color: var(--accent); --lbar-inset: var(--s-1); padding-left: calc(var(--s-2) + 3px); }
+.tl-line.by-agent { --lbar-color: var(--accent); --lbar-inset: var(--s-1); --lbar-left: calc(-1 * var(--s-2)); }
 @media (max-width: 899px), (pointer: coarse) and (max-height: 500px) and (max-width: 1023px) {
   .tr-open { min-height: var(--tap); }
 }
