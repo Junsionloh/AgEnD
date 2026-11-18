@@ -384,7 +384,8 @@ The sidebar's **Fleet** (zh "Fleet 概覽", at the top) and the phone's Fleet ta
   priority, ordered by board order, priority, last change, newest or title; **Sub tasks as rows of their own**;
   finished cards last 7 days / all / hidden). The project and filters are in the address (`?tp=`, `?tf=`): a link opens
   that filtered board; the choices are remembered per device (`agend_tasks_display`, `agend_tasks_filters`). A card opens in a dialog: every field editable, its sub tasks, comments,
-  progress log, history. **Search cards** in the header. Only a signed-in person confirms the work they handed out
+  progress log, history. A comment wakes the card's assignee, and `@<instance name>` in it wakes that instance (not the
+  writer; `defaults.task_board.comment_wakes: false` turns this off). **Search cards** in the header. Only a signed-in person confirms the work they handed out
   (an instance's `done` on such a card is review); a card an agent handed out, that agent confirms (#2434). No
   delete: cancel. Alt+arrows on a card's title move it (no drag needed; the card's Position row on a phone). A right
   click on a card (tile, list row, waiting row; or the menu key / Shift+F10) opens its menu: Open, Confirm / Send
