@@ -7,8 +7,10 @@
 // progress (the default, `board_cards_at_once: 1`). With several in progress (a higher limit, or a person dragged some
 // there) nothing says which one the assignee is on: each of them says "busy, N cards" and none says "running". Nothing is
 // stored and nothing is added to the API; an instance the viewer cannot see, a card nobody has, or steps that are not
-// offered show nothing (or the state alone). No style attribute anywhere (the CSP).
-import { html, useEffect, useRef, useState } from "/assets/app-html.js";
+// offered show nothing (or the state alone). The board reads the dashboard's store ONCE (useRunContext), only for the
+// instances that have a card in progress, and redraws only when one of THEIR states changes — a tile and a row never
+// subscribe to the store themselves. No style attribute anywhere (the CSP).
+import { html, useEffect, useMemo, useRef, useState } from "/assets/app-html.js";
 import { t, register } from "/assets/app-i18n.js";
 import { appStore, useStore } from "/assets/app-store.js";
 import { dotState } from "/assets/instance-nav.js";
@@ -57,11 +59,25 @@ export function inProgressBy(cards) {
 }
 
 /**
+ * The state of each named instance the viewer sees (`dotState`: working, needs, stuck, idle, stopped…), as a map by name —
+ * read from the dashboard's store state `{ instances, exec, awaiting }`. A name the viewer does not see is not in it.
+ */
+export function instanceStates(store, names) {
+  const out = new Map();
+  const instances = (store && store.instances) || [];
+  for (const name of names) {
+    const it = instances.find((i) => i.name === name);
+    if (it) out.set(name, dotState(it, ((store && store.exec) || {})[name], ((store && store.awaiting) || {})[name]));
+  }
+  return out;
+}
+
+/**
  * What a card's assignee is doing on it, or null (nothing to say): { instance, state: working | needs | stuck | idle, shared }
  * — `shared`: how many cards the assignee has in progress when that is more than this one (then which one it is on is
  * not known), else 0. Only a card in progress has one, and only while its assignee is an instance the viewer sees, running.
  * A main task that follows its sub tasks has its running sub tasks' (the strongest); `subs`: the ones the page shows.
- * `ctx`: { instances, exec, awaiting, doing } — the dashboard's store and `inProgressBy` of the board.
+ * `ctx`: { states, doing } — `instanceStates` of the instances with a card in progress, and `inProgressBy` of the board.
  */
 export function runOf(card, ctx, subs = []) {
   if (!card || card.status !== "claimed") return null;
@@ -70,19 +86,35 @@ export function runOf(card, ctx, subs = []) {
     return runs[0] || null;
   }
   const name = card.assignee;
-  if (!name) return null;
-  const it = (ctx.instances || []).find((i) => i.name === name);
-  if (!it) return null;
-  const state = dotState(it, (ctx.exec || {})[name], (ctx.awaiting || {})[name]);
+  if (!name || !ctx) return null;
+  const state = ctx.states && ctx.states.get(name);
   if (!(state in RUN_RANK)) return null;
   const n = (ctx.doing && ctx.doing.get(name)) || 0;
   return { instance: name, state, shared: n > 1 ? n : 0 };
 }
 
-/** The same, read from the dashboard's store: a tile's or a row's, redrawn when an instance's state changes. */
-export function useRun(card, doing, subs) {
-  const { instances, exec, awaiting } = useStore(appStore);
-  return runOf(card, { instances, exec, awaiting, doing }, subs);
+/** A signature of some states, to tell whether any changed. */
+const signature = (states) => [...states].map(([name, state]) => `${name}\u0000${state}`).sort().join("\u0001");
+
+/**
+ * What the board needs to say "running" on every tile and row: `{ states, doing }` for `runOf`. ONE read of the dashboard's
+ * store for the whole board, and only of the instances that have a card in progress (the only ones a mark can name):
+ * it redraws when one of THOSE states changes, not on every store change (a status poll, a message) — a tile or a row
+ * subscribes to nothing. Computed from the store as it is at each draw, so a card that came in progress is never drawn
+ * with a state from before.
+ */
+export function useRunContext(cards) {
+  const doing = useMemo(() => inProgressBy(cards), [cards]);
+  const [, redraw] = useState(0);
+  const states = instanceStates(appStore.get(), doing.keys());
+  const drawn = useRef("");
+  drawn.current = signature(states);
+  useEffect(() => {
+    const changed = () => signature(instanceStates(appStore.get(), doing.keys())) !== drawn.current;
+    if (changed()) redraw((n) => n + 1);     // moved between the draw and this subscription
+    return appStore.subscribe(() => { if (changed()) redraw((n) => n + 1); });
+  }, [doing]);
+  return useMemo(() => ({ states, doing }), [doing, drawn.current]);
 }
 
 /**
@@ -164,11 +196,11 @@ function useFeed(name, on, busy) {
  * tasks has none (its sub tasks' pages do).
  */
 export function AgentRun({ card, detail, doing }) {
-  const { instances, exec, awaiting } = useStore(appStore);
+  const store = useStore(appStore);            // one card's page: one subscription
   useStore(activityPrefs);
   const name = card.assignee;
-  const it = name ? (instances || []).find((i) => i.name === name) : null;
-  const run = runOf(card, { instances, exec, awaiting, doing });
+  const it = name ? (store.instances || []).find((i) => i.name === name) : null;
+  const run = runOf(card, { states: instanceStates(store, name ? [name] : []), doing });
   const live = !!run && run.state !== "idle";
   const offered = live && activityOffered() && activityPrefs.get().on;
   useFeed(name, offered, live);

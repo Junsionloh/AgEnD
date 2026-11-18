@@ -122,7 +122,11 @@ const markOf = (id: string) => q(`[data-tile="${id}"] .tr-mark`) ?? q(`[data-row
 // ── What is running (pure) ─────────────────────────────────────────────────────────────────────────────────────────
 
 const INST = (state: string) => [{ name: "alpha", status: "running" }, { name: "beta", status: "running" }, { name: "off", status: "paused" }].map((i) => ({ ...i, state }));
-const ctx = (over: Record<string, unknown> = {}) => ({ instances: INST("working"), exec: { alpha: "working", beta: "idle", off: "working" }, awaiting: {}, doing: new Map(), ...over });
+/** What `runOf` is given: the states of the named instances out of the dashboard's store, and the board's counts. */
+const ctx = (over: Record<string, unknown> = {}) => {
+  const store = { instances: INST("working"), exec: { alpha: "working", beta: "idle", off: "working" }, awaiting: {}, ...over };
+  return { states: run.instanceStates(store, ["alpha", "beta", "off", "ghost"]), doing: (over.doing as Map<string, number>) ?? new Map() };
+};
 
 describe("how many cards an instance has in progress", () => {
   it("counts the cards in `claimed` by assignee; a main task that follows its sub tasks does not count (its sub tasks do); nobody's and other statuses do not", () => {
@@ -155,7 +159,8 @@ describe("what a card's assignee is doing on it", () => {
     expect(run.runOf({ ...M1, assignee: "ghost" }, ctx()), "no such instance for this viewer (hidden, gone, a person)").toBeNull();
     expect(run.runOf({ ...M1, assignee: "off" }, ctx()), "paused").toBeNull();
     expect(run.runOf(null, ctx())).toBeNull();
-    expect(run.runOf(M1, { instances: undefined, exec: undefined, awaiting: undefined, doing: undefined })).toBeNull();
+    expect(run.runOf(M1, undefined), "no context at all").toBeNull();
+    expect(run.runOf(M1, {}), "a context that knows nothing").toBeNull();
   });
   it("a main task that follows its sub tasks has the strongest of its in-progress sub tasks'; none in progress: nothing", () => {
     const sub = (id: string, assignee: string, status = "claimed") => card({ id, kind: "sub", parentId: "M-2", status, assignee });
@@ -164,6 +169,61 @@ describe("what a card's assignee is doing on it", () => {
     expect(run.runOf(M2, c, [sub("S-1", "alpha", "done"), sub("S-2", "beta", "open")])).toBeNull();
     expect(run.runOf(M2, c, [])).toBeNull();
     expect(run.runOf(M2, c, undefined)).toBeNull();
+  });
+});
+
+describe("the states the board reads once", () => {
+  it("each named instance the viewer sees, as the dashboard words it; a name it does not see is left out; junk is an empty read", () => {
+    const store = { instances: INST("working"), exec: { alpha: "working", beta: "stuck", off: "working" }, awaiting: { beta: "a permission" } };
+    expect([...run.instanceStates(store, ["alpha", "beta", "off", "ghost"])]).toEqual([["alpha", "working"], ["beta", "needs"], ["off", "paused"]]);
+    for (const bad of [null, undefined, {}, { instances: null }]) expect(run.instanceStates(bad, ["alpha"]).size).toBe(0);
+    expect(run.instanceStates(store, []).size).toBe(0);
+  });
+});
+
+describe("the board subscribes once, and only to what a mark names (no tile or row subscribes to the store)", () => {
+  let renders = 0, seen: any = null;
+  const Probe = ({ cards }: { cards: unknown[] }) => { renders++; seen = run.useRunContext(cards); return h("div", { id: "probe" }); };
+  const mountProbe = async (cards: unknown[]) => { await p.mount(h(Probe, { cards })); await settle(4); };
+  beforeEach(() => { renders = 0; seen = null; });
+  it("redraws when the state of an instance that has a card in progress changes — and not for any other change of the store", async () => {
+    const cards = [M1, S2, M3];                         // alpha: M-1 in progress (beta: S-2 in progress; gamma: only a to-do card)
+    fleetIs({ alpha: "working", beta: "idle", gamma: "idle" });
+    await mountProbe(cards);
+    const first = renders;
+    expect([...seen.states]).toEqual([["alpha", "working"], ["beta", "idle"]]);
+    expect([...seen.doing]).toEqual([["alpha", 1], ["beta", 1]]);
+    fleetIs({ alpha: "working", beta: "idle", gamma: "working" }); await settle(4);
+    expect(renders, "gamma has no card in progress: nothing to say about it").toBe(first);
+    fleetIs({ alpha: "working", beta: "idle", gamma: "working" }, { description: "a status poll that changes nothing here" }); await settle(4);
+    app.applyActivity({ instance: "gamma", state: "idle" }); await settle(4);
+    expect(renders).toBe(first);
+    fleetIs({ alpha: "idle", beta: "idle", gamma: "idle" }); await settle(4);
+    expect(renders, "alpha stopped working: one redraw").toBe(first + 1);
+    expect(seen.states.get("alpha")).toBe("idle");
+    app.applyActivity({ instance: "beta", state: "working" }); await settle(4);
+    expect(renders).toBe(first + 2);
+    expect(seen.states.get("beta")).toBe("working");
+  });
+  it("a card that comes in progress is drawn with the state of now, not one from before; once unmounted nothing listens", async () => {
+    fleetIs({ alpha: "working", beta: "idle", gamma: "working" });
+    await mountProbe([M1]);
+    expect([...seen.states.keys()]).toEqual(["alpha"]);
+    await mountProbe([M1, card({ id: "M-6", status: "claimed", assignee: "gamma" })]);
+    expect(seen.states.get("gamma"), "gamma was working before its card came").toBe("working");
+    expect(seen.doing.get("gamma")).toBe(1);
+    await p.unmount(); await settle(2);
+    const after = renders;
+    fleetIs({ alpha: "idle", beta: "idle", gamma: "idle" }); await settle(4);
+    expect(renders, "the subscription went with the board").toBe(after);
+  });
+  it("the same cards and the same states give the same context (nothing for the tiles to redraw by)", async () => {
+    fleetIs({ alpha: "working", beta: "idle", gamma: "idle" });
+    const cards = [M1];
+    await mountProbe(cards);
+    const was = seen;
+    await mountProbe(cards);
+    expect(seen).toBe(was);
   });
 });
 
@@ -392,6 +452,47 @@ describe("a card's page: the live steps (an admin session, tool progress on)", (
       expect(calls.filter((c) => c.path.startsWith("/ui/steps"))).toEqual([]);
       expect(text(q(".tr-state"))).toBe("Running");
     } finally { act.setActivityOn(true); }
+  });
+});
+
+describe("the steps are an admin session's: no read, no block, for any other viewer", () => {
+  const stepsAnswer = () => ({ enabled: true, instance: "alpha", backend: "claude-code", supported: true, thinking: false, level: "standard", cwd: "/w", home: "/h",
+    steps: stepsOf([toolLine(Date.now() - 20_000, "Read", { file_path: "/w/src/a.ts" }), toolLine(Date.now() - 10_000, "Bash", { command: "npm test" })]), after: 100, key: "1-2", before: null, ev: 0 });
+  const viewers: Array<[string, () => void]> = [
+    ["chatActivity not set (a read-only session)", () => { delete doc().body.dataset.chatActivity; }],
+    ["chatActivity \"0\" (what the server writes for any session that is not an admin's)", () => { doc().body.dataset.chatActivity = "0"; }],
+    ["a guest on the public link (no chatActivity, a guest's name, the link's mark)", () => { delete doc().body.dataset.chatActivity; doc().body.dataset.guestName = "Gina"; doc().body.dataset.publicLink = "1"; }],
+  ];
+  afterAll(() => { delete doc().body.dataset.guestName; });
+  for (const [who, set] of viewers) {
+    it(`${who}: the assignee is working, the page reads no /ui/steps and draws none — even where the server would answer`, async () => {
+      set();
+      steps = stepsAnswer();                              // a read would succeed: it is the page that does not ask
+      fleetIs({ alpha: "working", beta: "idle", gamma: "idle" });
+      await mount();
+      await openCard("M-1");
+      await settle(20);
+      expect(calls.filter((c) => c.path.startsWith("/ui/steps")), "no read, at any time").toEqual([]);
+      expect(text(q(".tr-state")), "the state is still there").toBe("Running");
+      expect(q("a.tr-open").getAttribute("href")).toBe("/ui/chat/alpha");
+      expect(q(".tr-run .act-block")).toBeNull();
+      expect(q(".tr-note")).toBeNull();
+      // …and it keeps asking nothing while the assignee goes on working or the card is read again
+      app.applyActivity({ instance: "alpha", state: "idle" }); await settle(4);
+      app.applyActivity({ instance: "alpha", state: "working" }); await settle(10);
+      expect(calls.filter((c) => c.path.startsWith("/ui/steps"))).toEqual([]);
+      delete doc().body.dataset.guestName;
+    });
+  }
+  it("counter-proof: the same page for an admin session (chatActivity \"1\") does read, and draws the block", async () => {
+    doc().body.dataset.chatActivity = "1";
+    steps = stepsAnswer();
+    fleetIs({ alpha: "working", beta: "idle", gamma: "idle" });
+    await mount();
+    await openCard("M-1");
+    await settle(12);
+    expect(calls.filter((c) => c.path.startsWith("/ui/steps")).length).toBeGreaterThan(0);
+    expect(q(".tr-run .act-block.live")).toBeTruthy();
   });
 });
 
