@@ -17,7 +17,7 @@ import { page, settle, h, type AppPage } from "./helpers/app-harness.js";
 import { fire } from "./helpers/mini-dom.js";
 
 let p: AppPage;
-let app: any, nav: any, fleet: any, view: any, activity: any, cardMod: any, create: any;
+let app: any, nav: any, fleet: any, view: any, activity: any, cardMod: any, create: any, common: any, workMod: any;
 const calls: Array<{ method: string; path: string; body: any }> = [];
 type Reply = unknown | { __status: number; [k: string]: unknown };
 let handler: (path: string, method: string, body: any) => Reply = () => ({});
@@ -75,6 +75,8 @@ beforeAll(async () => {
   activity = await import("/ui/js/fleet-task-activity.js");
   cardMod = await import("/ui/js/fleet-task-card.js");
   create = await import("/ui/js/fleet-task-create.js");
+  common = await import("/ui/js/fleet-task-common.js");
+  workMod = await import("/ui/js/fleet-task-work.js");
   nav.startRouter(p.window);
 });
 afterAll(() => { p.restore(); delete (globalThis as any).fetch; });
@@ -164,6 +166,68 @@ describe("AGEND-309: a change of the card's watchers is a line of the timeline",
       i18n.setLang("zh-TW", { store: false });
       expect(cardMod.describeEvent(WATCH)).toBe("修改關注者：+ops, \u2212dev-b");
     } finally { i18n.setLang("en", { store: false }); }
+  });
+});
+
+describe("AGEND-311: a card that waits for a card kept out of sight (the public link says how many, never which)", () => {
+  // `hiddenUnmet` is the link's: the unfinished dependencies its read left out (the numbers are not in `unmetDeps`).
+  const ONE = card({ id: "M-5", title: "Waits for a hidden card", assignee: "beta", sort: 5, unmetDeps: [], hiddenUnmet: 1 });
+  const TWO = card({ id: "M-6", title: "Waits for two hidden cards and M-2", assignee: "beta", sort: 6, dependsOn: ["M-2"], unmetDeps: ["M-2"], hiddenUnmet: 2 });
+  const NONE = card({ id: "M-7", title: "Waits for nothing", assignee: "beta", sort: 7 });
+  const withThese = () => {
+    const base = handler;
+    handler = (path, method, body) => {
+      if (path.startsWith("/ui/tasks/board")) return { rev: 1, projects: [PROJECT], cards: [...CARDS, ONE, TWO, NONE], boardOff };
+      const m = /^\/ui\/tasks\/cards\/(M-[567])$/.exec(path);
+      if (m && method === "GET") return detailOf(m[1]!, { card: [ONE, TWO, NONE].find((c: any) => c.id === m[1]) });
+      return base(path, method, body);
+    };
+  };
+  const clock = (id: string) => [...qa(`[data-tile="${id}"] [title]`), ...qa(`[data-row="${id}"] [title]`)].map((el) => el.getAttribute("title") as string).filter((s) => s.startsWith("Waits for"));
+
+  it("a work line says what it waits for without a number: \"a card that is not public\" (after the numbers, when there are some); with nothing to say there is no suffix", async () => {
+    const i18n = await import("/assets/app-i18n.js");
+    const note = (c: any) => workMod.workLines({ waiting: [c] })[0].note;
+    try {
+      i18n.setLang("en", { store: false });
+      expect(note(ONE)).toBe("waits for a card that is not public");
+      expect(note(TWO)).toBe("waits for M-2, 2 cards that are not public");
+      expect(note(card({ id: "M-8", unmetDeps: ["M-2", "M-3"] })), "the dashboard's: the numbers, as before").toBe("waits for M-2, M-3");
+      expect(note(NONE), "no empty \"waits for \"").toBe("");
+      i18n.setLang("zh-TW", { store: false });
+      expect(note(ONE)).toBe("等 一張不公開的卡");
+      expect(note(TWO)).toBe("等 M-2、2 張不公開的卡");
+    } finally { i18n.setLang("en", { store: false }); }
+  });
+
+  it("a sub task that waits for one is not the next one to start (a main task's current work), numbered or not", () => {
+    const subs = [card({ id: "S-5", kind: "sub", parentId: "M-2", status: "open", hiddenUnmet: 1 }), card({ id: "S-6", kind: "sub", parentId: "M-2", status: "open" })];
+    expect(common.currentWork(M2, subs).cards.map((c: any) => c.id)).toEqual(["S-6"]);
+    expect(common.currentWork(M2, [subs[0]]), "nothing else can start").toBeNull();
+    expect(common.currentWork(M2, [{ ...subs[0], hiddenUnmet: 0 }]).cards.map((c: any) => c.id), "none left out: it can start").toEqual(["S-5"]);
+  });
+
+  it("the board's tile and the list's row show the clock, titled without a number; a card that waits for nothing has none", async () => {
+    withThese();
+    await mount();
+    expect(clock("M-5")).toEqual(["Waits for a card that is not public"]);
+    expect(clock("M-6")).toEqual(["Waits for M-2, 2 cards that are not public"]);
+    expect(clock("M-7")).toEqual([]);
+    await mount({ agend_tasks_project: "1", agend_tasks_display: JSON.stringify({ view: "list" }) });
+    expect(clock("M-5")).toEqual(["Waits for a card that is not public"]);
+    expect(clock("M-7")).toEqual([]);
+  });
+
+  it("the card's page lists them in the dependencies row, not \"None\"; the row still says \"None\" for a card that waits for nothing", async () => {
+    withThese();
+    const open = async (id: string) => { (globalThis as any).history.replaceState(null, "", "/ui/fleet"); await mount(); await openCard(id); return text(rowOf("Waits for")); };
+    const one = await open("M-5");
+    expect(one).toContain("a card that is not public");
+    expect(one).not.toContain("None");
+    const two = await open("M-6");
+    expect(two).toContain("M-2");
+    expect(two).toContain("2 cards that are not public");
+    expect(await open("M-7")).toContain("None");
   });
 });
 

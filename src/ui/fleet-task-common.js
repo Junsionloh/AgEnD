@@ -28,7 +28,7 @@ register("tasks", {
     emptyBoard: "No main tasks here yet", emptyFiltered: "No main tasks match the filter",
     emptyBoardHint: "A main task is an outcome you want. Assign it to an instance: it does a small one directly and splits a big one into sub tasks.",
     subProgress: "Sub tasks {0}/{1}", showSubs: "Show sub tasks", hideSubs: "Hide sub tasks", olderSubs: "{0} more finished earlier",
-    acceptance: "Acceptance", definition: "Definition of done", waitsFor: "Waits for {0}", comments: "Comments", agentReplied: "An instance replied",
+    acceptance: "Acceptance", definition: "Definition of done", waitsFor: "Waits for {0}", hiddenWait: "a card that is not public", hiddenWaitN: "{0} cards that are not public", comments: "Comments", agentReplied: "An instance replied",
     needsReview: "Needs review", needsReviewTitle: "Stops at review for your confirmation", urgentTag: "Urgent", highTag: "High",
     waitingTitle: "Waiting for you", waitingEmpty: "Nothing is waiting for you.", confirm: "Confirm", sendBack: "Send back", answer: "Answer",
     confirmed: "{0} confirmed", sentBack: "{0} sent back", answered: "Answered {0}",
@@ -108,7 +108,7 @@ register("tasks", {
     emptyBoard: "這個專案還沒有主任務", emptyFiltered: "沒有符合篩選的主任務",
     emptyBoardHint: "主任務是你要的成果，可大可小。指派給 Agent，它會自己決定直接做，或先拆成子任務。",
     subProgress: "子任務 {0}/{1}", showSubs: "展開子任務", hideSubs: "收起子任務", olderSubs: "另有 {0} 張比較早完成",
-    acceptance: "驗收條件", definition: "完成定義", waitsFor: "等 {0} 完成", comments: "留言", agentReplied: "Agent 有新回覆",
+    acceptance: "驗收條件", definition: "完成定義", waitsFor: "等 {0} 完成", hiddenWait: "一張不公開的卡", hiddenWaitN: "{0} 張不公開的卡", comments: "留言", agentReplied: "Agent 有新回覆",
     needsReview: "需確認", needsReviewTitle: "做完要停在待確認，等你確認", urgentTag: "緊急", highTag: "優先",
     waitingTitle: "待你處理", waitingEmpty: "沒有等你處理的事。", confirm: "確認", sendBack: "退回", answer: "回覆",
     confirmed: "已確認 {0}", sentBack: "已退回 {0}", answered: "已回覆 {0}",
@@ -291,6 +291,16 @@ export function wrapUpText(card) {
 }
 
 /**
+ * AGEND-311: what a card waits for. Over the public link a card kept out of sight is not numbered: `unmetDeps` leaves it
+ * out and `hiddenUnmet` counts those left out (absent on the dashboard and for an admin session). `waitsOn` is true while
+ * any dependency is unfinished — numbered or not — `hiddenWaits` words those left out ("a card that is not public": no
+ * number, ever; "" when none) and `waitsList` words them all: the numbers, then that.
+ */
+export const waitsOn = (card) => (card.unmetDeps || []).length > 0 || card.hiddenUnmet > 0;
+export const hiddenWaits = (card) => (card.hiddenUnmet > 0 ? t(card.hiddenUnmet === 1 ? "tasks.hiddenWait" : "tasks.hiddenWaitN", card.hiddenUnmet) : "");
+export const waitsList = (card, join) => [...(card.unmetDeps || []), hiddenWaits(card)].filter(Boolean).join(join);
+
+/**
  * Who works on a main task right now: its sub tasks in progress, else the blocked ones, else those that can start
  * (dependencies done). Null when there are none, or when the main task waits for you or is finished. Its owner is not
  * always the one at work: a review step belongs to the reviewer.
@@ -302,7 +312,7 @@ export function currentWork(main, subs) {
     const cards = live.filter((s) => s.status === status);
     if (cards.length) return { label, tone, cards };
   }
-  const ready = live.filter((s) => s.status === "open" && !(s.unmetDeps || []).length);
+  const ready = live.filter((s) => s.status === "open" && !waitsOn(s));
   return ready.length ? { label: "tasks.nowNext", tone: "open", cards: ready } : null;
 }
 

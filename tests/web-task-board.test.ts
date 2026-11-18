@@ -722,6 +722,45 @@ describe("4f3. AGEND-311: no other card number of a card kept out of sight over 
     expect(JSON.stringify(found), "the search").not.toContain(`"${hidden.code}"`);
   });
 
+  it("over the link `hiddenUnmet` counts the unfinished dependencies left out (how many, never which) — on the card, its sub tasks, the board, the work drawer and the search; a finished hidden dependency is not counted", async () => {
+    const { db, hidden, plain, work, only, main, sub } = seed();
+    // `done` is a second hidden card that is finished: its number is left out of `dependsOn` too, and it holds nothing.
+    const done = db.board.createCards(ANN, { cards: [{ title: "Hidden and done", assignee: "spy", needsReview: false }] }).cards[0]!;
+    db.board.moveCard(ANN, done.code, "claimed");
+    db.board.moveCard(ANN, done.code, "done", { result: "finished" });
+    // `lone` waits for the hidden card alone; `follower` for the hidden one and the finished one.
+    const lone = db.board.createCards(ANN, { cards: [{ title: "Visible lone", assignee: "dev-a", dependsOn: [hidden.code] }] }).cards[0]!;
+    const follower = db.board.createCards(ANN, { cards: [{ title: "Visible follower", assignee: "dev-a", dependsOn: [hidden.code, done.code] }] }).cards[0]!;
+    const hiddenOf = (c: any) => c.hiddenUnmet;
+    const link = (await get(db, `/ui/tasks/cards/${work.code}`, { tier: "read" })).body;
+    expect([hiddenOf(link.card), link.card.unmetDeps]).toEqual([1, [plain.code]]);
+    const loneRead = (await get(db, `/ui/tasks/cards/${lone.code}`, { tier: "read" })).body.card;
+    expect([loneRead.dependsOn, loneRead.unmetDeps, hiddenOf(loneRead)], "only the hidden card is waited for: nothing numbered, one not said").toEqual([[], [], 1]);
+    const mainLink = (await get(db, `/ui/tasks/cards/${main.code}`, { tier: "read" })).body;
+    expect([hiddenOf(mainLink.card), mainLink.children.map(hiddenOf)], "a sub task waits for what its main task waits for").toEqual([1, [1]]);
+    const board = (await get(db, "/ui/tasks/board", { tier: "read" })).body;
+    const row = (code: string) => board.cards.find((c: any) => c.id === code);
+    expect([work, lone, sub, plain].map((c) => hiddenOf(row(c.code))), "the board").toEqual([1, 1, 1, 0]);
+    expect(hiddenOf(row(follower.code)), "a finished hidden dependency is not counted").toBe(1);
+    const workRead = (await get(db, "/ui/tasks/work", { tier: "read" })).body;
+    const mine = workRead.instances.flatMap((i: any) => [...i.doing, ...i.blocked, ...i.review, ...i.ready, ...i.waiting, ...i.mains]).filter((c: any) => c.id === work.code);
+    expect(mine.length).toBeGreaterThan(0);
+    for (const c of mine) expect(hiddenOf(c), "the work drawer").toBe(1);
+    const found = (await get(db, "/ui/tasks/search?q=Visible", { tier: "read" })).body;
+    expect(hiddenOf(found.results.find((r: any) => r.card.id === work.code).card), "the search").toBe(1);
+  });
+
+  it("the local page and an admin session over the link read no `hiddenUnmet`: they see the numbers themselves", async () => {
+    const { db, hidden, work, main } = seed();
+    for (const opts of [{ local: true }, {}] as const) {
+      const full = (await get(db, `/ui/tasks/cards/${main.code}`, opts)).body;
+      expect(full.card.unmetDeps, JSON.stringify(opts)).toEqual([hidden.code]);
+      expect("hiddenUnmet" in full.card, JSON.stringify(opts)).toBe(false);
+      const row = (await get(db, "/ui/tasks/board", opts)).body.cards.find((c: any) => c.id === work.code);
+      expect("hiddenUnmet" in row, JSON.stringify(opts)).toBe(false);
+    }
+  });
+
   it("a sub task taken down with a main task kept out of sight (and brought back) does not carry that main task's number in its \"moved\" events; a visible main task's is kept", async () => {
     const db = scratchDb();
     db.board.setCommentRouting({ instances: () => ["dev-a", "ops", "spy"], enabled: () => true });

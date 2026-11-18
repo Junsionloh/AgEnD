@@ -3904,12 +3904,14 @@ export function handleWebRequest(
     // once per request, whatever the number of cards that name it.
     const hiddenCodes = new Map<string, boolean>();
     const hiddenCode = (code: string): boolean => { let h = hiddenCodes.get(code); if (h === undefined) { h = hiddenRef(code); hiddenCodes.set(code, h); } return h; };
-    const unnumbered = <T extends { parentId: string | null; dependsOn: string[]; unmetDeps: string[] }>(v: T): T => {
+    // …`hiddenUnmet` (over the link only) says how many of the unfinished dependencies were left out, so a card that waits for
+    // a card kept out of sight still reads as waiting (a clock, not "ready"): how many, never which.
+    const unnumbered = <T extends { parentId: string | null; dependsOn: string[]; unmetDeps: string[] }>(v: T): T & { hiddenUnmet?: number } => {
       if (!gateway) return v;
       const parentId = v.parentId && hiddenCode(v.parentId) ? null : v.parentId;
       const dependsOn = v.dependsOn.filter((c) => !hiddenCode(c));
       const unmetDeps = v.unmetDeps.filter((c) => !hiddenCode(c));
-      return parentId === v.parentId && dependsOn.length === v.dependsOn.length && unmetDeps.length === v.unmetDeps.length ? v : { ...v, parentId, dependsOn, unmetDeps };
+      return { ...v, parentId, dependsOn, unmetDeps, hiddenUnmet: v.unmetDeps.length - unmetDeps.length };
     };
     const numbered = (v: unknown): unknown => (Array.isArray(v) ? v.filter((c) => typeof c !== "string" || !hiddenCode(c)) : v);
     /** An event as the link may read it; null when nothing of it is left to show. */

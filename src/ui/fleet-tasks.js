@@ -18,7 +18,7 @@ import { Empty, ErrorState, Skeleton } from "/assets/ui-states.js";
 import { Icon } from "/assets/ui-icons.js";
 import { Menu } from "/assets/ui-menu.js";
 import { toast } from "/assets/ui-toast.js";
-import { AskHost, COLUMNS, NO_PROJECT, ProgressBar, StatusPill, Who, answerBlocked, askText, boardApi, currentWork, dropNeighbours, errorText, followsSubs, moveCard, notesForPeople, onPublicLink, projectKey, projectStats, readStored, relTime, reviewLabel, scrollBox, waitsForYou, workersOf, wrapUpText, writeStored } from "./fleet-task-common.js";
+import { AskHost, COLUMNS, NO_PROJECT, ProgressBar, StatusPill, Who, answerBlocked, askText, boardApi, currentWork, dropNeighbours, errorText, followsSubs, moveCard, notesForPeople, onPublicLink, projectKey, projectStats, readStored, relTime, reviewLabel, scrollBox, waitsForYou, waitsList, waitsOn, workersOf, wrapUpText, writeStored } from "./fleet-task-common.js";
 import { CardPage } from "./fleet-task-card.js";
 import { CardMenu, cardAt, cardMenuItems, pageOrder, stepsOf } from "./fleet-task-menu.js";
 import { ListView, SubList, TaskToolbar, doneShown, formatFilters, keepFilters, listRows, mainMatches, readDisplay, startFilters, writeDisplay } from "./fleet-task-view.js";
@@ -625,7 +625,7 @@ function Tile({ card, dragging, flash, subs = [], runs, expanded, writable, onTo
         : html`<${Who} name=${card.assignee} empty=${t("tasks.nobody")} />`}
       <span class="tb-tile-stats">
         ${card.acceptance.length ? html`<span class=${accepted === card.acceptance.length ? "all" : ""} title=${t(card.kind === "main" ? "tasks.definition" : "tasks.acceptance")}><${Icon} name="check" size=${13} />${accepted}/${card.acceptance.length}</span>` : null}
-        ${card.unmetDeps.length ? html`<span title=${t("tasks.waitsFor", card.unmetDeps.join(", "))}><${Icon} name="clock" size=${13} /></span>` : null}
+        ${waitsOn(card) ? html`<span title=${t("tasks.waitsFor", waitsList(card, ", "))}><${Icon} name="clock" size=${13} /></span>` : null}
         ${card.commentCount ? html`<span class=${replied ? "reply" : ""} title=${replied ? t("tasks.agentReplied") : t("tasks.comments")}><${Icon} name="chat" size=${13} />${card.commentCount}</span>` : null}
       </span>
     </div>
