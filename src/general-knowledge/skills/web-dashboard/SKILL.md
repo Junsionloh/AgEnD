@@ -387,10 +387,12 @@ The sidebar's **Fleet** (zh "Fleet 概覽", at the top) and the phone's Fleet ta
   sorts by its column headers (again: reversed) and folds its groups. The project and filters are in the address
   (`?tp=`, `?tf=`): a link opens that filtered board; the choices are remembered per device (`agend_tasks_display`,
   `agend_tasks_filters`, `agend_tasks_query`, `agend_tasks_collapsed`). **A card is a page** (`?card=`; Back returns to
-  the board or list): its text on the left (goal, scope, definition of done, context, state, result, sub tasks) and its
-  activity — comments, progress log and history as one timeline, the comment box last, `@` completes instance names —
-  and its properties on the right (status, assignee, dispatched by, project, priority, size, your confirmation,
-  dependencies; on a phone under the title). A property is a chip: pick from its menu and it is saved; text saves when
+  the board or list): its text on the left (goal, scope, definition of done, context — an empty one is a small "+ Add"
+  button, opened in place; then the agent's block: state, result and activity, one line while there is nothing to show; then
+  the sub tasks, a bordered list with done / total) and its activity — comments, progress log and history as one timeline,
+  the comment box last, `@` completes instance names — and its properties on the right in three groups (status, assignee,
+  priority, size / project, leader, dispatched by, watchers / a "needs my confirmation" switch, dependencies; "Mark blocked"
+  is in the toolbar at the top; on a phone one column: title, spec, agent line, sub tasks, properties, activity). A property is a chip: pick from its menu and it is saved; text saves when
   you leave the box or press Ctrl+Enter (Esc drops it); after a conflict the edit stays open and asks before it
   overwrites. A comment wakes the card's assignee, and `@<instance name>` in it wakes that instance (not the
   writer; `defaults.task_board.comment_wakes: false` turns this off). **Main task** (new) needs only a title; project, assignee and priority are optional chips, the rest is
