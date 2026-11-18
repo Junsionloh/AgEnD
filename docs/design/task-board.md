@@ -218,7 +218,12 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   agent's block takes its own padding off its label column, so its values are on the same line). A sub task is a row of four
   columns (status, number, title, who); a timeline line is four columns (mark, who, words, time) with its words on the value
   column; in the side column a chip's text is on the value column's edge. On a phone the label is above its value, the left edge
-  the same.
+  the same. (8) *The timeline is read for progress.* A comment has no box: its author and time on a line, the text under the
+  name, drawn by the chat's own renderer (`AgendChatRender.renderMarkdown`: it escapes first, so nothing in a comment makes a
+  tag of its own; a stored comment is still the plain text it was). A progress note is a line in the text colour; the history is
+  the quietest thing on the page — small, grey, the actor not bold, no bar even for an agent's — and a run of the same line from
+  the same hand is one line "×N" with the latest time (`collapseEvents`, only history lines merge). A day change is a thin
+  separator (Today / Yesterday / a date), only when the list spans more than one day (`dayLabel`).
 - **A card in the address.** The open card is `?card=` in the page's address, beside `?tp=` and `?tf=`. Opening a card
   from the board adds one history entry, so Back returns to the board or the list (its scroll and the card's tile focus
   come back); opening another from the card (a sub task, a dependency) adds one more, and "Back" on the page goes all the
