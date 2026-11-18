@@ -16,6 +16,7 @@ import { StatusPill, Who, answerBlocked, askText, boardApi, currentWork, errorTe
 import { StepButtons, movesFor } from "./fleet-task-menu.js";
 import { Checklist, EditableText, InlineTitle, PropChip, QuickAdd } from "./fleet-task-edit.js";
 import { Composer, Timeline } from "./fleet-task-activity.js";
+import { AgentRun } from "./fleet-task-run.js";
 
 register("taskcard", {
   en: {
@@ -146,9 +147,9 @@ const radioItems = (list, current, label, act) => list.map((v) => ({ key: String
  * `writable`: false over a read-only link (the card is shown, nothing on it changes). `place`: up and down in its column,
  * for touch and keyboard (null when it cannot move). `steps`: the previous and next card the page showed, and where this
  * one is among them (null: nowhere to step). `where`: the project's name for the breadcrumb (null: none). `back`: what
- * Back says. `onBack` returns to the board or list.
+ * Back says. `onBack` returns to the board or list. `doing`: how many cards each instance has in progress (fleet-task-run.js).
  */
-export function CardPage({ id, tick, projects, boardOff = [], writable = true, place = null, steps = null, where = null, back, onBack, onOpen, onStep, reloadBoard }) {
+export function CardPage({ id, tick, projects, boardOff = [], doing = new Map(), writable = true, place = null, steps = null, where = null, back, onBack, onOpen, onStep, reloadBoard }) {
   const { instances } = useStore(appStore);
   const [detail, setDetail] = useState(null);
   const [missing, setMissing] = useState(false);
@@ -330,6 +331,7 @@ export function CardPage({ id, tick, projects, boardOff = [], writable = true, p
       </aside>
 
       <div class="tp-body">
+        ${!derived && card.assignee ? html`<${AgentRun} card=${card} detail=${detail} doing=${doing} />` : null}
         ${card.status === "blocked" ? html`<${Field} title=${t("taskcard.blockedReason")} tone="blocked">
           <${EditableText} readOnly=${!can} value=${card.blockedReason} limit=${LIMIT.blockedReason} version=${card.version} onSave=${(v, base) => save({ blockedReason: v }, base)} /></${Field}>` : null}
         <${Field} title=${t("taskcard.goal")}><${EditableText} readOnly=${!can} value=${card.goal} limit=${LIMIT.goal} version=${card.version} placeholder=${t("taskcard.goalHint")} onSave=${(v, base) => save({ goal: v }, base)} /></${Field}>

@@ -219,6 +219,23 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   (`fleet-task-work.js`, taskhall's): by team as the sidebar groups them, working ones first, then those with cards;
   each line says what the card is to it (sent back, in progress, blocked, waiting for you, owns, can start, waiting on)
   and opens it. It is read again on each board change. An instance's Details page reads its own once.
+- **What the agent is doing (AGEND-296).** `fleet-task-run.js`. A card in `claimed` whose assignee is an instance the
+  viewer sees and that is working (the dashboard's own `exec` / `awaiting`, live by the `activity` event) is "running":
+  a mark on its tile and list row, a main task's from its in-progress sub tasks (the strongest), and an **Agent
+  activity** block on the card's page (who, their state, **Open conversation** → `/ui/chat/<instance>`). The match is an
+  inference, not a record: AgEnD has no run per card (an instance is one continuing session), and nothing was added to
+  record one. It is exact while the assignee has that one card in progress (`board_cards_at_once` defaults to 1); with
+  several (`inProgressBy` over the board's cards — the rule of `inProgress()`), no card says "running", each says "Busy
+  · N cards", and the page says what it cannot know. The live steps are the chat's own feed (`observeActivity`, `GET
+  /ui/steps?chat=1`, live by `steps_tick`), held only while the card's page is open and its assignee is working, drawn
+  by the chat's `ActivityBlock` from the steps since the card was last moved to `claimed`: for an admin session, with
+  the instance's `tool_progress` not `off` and Show activity on — otherwise the state alone (with a line saying so when
+  it is the agent's `tool_progress` that is off). Not used on purpose: `instance_activity` (the statusline's one-line tool label) — it is not
+  governed by `tool_progress` and carries commands, which a read-only viewer must not see — and a transcript per
+  finished card: the transcript is one continuing session read within a byte limit, so an old card's window may not be
+  there; a finished card gets the conversation link only. The timeline's entries carry `authorKind` / `actorKind`
+  already; an instance's are tagged **Agent**. No API, schema or column changed; a viewer who cannot see the instance,
+  a card nobody has and an older server's entries (no kind) show as before.
 - **The public link** shows the board with a read-only note and no write controls (see above): a card's project, priority, size and review are text, not disabled controls (#2299).
 - **Toasts** are a manual popover (the top layer), above any dialog's backdrop (the board's asks — a reason, an answer, a name — are dialogs). On a phone the board's toasts come in above the tabs (an older confirmation gives way to two newer toasts; an error stays), not over its title and search (#2299).
 - **Wrapped up before you confirm (step 2).** A main task goes to review by itself when its last sub task is done —

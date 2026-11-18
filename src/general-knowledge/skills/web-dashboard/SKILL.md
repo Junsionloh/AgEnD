@@ -401,7 +401,11 @@ The sidebar's **Fleet** (zh "Fleet 概覽", at the top) and the phone's Fleet ta
   back / Answer when it waits for the person, Move to, Assignee, Priority, Copy link / number, Cancel (Shift+right
   click keeps the browser's menu). An open card's arrows (or K / J) step to the previous / next card the page showed
   (a sub task: its siblings). A main
-  task's tile shows the sub task at work and who is on it; a card waiting for review that is not wrapped up says
+  task's tile shows the sub task at work and who is on it; a card in progress whose assignee is working says **Running**
+  (tile, list row; a main task for a sub task of its own), and the card's page has an **Agent activity** block — who,
+  their state, **Open conversation** (their chat) and, for an admin with the agent's `tool_progress` on, the live steps
+  since the card was put in progress. That is an inference (card in progress + assignee working): with several cards in
+  progress each says **Busy · N cards** instead. The timeline tags an agent's own entries **Agent**. A card waiting for review that is not wrapped up says
   **To fill in** and Confirm asks first. A card's **Dispatched by** row: who handed it out (a blocked question goes
   to them first). An agent with the task board off (Dashboard access) is greyed out as an assignee: the board hands
   it no cards. **Insights** (beside the project's numbers): its cards counted per assignee / status / priority / size,
