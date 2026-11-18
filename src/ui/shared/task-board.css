@@ -258,3 +258,36 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 @media (prefers-reduced-motion: reduce) {
   .tp-chip { transition: none; }
 }
+
+/* ── AGEND-296: what the agent is doing on a card ─────────────────────────────────────────────────────────────── */
+/* The mark beside a tile's or a row's number, and the state on the card's page: a dot that breathes only while the
+   assignee is working (still, with reduced motion; the word says it either way). Busy with several cards: quiet grey. */
+.tr-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.tr-mark, .tr-state { display: inline-flex; align-items: center; gap: var(--s-1); padding: 1px var(--s-2); border-radius: var(--r-full); background: var(--accent-dim); color: var(--accent); font-size: var(--fs-2xs); font-weight: var(--fw-semibold); white-space: nowrap; }
+.tr-state { padding: 2px var(--s-2); font-size: var(--fs-xs); }
+.tr-mark.s-working .tr-dot, .tr-state.s-working .tr-dot { animation: pulse 1.2s ease-in-out infinite; }
+.tr-mark.shared { background: var(--surface-2); color: var(--text-2); }
+.tr-mark.s-needs, .tr-state.s-needs { background: var(--warn-bg); color: var(--warn); }
+.tr-mark.s-stuck, .tr-state.s-stuck { background: var(--danger-bg); color: var(--danger); }
+.tr-state.s-idle { background: var(--surface-2); color: var(--text-2); }
+/* On a tile the mark has its own line under the title: the number, priority and size already fill a narrow column. */
+.tb-tile-run { display: flex; }
+.tb-tile.running { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
+.tb-row.running { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.tb-row.running:hover { background: var(--accent-dim); }
+/* The card's "Agent activity": who, their state, the way to their conversation, and (an admin, tool progress on) the steps. */
+.tr-run { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); }
+.tr-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); min-width: 0; }
+.tr-title { margin: 0; font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+.tr-note { margin: 0; font-size: var(--fs-sm); }
+.tr-run .act-block { margin: 0; }
+/* The timeline marks what an agent did: a bar beside it and an "Agent" tag after its name. */
+.tr-by { background: var(--surface-2); color: var(--text-2); }
+.tl-comment.by-agent { border-left: 3px solid var(--accent); }
+.tl-line.by-agent { padding-left: var(--s-2); box-shadow: inset 2px 0 0 var(--accent); }
+@media (max-width: 899px), (pointer: coarse) and (max-height: 500px) and (max-width: 1023px) {
+  .tr-open { min-height: var(--tap); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tr-mark.s-working .tr-dot, .tr-state.s-working .tr-dot { animation: none; }
+}

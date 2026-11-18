@@ -9,6 +9,7 @@ import { html, useEffect, useRef, useState } from "/assets/app-html.js";
 import { t } from "/assets/app-i18n.js";
 import { Icon } from "/assets/ui-icons.js";
 import { Who, relTime } from "./fleet-task-common.js";
+import { AgentTag } from "./fleet-task-run.js";
 
 export const TIMELINE_FILTERS = ["all", "comments", "log", "history"];
 const RANK = { event: 0, log: 1, comment: 2 };   // at one instant: the move first, then the words that came with it
@@ -17,15 +18,17 @@ const when = (iso) => { const n = Date.parse(iso); return Number.isFinite(n) ? n
 
 /**
  * The card detail's three lists as one timeline, oldest first (pure: tests import it). Each entry:
- * { key, type: "comment" | "log" | "event", at, who, text?, kind?, authorKind?, ev? } — `ev` is the history event.
+ * { key, type: "comment" | "log" | "event", at, who, by, text?, kind?, authorKind?, ev? } — `ev` is the history event;
+ * `by` is who made it (person | instance | script | system) when the server said, else "" (an older entry): an instance's is
+ * marked in the timeline (AGEND-296).
  */
 export function timelineOf(detail) {
   const out = [];
-  for (const e of (detail && detail.comments) || []) out.push({ key: `c${e.id}`, type: "comment", at: e.at, who: e.author, text: e.text, kind: e.kind, authorKind: e.authorKind });
-  for (const e of (detail && detail.logs) || []) out.push({ key: `l${e.id}`, type: "log", at: e.at, who: e.author, text: e.text });
+  for (const e of (detail && detail.comments) || []) out.push({ key: `c${e.id}`, type: "comment", at: e.at, who: e.author, by: e.authorKind || "", text: e.text, kind: e.kind, authorKind: e.authorKind });
+  for (const e of (detail && detail.logs) || []) out.push({ key: `l${e.id}`, type: "log", at: e.at, who: e.author, by: e.authorKind || "", text: e.text });
   for (const ev of (detail && detail.history) || []) {
     if (ev.type === "commented" || ev.type === "logged" || ev.type === "reordered") continue;
-    out.push({ key: `h${ev.id}`, type: "event", at: ev.at, who: ev.actor, ev });
+    out.push({ key: `h${ev.id}`, type: "event", at: ev.at, who: ev.actor, by: ev.actorKind || "", ev });
   }
   return out.map((e, i) => ({ e, i })).sort((a, b) => when(a.e.at) - when(b.e.at) || RANK[a.e.type] - RANK[b.e.type] || a.i - b.i).map((x) => x.e);
 }
@@ -106,18 +109,20 @@ const fullTime = (iso) => { const d = new Date(iso); return Number.isFinite(d.ge
 
 function Entry({ entry, describe }) {
   const time = html`<time class="muted tl-time" dateTime=${entry.at} title=${fullTime(entry.at)}>${relTime(entry.at)}</time>`;
+  const agent = entry.by === "instance";
+  const mark = agent ? " by-agent" : "";
   if (entry.type === "comment") {
-    return html`<li class=${`tl-item tl-comment${entry.authorKind === "person" ? " person" : ""}`}>
-      <div class="tl-head"><${Who} name=${entry.who} />
+    return html`<li class=${`tl-item tl-comment${entry.authorKind === "person" ? " person" : ""}${mark}`}>
+      <div class="tl-head"><${Who} name=${entry.who} />${agent ? html`<${AgentTag} />` : null}
         ${entry.kind === "reject" ? html`<span class="tb-tag st-blocked">${t("taskcard.rejectTag")}</span>` : null}
         ${entry.kind === "approve" ? html`<span class="tb-tag st-done">${t("taskcard.approveTag")}</span>` : null}
         ${time}</div>
       <div class="tl-body">${entry.text}</div></li>`;
   }
   if (entry.type === "log") {
-    return html`<li class="tl-item tl-line tl-log"><${Icon} name="check" size=${14} /><span class="tl-text"><b>${entry.who}</b> ${entry.text}</span>${time}</li>`;
+    return html`<li class=${`tl-item tl-line tl-log${mark}`}><${Icon} name="check" size=${14} /><span class="tl-text"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null} ${entry.text}</span>${time}</li>`;
   }
-  return html`<li class="tl-item tl-line tl-event"><span class="tb-dot" aria-hidden="true"></span><span class="tl-text"><b>${entry.who}</b> ${describe(entry.ev)}</span>${time}</li>`;
+  return html`<li class=${`tl-item tl-line tl-event${mark}`}><span class="tb-dot" aria-hidden="true"></span><span class="tl-text"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null} ${describe(entry.ev)}</span>${time}</li>`;
 }
 
 /** The merged timeline with its filter (all, comments, progress log, history). `describe(ev)` words a history event. */

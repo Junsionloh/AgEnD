@@ -381,8 +381,8 @@ describe("a card is a page of its own", () => {
     await mount();
     await openCard("M-1");
     expect(qa(".tp-props .tp-row dt").map((d) => text(d))).toEqual(["Status", "Assignee", "Dispatched by", "Project", "Priority", "Size", "Your confirmation", "Waits for"]);
-    expect(qa(".tp-body > *").map((el) => el.className.split(" ")[0]), "goal, scope, definition, context, state, result, sub tasks; then the timeline and the comment box")
-      .toEqual(["tc-field", "tc-field", "tc-field", "tc-field", "tc-field", "tc-field", "tc-field", "tl", "tc-composer"]);
+    expect(qa(".tp-body > *").map((el) => el.className.split(" ")[0]), "the assignee's activity (AGEND-296: a card with an assignee); goal, scope, definition, context, state, result, sub tasks; then the timeline and the comment box")
+      .toEqual(["card", "tc-field", "tc-field", "tc-field", "tc-field", "tc-field", "tc-field", "tc-field", "tl", "tc-composer"]);
   });
 });
 
@@ -582,7 +582,7 @@ describe("the timeline and the comment box on the page", () => {
     await mount();
     await openCard("M-1");
     expect(qa(".tl-item").length).toBe(7);
-    expect(qa(".tl-item").map((li) => li.className.split(" ").slice(1, 3).join(" "))).toEqual(["tl-line tl-event", "tl-line tl-event", "tl-comment person", "tl-line tl-log", "tl-comment", "tl-line tl-event", "tl-comment person"]);
+    expect(qa(".tl-item").map((li) => li.className.split(" ").slice(1, 3).join(" "))).toEqual(["tl-line tl-event", "tl-line tl-event", "tl-comment person", "tl-line tl-log", "tl-comment by-agent", "tl-line tl-event", "tl-comment person"]);
     expect(text(qa(".tl-comment")[2].querySelector(".tb-tag"))).toBe("Sent back");
     const filters = qa(".tl-filter button");
     expect(filters.map((b) => text(b))).toEqual(["All", "Comments 3", "Progress 1", "History 3"]);
