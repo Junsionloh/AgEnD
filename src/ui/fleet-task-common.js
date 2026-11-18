@@ -83,6 +83,8 @@ register("tasks", {
     workWaitsFor: "waits for {0}", workNone: "Nothing on the board", workNewComments: "Comments it has not read yet",
     workOutside: "Not in the fleet", workFailed: "Could not read who works on what: {0}", workJoin: ", ",
     detailsBoard: "Task board",
+    // The quick create (fleet-task-create.js)
+    quickHint: "A title is enough — fill in the rest on the card.", moreOptions: "More options", createMore: "Project, assignee and priority",
   },
   "zh-TW": {
     open: "待辦", claimed: "進行中", blocked: "卡住", review: "待確認", done: "完成", cancelled: "取消",
@@ -158,6 +160,8 @@ register("tasks", {
     workWaitsFor: "等 {0}", workNone: "看板上沒有它的卡", workNewComments: "有它還沒看過的留言",
     workOutside: "不在 fleet 裡", workFailed: "讀不到工作清單：{0}", workJoin: "、",
     detailsBoard: "任務看板",
+    // 快速建立（fleet-task-create.js）
+    quickHint: "只要標題就能建立，其他欄位建立後在卡片上補。", moreOptions: "更多選項", createMore: "專案、負責人與優先度",
   },
 });
 
