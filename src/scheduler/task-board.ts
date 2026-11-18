@@ -1181,6 +1181,38 @@ export class TaskBoard {
     return hits.slice(0, max);
   }
 
+  /**
+   * AGEND-298: the cards offered while a card number is typed in a chat (what follows the `#`, "" for nothing yet): those
+   * whose number starts with it ("m1", "M-1", "12" → M-1, M-12, S-12…; the exact number first), then those whose title
+   * holds it; with nothing typed, the latest changes. Live cards before finished ones in each part. `keep` leaves a card out
+   * (the public link's hidden instances) before the limit is applied.
+   */
+  suggest(query: string, limit = 8, keep?: (card: Card) => boolean): Card[] {
+    const q = query.replace(/^#/, "").trim();
+    const max = Math.min(Math.max(Math.floor(limit) || 1, 1), 50);
+    const escape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+    const order = "CASE WHEN status IN ('done', 'cancelled') THEN 1 ELSE 0 END, updated_at DESC";
+    const out: Card[] = [];
+    const add = (rows: Row[]) => {
+      for (const card of rows.map(toCard)) if (!out.some((c) => c.uuid === card.uuid) && (!keep || keep(card))) out.push(card);
+    };
+    if (!q) {
+      add(this.db.prepare(`SELECT * FROM tasks ORDER BY ${order} LIMIT 200`).all() as Row[]);
+      return out.slice(0, max);
+    }
+    const num = /^([MmSs])?\s*-?\s*(\d*)$/.exec(q);
+    if (num && (num[1] || num[2])) {
+      const letters = num[1] ? [num[1].toUpperCase()] : ["M", "S"];
+      const exact = num[2] ? cardCode(`${letters[0]}-${num[2]}`) : null;
+      add(this.db.prepare(
+        `SELECT * FROM tasks WHERE ${letters.map(() => "code LIKE ? ESCAPE '\\'").join(" OR ")}
+         ORDER BY CASE WHEN code = ? THEN 0 ELSE 1 END, ${order} LIMIT 200`,
+      ).all(...letters.map((l) => `${l}-${escape(num[2] ?? "")}%`), exact ?? "") as Row[]);
+    }
+    add(this.db.prepare(`SELECT * FROM tasks WHERE title LIKE ? ESCAPE '\\' ORDER BY ${order} LIMIT 200`).all(`%${escape(q)}%`) as Row[]);
+    return out.slice(0, max);
+  }
+
   private matchOf(card: Card, q: string, like: string, notBy: { sql: string; params: Record<string, string> } = { sql: "", params: {} }): SearchHit["match"] {
     const needle = q.toLowerCase();
     if (card.title.toLowerCase().includes(needle)) return null;

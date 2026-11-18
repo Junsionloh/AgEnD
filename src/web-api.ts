@@ -64,7 +64,8 @@ import { CreateInstanceArgs, CreateScheduleArgs, UpdateScheduleArgs, validateArg
 import { scheduleView } from "./web-schedules.js";
 import { DEFAULT_SCHEDULER_CONFIG } from "./scheduler/index.js";
 import type { Schedule, ScheduleRetry } from "./scheduler/types.js";
-import { CARD_PRIORITIES, CARD_SIZES, CARD_STATUSES, TaskBoardError, type Actor as BoardActor, type TaskBoard } from "./scheduler/task-board.js";
+import { CARD_PRIORITIES, CARD_SIZES, CARD_STATUSES, TaskBoardError, cardCode, type Actor as BoardActor, type TaskBoard } from "./scheduler/task-board.js";
+import { TASK_REF_SEPARATOR, cardsForRefs, taskRefBlock, taskRefCodes, taskRefView } from "./chat-task-refs.js";
 import { readStatuslineModel, resolveInstanceContext } from "./topic-commands.js";
 import { z } from "zod";
 import { ONBOARDING_BACKENDS } from "./backend-signin-pending.js";
@@ -104,7 +105,7 @@ import { claudeDocumentedModels } from "./model-catalog-defaults.js";
 import { shapeDocumentedClaudeModels, shapeWebModelCatalog } from "./web-model-groups.js";
 import { handleRuntimeRequest } from "./runtime-api.js";
 import type { RuntimeCoordinator } from "./runtime-coordinator.js";
-import { taskBoardOffNames } from "./dashboard-permissions.js";
+import { taskBoardOffIn, taskBoardOffNames } from "./dashboard-permissions.js";
 import { topicFields, type TopicDeleteOutcome } from "./instance-topic-delete.js";
 
 // ── Strict public-facing schemas ────────────────────────────────────────────
@@ -3875,7 +3876,7 @@ export function handleWebRequest(
   // ── Task board (scheduler/task-board.ts) ──────────────
   // Reads are the session's; every write is the signed-in person's, through the same rules an instance's tools use.
 
-  if (path === "/ui/tasks/board" || path === "/ui/tasks/search" || path === "/ui/tasks/work" || path.startsWith("/ui/tasks/cards") || path.startsWith("/ui/tasks/projects")) {
+  if (path === "/ui/tasks/board" || path === "/ui/tasks/search" || path === "/ui/tasks/refs" || path === "/ui/tasks/work" || path.startsWith("/ui/tasks/cards") || path.startsWith("/ui/tasks/projects")) {
     const board = ctx.scheduler?.db.board;
     if (!board) { json(res, 503, { error: "The task board is not available", code: "unavailable", key: "unavailable" }); return true; }
     // M-3278 (decision 7933bf90): an admin session changes the board over the public link too, as itself (boardActor), and
@@ -3970,6 +3971,20 @@ export function handleWebRequest(
           parentTitle: c.parent && !hiddenRef(c.parent) ? board.findCard(c.parent)?.title ?? null : null,
         }));
         json(res, 200, { results });
+        return true;
+      }
+      if (method === "GET" && path === "/ui/tasks/refs") {
+        // AGEND-298: a card as a chat shows it — number, title, status, who has it — and the cards offered while `#` is typed.
+        // `?codes=M-3,S-4` answers those that are cards (the others are left out, not an error); `?q=` (what follows the `#`,
+        // empty for the latest changes) offers cards. Over the public link, not a card that names a hidden instance.
+        const wanted = url.searchParams.get("codes");
+        if (wanted !== null) {
+          const codes = [...new Set(wanted.split(",").map((c) => cardCode(c.trim().replace(/^#/, ""))).filter((c): c is string => !!c))].slice(0, 50);
+          json(res, 200, { refs: cardsForRefs(board, codes, hidden).map(taskRefView) });
+          return true;
+        }
+        const limit = Number(url.searchParams.get("limit")) || 8;
+        json(res, 200, { refs: board.suggest((url.searchParams.get("q") ?? "").slice(0, 100), limit, (c) => !hidden(c)).map(taskRefView) });
         return true;
       }
       if (method === "GET" && card && !card[2]) {
@@ -4536,6 +4551,17 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
       }
       // The same tags and meta a Telegram photo/document produces, so the agent needs nothing new.
       const delivery = attachmentDelivery(typed, files);
+      // AGEND-298: the task cards the person's words name (`#M-3`, typed or chosen from the list), read from the board now, go to
+      // the agent as a short block under them, so it need not guess. Nothing is added for a number that is no card (never was,
+      // or deleted since), for a guest (a guest has no board), for an instance whose task board is switched off (it is told
+      // nothing of the board: only the person's words go), for a line that starts with "/" (a command for the CLI, or /raw's
+      // exact paste), or for a card that names an instance hidden on the public link. The chat's copy, the channel's echo and
+      // the receipt's "what was typed" stay the person's words.
+      const taskBoard = guest || taskBoardOffIn(ctx.fleetConfig, instance) || /^\s*\//.test(typed) ? undefined : ctx.scheduler?.db.board;
+      const { hidden: hiddenCard } = boardHiding(ctx, linkRestricted(req, new URL(req.url ?? "/", "http://localhost"), ctx));
+      const refCards = taskBoard ? cardsForRefs(taskBoard, taskRefCodes(typed), hiddenCard) : [];
+      const refBlock = taskBoard && refCards.length ? taskRefBlock(taskBoard, refCards, { hint: !native, hidden: hiddenCard }) : "";
+      const deliveredText = delivery.text + refBlock;
       // #1269: `/raw ` is pasted into the CLI with no [user:] envelope (the daemon's own check, on this exact text).
       // M-3278 (decision 7933bf90): the public link's admin session may do that too, as a local one may; anyone else
       // over the link (a guest) still may not.
@@ -4570,7 +4596,7 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
       if(nativeRequestId && ctx.nativeInstanceRuntime){
         const previous=ctx.nativeInstanceRuntime().get(instance)?.turns.find(turn=>turn.id===nativeRequestId);
         if(previous){
-          if(previous.prompt!==delivery.text){json(res,409,{error:"clientId belongs to a different message"});return;}
+          if(previous.prompt!==delivery.text&&!previous.prompt.startsWith(delivery.text+TASK_REF_SEPARATOR)){json(res,409,{error:"clientId belongs to a different message"});return;}   // the card block under it is read afresh on a retry
           acceptedId=messageId;json(res,200,{sent:true,messageId,repeated:true});return;
         }
       }
@@ -4622,7 +4648,7 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
           : ctx.deliverToInstance(name, payload, { stillCurrent, ...(native ? { authorityCurrent } : {}) });
         delivered = await deliver(instance, {
           type: "fleet_inbound",
-          content: delivery.text,
+          content: deliveredText,
           ...(nativeRequestId ? {requestId:nativeRequestId} : {}),
           targetSession: instance,
           meta: {

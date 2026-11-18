@@ -496,6 +496,36 @@ confirming and sending back work, and answering a blocked card, happen in the ch
   `/ui/history` withhold it while one of them is hidden there, read when asked, or is no longer on the board (#2341
   review).
 
+## Cards in the chat (AGEND-298)
+
+An instance's web chat can refer to a card, and the agent is handed it. Nothing about it is stored: a reference is text.
+
+- **The reference is the card's number in the text.** `#M-3` / `#s3`: a `#`, the letter in either case, an optional hyphen, the
+  number — after any character, not inside a longer word, a path, a URL or a decimal. A bare `M-3` is *not* a reference (an
+  upstream-style `M-3304` in a sentence must not pull in a card that has that number). `#` is the page's trigger because it does not
+  collide with anything the chat already types — `/` is the command palette, and Fleet › Tasks' comment box completes `@` with
+  instance names (AGEND-294) — and it reads as "a card number" as it does elsewhere. The rule is one regular expression in three
+  places (`src/chat-task-refs.ts`, `src/ui/chat-task-refs.js`, the renderer `src/ui/shared/chat-render.js`); a test holds them to one
+  list of cases. A number in a fenced block, an inline `code` span, the label of a link or a URL is no reference: the server
+  reads the text without those (`proseOf`, the renderer's own order) before it looks for numbers, and a test holds the cards
+  handed to the agent to exactly the chips the renderer draws, for every case.
+- **Typing `#`.** The composer asks `GET /ui/tasks/refs?q=` (`TaskBoard.suggest`: a number's start, then the title; the latest
+  changes for nothing typed; hidden instances' cards left out over the public link) and offers the cards in the command palette's own
+  list. Choosing puts `#M-3 ` in the draft. A guest has no board and is offered nothing.
+- **The chip.** A person's message (never an agent's, never the Hub's) that names a card is drawn with a chip — number, title, status
+  (the board's pill) — linking to `/ui/fleet?card=<number>`. The page asks `GET /ui/tasks/refs?codes=` once per number and again
+  after a `tasks` stream event; until the answer arrives, or when the number is no card, the text stays text.
+- **The agent.** `POST /ui/send` reads the numbers in the typed text, reads those cards from the board *now*, and puts a block under
+  the person's words in the message it delivers (`[Task cards this message refers to]`, a line per card as `task get` writes it,
+  and how to read one in full). Not for a guest, a line that starts with `/` (a command for the CLI, `/raw`'s exact paste), an instance
+  whose task board is switched off (it is told nothing of the board: only the person's words go), or a card a hidden instance
+  holds over the link; a sub task whose main task is hidden there does not name it (`sub task`, not `sub task of M-n`). The chat's own copy, the
+  channel echo and the delivery receipt's "what was typed" stay the person's words. A number with no card adds nothing and fails
+  nothing. Telegram and Discord messages take another path (`FleetManager`'s inbound handler) and are unchanged.
+- **Compatibility.** No column, table or stream field is new; a chat stored by an older version reads as before, and an older AgEnD
+  shows `#M-3` as text. The native (Windows) runtime's retry check compares the person's words, so a card that moved between a send
+  and its retry is still the same send.
+
 ## Next
 
 - **Watchers on the page.** The detail page's property side (AGEND-294) lists a card's watchers and lets the person add and
