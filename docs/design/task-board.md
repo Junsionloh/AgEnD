@@ -156,25 +156,57 @@ kept out of sight) and is built each time.
 
 ## The page (Fleet › Tasks)
 
-`fleet-tasks.js` (Home and a project's board), `fleet-task-card.js` (one card in the app's dialog, as a drawer),
-`fleet-task-common.js` (words, requests, moves, marks). Home: what waits for the person (confirm, send back, answer),
+`fleet-tasks.js` (Home and a project's board), `fleet-task-card.js` (one card as a page of its own), with
+`fleet-task-edit.js` (editing in place: a text, the title, the checklist, a property's chip), `fleet-task-activity.js`
+(the timeline and the comment box) and `fleet-task-create.js` (the quick create); `fleet-task-view.js` (the toolbar and
+the list), `fleet-task-menu.js` (a card's menu, stepping), `fleet-task-common.js` (words, requests, moves, marks). Home: what waits for the person (confirm, send back, answer),
 then the projects (with % done) and No project. A board read carries live cards and the last 14 days' finished ones
 (`?done=all`: every done main task, for the Done column's "All"), each project's numbers over all its cards, and is a
-handful of statements whatever its size (`views()`, `projectStats()`). A project: its main tasks by status, a filter by
-assignee, drag to move or reorder, a main task's sub tasks inside its tile. A card: every field edits in place with the
-version it started from; a 409 shows the newer card with the draft still open, and saving again overwrites. `?card=M-3`
-opens a card. Bars are SVG rects (the CSP allows no style attribute); a bar fills with done work only — the percentage beside it (#2299: a project whose only card was blocked drew a full red bar at 0 %) — and the chips name what is blocked or waiting.
+handful of statements whatever its size (`views()`, `projectStats()`). A project: its main tasks by status (or as a list), the toolbar's search and filters, drag to move or reorder,
+a main task's sub tasks inside its tile. A card: every field edits in place with the version it started from; a 409
+shows the newer card with the draft still open, and saving again overwrites. `?card=M-3` opens a card. Bars are SVG rects (the CSP allows no style attribute); a bar fills with done work only — the percentage beside it (#2299: a project whose only card was blocked drew a full red bar at 0 %) — and the chips name what is blocked or waiting.
 
 - **Live.** A `tasks` stream event older than the board on screen is ignored; otherwise the page asks again (once per
   burst, 250 ms) with its revision, and is sent the board only when it moved. Same on a stream reconnect.
 - **Moves keep their text.** Every move sends the version the person saw. When an agent changed the card meanwhile
   (409), a typed reason is not lost: the card is read again and the person is asked once more, the text in place.
 - **Without a mouse.** A tile's title is its button (the tile is not a button around buttons): Enter opens the card,
-  Alt+←/→ moves it to the status before or after, Alt+↑/↓ within its column. The card's dialog has Move to… and a
-  Position row (up, down) — reordering on a phone, where HTML5 dragging does not fire.
-- **taskhall's looks.** On a desk a card opens as a drawer from the right edge (the app's dialog with `drawer`: focus,
-  Esc and the backdrop as before), its fields in a grey block; a phone keeps the bottom sheet. The columns reach the
-  bottom of the page (a card drops anywhere down a column). Tiles are white with a shadow and a bold title; a bar on the
+  Alt+←/→ moves it to the status before or after, Alt+↑/↓ within its column. A tile and a list row also have a ⋯ button
+  that opens the card's menu (Move to…): a phone has no right click and HTML5 dragging does not fire there. The card's
+  page has a Status chip and a Position row (up, down).
+- **The card is a page (AGEND-294, after Multica's issue page).** It replaces the board in the tab instead of a drawer
+  over it, so a desk's width is used: a main column (title, goal, scope, definition of done, context, state, result, sub
+  tasks, then the activity — comments, progress log and history merged into one timeline, oldest first, with the comment
+  box last) and a side column of properties (status, assignee, dispatcher, project, priority, size, your confirmation,
+  dependencies) that stays in view; one column on a phone (≤ 899 px, the app's breakpoint) with the properties right
+  under the title. The merge is the page's: the card API still returns `comments`, `logs` and `history` apart, and the
+  history lines that only repeat a comment or a log entry are dropped from it. No API, schema or column changed.
+- **A card in the address.** The open card is `?card=` in the page's address, beside `?tp=` and `?tf=`. Opening a card
+  from the board adds one history entry, so Back returns to the board or the list (its scroll and the card's tile focus
+  come back); opening another from the card (a sub task, a dependency) adds one more, and "Back" on the page goes all the
+  way (the entry's state counts the cards deep); stepping to the previous / next card replaces. A link opens the card
+  directly, and Back then drops the parameter.
+- **Edit in place, saved when you leave.** A property is a chip that opens a menu (the app's `Menu`); a choice saves at
+  once. A text opens as a box on a click: leaving the box or Ctrl+Enter saves, Esc drops it — and the blur that follows
+  an Esc, or a switch to another window, saves nothing. Every save keeps the version the edit started from. After a 409
+  the box stays open with a line saying the card changed and two answers (Overwrite, Discard my change): leaving the box
+  never overwrites silently. Chip saves go one after another, each on the version the one before left. A comment carries
+  no version, as before.
+- **The toolbar.** Board | List, search, Filter and Display are one row (`TaskToolbar`). The view, grouping, order and
+  direction (`agend_tasks_display`), the filters (`agend_tasks_filters`, also `?tf=`), the folded list groups
+  (`agend_tasks_collapsed`, per project) and the search (`agend_tasks_query`) are kept on the device; a value an older build stored
+  still reads, an unknown one falls back to its default. Needs you is a filter field (`waits:you`, the rule of Waiting for
+  you). The list's header sorts by ID, Title, Priority, Assignee or Updated; the same column again reverses it.
+- **A phone.** The board shows one status at a time (the switch is hidden on a desk; every column is drawn, a class
+  shows the current one), starting at the first of To confirm, In progress, Blocked, To do, Done that has cards.
+- **The comment box's @.** Typing `@` completes with the fleet's instance names (those with the board off are listed,
+  disabled; a name no longer in the fleet is not) and only types `@<name> ` into the text. What an @ does to that
+  instance is the board's business, which reads the same plain text; the box sends the comment as typed. The list
+  follows the board's reading (`task-board-mentions.ts`): none right after a letter, digit, `_`, `.`, `-`, `@`, `/` or
+  `\`, none inside inline code or a fenced block (`mentionAt`, with the board's `withoutCode`), and when the text after
+  the caret would run the name on into a longer instance name, the box adds a space of its own, so the name typed is the
+  name read. A test runs both over a battery of texts (it waits for the board's parser to be in the tree).
+- **taskhall's looks.** The columns reach the bottom of the page (a card drops anywhere down a column). Tiles are white with a shadow and a bold title; a bar on the
   left only while a card is under way (in progress, blocked, waiting for you); a size in a box. Who works on a card has
   a round initial: an instance's in its identity colour (#1958), a person's grey.
 - **Who works on what (step 3).** `GET /ui/tasks/work` (`?instance=` for one): each instance's `myWork` — what its
@@ -184,7 +216,7 @@ opens a card. Bars are SVG rects (the CSP allows no style attribute); a bar fill
   each line says what the card is to it (sent back, in progress, blocked, waiting for you, owns, can start, waiting on)
   and opens it. It is read again on each board change. An instance's Details page reads its own once.
 - **The public link** shows the board with a read-only note and no write controls (see above): a card's project, priority, size and review are text, not disabled controls (#2299).
-- **Toasts** are a manual popover (the top layer): a toast raised while a card's dialog is open is above its backdrop, not dimmed under it. On a phone the board's toasts come in above the tabs (an older confirmation gives way to two newer toasts; an error stays), not over its title and search; while a card's sheet is open, at the top (#2299).
+- **Toasts** are a manual popover (the top layer), above any dialog's backdrop (the board's asks — a reason, an answer, a name — are dialogs). On a phone the board's toasts come in above the tabs (an older confirmation gives way to two newer toasts; an error stays), not over its title and search (#2299).
 - **Wrapped up before you confirm (step 2).** A main task goes to review by itself when its last sub task is done —
   often a reviewer's — before its owner ticked its definition of done or wrote its result. Such a card shows "To fill
   in", the waiting row and the card say what is missing, and Confirm asks first (send it back, or confirm anyway with
@@ -304,7 +336,7 @@ confirming and sending back work, and answering a blocked card, happen in the ch
   world's admins. Over the public link a task item whose card the board hides there (a hidden assignee, creator or
   dispatcher) is left out of `/ui/poll`'s Needs you; the link's page has no stream.
 - **Who acts.** The person, named by the platform (`person: <username>`), through the board's rules — the same as a
-  signed-in page; the web's Needs you list links each card to its dialog.
+  signed-in page; the web's Needs you list links each card to its page.
 
 - **The daily summary** (`task-board-summary.ts`, taskhall's): once a day at `defaults.task_board.summary_at`
   (default 09:00, the fleet's zone; `off`), each world's General gets what waits for the person and what is blocked now,
