@@ -556,6 +556,29 @@ describe("4f. AGEND-299: who follows a card, from the dashboard", () => {
       expect(full.history.filter((e: any) => e.type === "logged").map((e: any) => e.data.text)).toContain("watchers: +ops, +spy");
     }
   });
+
+  it("AGEND-301: the card's read names its leader and a sub task's inherited watchers; over the link a hidden instance is named in neither (the leader reads as none), and the local page sees all", async () => {
+    const db = named();
+    const project = db.board.createProject(ANN, { name: "Game" });
+    db.board.updateProject(ANN, project.id, { leadInstance: "spy" });
+    db.board.setProgressRouting({ enabled: () => true, leader: () => "ops" });
+    const main = db.board.createCards(ANN, { project: "Game", cards: [{ title: "Main", assignee: "dev-a" }] }).cards[0]!;
+    db.board.setWatchers(ANN, main.code, { add: ["ops", "spy"] });
+    const sub = db.board.createCards(ANN, { cards: [{ parent: main.code, title: "Sub" }] }).cards[0]!;
+    const get = (code: string, opts: { tier?: "admin" | "read"; local?: boolean }) => viaLink(db, "GET", `/ui/tasks/cards/${code}`, undefined, { fleetConfig, ...opts });
+
+    const local = (await get(sub.code, { local: true })).body;
+    expect(local.leader).toEqual({ name: "spy", via: "project" });
+    expect(local.inheritedWatchers).toEqual(["ops", "spy"]);
+    expect(local.followsProgress).toBe(true);
+    const link = (await get(sub.code, { tier: "read" })).body;
+    expect(link.leader, "a hidden lead reads as none").toBeNull();
+    expect(link.inheritedWatchers).toEqual(["ops"]);
+    expect(JSON.stringify(link)).not.toContain("spy");
+    // A visible leader is named over the link too, and the project's lead (here none) falls back to the board's default.
+    db.board.updateProject(ANN, project.id, { leadInstance: null });
+    expect((await get(main.code, { tier: "read" })).body.leader).toEqual({ name: "ops", via: "board" });
+  });
 });
 
 describe("4e. #2756: whom a card waits for, through the routes (#2757 review: a dispatcher deleted, caches warm)", () => {
