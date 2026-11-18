@@ -84,8 +84,8 @@ describe("#2801: one card's life — who is told what (the issue's table)", () =
     board.updateCard(LEAD, card.code, { comment: "see #12" });
     board.updateCard(ANN, card.code, { comment: "weekly, not daily" });
     // Comments wake since (tests/task-board-comment-wakes.test.ts; #2801's "a comment notifies nobody" no longer stands): the
-    // assignee is told, once for the three in the window, and reads them on the card.
-    expect(settle()).toEqual([["dev-a", has('new comment from Ann: "weekly, not daily"')]]);
+    // assignee is told once for the three in the window — the last one quoted, the two before it counted — and reads them on the card.
+    expect(settle()).toEqual([["dev-a", has('new comment from Ann: "weekly, not daily" (+2 earlier comments: task get')]]);
     board.moveCard(DEV, card.code, "blocked", { reason: "which API?" });
     expect(settle()).toEqual([["lead", has('you handed it out and it is blocked (@dev-a): "which API?"')]]);
     board.moveCard(LEAD, card.code, "claimed", { comment: "the v2 one" });

@@ -293,6 +293,11 @@ export interface Wake {
   by: Partial<Record<WakeReason, string>>;
   /** The words that came with a reason: a send-back's, an answer's, a comment's, a question's, a confirmation note. */
   texts: Partial<Record<WakeReason, string>>;
+  /**
+   * Set by the waker, never the board: how many comments (or mentions) earlier than the one in `texts` it merged into
+   * this wake while gathering — the notice quotes the last and says there are more.
+   */
+  earlier?: number;
 }
 
 /** What one committed write changed, for live views: the card numbers touched (none for a project change). */
@@ -2210,7 +2215,8 @@ export class TaskBoard {
   private settleWakes(events: TaskBoard["pending"]): Wake[] {
     const out = new Map<string, Wake>();
     const add = (card: Card, instance: string | null | undefined, reason: WakeReason, by: Actor, text?: string) => {
-      if (!instance || instance === by.name) return;
+      // Never its own write — but a person's `@name` is not the instance of that name's own write.
+      if (!instance || (instance === by.name && !(reason === "mention" && isPerson(by)))) return;
       const key = `${instance}\u0000${card.uuid}`;
       const w = out.get(key) ?? { instance, uuid: card.uuid, code: card.code, title: card.title, parent: card.parent ? this.codeOf(card.parent) : null, reasons: [], by: {}, texts: {} };
       if (!w.reasons.includes(reason)) w.reasons.push(reason);
@@ -2495,7 +2501,9 @@ export class TaskBoard {
     const names = [...this.routing.instances()];
     const parsed = parseMentions(text, names);
     const agent = author.kind !== "person";
-    let mentions = parsed.names.filter((n) => n !== author.name);
+    // Only an instance (or a script) is itself: a person whose name is an instance's name is someone else, and a mention
+    // of that instance is for it (the board's names are one string, but an `@name` always means the instance).
+    let mentions = parsed.names.filter((n) => agent ? n !== author.name : true);
     for (const n of mentions.filter((m) => this.boardOff(m))) {
       this.say("mention_off", [n], `@${n} has the task board switched off, so it was not woken: it cannot read the card`);
     }
@@ -2523,20 +2531,30 @@ export class TaskBoard {
    * How many turns the agents' talk on the card has had, within AGENT_COMMENT_WINDOW_MS, back to the last thing a person
    * wrote on it (their comment, send-back or confirmation): the comments by agents (anything but a person) that woke
    * someone, a change of writer counting as the next turn. The newest is counted. What woke someone is read again from
-   * the comment: it names an instance other than its writer, or the card's assignee is an instance other than its
-   * writer. An agent's note to itself on its own card wakes nobody: it is no turn of a loop, so it neither counts nor
-   * breaks the chain; and one agent writing twice in a row is one turn, as nobody has answered it.
+   * the comment as it was written: it names an instance other than its writer, or the card's assignee *at that time* was
+   * an instance other than its writer — read from the card's own assignment events (`assigned`: from, to), never from
+   * today's assignee, so handing the card to one of the two talking does not turn the other's comments into notes to
+   * itself and lift the guard. An agent's note to itself on its own card wakes nobody: it is no turn of a loop, so it
+   * neither counts nor breaks the chain; and one agent writing twice in a row is one turn, as nobody has answered it.
    */
   private agentCommentRun(card: Card, names: readonly string[]): number {
     const since = new Date(this.now().getTime() - AGENT_COMMENT_WINDOW_MS).toISOString();
-    const rows = this.db.prepare("SELECT kind, author, author_kind, text FROM task_entries WHERE task_id = ? AND kind IN ('comment', 'reject', 'approve') AND at >= ? ORDER BY id DESC LIMIT 100")
-      .all(card.uuid, since) as Array<{ kind: EntryKind; author: string; author_kind: string; text: string }>;
-    const assigneeHears = (by: string) => card.assignee !== null && card.assignee !== by && names.includes(card.assignee);
+    const rows = this.db.prepare("SELECT kind, author, author_kind, text, at FROM task_entries WHERE task_id = ? AND kind IN ('comment', 'reject', 'approve') AND at >= ? ORDER BY id DESC LIMIT 100")
+      .all(card.uuid, since) as Array<{ kind: EntryKind; author: string; author_kind: string; text: string; at: string }>;
+    // Assignments since the window began, oldest first: the first one after a comment says who had the card before it.
+    const handovers = (this.db.prepare("SELECT at, data FROM task_events WHERE task_id = ? AND type = 'assigned' AND at >= ? ORDER BY id").all(card.uuid, since) as Array<{ at: string; data: string }>)
+      .map((e) => { try { return { at: e.at, from: (JSON.parse(e.data) as { from?: unknown }).from }; } catch { return { at: e.at, from: undefined }; } });
+    const assigneeAt = (at: string): string | null => {
+      const next = handovers.find((h) => h.at > at);
+      if (!next) return card.assignee;
+      return typeof next.from === "string" ? next.from : null;
+    };
+    const assigneeHears = (by: string, at: string) => { const a = assigneeAt(at); return a !== null && a !== by && names.includes(a); };
     let turns = 0;
     let writer: string | null = null;
     for (const r of rows) {
       if (r.author_kind === "person") break;
-      if (r.kind !== "comment" || !(assigneeHears(r.author) || parseMentions(r.text, names).names.some((n) => n !== r.author))) continue;
+      if (r.kind !== "comment" || !(parseMentions(r.text, names).names.some((n) => n !== r.author) || assigneeHears(r.author, r.at))) continue;
       if (r.author !== writer) { turns++; writer = r.author; }
     }
     return turns;

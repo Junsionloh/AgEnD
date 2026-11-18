@@ -183,6 +183,21 @@ describe("2. whom a comment wakes", () => {
     expect(take().map((w) => [w.to, w.reasons])).toEqual([["lead", ["mention"]]]);
   });
 
+  it("a person whose name is an instance's name is not that instance: their @mention of it still wakes it", () => {
+    const { board, take } = rig();
+    const c = card(board, LEAD, { assignee: "dev-a" });
+    take();
+    const sameName: Actor = { kind: "person", name: "lead" };               // the dashboard's signed-in user happens to be called "lead"
+    board.updateCard(sameName, c.code, { comment: "@lead @Lead could you look?" });
+    expect(take().map((w) => [w.to, w.reasons, w.by])).toEqual([
+      ["lead", ["mention"], { mention: "lead" }],
+      ["dev-a", ["comment"], { comment: "lead" }],
+    ]);
+    // The instance itself, writing `@lead`, is still not woken by its own comment (an agent's name is its identity).
+    board.updateCard(LEAD, c.code, { comment: "@lead noted" });
+    expect(take().map((w) => w.to)).toEqual(["dev-a"]);
+  });
+
   it("a mention wakes on a finished card too, a plain comment does not", () => {
     const { board, take } = rig();
     const c = card(board, LEAD, { assignee: "dev-a" });
@@ -390,6 +405,53 @@ describe("4. the loop guard", () => {
     expect(turns).toEqual([2, 2, 2, 2, 0]);        // two comments a turn, each told; the 5th turn is held, both of them
   });
 
+  it("a loop through the assignee counts too: plain comments to the assignee are turns, not only @mentions", () => {
+    const r = rig();
+    const c = card(r.board, LEAD, { assignee: "dev-a" });
+    r.take();
+    const woke: string[][] = [];
+    const keys: string[][] = [];
+    for (let i = 0; i < AGENT_COMMENT_CHAIN + 1; i++) {
+      // The lead writes plainly (it wakes dev-a only as the card's assignee); dev-a answers naming the lead.
+      const res = i % 2 === 0 ? r.board.updateCard(LEAD, c.code, { comment: `ok (${i})` }) : r.board.updateCard(DEV, c.code, { comment: `@lead done (${i})` });
+      woke.push(r.take().map((w) => w.to));
+      keys.push(noteKeys(res).filter((k) => k !== "new_comment"));
+    }
+    expect(woke).toEqual([["dev-a"], ["lead"], ["dev-a"], ["lead"], []]);
+    expect(keys.at(-1)).toEqual(["comment_chain"]);
+  });
+
+  it("each comment counts with the assignee it had when it was written: handing the card to one of the two talking does not lift the guard", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const t0 = new Date("2026-11-18T09:00:00Z").getTime();
+    let step = 0;
+    const tick = () => vi.setSystemTime(t0 + ++step * 1000);
+    tick();
+    const r = rig();
+    const c = card(r.board, LEAD, { assignee: "dev-a" });
+    r.take();
+    const say = (by: Actor, comment: string) => {
+      tick();
+      const res = r.board.updateCard(by, c.code, { comment });
+      return { woke: r.take().map((w) => w.to), keys: noteKeys(res).filter((k) => k !== "new_comment") };
+    };
+    // dev-a names the lead; the lead answers plainly, which wakes dev-a as the card's assignee: four turns.
+    expect([say(DEV, "@lead go"), say(LEAD, "ok"), say(DEV, "@lead go"), say(LEAD, "ok")].map((s) => s.woke)).toEqual([["lead"], ["dev-a"], ["lead"], ["dev-a"]]);
+    // The card goes to the lead. Today's assignee is now one of the two; the lead's earlier comments were not notes to itself.
+    tick();
+    r.board.updateCard(ANN, c.code, { assignee: "lead" });
+    r.take();
+    expect(say(DEV, "@lead once more")).toEqual({ woke: [], keys: ["comment_chain"] });
+    // Handed back (to dev-a) the same talk is counted the same way.
+    tick();
+    r.board.updateCard(ANN, c.code, { assignee: "dev-a" });
+    r.take();
+    expect(say(LEAD, "and again")).toEqual({ woke: [], keys: ["comment_chain"] });
+    // A handover inside the talk does not hide its turns either: the window and a person's word still lift it.
+    expect(say(ANN, "@lead @dev-a go on").woke.sort()).toEqual(["dev-a", "lead"]);
+    expect(say(LEAD, "ok").woke).toEqual(["dev-a"]);
+  });
+
   it(`an agent's comment wakes at most ${MAX_COMMENT_WAKES} instances; a person's comment, every one it names`, () => {
     const many = Array.from({ length: 8 }, (_, i) => `inst-${i + 1}`);
     const r = rig(undefined, [...INSTANCES, ...many]);
@@ -432,6 +494,48 @@ describe("5. the notice", () => {
     });
     return { w, sent, fire: () => { for (const t of timers.splice(0)) if (t.live) t.fn(); } };
   }
+
+  it("several comments gathered in one window: the notice quotes the last and counts the earlier ones; another card is its own", () => {
+    const { w, sent, fire } = waker();
+    w.note([wake({ by: { comment: "Ann" }, texts: { comment: "first" } })]);
+    w.note([wake({ by: { comment: "Bob" }, texts: { comment: "second" } })]);
+    w.note([wake({ uuid: "u2", code: "M-5", by: { comment: "Ann" }, texts: { comment: "elsewhere" } })]);
+    fire();
+    expect(sent).toHaveLength(1);
+    const lines = sent[0]!.message.split("\n");
+    expect(lines.find((l) => l.includes("M-4"))).toContain('new comment from Bob: "second" (+1 earlier comment: task get M-4) — reply');
+    expect(lines.find((l) => l.includes("M-5"))).toContain('new comment from Ann: "elsewhere" — reply');
+    expect(lines.find((l) => l.includes("M-5"))).not.toContain("earlier");
+    w.note([wake({ texts: { comment: "a" } }), wake({ texts: { comment: "b" } }), wake({ texts: { comment: "c" } })]);
+    fire();
+    expect(sent[1]!.message).toContain('"c" (+2 earlier comments: task get M-4)');
+    // One comment alone says nothing of the kind.
+    w.note([wake({ texts: { comment: "only" } })]);
+    fire();
+    expect(sent[2]!.message).not.toContain("earlier");
+  });
+
+  it("through the board's own rules: a comment, then a mention of the same instance, is one notice that quotes the mention and counts the comment", () => {
+    const { board, take } = rig();
+    const c = card(board, LEAD, { assignee: "dev-a" });
+    take();
+    const sent: string[] = [];
+    const timers: Array<{ fn: () => void; live: boolean }> = [];
+    const waker = new TaskBoardWaker({
+      deliver: (_to, text) => { sent.push(text); return true; },
+      isInstance: (n) => INSTANCES.includes(n),
+      holds: (x) => board.wakeHolds(x),
+      card: (u) => board.findCard(u),
+      log: () => {},
+      timers: { set: (fn) => { const t = { fn, live: true }; timers.push(t); return t; }, clear: (h) => { (h as { live: boolean }).live = false; } },
+    });
+    board.onChange((ch) => waker.note(ch.wakes));
+    board.updateCard(ANN, c.code, { comment: "weekly, not daily" });
+    board.updateCard(DEV_B, c.code, { comment: "@dev-a the spec changed" });
+    for (const t of timers.splice(0)) if (t.live) t.fn();
+    expect(sent).toEqual([`[Task board] ${c.code} "Build the leaderboard": dev-b mentioned you in a comment: "@dev-a the spec changed" (+1 earlier comment: task get ${c.code}) — reply on the card (task update, with a comment) if it asks something of you; the card is not yours unless it says so. Read it with: task get ${c.code}`]);
+    waker.stop();
+  });
 
   it("an agent's comment is sent with the window, not held for its writer's own message the way an assignment is", () => {
     const { w, sent, fire } = waker({ messagedAbout: () => false });

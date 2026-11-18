@@ -263,8 +263,9 @@ left to wait for, `start` and `answered` while it is in progress, `sent back` wh
 `comment` while the assignee has not read it.
 
 **Sending** (`src/task-board-waker.ts`). The fleet gathers an instance's news for 10 s into one `[Task board]` notice:
-a line per card, each reason with its own words and who did it; a main task assigned with its sub tasks is one line;
-more than three assignments at once (a whole plan) are a count ("You were assigned 6 main tasks (M-11–M-16) and 9 sub
+a line per card, each reason with its own words and who did it (several comments on one card in the window: the last
+is quoted and the line says "+N earlier comments: task get <card>", so it never reads as the only one); a main task
+assigned with its sub tasks is one line; more than three assignments at once (a whole plan) are a count ("You were assigned 6 main tasks (M-11–M-16) and 9 sub
 tasks… one at a time, by priority"). The notice is AgEnD's own (`admitSystemNotice`: sender AgEnD, not a person's
 words) and the delivery outbox holds it until the instance can take it, across a fleet restart too. News still
 gathering when the fleet stops is lost; the card keeps it (`mine`, the comments new to its assignee). Blocked cards
@@ -305,7 +306,8 @@ comment; a notice the writer already told by message is not repeated; and agent-
   notice goes out is dropped.
 - *Mentioned instance, `mention`.* Any instance in `fleetConfig.instances`, not the writer, not one with the task board
   off; whatever the card's state, finished too — it was asked for by name. It may comment on any card, so it can answer.
-  A mentioned assignee gets one `mention`, not a `comment` as well.
+  A mentioned assignee gets one `mention`, not a `comment` as well. A *person* whose name is also an instance's name
+  is not that instance: their `@name` wakes it (only an instance's own `@name` is ignored as a self-mention).
 - *Said, not refused.* The writer's notes (`task` tool answer; the dashboard's `said`) tell who will be woken
   (`comment_wakes`), and what was not: `mention_off` (task board off), `mention_unknown` (no such instance; at most three
   shown), `mention_cap`, `comment_chain` (below). Nothing is rejected: the comment is kept either way. The dashboard
@@ -325,14 +327,25 @@ comment; a notice the writer already told by message is not repeated; and agent-
 **Loop guard.** Instances (and scripts, held to an instance's rules) can wake each other: `A: @B …` wakes B, whose reply
 `@A …` wakes A. So an *agent's* comment wakes someone only while `agentCommentRun(card) ≤ AGENT_COMMENT_CHAIN` (4 turns).
 The run is the agents' comments on the card within `AGENT_COMMENT_WINDOW_MS` (30 min), newest first, back to the last
-entry a person wrote (a comment, a send-back or a confirmation); of those, only the ones that woke someone count (the
-comment names an instance other than its writer, or the card's assignee is an instance other than its writer — read
-again from the text, so an agent's note to itself on its own card is skipped), and a change of writer starts the next
-turn: one agent writing again before anyone answered it is one turn, since a loop needs someone to answer. An agent's
-send-back or log neither counts nor breaks the chain. Past the limit the comment is kept and wakes nobody
+entry a person wrote (a comment, a send-back or a confirmation); of those, only the ones that woke someone count — the
+comment names an instance other than its writer, or the card's assignee *when it was written* was an instance other than
+its writer — so an agent's note to itself on its own card is skipped, and a change of writer starts the next turn: one
+agent writing again before anyone answered it is one turn, since a loop needs someone to answer. A comment is read as
+it was written: the text again for its `@names`, and the card's own assignment events (`assigned`: from, to; the first
+one after the comment says who had the card before it) for its assignee — never today's assignee, or handing the card to
+one of the two talking would turn the other's comments into notes to itself and lift the guard. Plain comments count as
+well as mentions: a loop can run through the assignee alone (`lead: ok` wakes dev-a, `dev-a: @lead done` wakes lead).
+An agent's send-back or log neither counts nor breaks the chain. Past the limit the comment is kept and wakes nobody
 (`comment_chain` says so to its writer) until a person writes on the card or the older comments leave the window. It is
 computed from the card's own `task_entries` — no counter, no new column. An agent's comment also wakes at most
 `MAX_COMMENT_WAKES` (5) instances. A person's comment has neither limit.
+
+*Per card only.* The guard bounds the talk on one card; it is not a global or per-instance rate limit. Two agents
+that move from card to card, mentioning each other, get up to 4 turns on each, so the total is bounded by the number
+of cards they can touch, not by the guard. That is a deliberate trade: a global ceiling would silence legitimate work
+on a busy fleet, and an agent that spends turns this way is also bounded by the board's other rules (one card in
+progress at a time, the dispatcher alerts of #3647). A fleet that wants none of it sets
+`defaults.task_board.comment_wakes: false`; a global or per-instance rate limit is a follow-up if upstream wants one.
 The 10 s gather and the 2-minute told-already rule apply as before; an agent's comment is not *held* for its writer's
 own message the way an assignment is, because a reply must not wait minutes — if the writer has already messaged the
 instance naming the card, the board does not repeat it.

@@ -83,8 +83,11 @@ const ORDER: WakeReason[] = ["cancelled", "sent_back", "decide", "to_confirm", "
  * already messaged the instance about the card has told it.
  */
 const isCommentNews = (r: WakeReason) => r === "comment" || r === "mention";
+const hasCommentNews = (w: Wake) => w.reasons.some(isCommentNews);
 
 const quote = (text: string | undefined) => (text ? `: "${oneLine(text, 160)}"` : "");
+/** A comment's words are the last of several gathered together: the others are on the card. */
+const earlierWords = (w: Wake) => (w.earlier ? ` (+${w.earlier} earlier comment${w.earlier === 1 ? "" : "s"}: task get ${w.code})` : "");
 
 /** One reason, as a line about the card says it. */
 function say(w: Wake, r: WakeReason, card: Card | undefined, here = false): string {
@@ -112,8 +115,8 @@ function say(w: Wake, r: WakeReason, card: Card | undefined, here = false): stri
       return `it is in review and nobody else confirms it — it is yours${gap ? `, though ${gapText(gap, card!.kind === "main")}` : ""}: check it, then move it to done`;
     }
     // Comments wake (docs/design/task-board.md, "Comments and mentions"): the words are in the notice; the reply goes on the card.
-    case "comment": return `new comment from ${by}${quote(w.texts.comment)} — reply on the card (task update, with a comment) only if it asks or needs something from you`;
-    case "mention": return `${by} mentioned you in a comment${quote(w.texts.mention)} — reply on the card (task update, with a comment) if it asks something of you; the card is not yours unless it says so`;
+    case "comment": return `new comment from ${by}${quote(w.texts.comment)}${earlierWords(w)} — reply on the card (task update, with a comment) only if it asks or needs something from you`;
+    case "mention": return `${by} mentioned you in a comment${quote(w.texts.mention)}${earlierWords(w)} — reply on the card (task update, with a comment) if it asks something of you; the card is not yours unless it says so`;
     case "cancelled": return `cancelled by ${by}${w.texts.cancelled?.startsWith("with its main task") ? ` ${oneLine(w.texts.cancelled, 160)}` : quote(w.texts.cancelled)} — stop working on it`;
     case "wrap_up": {
       const gap = card ? wrapUpGap(card) : null;
@@ -186,8 +189,10 @@ export class TaskBoardWaker {
       }
       if (!batch.at.has(w.uuid)) batch.at.set(w.uuid, (this.deps.now ?? Date.now)());
       const had = batch.wakes.get(w.uuid);
+      // A second comment on the card in the same window: the notice quotes the last and counts the ones before it.
+      const earlier = (had?.earlier ?? 0) + (had && hasCommentNews(had) && hasCommentNews(w) ? 1 : 0);
       batch.wakes.set(w.uuid, had
-        ? { ...had, title: w.title, reasons: [...new Set([...had.reasons, ...w.reasons])], by: { ...had.by, ...w.by }, texts: { ...had.texts, ...w.texts } }
+        ? { ...had, title: w.title, reasons: [...new Set([...had.reasons, ...w.reasons])], by: { ...had.by, ...w.by }, texts: { ...had.texts, ...w.texts }, ...(earlier ? { earlier } : {}) }
         : { ...w, reasons: [...w.reasons], by: { ...w.by }, texts: { ...w.texts } });
     }
   }
