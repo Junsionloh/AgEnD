@@ -1,29 +1,37 @@
 // The task board (Fleet › Tasks): projects → main tasks (M-) → sub tasks (S-), ported from taskhall (任務會所).
 // Home lists the projects and what waits for the person; a project is a board of its main tasks by status, each able to
-// open up its sub tasks; a card opens in a dialog (fleet-task-card.js). Every write goes through /ui/tasks/* as the
+// open up its sub tasks; a card opens as a page of its own (fleet-task-card.js). Every write goes through /ui/tasks/* as the
 // signed-in person, under the same rules an instance's task tool meets (scheduler/task-board.ts). A change from anywhere
 // (an agent's tool, another tab) arrives as a "tasks" stream event with the board's revision; the board reads again
 // when its revision moved. Over the temporary public link the board is read-only (the server refuses its writes there).
-// A card moves by drag, by Alt+arrow keys on its title, or by its dialog ("Move to…", up and down) — touch and keyboard
-// need no drag. A project shows as the board or as a list, and filters stack (fleet-task-view.js). A right click on a
-// card (or the menu key) opens its menu; its dialog steps to the previous / next card (fleet-task-menu.js).
+// A card moves by drag, by Alt+arrow keys on its title, by its ⋯ menu or its page's Status chip, up and down — touch and
+// keyboard need no drag. A project shows as the board or as a list (a switch in the toolbar, with search and filters in
+// the same row, fleet-task-view.js); on a phone the board shows one status at a time. A card's ⋯ (or a right click, or the
+// menu key) opens its menu; its page steps to the previous / next card (fleet-task-menu.js). The open card is in the
+// address (`?card=`): opening one adds a history entry, so Back returns to the board or the list.
 import { html, useEffect, useMemo, useRef, useState } from "/assets/app-html.js";
 import { t } from "/assets/app-i18n.js";
 import { recordEdit } from "/assets/text-undo.js";
-import { appStore, useStore } from "/assets/app-store.js";
+import { appStore } from "/assets/app-store.js";
 import { Dialog } from "/assets/ui-dialog.js";
 import { Empty, ErrorState, Skeleton } from "/assets/ui-states.js";
 import { Icon } from "/assets/ui-icons.js";
 import { Menu } from "/assets/ui-menu.js";
 import { toast } from "/assets/ui-toast.js";
-import { AskHost, AssigneeOption, COLUMNS, NO_PROJECT, ProgressBar, StatusPill, Who, answerBlocked, askText, boardApi, currentWork, dropNeighbours, errorText, followsSubs, moveCard, notesForPeople, onPublicLink, projectKey, projectStats, readStored, relTime, reviewLabel, waitsForYou, workersOf, wrapUpText, writeStored } from "./fleet-task-common.js";
-import { CardDialog } from "./fleet-task-card.js";
+import { AskHost, COLUMNS, NO_PROJECT, ProgressBar, StatusPill, Who, answerBlocked, askText, boardApi, currentWork, dropNeighbours, errorText, followsSubs, moveCard, notesForPeople, onPublicLink, projectKey, projectStats, readStored, relTime, reviewLabel, scrollBox, waitsForYou, workersOf, wrapUpText, writeStored } from "./fleet-task-common.js";
+import { CardPage } from "./fleet-task-card.js";
 import { CardMenu, cardAt, cardMenuItems, pageOrder, stepsOf } from "./fleet-task-menu.js";
-import { DisplayMenu, FilterBar, FilterMenu, ListView, SubList, doneShown, formatFilters, keepFilters, listRows, mainMatches, readDisplay, startFilters, writeDisplay } from "./fleet-task-view.js";
+import { ListView, SubList, TaskToolbar, doneShown, formatFilters, keepFilters, listRows, mainMatches, readDisplay, startFilters, writeDisplay } from "./fleet-task-view.js";
+import { CreateMainDialog } from "./fleet-task-create.js";
 import { InstancesDrawer } from "./fleet-task-work.js";
 import { InsightsDialog } from "./fleet-task-stats.js";
 
 const PROJECT_KEY = "agend_tasks_project";
+const QUERY_KEY = "agend_tasks_query";
+
+/** The card the address names (`?card=`), or null. */
+const cardInAddress = () => { try { return new URLSearchParams(globalThis.location?.search || "").get("card") || null; } catch { return null; } };
+
 
 // ── The tab ───────────────────────────────────────────────
 
@@ -50,16 +58,19 @@ export function TaskBoardTab({ lease }) {
   const [dialog, setDialog] = useState(null);
   // A card's menu ({ card, x, y, el }), and the cards the page showed when a card's dialog opened (its Previous / Next).
   const [menu, setMenu] = useState(null);
-  const [trail, setTrail] = useState([]);
+  const [trail, setTrail] = useState(() => []);
   // How a project shows (board or list, …) and its filters: remembered on this device, the filters also in the address.
   const [display, setDisplayRaw] = useState(readDisplay);
   const [filters, setFiltersRaw] = useState(() => startFilters(globalThis.location?.search));
+  // The project's search words, kept on this device with the filters and the view (and cleared on the way to another project).
+  const [query, setQueryRaw] = useState(() => readStored(QUERY_KEY, ""));
+  const setQuery = (q) => { setQueryRaw(q); writeStored(QUERY_KEY, q === "" ? null : q); };
   const setDisplay = (d) => { setDisplayRaw(d); writeDisplay(d); };
   const setFilters = (f) => { setFiltersRaw(f); keepFilters(f); };
   // Finished cards "All": every done main task is read only when asked for (the server keeps recent ones otherwise).
   const allDone = display.done === "all";
   const seq = useRef(0);
-  const setAt = (v) => { setAtRaw(v); writeStored(PROJECT_KEY, v === null ? null : String(v)); };
+  const setAt = (v) => { setAtRaw(v); setQuery(""); writeStored(PROJECT_KEY, v === null ? null : String(v)); };
   const reload = (ifMoved = false) => setVersion((v) => ({ n: v.n + 1, ifMoved }));
   const shown = useRef({ rev: null, allDone: false });
 
@@ -114,18 +125,58 @@ export function TaskBoardTab({ lease }) {
     } catch { /* no address bar */ }
   }, [at, filters]);
 
-  const openCard = (id) => {
+  // The open card is in the address. Opening one from the board adds a history entry (Back returns to the board or the
+  // list), and so does opening another from the card (a sub task, a dependency); stepping to the previous / next card
+  // replaces it. The entry says how many cards deep it is, so "Back" on the page can go all the way to the board.
+  const depthNow = () => { try { const d = globalThis.history.state && globalThis.history.state.tbCard; return Number.isInteger(d) ? d : 0; } catch { return 0; } };
+  const putCard = (id, replace) => {
+    try {
+      const u = new URL(globalThis.location.href);
+      if (id === null) u.searchParams.delete("card"); else u.searchParams.set("card", id);
+      const depth = id === null ? 0 : replace ? Math.max(1, depthNow()) : depthNow() + 1;
+      const state = id === null ? null : { ...(globalThis.history.state || {}), tbCard: depth };
+      if (replace || id === null) globalThis.history.replaceState(state, "", u); else globalThis.history.pushState(state, "", u);
+    } catch { /* no address bar */ }
+  };
+  const openCard = (id, replace = false) => {
+    if (!openId) { setTrail(pageOrder()); rememberScroll(); }   // the cards the page shows now are the walk (Previous / Next)
     setOpenId(id);
-    try { const u = new URL(globalThis.location.href); u.searchParams.set("card", id); globalThis.history.replaceState(globalThis.history.state, "", u); } catch { /* no address bar */ }
+    putCard(id, replace && !!openId);
   };
+  const stepToCard = (id) => openCard(id, true);
+  const lastOpen = useRef(null);      // the card whose page was just left: its tile or row takes the focus back
+  const openRef = useRef(openId);
+  openRef.current = openId;
   const closeCard = () => {
-    setOpenId(null);
+    const depth = depthNow();
+    lastOpen.current = openId;
     setTrail([]);
-    try { const u = new URL(globalThis.location.href); u.searchParams.delete("card"); globalThis.history.replaceState(globalThis.history.state, "", u); } catch { /* no address bar */ }
+    if (depth > 0) { try { globalThis.history.go(-depth); return; } catch { /* fall through: just drop the address */ } }
+    setOpenId(null);
+    putCard(null, true);
   };
-
-  // A card's dialog walks the page's cards in the order shown when it opened (read once the page is drawn).
-  useEffect(() => { if (openId && !trail.length) setTrail(pageOrder()); }, [openId, state]);
+  // Back and Forward bring the card the address names (or the board).
+  useEffect(() => {
+    const onPop = () => { const id = cardInAddress(); if (!id && openRef.current) lastOpen.current = openRef.current; setOpenId(id); if (!id) setTrail([]); };
+    if (typeof window === "undefined") return undefined;
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  // The board is where it was left when Back brings it again.
+  const scrolled = useRef(null);
+  const rememberScroll = () => { try { scrolled.current = scrollBox()?.scrollTop ?? null; } catch { scrolled.current = null; } };
+  useEffect(() => {
+    if (openId) return;
+    if (scrolled.current !== null) {
+      const box = scrollBox(), top = scrolled.current;
+      scrolled.current = null;
+      if (box) box.scrollTop = top;
+    }
+    const id = lastOpen.current;
+    if (!id) return;
+    const at = document.querySelector(`[data-tile="${id}"] .tb-tile-title, [data-row="${id}"] .tb-row-title`);
+    if (at) { lastOpen.current = null; at.focus({ preventScroll: true }); }
+  }, [openId, state]);
 
   // #2246 step 3: who works on what — the drawer gives way to a card opened from it (one drawer at a time).
   const showInstances = () => setDialog({ kind: "instances" });
@@ -143,8 +194,8 @@ export function TaskBoardTab({ lease }) {
   const project = at === null ? null : at === NO_PROJECT ? NO_PROJECT : projects.find((p) => p.id === at) || null;
   const body = project === null
     ? html`<${Home} cards=${cards} projects=${projects} stats=${stats} writable=${writable} onOpenProject=${setAt} onOpen=${openCard} onDialog=${setDialog} onInstances=${showInstances} reload=${reload} />`
-    : html`<${ProjectBoard} project=${project} cards=${cards} stats=${stats} flashed=${flashed} display=${display} filters=${filters} writable=${writable}
-        onDisplay=${setDisplay} onFilters=${setFilters} onBack=${() => setAt(null)}
+    : html`<${ProjectBoard} project=${project} cards=${cards} stats=${stats} flashed=${flashed} display=${display} filters=${filters} query=${query} writable=${writable}
+        onDisplay=${setDisplay} onFilters=${setFilters} onQuery=${setQuery} onBack=${() => setAt(null)} onMore=${openMenuFor}
         onOpen=${openCard} onCreate=${() => setDialog({ kind: "main", project: project === NO_PROJECT ? null : project.id })} onInstances=${showInstances} reload=${reload} />`;
 
   /** A right click on a card, or the keyboard's menu key on it (no pointer: the menu goes under the card). */
@@ -157,10 +208,15 @@ export function TaskBoardTab({ lease }) {
     if (!x && !y && typeof hit.el.getBoundingClientRect === "function") { const r = hit.el.getBoundingClientRect(); x = r.left + 8; y = r.bottom; }
     setMenu({ id: card.id, x, y, el: hit.el });
   }
+  /** A card's ⋯ button (board tile, list row): the same menu as a right click, under the button — for touch, which has no right click. */
+  function openMenuFor(card, el) {
+    const r = el && typeof el.getBoundingClientRect === "function" ? el.getBoundingClientRect() : { left: 0, bottom: 0 };
+    setMenu({ id: card.id, x: r.left, y: r.bottom, el });
+  }
   function closeMenu(refocus) {
     const el = menu && menu.el;
     setMenu(null);
-    if (refocus && el && document.contains?.(el)) (el.querySelector("button") || el).focus?.();
+    if (refocus && el && document.contains?.(el)) (el.querySelector(".tb-tile-title, .tb-row-title, .tb-wait-title") || el.querySelector("button") || el).focus?.();
   }
   /** A menu choice, through the calls and questions the card's dialog uses. */
   async function menuAct(card, a) {
@@ -191,13 +247,18 @@ export function TaskBoardTab({ lease }) {
   // The assignees a card's menu offers: who has cards in its project (Other… names anyone else).
   const names = menuCard ? cards.filter((c) => projectKey(c) === projectKey(menuCard) && c.assignee).map((c) => c.assignee) : [];
 
+  // The card's breadcrumb: its project (a sub task's is its main task's).
+  const openCardRow = openId ? cards.find((c) => c.id === openId) : null;
+  const rootRow = openCardRow && openCardRow.kind === "sub" ? cards.find((c) => c.id === openCardRow.parentId) : openCardRow;
+  const where = rootRow ? (rootRow.projectId === null || rootRow.projectId === undefined ? t("tasks.noProject") : (projects.find((p) => p.id === rootRow.projectId) || {}).name || null) : null;
+
   return html`<div class="tb" onContextMenu=${onMenu}>
     ${writable ? null : html`<p class="tb-readonly" role="note"><${Icon} name="eye" size=${16} />${t("tasks.readOnly")}</p>`}
-    ${body}
+    ${openId ? html`<${CardPage} key=${openId} id=${openId} tick=${tick} projects=${projects} boardOff=${boardOff} writable=${writable} place=${writable ? placeOf(cards, openId, reload) : null}
+      steps=${stepsOf(trail, openId, cards)} where=${where} back=${t(display.view === "list" ? "taskcard.backList" : "taskcard.backBoard")}
+      onBack=${closeCard} onOpen=${openCard} onStep=${stepToCard} reloadBoard=${reload} />` : body}
     ${menuCard ? html`<${CardMenu} at=${{ x: menu.x, y: menu.y }} label=${t("taskmenu.label", menuCard.id)} onClose=${closeMenu}
       items=${cardMenuItems(menuCard, { writable, names, act: (a) => menuAct(menuCard, a) })} />` : null}
-    ${openId ? html`<${CardDialog} key=${openId} id=${openId} tick=${tick} projects=${projects} boardOff=${boardOff} writable=${writable} place=${writable ? placeOf(cards, openId, reload) : null}
-      steps=${stepsOf(trail, openId, cards)} onClose=${closeCard} onOpen=${openCard} reloadBoard=${reload} />` : null}
     ${dialog && dialog.kind === "main" ? html`<${CreateMainDialog} projects=${projects} project=${dialog.project} boardOff=${boardOff} onClose=${() => setDialog(null)}
       onCreated=${(id) => { if (!lease.current()) return; setDialog(null); reload(); openCard(id); }} />` : null}
     ${dialog && dialog.kind === "instances" ? html`<${InstancesDrawer} tick=${tick} onClose=${() => setDialog(null)} onOpen=${(id) => { setDialog(null); openCard(id); }} />` : null}
@@ -343,8 +404,10 @@ function SearchBox({ onOpen }) {
 
 // ── A project's board ─────────────────────────────────────
 
-function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filters, writable, onDisplay, onFilters, onBack, onOpen, onCreate, onInstances, reload }) {
+function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filters, query, writable, onDisplay, onFilters, onQuery, onBack, onOpen, onMore, onCreate, onInstances, reload }) {
   const [expanded, setExpanded] = useState({});
+  // A phone shows one status at a time: the one picked here, else the first that has cards (the person's own first).
+  const [phoneStatus, setPhoneStatus] = useState(null);
   const [drag, setDrag] = useState(null);
   const [spot, setSpot] = useState(null);
   const key = project === NO_PROJECT ? NO_PROJECT : project.id;
@@ -362,20 +425,22 @@ function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filter
   const live = cards.filter((c) => c.kind === "main" && projectKey(c) === key && c.status !== "cancelled");
   // What the filters offer: this project's main tasks and their sub tasks.
   const own = live.flatMap((c) => [c, ...(subsOf.get(c.id) || [])]);
-  const mains = live.filter((c) => doneShown(c, display.done, now) && mainMatches(c, subsOf.get(c.id), filters));
+  const mains = live.filter((c) => doneShown(c, display.done, now) && mainMatches(c, subsOf.get(c.id), filters, query));
+  const searching = filters.length > 0 || query.trim() !== "";
   // Finished cards hidden: no Done column (a card is still confirmed or finished from its dialog).
   const columns = display.done === "hide" ? COLUMNS.filter((s) => s !== "done") : COLUMNS;
+  const current = columns.includes(phoneStatus) ? phoneStatus : ["review", "claimed", "blocked", "open", "done"].find((s) => columns.includes(s) && mains.some((c) => c.status === s)) || columns[0];
   const toggleSubs = (id) => setExpanded({ ...expanded, [id]: !expanded[id] });
-  const empty = () => html`<${Empty} icon="tasks" title=${filters.length ? t("tasks.emptyFiltered") : t("tasks.emptyBoard")} hint=${filters.length || archived ? undefined : t("tasks.emptyBoardHint")} />`;
+  const empty = () => html`<${Empty} icon="tasks" title=${searching ? t("tasks.emptyFiltered") : t("tasks.emptyBoard")} hint=${searching || archived ? undefined : t("tasks.emptyBoardHint")} />`;
   // Insights counts what the page shows. A list with sub-task rows shows exactly its rows (each matched by the filter, a
   // finished one as Done shows it); the board, or a list without them, shows a main task with all its sub tasks.
   const insightCards = () => (display.view === "list" && display.subs
-    ? listRows(mains, subsOf, display, filters, now)
+    ? listRows(mains, subsOf, display, filters, now, query)
     : mains.flatMap((c) => [c, ...(subsOf.get(c.id) || [])]));
   const listBody = () => {
-    const rows = listRows(mains, subsOf, display, filters, now);
+    const rows = listRows(mains, subsOf, display, filters, now, query);
     return rows.length === 0 ? empty() : html`<${ListView} rows=${rows} display=${display} subsOf=${subsOf} byId=${byId} flashed=${flashed} now=${now}
-      expanded=${expanded} onToggleSubs=${toggleSubs} onOpen=${onOpen} />`;
+      expanded=${expanded} onToggleSubs=${toggleSubs} onOpen=${onOpen} onMore=${onMore} onDisplay=${onDisplay} />`;
   };
 
   const dropping = useRef(false);
@@ -459,17 +524,16 @@ function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filter
       <${InstancesButton} onClick=${onInstances} />
       ${archived || !writable ? null : html`<button type="button" class="btn btn-primary" onClick=${onCreate}><${Icon} name="plus" size=${16} />${t("tasks.newMain")}</button>`}
     </div>
-    <div class="tb-view-bar">
-      <${FilterMenu} cards=${own} filters=${filters} onChange=${onFilters} />
-      <${DisplayMenu} display=${display} onChange=${onDisplay} />
-      <${FilterBar} cards=${own} filters=${filters} onChange=${onFilters} />
-    </div>
+    <${TaskToolbar} cards=${own} display=${display} onDisplay=${onDisplay} filters=${filters} onFilters=${onFilters} query=${query} onQuery=${onQuery} />
     ${display.view === "list" ? listBody() : mains.length === 0 && !drag ? empty()
-    : html`<div class="tb-scroll"><div class=${`tb-columns${columns.length < COLUMNS.length ? " no-done" : ""}`}>
+    : html`${html`<div class="tb-seg tb-status-seg" role="group" aria-label=${t("taskview.statusTabs")}>${columns.map((status) =>
+        html`<button key=${status} type="button" aria-pressed=${current === status ? "true" : "false"} class=${`tb-seg-btn${current === status ? " active" : ""}`}
+          onClick=${() => setPhoneStatus(status)}><span class=${`tb-dot st-${status}`} aria-hidden="true"></span>${t(`tasks.${status}`)} <span class="tb-count">${mains.filter((c) => c.status === status).length}</span></button>`)}</div>`}
+      <div class="tb-scroll"><div class=${`tb-columns${columns.length < COLUMNS.length ? " no-done" : ""}`}>
       ${columns.map((status) => {
         const list = mains.filter((c) => c.status === status);
         const line = spot && spot.status === status ? spot.index : -1;
-        return html`<section key=${status} class=${`tb-col st-${status}${drag ? " can-drop" : ""}${line >= 0 ? " over" : ""}`} aria-label=${t(`tasks.${status}`)}
+        return html`<section key=${status} class=${`tb-col st-${status}${status === current ? " is-current" : ""}${drag ? " can-drop" : ""}${line >= 0 ? " over" : ""}`} aria-label=${t(`tasks.${status}`)}
           onDragOver=${(e) => over(e, status)} onDrop=${(e) => dropOn(e, status, list)}>
           <h3 class="tb-col-head"><span class="tb-dot"></span>${t(`tasks.${status}`)}
             ${status === "done" ? html`<button type="button" class="tb-link" title=${t("tasks.toggleDone")} onClick=${() => onDisplay({ ...display, done: display.done === "all" ? "recent" : "all" })}>${display.done === "all" ? t("tasks.all") : t("tasks.recent")}</button>` : null}
@@ -478,7 +542,7 @@ function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filter
             const lit = Math.max(flashed.get(card.id) || 0, ...(subsOf.get(card.id) || []).map((s) => flashed.get(s.id) || 0));
             return html`<${Tile} key=${card.id} card=${card} dragging=${dragging} flash=${now - lit < 4000} subs=${subsOf.get(card.id)} writable=${writable}
               expanded=${!!expanded[card.id]} onToggleSubs=${() => toggleSubs(card.id)}
-              onOpen=${onOpen} onKeyMove=${(e) => keyMove(card, e)}
+              onOpen=${onOpen} onMore=${onMore} onKeyMove=${(e) => keyMove(card, e)}
               onDragStart=${(e) => { e.dataTransfer.setData("text/plain", card.id); e.dataTransfer.effectAllowed = "move"; setDrag(card); }} onDragEnd=${end} />`;
           })}
         </section>`;
@@ -506,7 +570,7 @@ function cellItems(list, draggingId, lineAt, render) {
 }
 
 /** A card on the board: a main task shows its sub-task progress, and can open up the list. */
-function Tile({ card, dragging, flash, subs = [], expanded, writable, onToggleSubs, onOpen, onKeyMove, onDragStart, onDragEnd }) {
+function Tile({ card, dragging, flash, subs = [], expanded, writable, onToggleSubs, onOpen, onMore, onKeyMove, onDragStart, onDragEnd }) {
   const accepted = card.acceptance.filter((a) => a.done).length;
   const progress = card.progress;
   const hasSubs = !!progress && progress.total > 0;
@@ -528,6 +592,8 @@ function Tile({ card, dragging, flash, subs = [], expanded, writable, onToggleSu
       ${gap ? html`<span class="tb-tag wrapup" title=${t("tasks.wrapLine", gap)}>${t("tasks.wrapTag")}</span>` : null}
       <span class="tb-grow"></span>
       ${card.size ? html`<span class="tb-size" title=${t("tasks.size")}>${t(`tasks.size${card.size}`)}</span>` : null}
+      ${onMore ? html`<button type="button" class="icon-btn tb-more tb-tile-more" aria-label=${t("taskview.more")} title=${t("taskview.more")}
+        onClick=${(e) => { e.stopPropagation(); onMore(card, e.currentTarget); }}><${Icon} name="more" size=${16} /></button>` : null}
     </div>
     <button type="button" class="tb-tile-title" title=${writable ? t("tasks.tileHint") : undefined}
       onClick=${(e) => { e.stopPropagation(); onOpen(card.id); }} onKeyDown=${onKeyMove}>${card.title}</button>
@@ -557,46 +623,7 @@ function Tile({ card, dragging, flash, subs = [], expanded, writable, onToggleSu
   </div>`;
 }
 
-// ── Dialogs: a new main task, a project ───────────────────
-
-function CreateMainDialog({ projects, project, boardOff = [], onClose, onCreated }) {
-  const { instances } = useStore(appStore);
-  const active = projects.filter((p) => !p.archived);
-  const [f, setF] = useState({ project: project === null || project === undefined ? "" : String(project), title: "", goal: "", scope: "", acceptance: "", context: "", size: "", priority: "normal", assignee: "", needsReview: true });
-  const [busy, setBusy] = useState(false);
-  const set = (k) => (e) => { const v = e.target.type === "checkbox" ? e.target.checked : e.target.value; setF((cur) => ({ ...cur, [k]: v })); };
-  async function submit() {
-    if (!f.title.trim()) { toast(t("tasks.titleRequired"), false); return; }
-    setBusy(true);
-    try {
-      const { card } = await boardApi.create({
-        kind: "main", project: f.project === "" ? null : Number(f.project), title: f.title, goal: f.goal, scope: f.scope,
-        acceptance: f.acceptance.split("\n").map((l) => l.trim()).filter(Boolean), context: f.context,
-        size: f.size || null, priority: f.priority, assignee: f.assignee.trim() || null, needsReview: f.needsReview,
-      });
-      toast(t("tasks.created", card.id));
-      onCreated(card.id);
-    } catch (err) { toast(errorText(err), false); setBusy(false); }
-  }
-  const field = (label, input) => html`<label class="field"><span>${label}</span>${input}</label>`;
-  return html`<${Dialog} title=${t("tasks.createMain")} onClose=${onClose} busy=${busy} wide
-    actions=${html`<button type="button" class="btn" onClick=${onClose} disabled=${busy}>${t("tasks.cancel")}</button>
-      <button type="button" class="btn btn-primary" onClick=${submit} disabled=${busy || !f.title.trim()}>${t("tasks.create")}</button>`}>
-    <form class="form" onSubmit=${(e) => { e.preventDefault(); submit(); }}><fieldset class="form" disabled=${busy}>
-      ${field(`${t("tasks.title")} *`, html`<input value=${f.title} maxlength="100" placeholder=${t("tasks.titleHint")} onInput=${set("title")} required />`)}
-      ${field(t("tasks.project"), html`<select value=${f.project} onChange=${set("project")}><option value="">${t("tasks.noProject")}</option>${active.map((p) => html`<option key=${p.id} value=${String(p.id)}>${p.name}</option>`)}</select>`)}
-      ${field(t("tasks.goal"), html`<textarea rows="2" maxlength="300" placeholder=${t("tasks.goalHint")} value=${f.goal} onInput=${set("goal")}></textarea>`)}
-      ${field(t("tasks.scope"), html`<textarea rows="2" maxlength="600" placeholder=${t("tasks.scopeHint")} value=${f.scope} onInput=${set("scope")}></textarea>`)}
-      ${field(t("tasks.definition"), html`<textarea rows="3" placeholder=${t("tasks.definitionHint")} value=${f.acceptance} onInput=${set("acceptance")}></textarea>`)}
-      ${field(t("tasks.context"), html`<textarea rows="2" maxlength="1000" placeholder=${t("tasks.contextHint")} value=${f.context} onInput=${set("context")}></textarea>`)}
-      <div class="tb-form-row">
-        ${field(t("tasks.assignee"), html`<select value=${f.assignee} onChange=${set("assignee")}><option value="">${t("tasks.nobody")}</option>${instances.map((i) => html`<${AssigneeOption} key=${i.name} name=${i.name} boardOff=${boardOff} />`)}</select>`)}
-        ${field(t("tasks.size"), html`<select value=${f.size} onChange=${set("size")}><option value="">${t("tasks.sizeNone")}</option><option value="S">${t("tasks.sizeS")}</option><option value="M">${t("tasks.sizeM")}</option><option value="L">${t("tasks.sizeL")}</option></select>`)}
-        ${field(t("tasks.priority"), html`<select value=${f.priority} onChange=${set("priority")}>${["urgent", "high", "normal", "low"].map((p) => html`<option key=${p} value=${p}>${t(`tasks.${p}`)}</option>`)}</select>`)}
-      </div>
-      <label class="tb-check"><input type="checkbox" checked=${f.needsReview} onChange=${set("needsReview")} />${t("tasks.reviewBox")}</label>
-    </fieldset></form></${Dialog}>`;
-}
+// ── Dialogs: a project (a new main task: fleet-task-create.js) ──
 
 /**
  * #2355 review: what an edit of a project sends — its fields, and its lead only when it changed (an unchanged retired

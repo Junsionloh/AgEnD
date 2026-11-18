@@ -510,6 +510,14 @@ export function Who({ name, title, empty = "—" }) {
 }
 const initialOf = (name) => (Array.from(name.trim())[0] || "?").toLocaleUpperCase();
 
+/**
+ * The element the task board's page scrolls in (the panel's body): a card's page starts at its top, and the board comes
+ * back to the place it was left. `from`: any element of the board (default: the board's root).
+ */
+export function scrollBox(from = typeof document !== "undefined" ? document.querySelector(".tb") : null) {
+  try { return (from && typeof from.closest === "function" && from.closest(".panel-body")) || null; } catch { return null; }
+}
+
 /** A per-device preference (localStorage may be unavailable: then nothing is remembered). */
 export function readStored(key, fallback) {
   try { const v = localStorage.getItem(key); return v === null ? fallback : v; } catch { return fallback; }
