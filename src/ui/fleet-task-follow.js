@@ -22,7 +22,7 @@ register("taskfollow", {
     viaProject: "project lead", viaBoard: "board default",
     leaderAssignee: "It has the card, so it hears the card's own news", leaderGone: "Not in the fleet: nobody is told", leaderBoardOff: "Its task board is off: nobody is told",
     leaderNoNotices: "Progress notices are switched off for the fleet: nobody is told",
-    leaderNoneHint: "No project lead and no board default leader: set a lead on the project, or defaults.task_board.leader",
+    leaderNoneHint: "Nobody is named as this card's leader",
   },
   "zh-TW": {
     watchers: "關注者", watchersHint: "會收到這張卡進度通知的 Agent：完成、等確認、被退回、卡住或換手時",
@@ -33,7 +33,7 @@ register("taskfollow", {
     viaProject: "專案負責人", viaBoard: "任務板預設",
     leaderAssignee: "它正是負責人，本來就會收到這張卡自己的消息", leaderGone: "已不在 fleet 中：不會通知任何人", leaderBoardOff: "它的任務板已關閉：不會通知任何人",
     leaderNoNotices: "fleet 已關閉進度通知：不會通知任何人",
-    leaderNoneHint: "專案沒有負責人、任務板也沒有預設 leader：在專案設定負責人，或設 defaults.task_board.leader",
+    leaderNoneHint: "這張卡沒有指定 leader",
   },
 });
 

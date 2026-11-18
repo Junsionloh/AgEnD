@@ -153,7 +153,14 @@ describe("a card's page: Watchers and Leader in the property column", () => {
     await mount(); await openCard("M-1");
     expect(text(rows().watchers.querySelector("dd"))).toContain("Nobody");
     expect(text(rows().leader.querySelector("dd"))).toBe("None");
-    expect(rows().leader.querySelector("dd span").getAttribute("title")).toMatch(/defaults\.task_board\.leader/);
+    // The hint is neutral: a read-only reader whose leader is kept out of sight reads the same "none" — it neither says there is one nor sends them to set one.
+    const hint = rows().leader.querySelector("dd span").getAttribute("title");
+    expect(hint).toBe("Nobody is named as this card's leader");
+    expect(hint).not.toMatch(/set|lead on|defaults|project/i);
+    i18n.setLang("zh-TW", { store: false });
+    expect(i18n.t("taskfollow.leaderNoneHint")).toBe("這張卡沒有指定 leader");
+    expect(i18n.t("taskfollow.leaderNoneHint")).not.toMatch(/設定|設/);
+    i18n.setLang("en", { store: false });
     expect(q("[data-watcher]")).toBeNull();
     expect(q(".tp-watch-add")).toBeTruthy();
   });

@@ -579,6 +579,26 @@ describe("4f. AGEND-299: who follows a card, from the dashboard", () => {
     db.board.updateProject(ANN, project.id, { leadInstance: null });
     expect((await get(main.code, { tier: "read" })).body.leader).toEqual({ name: "ops", via: "board" });
   });
+
+  it("AGEND-301 review: a sub task whose main task is kept out of sight reads no inherited watchers over the link (its `parent` reads as none): not even the visible instances among them; the local page still sees them", async () => {
+    const db = named();
+    // The main task is held by a hidden instance; a visible instance watches it. Its sub task is held by a visible one.
+    const main = db.board.createCards(ANN, { cards: [{ title: "Hidden main", assignee: "spy" }] }).cards.find((c) => c.title === "Hidden main")!;
+    db.board.setWatchers(ANN, main.code, { add: ["ops", "dev-a"] });
+    const sub = db.board.createCards(ANN, { cards: [{ parent: main.code, title: "Visible sub", assignee: "dev-a" }] }).cards[0]!;
+    const get = (code: string, opts: { tier?: "admin" | "read"; local?: boolean }) => viaLink(db, "GET", `/ui/tasks/cards/${code}`, undefined, { fleetConfig, ...opts });
+
+    const link = (await get(sub.code, { tier: "read" })).body;
+    expect(link.card.id).toBe(sub.code);
+    expect(link.parent, "the hidden main task is not named").toBeNull();
+    expect(link.inheritedWatchers, "…nor are the visible instances that watch it").toEqual([]);
+    // The local page and an admin session over the link see the main task, and what follows the sub task from it.
+    for (const opts of [{ local: true }, {}] as const) {
+      const full = (await get(sub.code, opts)).body;
+      expect(full.parent?.id, JSON.stringify(opts)).toBe(main.code);
+      expect(full.inheritedWatchers, JSON.stringify(opts)).toEqual(["ops", "dev-a"]);
+    }
+  });
 });
 
 describe("4e. #2756: whom a card waits for, through the routes (#2757 review: a dispatcher deleted, caches warm)", () => {

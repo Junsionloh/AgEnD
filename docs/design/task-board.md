@@ -476,7 +476,8 @@ is — read-only (the lead is set on the project, the default in fleet.yaml) —
 card itself, it is not in the fleet, its task board is off, or the fleet's notices are off. The card's read gained three fields for this,
 all additive: `leader` (`{ name, via: "project" | "board" }` or null; `TaskBoard.leaderOf`, the lookup `followersOf` uses), `inheritedWatchers`
 (a sub task's main task's) and `followsProgress` (`progress_wakes`). Over the public link a hidden instance is named in none of them (a hidden
-leader reads as none, as a hidden project lead does). An older page ignores the new fields; this page reads an older board's card without them.
+leader reads as none, as a hidden project lead does, and its hint is the neutral "nobody is named", not a way to set one), and a sub
+task whose main task is kept out of sight reads no inherited watchers at all. An older page ignores the new fields; this page reads an older board's card without them.
 
 **Switch.** `defaults.task_board.progress_wakes: false` turns all of this off at once (comments and mentions, and every other
 notice, are unchanged). It is on by default, read at each write: the owner asked for it, and it tells only instances that already
