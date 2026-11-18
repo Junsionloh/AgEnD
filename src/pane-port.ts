@@ -1,6 +1,7 @@
 /** Terminal operations used by the daemon. A handle's object identity fences in-flight work. */
 export interface PaneSize { columns: number; rows: number }
-export type PaneKey = "Enter" | "Escape" | "Up" | "Down" | "Right" | "Left" | "C-c" | "C-q";
+/** `M-m` (Alt+M, AGEND-284: agy's send-with-the-opposite-of-its-queue-setting) is a tmux key only: a native pane host takes none of it (RuntimePane.sendSpecialKey refuses it). */
+export type PaneKey = "Enter" | "Escape" | "Up" | "Down" | "Right" | "Left" | "C-c" | "C-q" | "M-m";
 /** Internal only, never a runtime wire field: delivery means the daemon checked its backend's runtime dialogs;
  * composer callers and explicit identity-bound human card answers retain their separate policies. */
 export interface PaneInputProof { kind: "composer" | "delivery" | "dialog"; screen: string; retryCount?: number }

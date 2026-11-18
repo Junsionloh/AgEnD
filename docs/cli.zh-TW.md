@@ -15,7 +15,7 @@ Telegram fleet 選單列出 23 個指令，ClassicBot 選單列出 11 個；Disc
 | `/profile` | 在 General 錄製執行中 fleet 的 CPU profile（預設 60 秒，上限 1,800 秒） | `[seconds]` | 🔒 管理員 |
 | `/ctx` | 顯示 Agent 的 Context 使用量 | — | 所有人 |
 | `/compact` | 壓縮 Agent 的 Context | `[instructions]`——指定摘要重點，僅 Claude Code | 🔒 管理員 |
-| `/steer` | 插話到 Agent 正在進行的回合，不等閒置 | `<message>` 必填；`claude-code`／`codex`／`grok`／`muse`，以及以已驗證版本的 TUI 執行的 `kiro-cli`（[說明](commands.md#steer-btw-and-clear-backend-support)） | 所有人 |
+| `/steer` | 插話到 Agent 正在進行的回合，不等閒置 | `<message>` 必填；`claude-code`／`codex`／`grok`／`muse`，以及以已驗證版本的 TUI 執行的 `kiro-cli`、終端機模式的 `antigravity`（[說明](commands.md#steer-btw-and-clear-backend-support)） | 所有人 |
 | `/btw` | 不中斷目前任務的旁支問題 | `<message>` 必填；僅 `claude-code` | 所有人 |
 | `/clear` | 完整重置對話（破壞性——會先問 Confirm/Cancel） | — | 🔒 管理員 |
 | `/model` | 切換 backend 模型 | 直接打名稱或用選單選 | 🔒 管理員 |

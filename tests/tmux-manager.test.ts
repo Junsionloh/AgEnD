@@ -210,6 +210,17 @@ describe("TmuxManager", () => {
     expect(output).toContain("hello world");
   });
 
+  it("sends Alt+M as the key agy reads as 'send with the opposite of Queued Messages' (AGEND-284)", async () => {
+    const tm = new TmuxManager(session, "");
+    await tm.createWindow("cat -v", "/tmp", "alt-m-key");
+    await tm.sendKeys("steer");
+    expect(await tm.sendSpecialKey("M-m")).toBe(true);
+    await tm.sendSpecialKey("Enter");
+    await new Promise(r => setTimeout(r, 500));
+    // `cat -v` shows an Escape-prefixed m (how a terminal sends Alt+M) as ^[m; a plain Enter would show nothing there.
+    expect(await tm.capturePane()).toContain("steer^[m");
+  });
+
   it("submits pasted input while the shared control client is attached", async () => {
     const tm = new TmuxManager(session, "");
     await tm.createWindow("cat", "/tmp", "control-send-keys");

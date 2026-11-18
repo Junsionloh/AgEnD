@@ -602,6 +602,13 @@ export interface CliBackend {
   supportsSteer?(): boolean;
 
   /**
+   * AGEND-284: the key that submits a steer into this CLI's busy TUI, where it is not the plain Enter — agy sends `Alt+M` (`M-m`) when its own
+   * setting queues, and Enter when it sends at once. Asked again for every steer (agy reads its setting once, at launch; a file changed since means the running agy's mode is unknown). null: the CLI has no way to take
+   * mid-turn input right now (then supportsSteer is false). Absent: Enter.
+   */
+  steerSubmitKey?(): "Enter" | "M-m" | null;
+
+  /**
    * What the composer does with typed input on this screen, for a CLI whose busy input either steers the running turn
    * or waits for its end, by a mode the user switches (kiro TUI: Ctrl+S; #1405). The empty composer reads "steer"
    * (busy, steers), "queue" (busy, waits for the turn's end) or "idle" (the empty idle prompt); "text" is positive

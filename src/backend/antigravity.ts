@@ -191,6 +191,48 @@ export function parseAntigravityModelsOutput(output: string): import("./types.js
   return models;
 }
 
+/**
+ * AGEND-284: how a steer is submitted into agy's busy TUI. agy sends a message by its `Queued Messages` setting
+ * (`queuedMessages` in the account folder's settings.json): `"queue"` (the default) holds it for the turn's end, `"send-immediately"` hands it to the
+ * running turn at the next step boundary (NEXT_INVOCATION — the running tool is NOT cancelled). `Alt+M` (agy 1.4.0 and later) sends with the OPPOSITE of the
+ * setting. So a steer is `M-m` under `"queue"` and a plain Enter under `"send-immediately"`. Measured live on agy 1.5.10, both settings.
+ *
+ * agy reads the setting when it starts (measured: a running agy whose file was switched to `send-immediately` kept queuing a plain Enter for the whole turn),
+ * so the file alone does not say what the RUNNING agy does. The backend keeps what the file said at launch and offers a steer only while the file still says
+ * the same: a person who edited it since (or switched it in agy's /config, which agy applies at once and the file records) leaves the running agy's mode unknown,
+ * and the steer is queued — as before — until the next launch.
+ *
+ * Absent file or key is the default, `"queue"`. A file that cannot be read or parsed, or a value this table does not know, says nothing about what `M-m` does:
+ * null, and the steer is not offered.
+ */
+export const AGY_STEER_MIN_VERSION = "1.4.0";
+export type AgySteerKey = "M-m" | "Enter";
+/** x.y.z out of "1.5.10" or "agy 1.5.10 (build)"; null when there is none. (Not backend-availability's: that module reaches the daemon, which the setup host's import graph must not.) */
+function agyVersionTriple(text: string): [number, number, number] | null {
+  const m = /(\d+)\.(\d+)(?:\.(\d+))?/.exec(text);
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3] ?? 0)] : null;
+}
+function agyVersionBelow(version: readonly number[], floor: string): boolean {
+  const min = agyVersionTriple(floor)!;
+  for (let i = 0; i < 3; i++) if (version[i] !== min[i]) return version[i]! < min[i]!;
+  return false;
+}
+export function readAgyQueuedMessages(folder: string): "queue" | "send-immediately" | null {
+  const file = join(folder, "settings.json");
+  if (!existsSync(file)) return "queue";
+  try {
+    const raw = readFileSync(file, "utf-8");
+    const settings = JSON.parse(raw) as unknown;
+    if (typeof settings !== "object" || settings === null || Array.isArray(settings)) return null;
+    const mode = (settings as Record<string, unknown>).queuedMessages;
+    if (mode === undefined || mode === "queue") return "queue";
+    return mode === "send-immediately" ? "send-immediately" : null;
+  } catch { return null; }
+}
+export function agySteerKeyFor(mode: "queue" | "send-immediately" | null): AgySteerKey | null {
+  return mode === "queue" ? "M-m" : mode === "send-immediately" ? "Enter" : null;
+}
+
 export class AntigravityBackend implements CliBackend {
   readonly binaryName = "agy";
   private binaryPath: string;
@@ -204,8 +246,44 @@ export class AntigravityBackend implements CliBackend {
     private agendHome = getAgendHome(),
   ) {
     this.binaryPath = resolveBinary("agy");
+    this.settingsFolder = join(userHome, ".gemini", "antigravity-cli");
     this.mcpWrapperPath = join(instanceDir, "agy-mcp-env.sh");
   }
+
+  /** AGEND-284: the folder agy keeps its settings in for the last launch (its named account's own, or the default sign-in's). */
+  private settingsFolder: string;
+  /** AGEND-284: what that folder's settings said when the last launch began (what the agy it starts reads); undefined before any launch. */
+  private launchQueuedMode: "queue" | "send-immediately" | null | undefined;
+
+  /**
+   * AGEND-284: the release the CLI env probe last recorded for agy (`<AGEND_HOME>/cli-env/antigravity.json`, read whatever its age, never a probe — this runs on
+   * the fleet loop and in tests that forbid a real agy) as [major, minor, patch], or null when none was recorded or it is not a version.
+   */
+  private recordedVersion(): [number, number, number] | null {
+    try {
+      const v = (JSON.parse(readFileSync(join(this.agendHome, "cli-env", "antigravity.json"), "utf-8")) as { version?: unknown }).version;
+      return typeof v === "string" ? agyVersionTriple(v) : null;
+    } catch { return null; }
+  }
+
+  /** AGEND-284: record what the settings say now — the last thing before agy is started, which reads them once. */
+  noteLaunchSettings(): void { this.launchQueuedMode = readAgyQueuedMessages(this.settingsFolder); }
+
+  /**
+   * AGEND-284: the key that submits a steer into the busy TUI — `M-m` under `queue`, Enter under `send-immediately` — or null: this agy has no mid-turn
+   * input for AgEnD to use (older than 1.4.0, a Queued Messages setting that cannot be read, or one that is no longer what the running agy started
+   * with — see the note on AGY_STEER_MIN_VERSION). A release newer than any measured, or one whose version is not recorded, is not refused: the floor
+   * is the only version rule.
+   */
+  steerSubmitKey(): AgySteerKey | null {
+    const version = this.recordedVersion();
+    if (version !== null && agyVersionBelow(version, AGY_STEER_MIN_VERSION)) return null;
+    const mode = readAgyQueuedMessages(this.settingsFolder);
+    if (this.launchQueuedMode !== undefined && mode !== this.launchQueuedMode) return null;
+    return agySteerKeyFor(mode);
+  }
+
+  supportsSteer(): boolean { return this.steerSubmitKey() !== null; }
 
   /** #1811: what the last launch left out and why — the Log tab and daemon.log, never a channel. */
   private quietLaunchNotes: string[] = [];
@@ -291,7 +369,9 @@ export class AntigravityBackend implements CliBackend {
       try { unlinkSync(this.mcpWrapperPath); } catch { /* absent */ }
     }
 
-    this.enableStatusLine(this.accountFolder(config));
+    this.settingsFolder = this.accountFolder(config);
+    this.enableStatusLine(this.settingsFolder);
+    this.noteLaunchSettings();
   }
 
   /**

@@ -1,4 +1,4 @@
-import type { Pane } from "./pane-port.js";
+import type { Pane, PaneKey } from "./pane-port.js";
 import { execFile } from "./child-process.js";
 import { promisify } from "node:util";
 import type { TerminalConfig } from "./types.js";
@@ -539,7 +539,7 @@ export class TmuxManager implements Pane {
     } catch { return false; }
   }
 
-  async sendSpecialKey(key: "Enter" | "Escape" | "Up" | "Down" | "Right" | "Left" | "C-c" | "C-q", timeoutMs?: number): Promise<boolean> {
+  async sendSpecialKey(key: PaneKey, timeoutMs?: number): Promise<boolean> {
     this.lastSendSpecialKeyError = null;
     try {
       await execBounded(TmuxManager.tmuxArgs(["send-keys", "-t", tmuxWindowTarget(this.sessionName, this.windowId), key]), timeoutMs);

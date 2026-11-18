@@ -14,7 +14,7 @@ The Telegram fleet menu lists 23 commands; the ClassicBot menu lists 11. Discord
 | `/profile` | Record the running fleet’s CPU profile in General (default 60 s, max 1,800 s) | `[seconds]` | 🔒 admin |
 | `/ctx` | Show agent context usage | — | All |
 | `/compact` | Compact agent context | `[instructions]` — steers the summary, Claude Code only | 🔒 admin |
-| `/steer` | Interject into the agent's current turn instead of queueing for idle | `<message>` required; `claude-code`/`codex`/`grok`/`muse`, and `kiro-cli` on its verified TUI ([details](commands.md#steer-btw-and-clear-backend-support)) | All |
+| `/steer` | Interject into the agent's current turn instead of queueing for idle | `<message>` required; `claude-code`/`codex`/`grok`/`muse`, `kiro-cli` on its verified TUI, and a terminal `antigravity` ([details](commands.md#steer-btw-and-clear-backend-support)) | All |
 | `/btw` | Side question without interrupting the current task | `<message>` required; `claude-code` only | All |
 | `/clear` | Full conversation reset (destructive — asks Confirm/Cancel) | — | 🔒 admin |
 | `/model` | Switch backend model | Name or inline keyboard/select menu | 🔒 admin |
