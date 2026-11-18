@@ -623,7 +623,7 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
     }
     if (config.defaults.tips === "dm") warn("defaults.tips", '"dm" is no longer offered: daily tips post in the General topic (read as true)');
     if (config.defaults.task_board !== undefined) {
-      // #2804: its only key, summary_at, is accepted and ignored (the daily summary is gone).
+      // #2804: summary_at is accepted and ignored (the daily summary is gone).
       if (!isObj(config.defaults.task_board)) err("defaults.task_board", "must be a mapping");
       else if (config.defaults.task_board.liveness !== undefined) {
         // #3647: the dispatcher-liveness thresholds.
@@ -635,6 +635,10 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
             if (typeof v !== "number" || !Number.isFinite(v) || v < 1 || v > 1440) err(`defaults.task_board.liveness.${k}`, "must be a number of minutes from 1 to 1440");
           } else err(`defaults.task_board.liveness.${k}`, "unknown key (enabled, quiet_minutes, prompt_minutes, crash_grace_minutes)");
         }
+      }
+      // Comments and @mentions wake (docs/design/task-board.md): on unless false.
+      if (isObj(config.defaults.task_board) && config.defaults.task_board.comment_wakes !== undefined && typeof config.defaults.task_board.comment_wakes !== "boolean") {
+        err("defaults.task_board.comment_wakes", "must be true or false");
       }
     }
     if (config.defaults.startup !== undefined) {

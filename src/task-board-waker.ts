@@ -76,7 +76,13 @@ export const namesCard = (text: string, code: string): boolean => {
 /** More assignments than this in one message are told as a count, not a line each. */
 const MANY_ASSIGNED = 3;
 /** The order a card's news is told in. */
-const ORDER: WakeReason[] = ["cancelled", "sent_back", "decide", "to_confirm", "confirm_own", "answered", "answer_kept", "wrap_up", "assigned", "start", "ready"];
+const ORDER: WakeReason[] = ["cancelled", "sent_back", "decide", "to_confirm", "confirm_own", "answered", "answer_kept", "wrap_up", "assigned", "start", "ready", "mention", "comment"];
+/**
+ * A comment (written by someone who is not the assignee) or an `@` mention: news only because of the words. Its writer
+ * is not waited for as an assignment's is (foldToldNews): a reply must not be held back for minutes, and whoever
+ * already messaged the instance about the card has told it.
+ */
+const isCommentNews = (r: WakeReason) => r === "comment" || r === "mention";
 
 const quote = (text: string | undefined) => (text ? `: "${oneLine(text, 160)}"` : "");
 
@@ -105,6 +111,9 @@ function say(w: Wake, r: WakeReason, card: Card | undefined, here = false): stri
       const gap = card ? wrapUpGap(card) : null;
       return `it is in review and nobody else confirms it — it is yours${gap ? `, though ${gapText(gap, card!.kind === "main")}` : ""}: check it, then move it to done`;
     }
+    // Comments wake (docs/design/task-board.md, "Comments and mentions"): the words are in the notice; the reply goes on the card.
+    case "comment": return `new comment from ${by}${quote(w.texts.comment)} — reply on the card (task update, with a comment) only if it asks or needs something from you`;
+    case "mention": return `${by} mentioned you in a comment${quote(w.texts.mention)} — reply on the card (task update, with a comment) if it asks something of you; the card is not yours unless it says so`;
     case "cancelled": return `cancelled by ${by}${w.texts.cancelled?.startsWith("with its main task") ? ` ${oneLine(w.texts.cancelled, 160)}` : quote(w.texts.cancelled)} — stop working on it`;
     case "wrap_up": {
       const gap = card ? wrapUpGap(card) : null;
@@ -267,7 +276,7 @@ export class TaskBoardWaker {
           asked.set(`${by}\u0000${since}`, messaged);
         }
         if (messaged === true) told.push(r);
-        else if (messaged === false && now - at < window) pending = true;
+        else if (messaged === false && now - at < window && !isCommentNews(r)) pending = true;
       }
       if (pending) { waiting.set(uuid, w); continue; }
       if (told.length) this.deps.log("info", "Task board news already told by its maker", { instance, code: w.code, reasons: told });

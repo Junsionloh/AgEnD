@@ -327,6 +327,12 @@ export interface FleetDefaults extends Partial<InstanceConfig> {
      * on, quiet 60, prompt 10, crash grace 5.
      */
     liveness?: { enabled?: boolean; quiet_minutes?: number; prompt_minutes?: number; crash_grace_minutes?: number };
+    /**
+     * Comments and `@<instance>` mentions wake (docs/design/task-board.md, "Comments and mentions"): a comment on a card
+     * wakes its assignee, an `@name` in it wakes that instance. Default true; `false` brings back #2801's rule that a
+     * comment notifies nobody.
+     */
+    comment_wakes?: boolean;
   };
   webhooks?: WebhookConfig[];
 }
