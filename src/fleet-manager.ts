@@ -76,7 +76,7 @@ import { atomicWriteFileSync } from "./atomic-write.js";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { freemem, totalmem, homedir, hostname } from "node:os";
 import { effectiveCpuCount } from "./cpu-quota.js";
-import { access } from "node:fs/promises";
+import { access, realpath } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import { Worker } from "node:worker_threads";
 import { ProbeWorkerPool, type ProbeWorker } from "./probe-worker-pool.js";
@@ -355,7 +355,8 @@ import { resolveUpdateLaunch, openUpdateLog, updateLogPath, watchUpdateLaunch } 
 import { isWebUpdateTarget, readLogTail, RUNNING_AGEND_VERSION, updateOffer, webProgressOf, webUpdateTarget, type UpdateOffer, type WebUpdateHost, type WebUpdatePin, type WebUpdateProgress } from "./web-update.js";
 import { admitProfileLogin, LoginController, LOGIN_TOKEN_RESEND_PREFIX, POST_LOGIN_RECOVERY_DEADLINE_MS, type PostLoginRecovery, type LoginChat, type LoginStartOptions } from "./login-controller.js";
 import { WebBackendLogins, dashboardSignInSupported, type SignInTarget } from "./web-backend-login.js";
-import { WebHostInstalls, claudeSelfUpdating, hostUpdatePlan, type HostInstallMode, type HostInstallReporter, type HostInstallStart } from "./web-host-install.js";
+import { claudeInstallKind, type ClaudeInstall } from "./claude-install-kind.js";
+import { WebHostInstalls, claudeSelfUpdating, hostUpdatePlan, npmUninstallCommand, type ClaudeInstallAfter, type HostInstallMode, type HostInstallReporter, type HostInstallStart } from "./web-host-install.js";
 import { cliUpdateView, versionOf } from "./cli-audited.js";
 import { runBeforeDeadline } from "./deadline.js";
 import { LoginWindowLock } from "./login-window-lock.js";
@@ -2586,6 +2587,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
           attachRoomInputs: handler => { this.hubRoomInput = handler; },
           attachRoomOwed: port=>{this.hubRoomOwed=port;},
           roomNotify: input => this.deliverHubRoomNotification(input),
+          // M-3313: a sign-in token in what the Hub sends is taken back the moment the link receives it.
+          sawText: text => this.sawHubText(text),
           roomReceipt: (caller, receiptId) => verifyRoomReceipt({
             lookup: (agent, id) => {
               const item = this.queryDurableDeliveryStatus(agent, {messageId:id}).items[0];
@@ -2906,6 +2909,33 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   }
   hubContactRestricted(agent: string): boolean { return this.contactWindows().restricted(agent); }
   /**
+   * M-3313 (#4145 for the Hub): what a Hub question or room notification hands the agent, with this fleet's sign-in
+   * access token hidden (exact match, as a chat's). The live one is taken back and replaced, and the sign-in's chat told.
+   * The Hub's own copy of the post is beyond the Fleet: it keeps it (encrypted) until its retention deletes it.
+   */
+  /**
+   * M-3313 (Fable #4165 F1): a Hub frame's content as the member link receives it — before it waits for its agent (busy,
+   * paused, offline) or is dropped undelivered — so a live sign-in token in it is taken back at once, not at delivery.
+   * Nothing is changed here: the delivery hides it from the agent (screenHubText).
+   */
+  private sawHubText(text: string): void {
+    const screened = this.screenLoginToken(text);
+    if (!screened?.live) return;
+    this.logger.warn("A sign-in access token arrived from the Hub: taken back and replaced");
+    void this.loginController?.tokenPastedElsewhere().catch((err: unknown) =>
+      this.logger.warn({ err: (err as Error).message }, "Taking back a sign-in token pasted on the Hub failed"));
+  }
+
+  private screenHubText(text: string): string {
+    const screened = this.screenLoginToken(text);
+    if (!screened) return text;
+    this.logger.warn("A sign-in access token reached this Fleet in a Hub question: hidden from the agent, taken back and replaced");
+    if (screened.live) void this.loginController?.tokenPastedElsewhere().catch((err: unknown) =>
+      this.logger.warn({ err: (err as Error).message }, "Taking back a sign-in token pasted on the Hub failed"));
+    return screened.text;
+  }
+
+  /**
    * A Hub question to its representative agent: ordinary cross-instance delivery (idle gate, wake, retries), from the
    * reserved Hub sender with the Hub-issued correlation id. beforeInput runs immediately before the IPC hand-off.
    */
@@ -2930,7 +2960,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       task_summary: "A question from the Hub",
     };
     if (input.roomContextGeneration) ipcMeta.hub_room_context_generation = input.roomContextGeneration;
-    const result = await this.deliverToInstance(input.agent, { type: "fleet_inbound", targetSession: input.agent, content: input.text, meta: ipcMeta },
+    const result = await this.deliverToInstance(input.agent, { type: "fleet_inbound", targetSession: input.agent, content: this.screenHubText(input.text), meta: ipcMeta },
       { isCrossInstance: true, stillCurrent: input.stillCurrent, beforeInput: async () => {
         const classic=this.isClassicInstance(input.agent);
         // A busy Classic room must finish its public turn first; never force a private question into that turn's queue.
@@ -2950,7 +2980,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const config=input.kind==="answer-reminder"?this.hubAgentConfig(input.agent):this.fleetConfig?.instances[input.agent];
     if (this.shuttingDown || !config || isNativeExecInstance(config)) return false;
     const prefix=input.kind==="answer-reminder"?"hub-room-answer-reminder":input.kind==="mention-feedback"?"hub-room-mention-feedback":"hub-room-post-answer";
-    const result=await this.deliverToInstance(input.agent,{type:"fleet_inbound",targetSession:input.agent,content:input.text,
+    const result=await this.deliverToInstance(input.agent,{type:"fleet_inbound",targetSession:input.agent,content:this.screenHubText(input.text),
       meta:{chat_id:"",message_id:`${prefix}-${input.id}`,user:`instance:${HUB_REPORT_TARGET}`,user_id:`instance:${HUB_REPORT_TARGET}`,
         ts:new Date().toISOString(),thread_id:"",from_instance:HUB_REPORT_TARGET,from_display:"Hub",correlation_id:`${prefix}-${input.id}`,
         request_kind:"notification",requires_reply:"false",task_summary:input.kind==="answer-reminder"?"Hub room answer reminder":input.kind==="mention-feedback"?"Hub mention delivery feedback":"A reply to your Hub room post"}},
@@ -19178,6 +19208,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       acknowledgeMissed: (id, by) => this.missedOfflineStore?.acknowledge(id, by) ?? false,
       tasks: () => this.needsYouTaskItems(),
       backendSignIns: () => this.needsYouBackendSignIns(),
+      claudeNpmInstall: () => this.claudeNpmAttention(),
       signInKeepAlive: () => this.keepAliveAttention(),
       hubExecution: () => this.hubExecutionAttention?.() ?? [],
       runtimeUpdates: () => remoteRuntimeEnabled() ? runtimeUpdateAttention(this.runtimeHub?.listMachines() ?? [], t, this.worlds.keys().next().value) : [],
@@ -22535,7 +22566,13 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     let machines: Awaited<ReturnType<MachineAccounts["list"]>> = [];
     if (remoteRuntimeEnabled()) { try { machines = await this.machineAccounts.list(); } catch (err) { this.logger.debug({ err: (err as Error).message }, "Computer accounts not read"); } }
     return buildAccountsView({ targets, diskProfiles, agents, classic, fleetDefaults, usage, keepAlive, machines, installShown: this.webHostInstalls.view()?.backend ?? null,
-      versions: new Map(this.backendAvailabilityRows().map(row => [row.backend, row.version ?? null] as const)) });
+      versions: new Map(this.backendAvailabilityRows().map(row => [row.backend, row.version ?? null] as const)), claudeInstall: await this.claudeInstall() });
+  }
+
+  /** M-3307 (#4146): the kind of the host's Claude Code install, from the real path of the `claude` the availability snapshot resolved (null: none, or unreadable). */
+  async claudeInstall(path: string | null = this.backendAvailabilityRows().find(row => row.backend === "claude-code")?.path ?? null): Promise<ClaudeInstall | null> {
+    if (!path) return null;
+    try { return claudeInstallKind(await realpath(path), process.env, homedir()); } catch { return null; }
   }
 
   /**
@@ -23758,9 +23795,14 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const base = BACKEND_INSTALLATION_INFO[backend];
     if (!base || isRemovedBackend(backend)) return { refused: "unsupported" };
     // AGEND-136: an update runs the registry's `host.update` command with the audited release in it (hostUpdatePlan); the window, its judgement and its release are the install's.
-    const plan = mode === "update" ? hostUpdatePlan(backend) : null;
-    if (mode === "update" && !plan) return { refused: "unsupported" };
-    const info = plan ? { install: plan.command } : base;
+    const plan = mode === "update" || mode === "native" ? hostUpdatePlan(backend) : null;
+    if ((mode === "update" || mode === "native") && !plan) return { refused: "unsupported" };
+    // M-3307 (#4146): the switch and the npm copy's removal are Claude Code's alone.
+    if ((mode === "native" || mode === "remove-npm") && backend !== "claude-code") return { refused: "unsupported" };
+    // remove-npm: the npm copy the switch found (its package directory), removed with npm of that same prefix (<prefix>/lib/node_modules/@anthropic-ai/claude-code).
+    const npmCopy = mode === "remove-npm" ? this.claudeNpmCopy : null;
+    if (mode === "remove-npm" && (!npmCopy || !existsSync(npmCopy))) return { refused: "no_npm_copy" };
+    const info = plan ? { install: plan.command } : npmCopy ? { install: npmUninstallCommand(npmCopy) } : base;
     // The fleet-wide window, claimed before the first await (shared with /login, chat's install and sign-in).
     const claim = this.loginWindow.tryClaim("install", backend);
     if (!claim) return { refused: this.loginWindow.isClosed ? "shutting_down" : "busy" };
@@ -23772,7 +23814,15 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const present = await checkBinaryInstalledAsync(base.binary);
     if (mode === "install" && present) { this.loginWindow.release(claim); return { refused: "already" }; }
     // An update needs the CLI where the Accounts page found it: on the fleet's PATH, else (a fresh login shell, then) the installer's own directories (~/.grok/bin, ~/.opencode/bin …).
-    if (mode === "update" && !present && !(await this.locateInstalledCli(backend, base.binary).catch(() => null))) { this.loginWindow.release(claim); return { refused: "not_installed" }; }
+    if (mode !== "install" && !present && !(await this.locateInstalledCli(backend, base.binary).catch(() => null))) { this.loginWindow.release(claim); return { refused: "not_installed" }; }
+    // M-3307: the switch is offered only over an npm-global install; the removal only once `claude` resolves to the native install (else nothing would be left).
+    if (mode === "native" || mode === "remove-npm") {
+      const now = await this.claudeInstallAfter(base.binary, null);
+      if (mode === "native" && now.kind !== "npm-global") { this.loginWindow.release(claim); return { refused: "not_npm" }; }
+      if (mode === "native") this.claudeNpmCopy = (await this.claudeInstall(now.path))?.npmPackageDir ?? null;
+      // The removal needs a native install to fall back on: `claude` resolves to it already, or it is there behind the npm copy on PATH (the switch's "still npm" case).
+      if (mode === "remove-npm" && now.kind !== "native" && !(await this.nativeClaudePresent())) { this.loginWindow.release(claim); return { refused: "still_npm" }; }
+    }
     if (!asker()) { this.loginWindow.release(claim); return { refused: "failed" }; }
     let versionBefore: string | null = null;
     if (plan) {
@@ -23789,7 +23839,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       if (!asker()) { this.loginWindow.release(claim); return { refused: "failed" }; }
       if (!fresh) { this.loginWindow.release(claim); return { refused: "version_unreadable" }; }
       // AGEND-153: the named exception (`release: "latest-unaudited"`) is offered at any readable version (it goes to the vendor's newest, not to our audited release), so "behind" does not decide it.
-      if (cliUpdateView(backend, versionBefore, true, plan.target === null)?.button !== true) { this.loginWindow.release(claim); return { refused: "up_to_date" }; }
+      if (mode === "update" && cliUpdateView(backend, versionBefore, true, plan.target === null)?.button !== true) { this.loginWindow.release(claim); return { refused: "up_to_date" }; }
       try { reporter.update?.(versionOf(versionBefore), plan.target); } catch { /* a view never stops the update */ }
     } else this.recordLoginFlow(backend, "install_only", "web");
     const opened = await this.openInstallWindow(backend, info, claim, {
@@ -23809,8 +23859,12 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
             version = this.backendAvailabilityRows().find(row => row.backend === backend)?.version ?? null;
           }
         }
-        this.logger.info({ backend, mode, ok, verified, ...(plan ? { to: plan.target } : {}), ...(ok ? {} : { detail }) }, mode === "update" ? "Dashboard update ended" : "Dashboard install ended");
-        try { reporter.done({ ok, detail, cleanupFailed, verified, version, signIn: !!LOGIN_FLOWS[backend] && dashboardSignInSupported(backend) }); } catch { /* a view never stops the install */ }
+        // M-3307: after the switch or the removal, where `claude` resolves now (a fresh login shell), its kind, and whether the npm copy is still there.
+        const claude = ok && (mode === "native" || mode === "remove-npm") ? await this.claudeInstallAfter(base.binary, mode === "remove-npm" ? npmCopy : this.claudeNpmCopy).catch(() => undefined) : undefined;
+        if (claude && mode === "remove-npm" && !claude.npmLeftover) this.claudeNpmCopy = null;
+        this.logger.info({ backend, mode, ok, verified, ...(plan ? { to: plan.target } : {}), ...(claude ? { claude } : {}), ...(ok ? {} : { detail }) },
+          mode === "install" ? "Dashboard install ended" : mode === "update" ? "Dashboard update ended" : mode === "native" ? "Dashboard switch to Claude's native install ended" : "Dashboard removal of the npm Claude Code ended");
+        try { reporter.done({ ok, detail, cleanupFailed, verified, version, signIn: mode === "install" && !!LOGIN_FLOWS[backend] && dashboardSignInSupported(backend), ...(claude ? { claude } : {}) }); } catch { /* a view never stops the install */ }
       },
     }, execution);
     if ("failure" in opened) {
@@ -23819,6 +23873,37 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       return { refused: "failed", message: opened.message };
     }
     return { started: true };
+  }
+
+  /** M-3307: the npm copy of Claude Code the last switch found (its package directory), the one `remove-npm` removes. */
+  private claudeNpmCopy: string | null = null;
+
+  private claudeNpmSeen: { path: string; since: number } | null = null;
+  /**
+   * M-3307 (#4146): Needs you's "Claude Code is installed with npm" — while the `claude` the availability snapshot resolved really is an npm-global package. Its age is from the
+   * first time it was seen so; it goes away once the switch made `claude` native (the snapshot is refreshed after a dashboard install).
+   */
+  claudeNpmAttention(): { path: string; since: number } | null {
+    const path = this.backendAvailabilityRows().find(row => row.backend === "claude-code")?.path ?? null;
+    let dir: string | null = null;
+    if (path) { try { const kind = claudeInstallKind(realpathSync(path), process.env, homedir()); dir = kind.kind === "npm-global" ? kind.npmPackageDir ?? null : null; } catch { dir = null; } }
+    if (!dir) { this.claudeNpmSeen = null; return null; }
+    if (this.claudeNpmSeen?.path !== dir) this.claudeNpmSeen = { path: dir, since: Date.now() };
+    return this.claudeNpmSeen;
+  }
+
+  /** M-3307: Claude's native install is there: `~/.local/bin/claude` leads into its versions folder. */
+  private async nativeClaudePresent(): Promise<boolean> {
+    const real = await realpath(join(homedir(), ".local", "bin", "claude")).catch(() => null);
+    return !!real && claudeInstallKind(real, process.env, homedir()).kind === "native";
+  }
+
+  /** M-3307: where `binary` resolves in a fresh login shell now, the kind of that install, and whether `npmCopy` (a package directory) is still there. */
+  private async claudeInstallAfter(binary: string, npmCopy: string | null): Promise<ClaudeInstallAfter> {
+    const at = await this.locateBinaryOnLoginShell(binary).catch(() => null);
+    const real = at ? await realpath(at).catch(() => null) : null;
+    const kind = real ? claudeInstallKind(real, process.env, homedir()).kind : null;
+    return { kind, path: real, npmLeftover: npmCopy && existsSync(npmCopy) ? npmCopy : null };
   }
 
   /** A fresh login shell's answer for `binary`, else the installer's own directories (see locateBinaryOnLoginShell / locateInstalledBackend). */
