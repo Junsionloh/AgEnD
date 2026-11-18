@@ -466,6 +466,19 @@ and another's only on a card it may edit (assignee, creator, dispatcher, or an u
 the task board on (an instance that left the fleet can still be removed). The card's detail (`GET /ui/tasks/cards/<id>`) lists them
 (`watchers`); over the public link a read-only session does not see hidden instances among them.
 
+**On the page (AGEND-301).** A card's page lists them in its property column, after *Dispatched by*, with the *Leader* under them
+(`fleet-task-follow.js`). *Watchers*: one chip per instance with a ✕, and an Add menu of the fleet's other instances — one with the
+task board off is listed greyed with why (the board refuses it), and at ten the menu gives way to the reason; a sub task shows its
+main task's watchers as "Also from M-n", read-only, since they follow it too. A write is `POST …/watchers` with no `version` (a watch is
+not an edit), then the card and the board are read again; a refusal is the page's toast in its own words (`tasks.err.watcher_unknown`,
+`watcher_board_off`, `watchers_max`, `watch_not_board`). *Leader*: the project's lead, else the board's default, with which of the two it
+is — read-only (the lead is set on the project, the default in fleet.yaml) — and, when it would hear nothing of this card, why: it has the
+card itself, it is not in the fleet, its task board is off, or the fleet's notices are off. The card's read gained three fields for this,
+all additive: `leader` (`{ name, via: "project" | "board" }` or null; `TaskBoard.leaderOf`, the lookup `followersOf` uses), `inheritedWatchers`
+(a sub task's main task's) and `followsProgress` (`progress_wakes`). Over the public link a hidden instance is named in none of them (a hidden
+leader reads as none, as a hidden project lead does, and its hint is the neutral "nobody is named", not a way to set one), and a sub
+task whose main task is kept out of sight reads no inherited watchers at all. An older page ignores the new fields; this page reads an older board's card without them.
+
 **Switch.** `defaults.task_board.progress_wakes: false` turns all of this off at once (comments and mentions, and every other
 notice, are unchanged). It is on by default, read at each write: the owner asked for it, and it tells only instances that already
 have a reason to follow a card. A project's lead, until now only the Needs you lane, now also hears its project's progress.
@@ -550,7 +563,4 @@ An instance's web chat can refer to a card, and the agent is handed it. Nothing 
 
 ## Next
 
-- **Watchers on the page.** The detail page's property side (AGEND-294) lists a card's watchers and lets the person add and
-  remove them, over `POST /ui/tasks/cards/<id>/watchers` (`{ add: [...], remove: [...] }`); until then they are set by the
-  `task` tool and the route.
 - **Step 3, rest.** Each instance's board work on its details page (and a list of every instance's on the board).

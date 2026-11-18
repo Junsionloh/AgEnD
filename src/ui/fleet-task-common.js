@@ -73,6 +73,9 @@ register("tasks", {
     "err.dep_cycle": "These dependencies would wait on each other forever: {0}", "err.conflict": "{0} was changed meanwhile (last by {1})",
     "err.signed_in_only": "The task board takes changes from a signed-in dashboard", "err.unavailable": "The task board is not available right now", "err.not_over_public_link": "The public link can only read the board",
     "err.assignee_board_off": "{0} has the task board switched off: it cannot read or move cards. Switch it on for {0} (Settings → the agent → Dashboard access), or hand it the work in the chat",
+    // AGEND-301: the watchers a card's page sets (fleet-task-follow.js)
+    "err.watcher_unknown": "“{0}” is not one of the fleet's instances", "err.watcher_board_off": "{0} has the task board switched off: it cannot read or move cards, so a notice would reach nothing it can act on",
+    "err.watchers_max": "{0} can have at most {1} watchers", "err.watch_not_board": "{0} is not a card on the board: only cards can be watched",
     "note.review_waiting": "{0} “{1}”: every sub task is done — it waits for your confirmation",
     "note.back_to": "{0} has unfinished sub tasks again: it is back to {1}", "note.deps_done": "{0}'s dependencies are all done: it can start",
     "note.deps_unmet": "Note: {0} not done yet",
@@ -150,6 +153,8 @@ register("tasks", {
     "err.dep_cycle": "相依會形成循環，大家會互相等待：{0}", "err.conflict": "{0} 已經被改過（最後由 {1} 修改）",
     "err.signed_in_only": "看板只接受已登入網頁的修改", "err.unavailable": "看板目前無法使用", "err.not_over_public_link": "公開連結只能看看板，不能修改",
     "err.assignee_board_off": "{0} 關閉了任務看板，讀不到也動不了卡片。請先替 {0} 開啟（Settings → 該 agent → Dashboard access），或改在聊天中交辦",
+    "err.watcher_unknown": "「{0}」不是 fleet 裡的 Agent", "err.watcher_board_off": "{0} 關閉了任務看板，讀不到也動不了卡片，通知送過去它也沒辦法處理",
+    "err.watchers_max": "{0} 最多只能有 {1} 個關注者", "err.watch_not_board": "{0} 不是任務板上的卡片，只有任務板上的卡片可以關注",
     "note.review_waiting": "{0}「{1}」的子任務都完成了，等你確認",
     "note.back_to": "{0} 又有沒完成的子任務，已回到{1}", "note.deps_done": "{0} 的相依都完成了，可以開始",
     "note.deps_unmet": "提醒：{0} 還沒完成",
@@ -352,6 +357,8 @@ export const boardApi = {
   create: (spec) => boardCall("POST", "/ui/tasks/cards", spec),
   update: (id, patch) => boardCall("POST", `/ui/tasks/cards/${enc(id)}`, patch),
   move: (id, to, input = {}) => boardCall("POST", `/ui/tasks/cards/${enc(id)}/move`, { to, ...input }),
+  /** AGEND-301: starts and stops instances watching a card (`add`, `remove`: names); a watch is not an edit, so it carries no version. */
+  watchers: (id, change) => boardCall("POST", `/ui/tasks/cards/${enc(id)}/watchers`, change),
   reorder: (id, after, before) => boardCall("POST", `/ui/tasks/cards/${enc(id)}/reorder`, { after, before }),
   search: (q) => boardCall("GET", `/ui/tasks/search?q=${enc(q)}`),
   /** #2246 step 3: each instance's work (its `task mine`), or one instance's. */

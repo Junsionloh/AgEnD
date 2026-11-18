@@ -3900,6 +3900,9 @@ export function handleWebRequest(
       parent: d.card.parentId && hiddenRef(d.card.parentId) ? null : d.parent,
       children: d.children.filter((c) => !hidden(c)),
       watchers: d.watchers.filter((n) => !hiddenName(n)),
+      // A main task kept out of sight is not named here either: its watchers go with it (the `parent` above reads as none).
+      inheritedWatchers: d.card.parentId && hiddenRef(d.card.parentId) ? [] : d.inheritedWatchers.filter((n) => !hiddenName(n)),
+      leader: d.leader && hiddenName(d.leader.name) ? null : d.leader,       // as a project's hidden lead: read as none
       comments: d.comments.filter((e) => !hiddenName(e.author)),
       logs: d.logs.filter((e) => !hiddenName(e.author)),
       history: d.history.filter((e) => !hiddenName(e.actor) && !mentionsHidden(e.data)),

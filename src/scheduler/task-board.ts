@@ -359,6 +359,12 @@ export interface CardDetail {
   history: CardEvent[];
   /** The instances that watch this card (its own list: a sub task's main task's watchers follow it too). */
   watchers: string[];
+  /** A sub task's: the watchers of its main task, which follow it too (read-only here; empty for any other card). */
+  inheritedWatchers: string[];
+  /** Who leads the card — its project's lead, else the board's leader — and which of the two it is; null: nobody. */
+  leader: { name: string; via: "project" | "board" } | null;
+  /** `defaults.task_board.progress_wakes`: false means no follower (a watcher, the leader…) hears the card's progress. */
+  followsProgress: boolean;
 }
 
 export interface NewCard {
@@ -1097,6 +1103,9 @@ export class TaskBoard {
       logs: this.entries(card.uuid, ["log"], 200),
       history: this.events(card.uuid, 200).filter((e) => e.type !== "reordered"),
       watchers: this.watchersOf(card.uuid),
+      inheritedWatchers: card.parent ? this.watchersOf(card.parent) : [],
+      leader: this.leaderOf(card),
+      followsProgress: this.following.enabled(),
     };
   }
 
@@ -2363,10 +2372,23 @@ export class TaskBoard {
     };
     if (card.dispatcher?.kind === "instance") put(card.dispatcher.name, "dispatcher");
     for (const n of card.parent ? [...this.watchersOf(card.uuid), ...this.watchersOf(card.parent)] : this.watchersOf(card.uuid)) put(n, "watcher");
+    put(this.leaderOf(card)?.name, "leader");
+    return out;
+  }
+
+  /**
+   * Who leads a card, and through what: the lead of its project (`project`), else the board's leader
+   * (`defaults.task_board.leader`, `board`; it also leads the cards in no project). Null: nobody leads it, or it is not
+   * on the board. Whether the leader is also told is {@link followersOf}'s question (not its own assignee, in the fleet,
+   * task board on).
+   */
+  leaderOf(card: Card): { name: string; via: "project" | "board" } | null {
+    if (!this.isOnBoard(card)) return null;
     const projectLead = card.projectId === null ? null
       : (this.db.prepare("SELECT lead_instance FROM task_projects WHERE id = ?").get(card.projectId) as { lead_instance: string | null } | undefined)?.lead_instance ?? null;
-    put(projectLead ?? this.following.leader(), "leader");
-    return out;
+    if (projectLead) return { name: projectLead, via: "project" };
+    const board = this.following.leader();
+    return board ? { name: board, via: "board" } : null;
   }
 
   /**

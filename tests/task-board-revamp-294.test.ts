@@ -380,7 +380,7 @@ describe("a card is a page of its own", () => {
   it("the page's order: properties right under the title (a phone's single column keeps this order), the body after them", async () => {
     await mount();
     await openCard("M-1");
-    expect(qa(".tp-props .tp-row dt").map((d) => text(d))).toEqual(["Status", "Assignee", "Dispatched by", "Project", "Priority", "Size", "Your confirmation", "Waits for"]);
+    expect(qa(".tp-props .tp-row dt").map((d) => text(d))).toEqual(["Status", "Assignee", "Dispatched by", "Watchers", "Leader", "Project", "Priority", "Size", "Your confirmation", "Waits for"]);   // AGEND-301: Watchers and Leader follow Dispatched by
     expect(qa(".tp-body > *").map((el) => el.className.split(" ")[0]), "the assignee's activity (AGEND-296: a card with an assignee); goal, scope, definition, context, state, result, sub tasks; then the timeline and the comment box")
       .toEqual(["card", "tc-field", "tc-field", "tc-field", "tc-field", "tc-field", "tc-field", "tc-field", "tl", "tc-composer"]);
   });

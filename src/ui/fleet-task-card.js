@@ -17,6 +17,7 @@ import { StepButtons, movesFor } from "./fleet-task-menu.js";
 import { Checklist, EditableText, InlineTitle, PropChip, QuickAdd } from "./fleet-task-edit.js";
 import { Composer, Timeline } from "./fleet-task-activity.js";
 import { AgentRun } from "./fleet-task-run.js";
+import { FollowRows } from "./fleet-task-follow.js";
 
 register("taskcard", {
   en: {
@@ -250,6 +251,9 @@ export function CardPage({ id, tick, projects, boardOff = [], doing = new Map(),
   const fleet = instances.map((i) => i.name);
   const mentionNames = [...(fleet.includes(card.assignee) ? [card.assignee] : []), ...fleet.filter((n) => n !== card.assignee)].map((name) => ({ name, off: boardOff.includes(name) }));
 
+  /** Who watches the card: no version (a watch is not an edit of the card), the card and the board read again after. */
+  const follow = (change) => run(() => boardApi.watchers(card.id, change));
+
   async function chooseAssignee(value) {
     if (value === "\u0000other") {
       const name = await askText({ title: t("taskcard.otherTitle"), label: t("taskcard.otherLabel"), required: true });
@@ -305,6 +309,7 @@ export function CardPage({ id, tick, projects, boardOff = [], doing = new Map(),
           ${row(t("taskcard.assignee"), html`<${PropChip} label=${t("taskcard.assignee")} items=${can && !finished ? assigneeItems(card, names, boardOff, chooseAssignee) : null} value=${html`<${Who} name=${card.assignee} empty=${t("taskcard.nobody")} />`} />`)}
           ${row(t("taskcard.dispatcher"), html`<${PropChip} label=${t("taskcard.dispatcher")} items=${can ? dispatcherItems(card, names, (v) => save({ dispatcher: dispatcherValue(v) })) : null}
             value=${html`<span class="tb-who" title=${t("taskcard.dispatcherHint")}>${!card.dispatcher ? t("taskcard.dispatcherNone") : card.dispatcher.kind === "person" ? t("taskcard.dispatcherPerson", card.dispatcher.name) : card.dispatcher.name}</span>`} />`)}
+          <${FollowRows} detail=${detail} names=${fleet} boardOff=${boardOff} can=${can} follow=${follow} />
           ${isMain ? row(t("taskcard.project"), html`<${PropChip} label=${t("taskcard.project")} value=${projectName(card.projectId)}
             items=${can ? [{ key: "none", label: t("tasks.noProject"), checked: card.projectId === null, onSelect: () => save({ projectId: null }) },
               ...projects.filter((p) => !p.archived || p.id === card.projectId).map((p) => ({ key: String(p.id), label: p.name, checked: card.projectId === p.id, onSelect: () => save({ projectId: p.id }) }))] : null} />`) : null}
