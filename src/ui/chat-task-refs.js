@@ -1,5 +1,5 @@
 // AGEND-298: task cards in the web chat. The person types `#` in the chat box, picks a card, and the box holds its number
-// (`#M-3`; M- is a main task, S- a sub task). A hand-typed number counts the same, with or without the `#`.
+// (`#M-3`; M- is a main task, S- a sub task). A hand-typed `#M-3` / `#s3` counts the same; a bare `M-3` does not.
 // Nothing about a reference is stored with the message — the text is the message — so an older chat, and an older AgEnD, read
 // it as the text it is. This file is the page's side:
 //   - taskRefAt / insertTaskRef: the `#query` being typed at the caret, and the number put in its place (pure);
@@ -13,7 +13,7 @@
 // replacement. They are kept apart only so that neither feature waits for the other's pull request.
 
 /** The same rule as the renderer's and the server's (src/chat-task-refs.ts): a test holds the three to one list of cases. */
-const REF = /(?<![A-Za-z0-9_/&#@-])(?:#([MmSs])-?(\d{1,9})|([MS])-(\d{1,9}))(?![A-Za-z0-9_-]|\.\d)/g;
+const REF = /(?<![A-Za-z0-9_/&#@-])#([MmSs])-?(\d{1,9})(?![A-Za-z0-9_-]|\.\d)/g;
 const MAX_CODES = 50;
 /** A card number as the board writes it: "#s3" / "m 3" → "S-3"; null when it is not one. */
 export function taskRefCode(raw) {
@@ -26,7 +26,7 @@ export function taskRefCodes(text, max = 10) {
   const out = [];
   if (typeof text !== "string" || !text) return out;
   for (const m of text.matchAll(REF)) {
-    const code = taskRefCode(`${m[1] ?? m[3]}-${m[2] ?? m[4]}`);
+    const code = taskRefCode(`${m[1]}-${m[2]}`);
     if (code && !out.includes(code)) out.push(code);
     if (out.length >= max) break;
   }

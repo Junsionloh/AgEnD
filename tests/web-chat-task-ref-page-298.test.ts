@@ -155,16 +155,16 @@ describe("typing # in the chat box", () => {
   });
   it("Enter with no list sends the draft exactly as typed (the server adds the cards' summary for the agent)", async () => {
     const c = await open();
-    await c.type("look at #M-1 and M-3 please");
+    await c.type("look at #M-1 and #M-3 please");
     await c.key("Enter");
     await settle(); await settle();
-    expect(sends.map((s) => [s.instance, s.message])).toEqual([["w", "look at #M-1 and M-3 please"]]);
+    expect(sends.map((s) => [s.instance, s.message])).toEqual([["w", "look at #M-1 and #M-3 please"]]);
   });
 });
 
 describe("a task card in a message", () => {
   it("a person's number is a chip with number, title, status and a link to the card — once the card's answer is in", async () => {
-    const c = await open([row(1, "user", "please look at #M-1 and S-2")]);
+    const c = await open([row(1, "user", "please look at #M-1 and #S-2")]);
     await wait(20); await settle(); await settle();
     const chips = c.chips();
     expect(chips.map((a) => a.getAttribute("href"))).toEqual(["/ui/fleet?card=M-1", "/ui/fleet?card=S-2"]);
@@ -181,12 +181,13 @@ describe("a task card in a message", () => {
     expect([chip.querySelector(".task-ref-title").textContent, chip.querySelector("b")]).toEqual(["<b>Ship</b> it", null]);
   });
   it("a number that is no card, an agent's message, and a message from before this feature are drawn as they were", async () => {
-    const c = await open([row(1, "user", "an old message about M-99 and S-98"), row(2, "agent", "I finished #M-1 and M-3"), row(3, "user", "plain words, no numbers")]);
+    const c = await open([row(1, "user", "an old message about #M-99 and #S-98"), row(2, "agent", "I finished #M-1 and #M-3"), row(3, "user", "plain words, no numbers"), row(4, "user", "a bare M-1, as written before this feature, and `#M-3` in code")]);
     await wait(20); await settle(); await settle();
     expect(c.chips()).toEqual([]);
     const text = [...c.root.querySelectorAll(".msg .md")].map((m: any) => m.textContent);
-    expect(text).toEqual(["an old message about M-99 and S-98", "I finished #M-1 and M-3", "plain words, no numbers"]);
-    expect(reads.filter((u) => u.startsWith("/ui/tasks/refs?codes="))).toEqual([`/ui/tasks/refs?codes=${encodeURIComponent("M-99,S-98")}`]);   // only the person's own, and asked once
+    expect(text).toEqual(["an old message about #M-99 and #S-98", "I finished #M-1 and #M-3", "plain words, no numbers", "a bare M-1, as written before this feature, and #M-3 in code"]);
+    // Only the person's own numbers are asked about, once (the page may ask about a number in code: the renderer draws no chip there).
+    expect(reads.filter((u) => u.startsWith("/ui/tasks/refs?codes=")).map((u) => decodeURIComponent(u.split("codes=")[1]!))).toEqual(["M-99,S-98,M-3"]);
   });
   it("a board that cannot be read leaves the numbers as text (a chat from an older host, or a failure)", async () => {
     board = false;

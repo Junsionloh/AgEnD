@@ -112,8 +112,8 @@ const mdCache = new Map();
 const EMOJI_IDS = /<a?:[A-Za-z0-9_]{2,32}:(\d{15,25})>/g;
 const MENTION_IDS = /<(@!?|@&|#)(\d{15,25})>/g;
 const MENTION_KINDS = { "@": "u", "@!": "u", "@&": "r", "#": "c" };
-/** AGEND-298: a text that may name a task card (M-3, #s3): the quick test before the exact one. */
-const TASK_REF_HINT = /(?:^|[^A-Za-z0-9])#?[MmSs]-?\d/;
+/** AGEND-298: a text that may name a task card (#M-3, #s3): the quick test before the exact one. */
+const TASK_REF_HINT = /#[MmSs]-?\d/;
 export function renderedMarkdown(text, cards, emojis, mentions, labels, taskRefs) {
   const src = typeof text === "string" ? text : String(text == null ? "" : text);
   let sig = cards ? "c" : "-";

@@ -85,13 +85,13 @@
     return '<span class="mention" data-mention="' + kind + ":" + id + '" title="' + id + '">' + label + "</span>";
   }
 
-  // AGEND-298: a task card's number in a person's message — `#M-3`, `#s3`, or a bare M-3 / S-34 — drawn as a chip (number, title,
+  // AGEND-298: a task card's number in a person's message — `#M-3` or `#s3` (a bare M-3 is the word it is) — drawn as a chip (number, title,
   // status) that opens the card (Fleet › Tasks, ?card=). Only for a card the page knows (store.taskRefs(code) → { title, status,
   // statusLabel, tip }), and only on a page that asks for it (the person's own words, in the Fleet chat); any other number
   // stays the text it was. The rule is the server's (src/chat-task-refs.ts) and the page's (chat-task-refs.js): a test holds the
   // three to one list of cases. The href is built from the matched digits, the class from a fixed list; the card's own words
   // (title, labels) are inserted escaped.
-  var TASK_REF_RE = /(?<![A-Za-z0-9_\/&#@-])(?:#([MmSs])-?(\d{1,9})|([MS])-(\d{1,9}))(?![A-Za-z0-9_-]|\.\d)/g;
+  var TASK_REF_RE = /(?<![A-Za-z0-9_\/&#@-])#([MmSs])-?(\d{1,9})(?![A-Za-z0-9_-]|\.\d)/g;
   var TASK_STATUS = { open: 1, claimed: 1, blocked: 1, review: 1, done: 1, cancelled: 1 };
   function taskChip(code, info) {
     var status = Object.prototype.hasOwnProperty.call(TASK_STATUS, info.status) ? info.status : "open";
@@ -108,7 +108,7 @@
     var out = [], re = new RegExp(TASK_REF_RE.source, "g"), m;
     var src = String(text == null ? "" : text).replace(/\u0000/g, "");
     while ((m = re.exec(src)) && out.length < 10) {
-      var code = (m[1] || m[3]).toUpperCase() + "-" + Number(m[2] || m[4]);
+      var code = m[1].toUpperCase() + "-" + Number(m[2]);
       if (out.indexOf(code) === -1) out.push(code);
     }
     return out;
@@ -142,8 +142,8 @@
     });
     // AGEND-298: a card's number, after the links (a link is stashed by now: a URL's "#M-3" is never touched).
     var cardOf = store.taskRefs;
-    if (cardOf) s = s.replace(TASK_REF_RE, function (m, hl, hn, bl, bn) {
-      var code = (hl || bl).toUpperCase() + "-" + Number(hn || bn);
+    if (cardOf) s = s.replace(TASK_REF_RE, function (m, letter, digits) {
+      var code = letter.toUpperCase() + "-" + Number(digits);
       var info = cardOf(code);
       return info && typeof info === "object" ? stash(store, taskChip(code, info)) : m;
     });

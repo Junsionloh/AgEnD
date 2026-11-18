@@ -1,7 +1,9 @@
 /**
  * AGEND-298: task cards in the web chat — the pure parts and the page's modules.
- *   1. The rule for what names a card (`#M-3`, `#s3`, a bare M-3 / S-34) is one: the server's, the page's and the renderer's
- *      return the same numbers for one list of cases — and leave alone what is not a reference (a word, a path, a URL, a decimal).
+ *   1. The rule for what names a card (`#M-3`, `#s3`; a bare M-3 is a word) is one: the server's, the page's and the renderer's
+ *      return the same numbers for one list of cases — and leave alone what is not a reference (a word, a path, a URL, a
+ *      decimal). Code, a link's label and a URL are no reference either: what the server hands the agent is exactly the chips
+ *      the page draws.
  *   2. Typing `#`: where the list opens, what it searches for, what goes in when a card is chosen.
  *   3. The chip: number, title, status, a link to the card; only for a card the page knows; the card's own words are escaped;
  *      nothing in a code span or a URL; a page that does not ask (an agent's message, the Hub) draws what it always drew.
@@ -24,25 +26,42 @@ const CASES: Array<[string, string[]]> = [
   ["#M-3", ["M-3"]],
   ["#m3", ["M-3"]],
   ["#S-34 and #s-34", ["S-34"]],
-  ["look at M-3 please", ["M-3"]],
-  ["M-3, S-4; M-3 again", ["M-3", "S-4"]],
-  ["請看M-3的進度", ["M-3"]],
+  ["look at #M-3 please", ["M-3"]],
+  ["#M-3, #S-4; #M-3 again", ["M-3", "S-4"]],
+  ["請看#M-3的進度", ["M-3"]],
   ["看#M-3怎麼了", ["M-3"]],
   ["(#M-12)", ["M-12"]],
-  ["line one\n#S-7\nM-9", ["S-7", "M-9"]],
+  ["line one\n#S-7\n#M-9", ["S-7", "M-9"]],
   ["#M-007", ["M-7"]],
   // not references
+  ["M-3 and S-4 without the #", []],
+  ["fix M-3304 now", []],
   ["m-3 in lowercase with a hyphen is a word", []],
   ["M3 bare, no hyphen", []],
-  ["ABM-3 and XS-4", []],
   ["a#M-3", []],
-  ["/usr/M-3 and https://x.dev/#M-3 and https://x.dev/S-4", []],
-  ["version M-3.5", []],
-  ["S-3-2", []],
+  ["##M-3", []],
+  ["/usr/#M-3 and https://x.dev/#M-3 and https://x.dev/page#S-4", []],
+  ["version #M-3.5", []],
+  ["#S-3-2 and #M-3x", []],
   ["#12 is an issue", []],
   ["#", []],
-  ["M-", []],
-  ["M-1234567890", []],
+  ["#M-", []],
+  ["#M-1234567890", []],
+];
+/** Code, links and URLs: not references — what the page draws no chip in, the server hands the agent no card for. */
+const PROSE_CASES: Array<[string, string[]]> = [
+  ["`#M-3`", []],
+  ["run `git log` then #M-3 and `#S-4`", ["M-3"]],
+  ["```\n#M-3\n```", []],
+  ["```js\nconst a = '#M-3';\n```\nafter: #S-4", ["S-4"]],
+  ["```\n#M-3 in a fence that is never closed", []],
+  ["[#M-3](https://example.com/a)", []],
+  ["[see #M-3 here](mailto:a@b.dev) and #S-4", ["S-4"]],
+  ["[#M-3](not-a-link) is text", ["M-3"]],
+  ["[x](https://example.com) #M-4", ["M-4"]],
+  ["https://example.com/?a=1.#M-3 and #S-4", ["S-4"]],
+  ["see https://example.com/a #M-3", ["M-3"]],
+  ["~~~\n#M-3\n~~~", ["M-3"]],                     // only ``` fences are code in this renderer
 ];
 
 describe("what names a card: one rule in three places", () => {
@@ -51,12 +70,19 @@ describe("what names a card: one rule in three places", () => {
     expect(pageCodes(text)).toEqual(expected);
     expect(R().taskRefCodes(text)).toEqual(expected);
   });
+  // The page asks about, and keys its cache on, every number it can read in a text (a superset, harmless); the server and the
+  // renderer are the two that decide: the cards handed to the agent are exactly the chips drawn.
+  it.each([...CASES, ...PROSE_CASES])("the agent gets what the page draws: %j → %j", (text, expected) => {
+    expect(serverCodes(text)).toEqual(expected);
+    const html = R().renderMarkdown(text, { taskRefs: (code: string) => ({ title: `Card ${code}`, status: "open", statusLabel: "To do" }) });
+    expect([...new Set([...html.matchAll(/data-task-ref="([MS]-\d+)"/g)].map((m) => m[1]))]).toEqual(expected);
+  });
   it("at most ten numbers, each once", () => {
     const many = Array.from({ length: 14 }, (_, i) => `#M-${i + 1}`).join(" ");
     expect(serverCodes(many)).toHaveLength(10);
     expect(pageCodes(many)).toHaveLength(10);
     expect(R().taskRefCodes(many)).toHaveLength(10);
-    expect(serverCodes("#M-1 #M-1 M-1")).toEqual(["M-1"]);
+    expect(serverCodes("#M-1 #M-1 #m1")).toEqual(["M-1"]);
   });
   it("a card number as the board writes it", () => {
     expect([taskRefCode("#s3"), taskRefCode(" m - 12 "), taskRefCode("M-3"), taskRefCode("x3"), taskRefCode("M-"), taskRefCode("")]).toEqual(["S-3", "M-12", "M-3", null, null, null]);
@@ -101,11 +127,14 @@ describe("the chip", () => {
     expect(html).toBe('<p>look at <a class="task-ref" href="/ui/fleet?card=M-3" data-task-ref="M-3" title="M-3 · Build the leaderboard · In progress · @dev-a">'
       + '<span class="task-ref-code">M-3</span><span class="task-ref-title">Build the leaderboard</span><span class="tb-pill st-claimed">In progress</span></a> now</p>');
   });
-  it("a hand-typed number is the same chip, with or without the #, in any case of the letter after #", () => {
-    for (const text of ["#M-3", "M-3", "#m3", "#m-3"]) expect(draw(text), text).toContain('data-task-ref="M-3"');
+  it("a hand-typed number is the same chip, in either case of the letter and with or without the hyphen", () => {
+    for (const text of ["#M-3", "#m3", "#m-3", "#M3"]) expect(draw(text), text).toContain('data-task-ref="M-3"');
+  });
+  it("a bare number — no # — is the word it is, even for a card the page knows", () => {
+    for (const text of ["M-3", "fix M-3 now", "S-4 and M-3304"]) expect(draw(text, { "M-3": CARD, "S-4": CARD, "M-3304": CARD }), text).toBe(`<p>${text}</p>`);
   });
   it("a number that is no card (not asked yet, not a card, or deleted) stays the text it was", () => {
-    expect(draw("see #M-99 and M-98", {})).toBe("<p>see #M-99 and M-98</p>");
+    expect(draw("see #M-99 and #M-98", {})).toBe("<p>see #M-99 and #M-98</p>");
     expect(draw("see #M-3 and #M-99")).toContain("#M-99");
   });
   it("the card's words are escaped, the class comes from the fixed list, the href from the digits", () => {
@@ -127,7 +156,7 @@ describe("the chip", () => {
     expect([...html.matchAll(/data-task-ref="([MS]-\d+)"/g)].map((m) => m[1])).toEqual(["M-3", "S-4", "M-3"]);
   });
   it("a page that does not ask draws what it always drew (an agent's message, the Hub, a message before this feature)", () => {
-    for (const text of ["#M-3", "see M-3 and #S-4 done"]) {
+    for (const text of ["#M-3", "see #M-3 and #S-4 done"]) {
       expect(R().renderMarkdown(text, {})).toBe(`<p>${text}</p>`);
       expect(R().renderMarkdown(text)).toBe(`<p>${text}</p>`);
     }
@@ -158,7 +187,7 @@ describe("the thread's cached Markdown follows what the page knows", () => {
   });
   it("a page without cards renders and caches as before (the Hub, an agent's message)", () => {
     clearRenderedMarkdown();
-    expect(renderedMarkdown("#M-3 and M-4", true, undefined, undefined, undefined)).toBe("<p>#M-3 and M-4</p>");
+    expect(renderedMarkdown("#M-3 and #M-4", true, undefined, undefined, undefined)).toBe("<p>#M-3 and #M-4</p>");
   });
 });
 
@@ -176,7 +205,7 @@ describe("the page's index of cards", () => {
     const { calls, index } = rig((url) => ({ refs: decodeURIComponent(url.split("codes=")[1]!).split(",").filter((c) => c !== "M-99").map((c) => viewOf(c)) }));
     const seen = vi.fn();
     index.subscribe(seen);
-    index.ensure([user("see #M-3 and M-99"), user("again #M-3 and #S-4"), { role: "agent", text: "I did M-77" }, { role: "user", text: 5 }, null]);
+    index.ensure([user("see #M-3 and #M-99 and M-55"), user("again #M-3 and #S-4"), { role: "agent", text: "I did #M-77" }, { role: "user", text: 5 }, null]);
     await settleAll(index);
     expect(calls).toEqual([`/ui/tasks/refs?codes=${encodeURIComponent("M-3,M-99,S-4")}`]);
     expect([index.get("M-3")?.title, index.get("S-4")?.title, index.get("M-99"), index.get("M-77")]).toEqual(["Title of M-3", "Title of S-4", null, null]);

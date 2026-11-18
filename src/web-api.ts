@@ -4539,18 +4539,16 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
       }
       // The same tags and meta a Telegram photo/document produces, so the agent needs nothing new.
       const delivery = attachmentDelivery(typed, files);
-      // AGEND-298: the task cards the person's words name (`#M-3`, or a hand-typed M-3 / S-34), read from the board now, go to
+      // AGEND-298: the task cards the person's words name (`#M-3`, typed or chosen from the list), read from the board now, go to
       // the agent as a short block under them, so it need not guess. Nothing is added for a number that is no card (never was,
-      // or deleted since), for a guest (a guest has no board), or for a card that names an instance hidden on the public link.
-      // The chat's copy, the channel's echo and the receipt's "what was typed" stay the person's words alone.
-      // A line that starts with "/" is a command for the CLI (or /raw's exact paste): nothing is added to it.
-      const taskBoard = guest || /^\s*\//.test(typed) ? undefined : ctx.scheduler?.db.board;
-      const refCards = taskBoard
-        ? cardsForRefs(taskBoard, taskRefCodes(typed), boardHiding(ctx, linkRestricted(req, new URL(req.url ?? "/", "http://localhost"), ctx)).hidden)
-        : [];
-      const refBlock = taskBoard && refCards.length
-        ? taskRefBlock(taskBoard, refCards, { hint: !native && !taskBoardOffIn(ctx.fleetConfig, instance) })
-        : "";
+      // or deleted since), for a guest (a guest has no board), for an instance whose task board is switched off (it is told
+      // nothing of the board: only the person's words go), for a line that starts with "/" (a command for the CLI, or /raw's
+      // exact paste), or for a card that names an instance hidden on the public link. The chat's copy, the channel's echo and
+      // the receipt's "what was typed" stay the person's words.
+      const taskBoard = guest || taskBoardOffIn(ctx.fleetConfig, instance) || /^\s*\//.test(typed) ? undefined : ctx.scheduler?.db.board;
+      const { hidden: hiddenCard } = boardHiding(ctx, linkRestricted(req, new URL(req.url ?? "/", "http://localhost"), ctx));
+      const refCards = taskBoard ? cardsForRefs(taskBoard, taskRefCodes(typed), hiddenCard) : [];
+      const refBlock = taskBoard && refCards.length ? taskRefBlock(taskBoard, refCards, { hint: !native, hidden: hiddenCard }) : "";
       const deliveredText = delivery.text + refBlock;
       // #1269: `/raw ` is pasted into the CLI with no [user:] envelope (the daemon's own check, on this exact text).
       // M-3278 (decision 7933bf90): the public link's admin session may do that too, as a local one may; anyone else

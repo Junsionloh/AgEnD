@@ -140,11 +140,11 @@ describe("GET /ui/tasks/refs", () => {
 describe("POST /ui/send: the cards a message names go to the agent", () => {
   it("a block under the person's words: number, status, title on one line, who has it, how to read the whole card", async () => {
     const { delivered, bodies } = delivering();
-    const r = await send("please look at #M-1 and S-1");
+    const r = await send("please look at #M-1 and #S-1");
     expect(r.status).toBe(200);
     expect(delivered).toHaveLength(1);
     expect(delivered[0].content).toBe([
-      "please look at #M-1 and S-1",
+      "please look at #M-1 and #S-1",
       "",
       TASK_REF_HEADER,
       "M-1 [in progress] Build the login API @dev-a (main task)",
@@ -152,12 +152,12 @@ describe("POST /ui/send: the cards a message names go to the agent", () => {
       "Read a card in full with the task tool: task get M-1 (or agend-agent task get M-1 --detail).",
     ].join("\n"));
     // What the person typed is what the receipt records; the meta is the web message's, as before.
-    expect(bodies).toEqual(["please look at #M-1 and S-1"]);
+    expect(bodies).toEqual(["please look at #M-1 and #S-1"]);
     expect(delivered[0].meta.source).toBe("web");
     expect(Object.keys(delivered[0].meta).filter((k) => /task|card/i.test(k))).toEqual([]);
     // The agent's line: the person's words and the block, one message; the block is not a header the agent could mistake.
     const wire = formatHumanInboundMessage(delivered[0].content, delivered[0].meta, "mcp");
-    expect(wire).toContain(`please look at #M-1 and S-1\n\n${TASK_REF_HEADER}\nM-1 [in progress]`);
+    expect(wire).toContain(`please look at #M-1 and #S-1\n\n${TASK_REF_HEADER}\nM-1 [in progress]`);
     expect(wire.split("\n").filter((l) => l.startsWith("> "))).toEqual([]);
   });
   it("the chat keeps the person's words alone: the stream's copy and the stored row", async () => {
@@ -166,25 +166,48 @@ describe("POST /ui/send: the cards a message names go to the agent", () => {
     const row = fm.webChatHistory.list("a").at(-1);
     expect([row.role, row.text]).toEqual(["user", "check #M-1"]);
   });
-  it("a hand-typed number with no #, and a card's number inside a sentence in Chinese", async () => {
+  it("a hand-typed #number (either case, with or without the hyphen), and one inside a sentence in Chinese", async () => {
     const { delivered } = delivering();
-    await send("看一下M-2的進度");
+    await send("看一下#M-2的進度");
     expect(delivered[0].content).toContain("M-2 [to do] 登入頁面 50%_done (main task)");
   });
   it("a card that is finished or cancelled is still a card, with its status", async () => {
     db.board.moveCard(ANN, m4.code, "cancelled");
     const { delivered } = delivering();
-    await send("what happened to M-3?");
+    await send("what happened to #m3?");
     expect(delivered[0].content).toContain("M-3 [cancelled] Old finished work (main task)");
+  });
+  it("a number with no # is the word it is: nothing is added, even for a card the board has", async () => {
+    const { delivered } = delivering();
+    for (const text of ["M-1", "fix M-1 now", "S-1 and M-2", "an upstream-style M-3304 in a sentence"]) expect((await send(text)).status, text).toBe(200);
+    expect(delivered.map((d) => d.content)).toEqual(["M-1", "fix M-1 now", "S-1 and M-2", "an upstream-style M-3304 in a sentence"]);
+  });
+  it("a number written as code, or as a link's label, is no reference: only the numbers in prose are handed over", async () => {
+    const { delivered } = delivering();
+    const typed = [
+      "run `#M-1` please",
+      "```\n#M-1\n```",
+      "```sh\ngit show #M-1\n```\nand #S-1 after it",
+      "[#M-1](https://example.com/x) is the link",
+      "see https://example.com/a?x=1.#M-1",
+      "`#M-1` and #M-2",
+    ];
+    for (const text of typed) expect((await send(text)).status, text).toBe(200);
+    const lines = (n: number) => delivered[n].content.split("\n").filter((l: string) => /^[MS]-\d+ \[/.test(l));
+    expect([0, 1, 3, 4].map((n) => delivered[n].content)).toEqual([typed[0], typed[1], typed[3], typed[4]]);   // nothing added
+    expect(lines(2)).toEqual(["S-1 [to do] Write the tests across two lines (sub task of M-1)"]);
+    expect(lines(5)).toEqual(["M-2 [to do] 登入頁面 50%_done (main task)"]);
+    // The person's words themselves are never changed: the row the chat keeps is the text as typed.
+    expect(fm.webChatHistory.list("a").map((m: any) => m.text).slice(-6)).toEqual(typed);
   });
   it("a number that is no card — never was, or deleted — sends the words as typed: no block, no error", async () => {
     (db as any).db.prepare("DELETE FROM tasks WHERE code = ?").run(m3.code);
     const { delivered } = delivering();
-    for (const text of ["#M-99 is not a card", "deleted: #M-2", "see S-77 and #S-78"]) {
+    for (const text of ["#M-99 is not a card", "deleted: #M-2", "see #S-77 and #S-78"]) {
       const r = await send(text);
       expect(r.status, text).toBe(200);
     }
-    expect(delivered.map((d) => d.content)).toEqual(["#M-99 is not a card", "deleted: #M-2", "see S-77 and #S-78"]);
+    expect(delivered.map((d) => d.content)).toEqual(["#M-99 is not a card", "deleted: #M-2", "see #S-77 and #S-78"]);
   });
   it("one real card among numbers that are not: only the real one", async () => {
     const { delivered } = delivering();
@@ -223,11 +246,16 @@ describe("POST /ui/send: the cards a message names go to the agent", () => {
     expect(r.status).toBe(200);
     expect(delivered.map((d) => d.content)).toEqual(["what is #M-1?"]);
   });
-  it("an instance with its task board off is told the card, not how to read it", async () => {
+  it("an instance with its task board off is told nothing of the board: only the person's words go", async () => {
     const { delivered } = delivering("b");
-    const r = await send("#M-1", { instance: "b" });
+    const r = await send("please read #M-1 and #S-1", { instance: "b" });
     expect(r.status).toBe(200);
-    expect(delivered[0].content).toBe(`#M-1\n\n${TASK_REF_HEADER}\nM-1 [in progress] Build the login API @dev-a (main task)`);
+    expect(delivered.map((d) => d.content)).toEqual(["please read #M-1 and #S-1"]);
+    expect(delivered[0].content).not.toContain("Build the login API");
+    // The same words to an instance that has the board are handed the cards (the switch is per instance, read at each send).
+    const on = delivering("a");
+    await send("please read #M-1");
+    expect(on.delivered.at(-1).content).toContain("M-1 [in progress] Build the login API");
   });
   it("the channel's echo is the person's words (no card text goes to a topic)", async () => {
     delivering();
@@ -257,7 +285,7 @@ describe("POST /ui/send: the cards a message names go to the agent", () => {
 
 describe("the block and the reads behind it", () => {
   it("taskRefCodes reads what the page reads", () => {
-    expect(taskRefCodes("#M-1, S-2 and #m3 but not a#M-4")).toEqual(["M-1", "S-2", "M-3"]);
+    expect(taskRefCodes("#M-1, S-2 and #m3 but not a#M-4")).toEqual(["M-1", "M-3"]);
   });
   it("cardsForRefs: in the order asked, the unknown and the hidden left out, an unreadable board is no cards", () => {
     const board = db.board;
@@ -265,6 +293,14 @@ describe("the block and the reads behind it", () => {
     expect(cardsForRefs(board, ["S-1", "M-1"], (c) => c.assignee === "dev-a").map((c) => c.code)).toEqual(["S-1"]);
     expect(cardsForRefs(board, [])).toEqual([]);
     expect(cardsForRefs({ cardsByCode: () => { throw new Error("db closed"); } } as never, ["M-1"])).toEqual([]);
+  });
+  it("taskRefBlock: a sub task whose main task is hidden does not name it", () => {
+    const board = db.board, sub = cardsForRefs(board, ["S-1"]);
+    expect(taskRefBlock(board, sub, { hint: false })).toContain("S-1 [to do] Write the tests across two lines (sub task of M-1)");
+    const hidden = taskRefBlock(board, sub, { hint: false, hidden: (c) => c.code === "M-1" });
+    expect(hidden).toContain("S-1 [to do] Write the tests across two lines (sub task)");
+    expect(hidden).not.toContain("M-1");
+    expect(taskRefBlock(board, sub, { hint: false, hidden: (c) => c.code === "S-1" })).toContain("(sub task of M-1)");   // the card itself is the caller's to leave out
   });
   it("taskRefBlock: empty for no card; the hint can be left out", () => {
     const cards = cardsForRefs(db.board, ["M-1"]);
