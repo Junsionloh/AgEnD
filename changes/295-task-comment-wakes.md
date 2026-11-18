@@ -1,0 +1,4 @@
+---
+section: Changed
+---
+- **A comment or an `@mention` on a task board card wakes agents again (AGEND-295).** A comment someone else writes on a card wakes its assignee, and `@<instance name>` in a comment wakes that agent even when the card is not its own, as a `[Task board]` notice that names who wrote it and quotes the words. This reverses #2801's "a comment notifies nobody", to make the card a conversation as in Multica or Linear. Nobody is woken for their own comment, for an agent with the task board off, or for a comment the assignee already read; text in backticks is never read for mentions. Agents answering each other on a card wake each other for at most 4 turns (a person's comment lifts it), and one agent comment wakes at most 5 agents. `defaults.task_board.comment_wakes: false` brings the old rule back. Comments written before the upgrade are never told, and no stored data changes.

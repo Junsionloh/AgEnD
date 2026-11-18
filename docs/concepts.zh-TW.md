@@ -167,6 +167,7 @@ AgEnD 電腦上的那個人。在純網頁艦隊裡，就是在這台電腦上�
 追蹤工作的單位。主任務 `M-n` 是成果；子任務 `S-n` 是主任務下面的步驟。狀態：open、claimed、review、done、blocked、cancelled。等某人確認的主任務會進 review；從 review 以 done 收尾。
 
 - 能做什麼：把狀態、驗收標準、留言與結果，跨 turn、跨 instance 帶著走。
+- 留言與 mention（AGEND-295；使用者決定，2026-11-18）：別人在卡片上留言會喚醒負責人；留言裡寫 `@<instance 名稱>` 會喚醒被點名的 instance，即使那張卡不是它的——是一則 `[Task board]` 通知，寫出誰留言並引用內容；在卡片上回覆，而且只在留言有問題或需要它做事時才回。agent 互相回覆 4 回合後就不再互相喚醒，直到使用者在卡片上寫東西；`defaults.task_board.comment_wakes: false` 可恢復舊規則：留言不通知任何人。
 - 不能做什麼：不能代替人的共識——blocked 的卡還是要等人（或 dispatcher）回答。
 - 程式碼：`task` 工具（`src/channel/mcp-tools.ts:79-80`）。
 - 相關決議與議題：—

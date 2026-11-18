@@ -14,6 +14,7 @@
  */
 import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
+import { parseMentions } from "./task-board-mentions.js";
 
 export const CARD_STATUSES = ["open", "claimed", "blocked", "review", "done", "cancelled"] as const;
 export type CardStatus = (typeof CARD_STATUSES)[number];
@@ -55,6 +56,35 @@ export const CARD_LIMITS = {
 /** How far back finished sub tasks and cancelled main tasks stay on the board. */
 const BOARD_DAYS = 14;
 const BATCH_MAX = 30;
+
+/**
+ * The loop guard for comments that wake (docs/design/task-board.md, "Comments and mentions"): instances (and scripts,
+ * held to the same rules) can wake each other with a comment or an `@` mention, and a reply wakes its writer again.
+ * Within AGENT_COMMENT_WINDOW_MS, and counting back to the last thing a person wrote on the card, the agents' comments
+ * that woke someone make a chain of turns (a change of writer starts a new turn; one agent writing again is the same
+ * turn, since nobody answered it). A comment wakes someone only while the chain is no longer than AGENT_COMMENT_CHAIN
+ * turns: the rest are kept on the card and wake nobody until a person writes on it or the window passes. One agent
+ * comment also wakes at most MAX_COMMENT_WAKES instances. A person's comment has neither limit.
+ */
+export const AGENT_COMMENT_CHAIN = 4;      // turns
+export const AGENT_COMMENT_WINDOW_MS = 30 * 60_000;
+export const MAX_COMMENT_WAKES = 5;
+
+/** Whom one comment may wake, settled when it is written (its notes go back to its writer) and read when the write ends. */
+export interface CommentAudience {
+  /** The instances its `@` marks name (the board's own names), without its writer, those with the task board off, and the surplus. */
+  mentions: string[];
+  /** Whether the card's assignee may hear it as a comment (the fleet's switch on, an agent's chain not over its limit). */
+  assignee: boolean;
+}
+
+/** What the fleet tells the board for routing a comment; read at every comment, so a fleet.yaml edit applies to the next. */
+export interface CommentRouting {
+  /** The fleet's instance names (an `@name` is only ever one of them). */
+  instances: () => Iterable<string>;
+  /** `defaults.task_board.comment_wakes` (default on): whether comments and mentions wake at all. */
+  enabled: () => boolean;
+}
 
 /**
  * A refusal. `code` is its kind (and the HTTP status the dashboard gets); `key` and `args`, when set, name the same
@@ -242,10 +272,13 @@ export interface CardEvent {
  * tells them (to_confirm); a main task went to the person by itself before its owner wrapped it up (wrap_up); or
  * someone else cancelled it — a main task's cancel takes its unfinished sub tasks down with it, and their assignees
  * hear (cancelled). #2801: only a change of status or assignee is news, and only to the one instance that acts on it
- * next — a comment, and a confirmation (the work is finished), wake nobody; but for the answer to its blocked question
- * that waits on the card while its assignee is busy with another (#2303), which it acts on next (answer_kept).
+ * next — a confirmation (the work is finished) wakes nobody; but for the answer to its blocked question that waits on
+ * the card while its assignee is busy with another (#2303), which it acts on next (answer_kept).
+ * A comment is news too, since comments and mentions wake (docs/design/task-board.md, "Comments and mentions"): the
+ * card's assignee hears a comment someone else wrote on it (comment), and an instance a comment names with
+ * `@<instance>` hears it whether or not the card is its own (mention).
  */
-export type WakeReason = "assigned" | "start" | "sent_back" | "answered" | "answer_kept" | "ready" | "decide" | "to_confirm" | "confirm_own" | "wrap_up" | "cancelled";
+export type WakeReason = "assigned" | "start" | "sent_back" | "answered" | "answer_kept" | "ready" | "decide" | "to_confirm" | "confirm_own" | "wrap_up" | "cancelled" | "comment" | "mention";
 
 /** One card's news for one instance from one committed write. Never sent to a page (it carries titles and text). */
 export interface Wake {
@@ -260,6 +293,11 @@ export interface Wake {
   by: Partial<Record<WakeReason, string>>;
   /** The words that came with a reason: a send-back's, an answer's, a comment's, a question's, a confirmation note. */
   texts: Partial<Record<WakeReason, string>>;
+  /**
+   * Set by the waker, never the board: how many comments (or mentions) earlier than the one in `texts` it merged into
+   * this wake while gathering — the notice quotes the last and says there are more.
+   */
+  earlier?: number;
 }
 
 /** What one committed write changed, for live views: the card numbers touched (none for a project change). */
@@ -581,7 +619,8 @@ export class TaskBoard {
   private listeners: Array<(change: BoardChange) => void> = [];
   private cardLimit: (name: string) => number = () => 1;
   private boardOff: (name: string) => boolean = () => false;
-  private pending: Array<{ code: string; uuid: string; actor: Actor; type: CardEventType; data: Record<string, unknown> }> = [];
+  private routing: CommentRouting = { instances: () => [], enabled: () => true };
+  private pending: Array<{ code: string; uuid: string; actor: Actor; type: CardEventType; data: Record<string, unknown>; audience?: CommentAudience }> = [];
   private projectsChanged = false;
   private notes: Note[] = [];
   /** The notes of the last write, until a caller of the `task` tool's old actions takes them (takeNotes). */
@@ -1509,7 +1548,7 @@ export class TaskBoard {
         const text = checkText("the comment", patch.comment, CARD_LIMITS.comment);
         if (text) {
           this.entry(card, "comment", actor, text);
-          this.event(actor, card, "commented", { text });
+          this.commented(actor, card, text);
           touched = true;
         }
       }
@@ -1556,7 +1595,7 @@ export class TaskBoard {
           const text = checkText("the comment", comment!, CARD_LIMITS.comment);
           this.entry(card, "comment", actor, text);
           // #2801 review: the one comment that is news — the answer its assignee waits for (`kept`).
-          this.event(actor, card, "commented", { text, kept: true });
+          this.commented(actor, card, text, true);
           card.version++;
           card.updatedAt = this.nowIso();
           this.save(card);
@@ -2013,6 +2052,11 @@ export class TaskBoard {
     this.boardOff = off;
   }
 
+  /** The fleet's instance names and its comment-wakes switch, for routing a comment to the instances it concerns. */
+  setCommentRouting(routing: CommentRouting): void {
+    this.routing = routing;
+  }
+
   /** Refuses `name` as the new assignee of a card or task when it is an instance with the task board switched off. */
   private checkAssignable(name: string | null, current: string | null = null): void {
     if (name === null || name === current || !this.boardOff(name)) return;
@@ -2044,7 +2088,7 @@ export class TaskBoard {
     if (comment?.trim()) {
       const text = checkText("the comment", comment, CARD_LIMITS.comment);
       this.entry(card, "comment", actor, text);
-      this.event(actor, card, "commented", { text });
+      this.commented(actor, card, text);
     }
     card.version++;
     card.updatedAt = now;
@@ -2171,7 +2215,8 @@ export class TaskBoard {
   private settleWakes(events: TaskBoard["pending"]): Wake[] {
     const out = new Map<string, Wake>();
     const add = (card: Card, instance: string | null | undefined, reason: WakeReason, by: Actor, text?: string) => {
-      if (!instance || instance === by.name) return;
+      // Never its own write — but a person's `@name` is not the instance of that name's own write.
+      if (!instance || (instance === by.name && !(reason === "mention" && isPerson(by)))) return;
       const key = `${instance}\u0000${card.uuid}`;
       const w = out.get(key) ?? { instance, uuid: card.uuid, code: card.code, title: card.title, parent: card.parent ? this.codeOf(card.parent) : null, reasons: [], by: {}, texts: {} };
       if (!w.reasons.includes(reason)) w.reasons.push(reason);
@@ -2221,6 +2266,19 @@ export class TaskBoard {
         if (d.to === "blocked" && !isPerson(e.actor)) add(card, dispatcherOf(), "decide", e.actor, d.reason);
       }
     }
+    // Comments and mentions: the assignee hears a comment someone else wrote, an instance it names hears it. An answer
+    // to a blocked question already says its words (answered, answer_kept), and a mention says it all to the assignee.
+    for (const e of events) {
+      if (e.type !== "commented" || !e.audience) continue;
+      const card = this.byUuid(e.uuid);
+      if (!card) continue;
+      const text = String(e.data.text ?? "");
+      for (const name of e.audience.mentions) add(card, name, "mention", e.actor, text);
+      const held = card.assignee ? out.get(`${card.assignee}\u0000${card.uuid}`) : undefined;
+      if (e.audience.assignee && card.assignee && !e.audience.mentions.includes(card.assignee) && !held?.reasons.some((r) => r === "answered" || r === "answer_kept")) {
+        add(card, card.assignee, "comment", e.actor, text);
+      }
+    }
     return [...out.values()].map((w) => this.wakeHolds(w)).filter((w): w is Wake => w !== null);
   }
 
@@ -2247,11 +2305,16 @@ export class TaskBoard {
     const waiting = this.unmetDeps(card).length > 0;
     let reasons = wake.reasons.filter((r) => {
       if (r === "cancelled") return card.status === "cancelled" && own;
+      // A mention was asked for by name: it holds whatever state the card is in, finished too.
+      if (r === "mention") return true;
       if (isFinished(card)) return false;
       if (r === "decide") return handedOut && card.status === "blocked";
       // #2341 review: and still waiting for the person — its confirmation not switched off during the gather.
       if (r === "to_confirm") return handedOut && card.status === "review" && requiresReview(card);
       if (!own) return false;
+      // A card still waiting on what it depends on is read when it can start (as for an assignment, "assigned" above);
+      // and a comment its assignee has already read — its own write since — is not told to it.
+      if (r === "comment") return (card.status !== "open" || !waiting) && this.newComments(card).some((e) => e.kind === "comment");
       if (r === "confirm_own") return card.status === "review" && confirmingInstance(card) === wake.instance;
       if (r === "wrap_up") return card.status === "review" && wrapUpGap(card) !== null;
       if (r === "assigned") return !waiting;
@@ -2264,6 +2327,7 @@ export class TaskBoard {
     // One piece of news says it all: a send-back outweighs the rest.
     if (reasons.includes("sent_back")) reasons = reasons.filter((r) => r !== "start");
     if (reasons.includes("assigned")) reasons = reasons.filter((r) => r !== "start" && r !== "ready");
+    if (reasons.includes("mention")) reasons = reasons.filter((r) => r !== "comment");
     if (reasons.includes("cancelled")) reasons = ["cancelled"];
     if (!reasons.length) return null;
     const keep = <T>(o: Partial<Record<WakeReason, T>>) => Object.fromEntries(Object.entries(o).filter(([r]) => reasons.includes(r as WakeReason))) as Partial<Record<WakeReason, T>>;
@@ -2412,6 +2476,88 @@ export class TaskBoard {
   private entry(card: Card, kind: EntryKind, actor: Actor, text: string): void {
     this.db.prepare("INSERT INTO task_entries (task_id, kind, author, author_kind, text, at) VALUES (?, ?, ?, ?, ?, ?)")
       .run(card.uuid, kind, actor.name, actor.kind, text, this.nowIso());
+  }
+
+  /**
+   * A comment written (its entry is already on the card): the "commented" event, and whom the comment concerns, which
+   * settleWakes reads when the write ends. `kept` is a dispatcher's answer a busy assignee finds on the card (#2303).
+   */
+  private commented(actor: Actor, card: Card, text: string, kept = false): void {
+    this.event(actor, card, "commented", kept ? { text, kept: true } : { text });
+    this.pending[this.pending.length - 1]!.audience = this.routeComment(actor, card, text, kept);
+  }
+
+  /**
+   * Whom a comment wakes (docs/design/task-board.md, "Comments and mentions"): the card's assignee, when someone else
+   * wrote it, and each instance it names with `@<instance>` (not its writer; one wake per instance however often it is
+   * named). What cannot be woken is said in the writer's notes, never refused: a name that is no instance is ignored,
+   * and so is one with the task board off (it has no `task` tool to act on a notice with). An agent's comment is held
+   * to the loop guard (AGENT_COMMENT_CHAIN, MAX_COMMENT_WAKES). A card that is not on the board (the `task` tool's own
+   * task) wakes nobody by a comment, as it wakes nobody by an assignment.
+   */
+  private routeComment(author: Actor, card: Card, text: string, kept: boolean): CommentAudience {
+    const none: CommentAudience = { mentions: [], assignee: false };
+    if (author.kind === "system" || !this.routing.enabled() || !this.isOnBoard(card)) return none;
+    const names = [...this.routing.instances()];
+    const parsed = parseMentions(text, names);
+    const agent = author.kind !== "person";
+    // Only an instance (or a script) is itself: a person whose name is an instance's name is someone else, and a mention
+    // of that instance is for it (the board's names are one string, but an `@name` always means the instance).
+    let mentions = parsed.names.filter((n) => agent ? n !== author.name : true);
+    for (const n of mentions.filter((m) => this.boardOff(m))) {
+      this.say("mention_off", [n], `@${n} has the task board switched off, so it was not woken: it cannot read the card`);
+    }
+    mentions = mentions.filter((n) => !this.boardOff(n));
+    const asAssignee = !kept && card.assignee !== null && card.assignee !== author.name && names.includes(card.assignee) && !this.boardOff(card.assignee) && !mentions.includes(card.assignee);
+    if (parsed.unknown.length) {
+      this.say("mention_unknown", [parsed.unknown.map((w) => `@${w}`).join(", ")], `${parsed.unknown.map((w) => `@${w}`).join(", ")}: no such instance, nobody was woken for it`);
+    }
+    const run = agent && (mentions.length || asAssignee) ? this.agentCommentRun(card, names) : 0;
+    if (run > AGENT_COMMENT_CHAIN) {
+      this.say("comment_chain", [card.code, run], `nobody was woken by this comment: it is turn ${run} of agents answering each other on ${card.code} (a loop guard). It is kept on the card; `
+        + `comments wake again once a person writes on it, or when these are ${AGENT_COMMENT_WINDOW_MS / 60_000} minutes old`);
+      return none;
+    }
+    if (agent && mentions.length > MAX_COMMENT_WAKES) {
+      this.say("mention_cap", [MAX_COMMENT_WAKES], `only the first ${MAX_COMMENT_WAKES} instances you mentioned were woken (the limit for an agent's comment)`);
+      mentions = mentions.slice(0, MAX_COMMENT_WAKES);
+    }
+    const heard = [...mentions.map((n) => `${n} (mentioned)`), ...(asAssignee ? [`${card.assignee} (assignee)`] : [])];
+    if (heard.length) this.say("comment_wakes", [heard.join(", ")], `this comment is told to ${heard.join(", ")} as a [Task board] notice: no need to message them about it`);
+    return { mentions, assignee: !kept };
+  }
+
+  /**
+   * How many turns the agents' talk on the card has had, within AGENT_COMMENT_WINDOW_MS, back to the last thing a person
+   * wrote on it (their comment, send-back or confirmation): the comments by agents (anything but a person) that woke
+   * someone, a change of writer counting as the next turn. The newest is counted. What woke someone is read again from
+   * the comment as it was written: it names an instance other than its writer, or the card's assignee *at that time* was
+   * an instance other than its writer — read from the card's own assignment events (`assigned`: from, to), never from
+   * today's assignee, so handing the card to one of the two talking does not turn the other's comments into notes to
+   * itself and lift the guard. An agent's note to itself on its own card wakes nobody: it is no turn of a loop, so it
+   * neither counts nor breaks the chain; and one agent writing twice in a row is one turn, as nobody has answered it.
+   */
+  private agentCommentRun(card: Card, names: readonly string[]): number {
+    const since = new Date(this.now().getTime() - AGENT_COMMENT_WINDOW_MS).toISOString();
+    const rows = this.db.prepare("SELECT kind, author, author_kind, text, at FROM task_entries WHERE task_id = ? AND kind IN ('comment', 'reject', 'approve') AND at >= ? ORDER BY id DESC LIMIT 100")
+      .all(card.uuid, since) as Array<{ kind: EntryKind; author: string; author_kind: string; text: string; at: string }>;
+    // Assignments since the window began, oldest first: the first one after a comment says who had the card before it.
+    const handovers = (this.db.prepare("SELECT at, data FROM task_events WHERE task_id = ? AND type = 'assigned' AND at >= ? ORDER BY id").all(card.uuid, since) as Array<{ at: string; data: string }>)
+      .map((e) => { try { return { at: e.at, from: (JSON.parse(e.data) as { from?: unknown }).from }; } catch { return { at: e.at, from: undefined }; } });
+    const assigneeAt = (at: string): string | null => {
+      const next = handovers.find((h) => h.at > at);
+      if (!next) return card.assignee;
+      return typeof next.from === "string" ? next.from : null;
+    };
+    const assigneeHears = (by: string, at: string) => { const a = assigneeAt(at); return a !== null && a !== by && names.includes(a); };
+    let turns = 0;
+    let writer: string | null = null;
+    for (const r of rows) {
+      if (r.author_kind === "person") break;
+      if (r.kind !== "comment" || !(parseMentions(r.text, names).names.some((n) => n !== r.author) || assigneeHears(r.author, r.at))) continue;
+      if (r.author !== writer) { turns++; writer = r.author; }
+    }
+    return turns;
   }
 
   private event(actor: Actor, card: Card, type: CardEventType, data: Record<string, unknown>): void {

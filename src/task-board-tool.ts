@@ -278,6 +278,15 @@ export function boardCardLimit(fleet: { instances?: Record<string, { board_cards
   return typeof own === "number" && Number.isInteger(own) && own >= 1 ? own : 1;
 }
 
+/**
+ * `defaults.task_board.comment_wakes` (default on): whether a comment wakes its card's assignee and an `@<instance>` in it
+ * wakes the instance named (docs/design/task-board.md, "Comments and mentions"). Only an explicit `false` switches it off;
+ * the fleet reads it at every comment, so an edit applies to the next one.
+ */
+export function boardCommentWakesOn(fleet: { defaults?: { task_board?: { comment_wakes?: unknown } } } | null | undefined): boolean {
+  return fleet?.defaults?.task_board?.comment_wakes !== false;
+}
+
 function cardTitle(card: Card) {
   return { id: card.uuid, code: card.code, title: card.title, status: card.status, assignee: card.assignee, priority: card.priority, version: card.version };
 }
