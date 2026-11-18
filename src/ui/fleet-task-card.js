@@ -244,7 +244,10 @@ export function CardPage({ id, tick, projects, boardOff = [], writable = true, p
     return job;
   };
   const names = [...new Set([...instances.map((i) => i.name), card.assignee].filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const mentionNames = [...new Set([card.assignee, ...instances.map((i) => i.name)].filter(Boolean))].map((name) => ({ name, off: boardOff.includes(name) }));
+  // Only the fleet's instances can be mentioned (an assignee that has left the fleet, or a person, would wake nobody); the
+  // card's assignee comes first.
+  const fleet = instances.map((i) => i.name);
+  const mentionNames = [...(fleet.includes(card.assignee) ? [card.assignee] : []), ...fleet.filter((n) => n !== card.assignee)].map((name) => ({ name, off: boardOff.includes(name) }));
 
   async function chooseAssignee(value) {
     if (value === "\u0000other") {

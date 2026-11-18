@@ -38,11 +38,29 @@ export function timelineShown(entries, filter) {
 
 // ── Completing an @ ───────────────────────────────────────
 
+/** The characters a name being typed is made of (an instance's name may be CJK, so letters of any script). */
 const NAME_CHAR = /[\p{L}\p{N}_.\-]/u;
+/**
+ * What may not stand right before an `@` for it to be a mention: an address (`me@host`), a path (`a/@x`, `C:\@x`), a
+ * doubled `@`. The board's own rule (task-board-mentions.ts, NOT_BEFORE) — ASCII only, so a letter of another script
+ * before the `@` ("請@lead") is fine there and here.
+ */
+const NOT_BEFORE = /[A-Za-z0-9_.@/\\-]/;
 
 /**
- * The `@name` being typed at the caret, or null: an "@" that starts the text or follows something that is not part of a
- * name (a space, a bracket, a comma — not an e-mail's "a@b"), then the name's characters up to the caret.
+ * The text with fenced blocks and inline code blanked, as the board reads a comment (task-board-mentions.ts, withoutCode):
+ * an `@name` in code names an instance without waking it. A fence not closed runs to the end of the text; inline code
+ * is between two backticks on one line.
+ */
+export function withoutCode(text) {
+  const blank = (s) => s.replace(/[^\n]/g, " ");
+  return String(text).replace(/```[\s\S]*?(?:```|$)/g, blank).replace(/`[^`\n]*`/g, blank);
+}
+
+/**
+ * The `@name` being typed at the caret, or null — null wherever the board would not read the name as a mention, so the
+ * list is never offered for a name that would wake nobody: the "@" must start the text or follow something that is not
+ * in NOT_BEFORE, and must not be in code (inline or fenced). Then the name's characters up to the caret.
  * { start: where the "@" is, query: the characters after it }.
  */
 export function mentionAt(text, caret) {
@@ -51,7 +69,9 @@ export function mentionAt(text, caret) {
   while (i > 0 && NAME_CHAR.test(s[i - 1])) i--;
   if (i === 0 || s[i - 1] !== "@") return null;
   const start = i - 1;
-  if (start > 0 && NAME_CHAR.test(s[start - 1])) return null;
+  const read = withoutCode(s);
+  if (read[start] !== "@") return null;
+  if (start > 0 && NOT_BEFORE.test(read[start - 1])) return null;
   return { start, query: s.slice(i, caret) };
 }
 
@@ -64,11 +84,18 @@ export function mentionMatches(names, query, limit = 8) {
   return [...starts, ...inside].slice(0, limit);
 }
 
-/** The text with the `@query` at `m` replaced by `@name ` (one space after, unless one is already there), and where the caret goes. */
-export function insertMention(text, m, caret, name) {
+/**
+ * The text with the `@query` at `m` replaced by `@name ` (one space after, unless one is already there), and where the
+ * caret goes. The board reads the longest instance name that fits, so when the text after the caret would run the name
+ * on into a longer one (`@a` before " b", with an instance `a b` too — `names`: the fleet's), a space of its own is
+ * put in: the name typed is the name read.
+ */
+export function insertMention(text, m, caret, name, names = []) {
   const s = String(text);
   const after = s.slice(caret);
-  const spaced = after.startsWith(" ");
+  const lower = name.toLowerCase(), tail = after.toLowerCase();
+  const runsOn = names.some((n) => n.length > name.length && n.toLowerCase().startsWith(lower) && tail.startsWith(n.toLowerCase().slice(name.length)));
+  const spaced = after.startsWith(" ") && !runsOn;
   const head = `${s.slice(0, m.start)}@${name}${after.startsWith("\n") || spaced ? "" : " "}`;
   return { text: head + after, caret: head.length + (spaced ? 1 : 0) };
 }
@@ -137,7 +164,7 @@ export function Composer({ placeholder, names, onSend }) {
   const note = (e) => setCaret(e.target.selectionStart ?? e.target.value.length);
   function choose(item) {
     if (!item || item.off || !m) return;
-    const r = insertMention(text, m, caret, item.name);
+    const r = insertMention(text, m, caret, item.name, names.map((n) => n.name));
     pending.current = r.caret;
     setText(r.text);
     setCaret(r.caret);

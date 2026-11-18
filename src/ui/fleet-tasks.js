@@ -431,7 +431,9 @@ function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filter
   const columns = display.done === "hide" ? COLUMNS.filter((s) => s !== "done") : COLUMNS;
   const current = columns.includes(phoneStatus) ? phoneStatus : ["review", "claimed", "blocked", "open", "done"].find((s) => columns.includes(s) && mains.some((c) => c.status === s)) || columns[0];
   const toggleSubs = (id) => setExpanded({ ...expanded, [id]: !expanded[id] });
-  const empty = () => html`<${Empty} icon="tasks" title=${searching ? t("tasks.emptyFiltered") : t("tasks.emptyBoard")} hint=${searching || archived ? undefined : t("tasks.emptyBoardHint")} />`;
+  // Nothing left by a search says so, with the way out (the search is kept on the device, so a reload would show it again).
+  const empty = () => html`<${Empty} icon="tasks" title=${searching ? t("tasks.emptyFiltered") : t("tasks.emptyBoard")} hint=${searching || archived ? undefined : t("tasks.emptyBoardHint")}
+    action=${query.trim() !== "" ? html`<button type="button" class="btn" onClick=${() => onQuery("")}>${t("taskview.clearSearch")}</button>` : null} />`;
   // Insights counts what the page shows. A list with sub-task rows shows exactly its rows (each matched by the filter, a
   // finished one as Done shows it); the board, or a list without them, shows a main task with all its sub tasks.
   const insightCards = () => (display.view === "list" && display.subs
@@ -440,7 +442,7 @@ function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filter
   const listBody = () => {
     const rows = listRows(mains, subsOf, display, filters, now, query);
     return rows.length === 0 ? empty() : html`<${ListView} rows=${rows} display=${display} subsOf=${subsOf} byId=${byId} flashed=${flashed} now=${now}
-      expanded=${expanded} onToggleSubs=${toggleSubs} onOpen=${onOpen} onMore=${onMore} onDisplay=${onDisplay} />`;
+      expanded=${expanded} onToggleSubs=${toggleSubs} onOpen=${onOpen} onMore=${onMore} onDisplay=${onDisplay} scope=${String(key)} />`;
   };
 
   const dropping = useRef(false);

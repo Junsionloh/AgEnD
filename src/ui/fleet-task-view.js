@@ -45,7 +45,7 @@ register("taskview", {
     fieldwaits: "Needs you", waitsYou: "Waiting for me", viewLabel: "Board or list", search: "Search", searchLabel: "Search this project's cards (numbers, titles, fields, checklists)",
     "order.assignee": "Assignee", "order.code": "Number", sortBy: "Sort by {0}", sortedBy: "{0}, sorted {1}", asc: "ascending", desc: "descending",
     colId: "ID", colTitle: "Title", colPriority: "Priority", colAssignee: "Assignee", colUpdated: "Updated",
-    collapse: "Collapse {0}", expand: "Expand {0}", more: "Card actions", statusTabs: "Show one status", noMatch: "No cards match “{0}”",
+    collapse: "Collapse {0}", expand: "Expand {0}", more: "Card actions", statusTabs: "Show one status", noMatch: "No cards match “{0}”", clearSearch: "Clear search",
   },
   "zh-TW": {
     display: "顯示", displayTip: "看板或清單、分組、排序、已完成的卡", filter: "篩選", filterTip: "只看部分卡片",
@@ -59,7 +59,7 @@ register("taskview", {
     fieldwaits: "等我處理", waitsYou: "等我確認", viewLabel: "看板或清單", search: "搜尋", searchLabel: "搜尋這個專案的卡片（卡號、標題、欄位、完成定義）",
     "order.assignee": "負責人", "order.code": "卡號", sortBy: "依{0}排序", sortedBy: "{0}，{1}排序", asc: "由小到大", desc: "由大到小",
     colId: "卡號", colTitle: "標題", colPriority: "優先度", colAssignee: "負責人", colUpdated: "更新",
-    collapse: "收合 {0}", expand: "展開 {0}", more: "卡片動作", statusTabs: "一次看一個狀態", noMatch: "沒有符合「{0}」的卡片",
+    collapse: "收合 {0}", expand: "展開 {0}", more: "卡片動作", statusTabs: "一次看一個狀態", noMatch: "沒有符合「{0}」的卡片", clearSearch: "清除搜尋",
   },
 });
 
@@ -201,7 +201,8 @@ const PRIORITY_RANK = { urgent: 0, high: 1, normal: 2, low: 3 };
 const codeKey = (c) => [c.kind === "sub" ? 1 : 0, Number(/\d+/.exec(c.id)?.[0] ?? 0)];
 /**
  * Rows in an order: the board's (a sub task right after its main task), by priority (urgent first), last change and
- * newest (newest first), title, assignee (nobody last) or number. `dir` "desc" turns the order round.
+ * newest (newest first), title, assignee or number. `dir` "desc" turns the order round — except that a card nobody has
+ * is last by assignee either way (it is not "the biggest name").
  */
 export function orderRows(rows, order, byId = new Map(), dir = "asc") {
   const place = (c) => {
@@ -218,7 +219,9 @@ export function orderRows(rows, order, byId = new Map(), dir = "asc") {
     assignee: (a, b) => (a.assignee ? 0 : 1) - (b.assignee ? 0 : 1) || String(a.assignee || "").localeCompare(String(b.assignee || ""), lang()) || manual(a, b),
     code: (a, b) => { const x = codeKey(a), y = codeKey(b); return x[0] - y[0] || x[1] - y[1]; },
   }[order] || manual;
-  return [...rows].sort(dir === "desc" ? (a, b) => by(b, a) : by);
+  if (dir !== "desc") return [...rows].sort(by);
+  // Turned round; for assignee the nobody-last rule stays outside the turning.
+  return [...rows].sort(order === "assignee" ? (a, b) => (a.assignee ? 0 : 1) - (b.assignee ? 0 : 1) || by(b, a) : (a, b) => by(b, a));
 }
 
 /** Rows in groups, in a fixed order: statuses as the board's columns, priorities from urgent, assignees by name (nobody last). */
@@ -344,9 +347,10 @@ function groupHead(group, key) {
 const groupWord = (group, key) => (group === "assignee" ? (key === NONE ? t("tasks.nobody") : key) : t(`tasks.${key}`));
 const longTime = (iso) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleString(lang() === "zh-TW" ? "zh-TW" : "en") : ""; };
 
-// The groups a person folded away, remembered on this device (by what heads them: "status:done", "assignee:alpha").
+// The groups a person folded away, remembered on this device, per project (by what heads them: "1/status:done",
+// "none/assignee:alpha" — the project's id, or "none" for No project).
 const COLLAPSED_KEY = "agend_tasks_collapsed";
-export const groupId = (group, key) => `${group}:${key}`;
+export const groupId = (group, key, scope = "") => (scope === "" ? `${group}:${key}` : `${scope}/${group}:${key}`);
 export function readCollapsed() {
   try { const a = JSON.parse(readStored(COLLAPSED_KEY, "[]")); return new Set(Array.isArray(a) ? a.filter((x) => typeof x === "string") : []); } catch { return new Set(); }
 }
@@ -381,7 +385,7 @@ function ListHead({ display, onDisplay, who }) {
  * count (a click folds it away). A row shows its number, title, priority, assignee and last change; it opens its card; a
  * main task's sub-task progress opens up its sub tasks under it (unless they are rows already); its ⋯ opens the card's menu.
  */
-export function ListView({ rows, display, subsOf, byId, flashed, now, expanded, onToggleSubs, onOpen, onMore, onDisplay }) {
+export function ListView({ rows, display, subsOf, byId, flashed, now, expanded, onToggleSubs, onOpen, onMore, onDisplay, scope = "" }) {
   const [folded, setFolded] = useState(readCollapsed);
   const toggle = (id) => setFolded((cur) => { const next = new Set(cur); if (next.has(id)) next.delete(id); else next.add(id); writeCollapsed(next); return next; });
   const groups = groupRows(orderRows(rows, display.order, byId, display.dir), display.group);
@@ -389,7 +393,7 @@ export function ListView({ rows, display, subsOf, byId, flashed, now, expanded, 
   return html`<div class="tb-list">
     <${ListHead} display=${display} onDisplay=${onDisplay} who=${who} />
     ${groups.map((g) => {
-      const id = groupId(display.group, g.key);
+      const id = groupId(display.group, g.key, scope);
       const shut = display.group !== "none" && folded.has(id);
       return html`<section key=${g.key} class=${`tb-group${shut ? " shut" : ""}`} aria-label=${display.group === "none" ? null : groupWord(display.group, g.key)}>
         ${display.group === "none" ? null : html`<h3 class=${`tb-group-head g-${display.group}`}>

@@ -10,6 +10,8 @@
  *  - a new main task needs only a title; a phone shows one status at a time and every card has a ⋯ menu;
  *  - what an older board holds — every status, no project, dependencies, a dispatcher gone, cancelled cards — opens.
  */
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { page, settle, h, type AppPage } from "./helpers/app-harness.js";
 import { fire } from "./helpers/mini-dom.js";
@@ -154,6 +156,41 @@ describe("completing an @ in the comment box", () => {
     expect(activity.mentionAt("hi @al and", 10)).toBeNull();       // past the name
     expect(activity.mentionAt("", 0)).toBeNull();
   });
+  it("not offered where the board would not read it as a mention: after @, / or \\, a letter, digit, _ . - (an address, a path)", () => {
+    for (const [text, why] of [["@@x", "a doubled @"], ["a/@x", "a path"], ["C:\\@x", "a Windows path"], ["me@x", "an e-mail"], ["v1.@x", "after a dot"], ["x-@x", "after a dash"], ["_@x", "after an underscore"], ["9@x", "after a digit"]] as const) {
+      expect(activity.mentionAt(text, text.length), `${text}: ${why}`).toBeNull();
+    }
+    // …and where the board reads it, it is: a space, a bracket, a quote, a colon, a newline, CJK text or another script's letter before it.
+    for (const text of ["hi @x", "(@x", "\"@x", "see:@x", "a\n@x", "請@x", "é@x", "，@x", "> @x"]) {
+      expect(activity.mentionAt(text, text.length), text).toEqual({ start: text.length - 2, query: "x" });
+    }
+  });
+  it("not offered inside code — inline, or in a fenced block (closed or not): the board reads none of it", () => {
+    const none = (text: string) => activity.mentionAt(text, text.length);
+    expect(none("`ask @x"), "an inline code never closed is not code (yet)").toEqual({ start: 5, query: "x" });
+    expect(activity.mentionAt("`ask @x`", 7), "inline code, caret before its closing backtick").toBeNull();
+    expect(activity.mentionAt("`ask @x`", 7 + 1)).toBeNull();
+    expect(none("see `a` and `b @x"), "an earlier closed code does not reach the next @").toEqual({ start: 15, query: "x" });
+    expect(none("```\n@x"), "a fence not closed runs to the end").toBeNull();
+    expect(none("```js\nlet a = 1;\n@x"), "inside an open fence").toBeNull();
+    expect(activity.mentionAt("```\n@x\n```", 6), "inside a closed fence").toBeNull();
+    expect(none("```\ncode\n```\n@x"), "after a closed fence").toEqual({ start: 13, query: "x" });
+    expect(none("`code`@x"), "right after code: the board blanks the code, so the @ stands alone").toEqual({ start: 6, query: "x" });
+    expect(none("a `b` @x"), "after a closed inline code and a space").toEqual({ start: 6, query: "x" });
+    expect(activity.withoutCode("a `b` d")).toBe("a     d");
+    expect(activity.withoutCode("x\n```\nc\n```\ny")).toBe("x\n   \n \n   \ny");
+  });
+  it("a name is typed as it is read: when the text after the caret would run it on into a longer instance's name, the box adds a space", () => {
+    const names = ["a", "a b", "alpha"];
+    const at = (text: string, caret: number) => activity.mentionAt(text, caret);
+    let t = "Ping @a b later";
+    let m = at(t, 7);
+    expect(activity.insertMention(t, m, 7, "a", names), "@a before \" b\" would read as @a b").toEqual({ text: "Ping @a  b later", caret: 8 });
+    expect(activity.insertMention(t, m, 7, "a", ["a"]), "no longer name: the space already there serves").toEqual({ text: "Ping @a b later", caret: 8 });
+    t = "Ping @a x";
+    m = at(t, 7);
+    expect(activity.insertMention(t, m, 7, "a", names), "after the space comes something else").toEqual({ text: "Ping @a x", caret: 8 });
+  });
   it("names that start with the query first, then those that contain it; case does not matter; at most eight", () => {
     const names = ["beta", "alpha", "Alphonse", "gamma-al", "delta"];
     expect(activity.mentionMatches(names, "al")).toEqual(["alpha", "Alphonse", "gamma-al"]);
@@ -220,6 +257,7 @@ describe("the toolbar's search, sort and the Needs you filter", () => {
     expect(ids(view.orderRows(rows, "priority"))).toEqual(["M-3", "M-1", "M-10", "M-2"]);
     expect(ids(view.orderRows(rows, "priority", new Map(), "desc"))).toEqual(["M-2", "M-10", "M-1", "M-3"]);
     expect(ids(view.orderRows(rows, "assignee"))).toEqual(["M-1", "M-3", "M-2", "M-10"]);
+    expect(ids(view.orderRows(rows, "assignee", new Map(), "desc")), "turned round: beta first (ties turned too), but nobody still last").toEqual(["M-2", "M-3", "M-1", "M-10"]);
     expect(ids(view.orderRows(rows, "code"))).toEqual(["M-1", "M-2", "M-3", "M-10"]);
     expect(ids(view.orderRows(rows, "code", new Map(), "desc"))).toEqual(["M-10", "M-3", "M-2", "M-1"]);
     expect(ids(view.orderRows([S1, M2, M1], "code")), "main tasks before sub tasks").toEqual(["M-1", "M-2", "S-1"]);
@@ -583,6 +621,33 @@ describe("the timeline and the comment box on the page", () => {
     expect(q(".tc-mentions")).toBeNull();
     expect(box.value).toBe("Ping @beta and @g");
   });
+  it("only the fleet's instances are listed: an assignee that has left the fleet (or a person) is not, and the assignee that is one comes first", async () => {
+    handler = (path, method, body) => (path === "/ui/tasks/cards/M-1" && method === "GET" ? detailOf("M-1", { card: { ...M1, assignee: "ghost" } }) : path.startsWith("/ui/tasks/board") ? { rev: 1, projects: [PROJECT], cards: CARDS } : {});
+    await mount();
+    await openCard("M-1");
+    const box = q(".tc-composer textarea");
+    await typeInto(box, "Ping @");
+    expect(qa(".tc-mentions li").map((li) => li.textContent.replace(/\s+/g, " ").trim()), "no @ghost").toEqual(["@alpha", "@beta", "@gamma"]);
+    await typeInto(box, "Ping @gh");
+    expect(q(".tc-mentions"), "nothing completes a name that is no instance").toBeNull();
+    handler = (path, method, body) => (path === "/ui/tasks/cards/M-1" && method === "GET" ? detailOf("M-1", { card: { ...M1, assignee: "gamma" } }) : path.startsWith("/ui/tasks/board") ? { rev: 1, projects: [PROJECT], cards: CARDS } : {});
+    (globalThis as any).history.replaceState(null, "", "/ui/fleet");
+    await mount();
+    await openCard("M-1");
+    await typeInto(q(".tc-composer textarea"), "@");
+    expect(qa(".tc-mentions li").map((li) => li.textContent.replace(/\s+/g, " ").trim()), "the assignee, when it is an instance, first").toEqual(["@gamma", "@alpha", "@beta"]);
+  });
+  it("no list where the board would not read the @ — after a path's / or \\, after another @, inside code or a fence — and one after CJK text", async () => {
+    await mount();
+    await openCard("M-1");
+    const box = q(".tc-composer textarea");
+    for (const text of ["@@al", "see src/@al", "C:\\@al", "`ask @al", "```\n@al"].map((t, i) => (i === 3 ? "`ask @al`" : t))) {
+      await typeInto(box, text, text === "`ask @al`" ? text.length - 1 : text.length);
+      expect(q(".tc-mentions"), text).toBeNull();
+    }
+    await typeInto(box, "請@al");
+    expect(qa(".tc-mentions li").map((li) => li.textContent), "after CJK text the board reads it, so the list is there").toEqual(["@alpha"]);
+  });
   it("an @ inside a word is not offered; clicking a name types it; sending posts the plain text", async () => {
     await mount();
     await openCard("M-1");
@@ -630,7 +695,15 @@ describe("one toolbar row", () => {
     expect(rows()).toEqual(["M-2"]);
     await typeInto(input, "zzz");
     expect(text(q(".empty"))).toContain("No main tasks match the filter");
-    fire(input, "keydown", { key: "Escape", cancelable: true }); await settle(6);
+    // The empty message has the way out: Clear search (the search is kept on the device, so a reload would show it again).
+    const clear = qa(".empty button").find((b) => text(b) === "Clear search");
+    expect(clear, "Clear search").toBeTruthy();
+    fire(clear, "click"); await settle(6);
+    expect(q(".tb-find input").value).toBe("");
+    expect((globalThis as any).localStorage.getItem("agend_tasks_query")).toBeNull();
+    expect(rows().length).toBe(4);
+    await typeInto(q(".tb-find input"), "zzz");
+    fire(q(".tb-find input"), "keydown", { key: "Escape", cancelable: true }); await settle(6);
     expect(q(".tb-find input").value).toBe("");
     expect((globalThis as any).localStorage.getItem("agend_tasks_query")).toBeNull();
     expect(rows().length).toBe(4);
@@ -677,12 +750,35 @@ describe("one toolbar row", () => {
     fire(toggleOf("In progress"), "click"); await settle(4);
     expect(rows()).toEqual(["M-2", "M-3", "M-4"]);
     expect(toggleOf("In progress").getAttribute("aria-expanded")).toBe("false");
-    expect(JSON.parse((globalThis as any).localStorage.getItem("agend_tasks_collapsed"))).toEqual(["status:claimed"]);
+    expect(JSON.parse((globalThis as any).localStorage.getItem("agend_tasks_collapsed"))).toEqual(["1/status:claimed"]);
     await mount({ agend_tasks_project: "1" });                     // opened again: still folded
     expect(rows()).toEqual(["M-2", "M-3", "M-4"]);
     fire(toggleOf("In progress"), "click"); await settle(4);
     expect(rows().length).toBe(4);
     expect(JSON.parse((globalThis as any).localStorage.getItem("agend_tasks_collapsed"))).toEqual([]);
+  });
+
+  it("what is folded is per project: folding a status in one project leaves the same status open in another", async () => {
+    const P2 = { ...PROJECT, id: 2, name: "Billing", sort: 2 };
+    const B1 = card({ id: "M-21", projectId: 2, title: "Reconcile invoices", status: "claimed", assignee: "alpha", sort: 1 });
+    const board = { rev: 1, projects: [PROJECT, P2], cards: [...CARDS, B1], boardOff: [] };
+    const base = handler;
+    handler = (path, method, body) => (path.startsWith("/ui/tasks/board") ? board : base(path, method, body));
+    await mount({ agend_tasks_project: "1", agend_tasks_display: JSON.stringify({ view: "list" }) });
+    const toggleOf = (label: string) => qa(".tb-group-toggle").find((b) => (text(b) ?? "").startsWith(label));
+    fire(toggleOf("In progress"), "click"); await settle(4);
+    expect(rows()).toEqual(["M-2", "M-3", "M-4"]);
+    (globalThis as any).history.replaceState(null, "", "/ui/fleet");
+    await mount({ agend_tasks_project: "2", agend_tasks_display: JSON.stringify({ view: "list" }) });
+    expect(rows(), "Billing's In progress is open").toEqual(["M-21"]);
+    fire(toggleOf("In progress"), "click"); await settle(4);
+    expect(rows()).toEqual([]);
+    expect(JSON.parse((globalThis as any).localStorage.getItem("agend_tasks_collapsed")).sort()).toEqual(["1/status:claimed", "2/status:claimed"]);
+    (globalThis as any).history.replaceState(null, "", "/ui/fleet");
+    await mount({ agend_tasks_project: "1", agend_tasks_display: JSON.stringify({ view: "list" }) });
+    expect(rows(), "back in the first project: still its own folding").toEqual(["M-2", "M-3", "M-4"]);
+    fire(toggleOf("In progress"), "click"); await settle(4);                   // open it again here; the other stays folded
+    expect(JSON.parse((globalThis as any).localStorage.getItem("agend_tasks_collapsed"))).toEqual(["2/status:claimed"]);
   });
 
   it("a main task's sub tasks open up in the list", async () => {
@@ -814,5 +910,44 @@ describe("what an existing user's board holds still opens, and their stored choi
     (globalThis as any).localStorage.removeItem("agend_tasks_assignee");
     await mount({ agend_tasks_project: "none", agend_tasks_display: JSON.stringify({ view: "board" }) });
     expect(qa(".tb-tile").map((t) => t.getAttribute("data-tile"))).toEqual(["M-7"]);
+  });
+});
+
+// ── The comment box and the board read an @ the same way ─────────────────────────────
+
+// AGEND-295 (#88) adds the board's parser, src/scheduler/task-board-mentions.ts; this branch is on the line before it, so the
+// battery below runs only where the parser is in the tree (after both are merged, or with #88's file put in). It needs no
+// import before: the path is built at run time.
+const BOARD_PARSER = fileURLToPath(new URL("../src/scheduler/" + "task-board-mentions.ts", import.meta.url));
+describe.skipIf(!existsSync(BOARD_PARSER))("whenever the comment box offers a name, the board reads the text it types as that instance", () => {
+  const NAMES = ["alpha", "beta", "dev", "dev-a", "Lead", "lead-2", "a", "a b", "小金", "x.y", "docs writer"];
+  const BEFORE = ["", "hi ", "(", "\n", "請", "é", "a", "a.", "x-", "_", "9", "/", "a/", "C:\\", "@", "`", "`x ", "```\n", "```\nx\n```\n", "`a` ", "a`b` ", "> ", "，"];
+  const AFTER = ["", " tail", "\n", ", ok", ".", "`", "`\n", "\n```", " b", " b c", " writer", "請看", "-1", " -1"];
+  it("over every prefix, instance name, part of it typed and text after the caret of a battery (the board's own parser reads each result)", async () => {
+    const board: any = await import(/* @vite-ignore */ BOARD_PARSER);
+    let offered = 0;
+    const wrong: string[] = [];
+    for (const before of BEFORE) for (const name of NAMES) for (let k = 0; k <= name.length; k++) for (const after of AFTER) {
+      const text = `${before}@${name.slice(0, k)}${after}`, caret = before.length + 1 + k;
+      const m = activity.mentionAt(text, caret);
+      if (!m || !activity.mentionMatches(NAMES, m.query).includes(name)) continue;
+      offered++;
+      const typed = activity.insertMention(text, m, caret, name, NAMES);
+      const read = board.parseMentions(typed.text, NAMES).names;
+      if (!read.includes(name)) wrong.push(JSON.stringify({ text, caret, typed: typed.text, read }));
+    }
+    expect(offered, "the battery offers the list in many places").toBeGreaterThan(2000);
+    expect(wrong.slice(0, 5), `${wrong.length} of ${offered} offers type a name the board does not read as that instance`).toEqual([]);
+  });
+  it("and the places the board refuses are the places the box does not offer", async () => {
+    const board: any = await import(/* @vite-ignore */ BOARD_PARSER);
+    for (const text of ["@@alpha", "a/@alpha", "C:\\@alpha", "me@alpha", "`@alpha`", "```\n@alpha", "```\n@alpha\n```"]) {
+      expect(board.parseMentions(text, NAMES).names, `the board: ${text}`).toEqual([]);
+      expect(activity.mentionAt(text, text.indexOf("@alpha") + 6), `the box: ${text}`).toBeNull();
+    }
+    for (const text of ["請@alpha", "é@alpha", "(@alpha)"]) {
+      expect(board.parseMentions(text, NAMES).names, `the board: ${text}`).toEqual(["alpha"]);
+      expect(activity.mentionAt(text, text.indexOf("@alpha") + 6), `the box: ${text}`).not.toBeNull();
+    }
   });
 });

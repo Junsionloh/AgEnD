@@ -194,14 +194,18 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   no version, as before.
 - **The toolbar.** Board | List, search, Filter and Display are one row (`TaskToolbar`). The view, grouping, order and
   direction (`agend_tasks_display`), the filters (`agend_tasks_filters`, also `?tf=`), the folded list groups
-  (`agend_tasks_collapsed`) and the search (`agend_tasks_query`) are kept on the device; a value an older build stored
+  (`agend_tasks_collapsed`, per project) and the search (`agend_tasks_query`) are kept on the device; a value an older build stored
   still reads, an unknown one falls back to its default. Needs you is a filter field (`waits:you`, the rule of Waiting for
   you). The list's header sorts by ID, Title, Priority, Assignee or Updated; the same column again reverses it.
 - **A phone.** The board shows one status at a time (the switch is hidden on a desk; every column is drawn, a class
   shows the current one), starting at the first of To confirm, In progress, Blocked, To do, Done that has cards.
 - **The comment box's @.** Typing `@` completes with the fleet's instance names (those with the board off are listed,
-  disabled) and only types `@<name> ` into the text. What an @ does to that instance is the board's business, which
-  reads the same plain text; the box sends the comment as typed.
+  disabled; a name no longer in the fleet is not) and only types `@<name> ` into the text. What an @ does to that
+  instance is the board's business, which reads the same plain text; the box sends the comment as typed. The list
+  follows the board's reading (`task-board-mentions.ts`): none right after a letter, digit, `_`, `.`, `-`, `@`, `/` or
+  `\`, none inside inline code or a fenced block (`mentionAt`, with the board's `withoutCode`), and when the text after
+  the caret would run the name on into a longer instance name, the box adds a space of its own, so the name typed is the
+  name read. A test runs both over a battery of texts (it waits for the board's parser to be in the tree).
 - **taskhall's looks.** The columns reach the bottom of the page (a card drops anywhere down a column). Tiles are white with a shadow and a bold title; a bar on the
   left only while a card is under way (in progress, blocked, waiting for you); a size in a box. Who works on a card has
   a round initial: an instance's in its identity colour (#1958), a person's grey.
