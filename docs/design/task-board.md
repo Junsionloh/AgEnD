@@ -206,7 +206,10 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   follows the board's reading (`task-board-mentions.ts`): none right after a letter, digit, `_`, `.`, `-`, `@`, `/` or
   `\`, none inside inline code or a fenced block (`mentionAt`, with the board's `withoutCode`), and when the text after
   the caret would run the name on into a longer instance name, the box adds a space of its own, so the name typed is the
-  name read. A test runs both over a battery of texts (it waits for the board's parser to be in the tree).
+  name read. A test runs both over a battery of texts (it waits for the board's parser to be in the tree). The word at the
+  caret and its replacement are one function for this `@` and the chat's `#` (`src/ui/trigger-complete.js`: `triggerAt` /
+  `insertAtTrigger`, a rule per trigger character; `mentionAt` / `insertMention` and `taskRefAt` / `insertTaskRef` are it with
+  their trigger), so a rule fixed for one list is fixed for both.
 - **taskhall's looks.** The columns reach the bottom of the page (a card drops anywhere down a column). Tiles are white with a shadow and a bold title; a bar on the
   left only while a card is under way (in progress, blocked, waiting for you); a size in a box. Who works on a card has
   a round initial: an instance's in its identity colour (#1958), a person's grey.
@@ -511,7 +514,8 @@ An instance's web chat can refer to a card, and the agent is handed it. Nothing 
   handed to the agent to exactly the chips the renderer draws, for every case.
 - **Typing `#`.** The composer asks `GET /ui/tasks/refs?q=` (`TaskBoard.suggest`: a number's start, then the title; the latest
   changes for nothing typed; hidden instances' cards left out over the public link) and offers the cards in the command palette's own
-  list. Choosing puts `#M-3 ` in the draft. A guest has no board and is offered nothing.
+  list. Choosing puts `#M-3 ` in the draft. A guest has no board and is offered nothing. Where the list opens and what
+  goes in are the same function as the comment box's `@` (`src/ui/trigger-complete.js`, the trigger `#`).
 - **The chip.** A person's message (never an agent's, never the Hub's) that names a card is drawn with a chip — number, title, status
   (the board's pill) — linking to `/ui/fleet?card=<number>`. The page asks `GET /ui/tasks/refs?codes=` once per number and again
   after a `tasks` stream event; until the answer arrives, or when the number is no card, the text stays text.

@@ -2,15 +2,16 @@
 // (`#M-3`; M- is a main task, S- a sub task). A hand-typed `#M-3` / `#s3` counts the same; a bare `M-3` does not.
 // Nothing about a reference is stored with the message — the text is the message — so an older chat, and an older AgEnD, read
 // it as the text it is. This file is the page's side:
-//   - taskRefAt / insertTaskRef: the `#query` being typed at the caret, and the number put in its place (pure);
+//   - taskRefAt / insertTaskRef: the `#query` being typed at the caret, and the number put in its place (pure; the shared
+//     trigger-complete.js with "#");
 //   - createTaskRefIndex: what the page knows of the cards its messages name (GET /ui/tasks/refs, only the numbers asked,
 //     each once per page and again after the board changed), and the cards offered while `#` is typed. Until a card's answer
 //     arrives (or if the number is no card) the message shows the number as text; when it arrives the messages are drawn again.
 // The chip itself is drawn by the shared renderer (shared/chat-render.js), which asks `taskRefs(code)`.
 //
-// The `@` completion of Fleet › Tasks' comment box (fleet-task-activity.js) has the same shape — mentionAt / insertMention —
-// and these two pairs are meant to be one: both are a trigger character, the word typed after it up to the caret, and the
-// replacement. They are kept apart only so that neither feature waits for the other's pull request.
+// The `@` completion of Fleet › Tasks' comment box (fleet-task-activity.js) is the same function, trigger-complete.js, with "@".
+
+import { insertAtTrigger, triggerAt } from "./trigger-complete.js";
 
 /** The same rule as the renderer's and the server's (src/chat-task-refs.ts): a test holds the three to one list of cases. */
 const REF = /(?<![A-Za-z0-9_/&#@-])#([MmSs])-?(\d{1,9})(?![A-Za-z0-9_-]|\.\d)/g;
@@ -35,35 +36,17 @@ export function taskRefCodes(text, max = 10) {
 
 // ── Typing a `#` ──────────────────────────────────────────
 
-/** What may follow the `#` while it is still being typed: no space, no second `#`; a card number or a word of a title. */
-const QUERY_CHAR = /[^\s#]/u;
-const MAX_QUERY = 60;
+// The `#query` at the caret and the number put in its place are the shared trigger-complete.js's, with the trigger "#"
+// (AGEND-305; the `@` completion of Fleet › Tasks' comment box is the same function with "@"): a "#" that starts the text or
+// follows a space, a bracket or a full-width punctuation mark (not a word, a path or a URL: "page#top", "a/b#c") — the renderer's
+// and the server's rule for what comes before a `#` — then what was typed after it up to the caret; a line that starts
+// with "/" is a command, not a message.
 
-/**
- * The `#query` being typed at the caret, or null: a "#" that starts the text or follows a space, a bracket or a full-width
- * punctuation mark (not a word, a path or a URL: "page#top", "a/b#c"), then what was typed after it up to the caret.
- * { start: where the "#" is, query: the characters after it }. A line that starts with "/" is a command, not a message: null.
- */
-export function taskRefAt(text, caret) {
-  const s = String(text);
-  if (/^\s*\//.test(s)) return null;
-  const end = Math.min(Math.max(0, caret), s.length);
-  let i = end;
-  while (i > 0 && QUERY_CHAR.test(s[i - 1]) && end - i <= MAX_QUERY) i--;
-  if (i === 0 || s[i - 1] !== "#") return null;
-  const start = i - 1;
-  if (start > 0 && /[A-Za-z0-9_/&#@-]/.test(s[start - 1])) return null;   // the renderer's and the server's rule for what comes before a `#`
-  return { start, query: s.slice(i, end) };
-}
+/** The `#query` being typed at the caret, or null: { start: where the "#" is, query: the characters after it }. */
+export const taskRefAt = (text, caret) => triggerAt(text, caret, "#");
 
 /** The text with the `#query` at `at` replaced by `#M-3 ` (one space after, unless one is already there), and where the caret goes. */
-export function insertTaskRef(text, at, caret, code) {
-  const s = String(text);
-  const after = s.slice(Math.max(caret, at.start));
-  const spaced = after.startsWith(" ");
-  const head = `${s.slice(0, at.start)}#${code}${after.startsWith("\n") || spaced ? "" : " "}`;
-  return { text: head + after, caret: head.length + (spaced ? 1 : 0) };
-}
+export const insertTaskRef = (text, at, caret, code) => insertAtTrigger(text, at, caret, "#", code);
 
 // ── What the page knows of the cards ──────────────────────
 
