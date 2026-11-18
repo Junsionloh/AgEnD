@@ -226,7 +226,8 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   inference, not a record: AgEnD has no run per card (an instance is one continuing session), and nothing was added to
   record one. It is exact while the assignee has that one card in progress (`board_cards_at_once` defaults to 1); with
   several (`inProgressBy` over the board's cards — the rule of `inProgress()`), no card says "running", each says "Busy
-  · N cards", and the page says what it cannot know. The live steps are the chat's own feed (`observeActivity`, `GET
+  · N cards", and the page says what it cannot know. The board reads the dashboard's store once (`useRunContext`), only for the instances that have a card in
+  progress, and redraws when one of their states changes: a tile or a row subscribes to nothing. The live steps are the chat's own feed (`observeActivity`, `GET
   /ui/steps?chat=1`, live by `steps_tick`), held only while the card's page is open and its assignee is working, drawn
   by the chat's `ActivityBlock` from the steps since the card was last moved to `claimed`: for an admin session, with
   the instance's `tool_progress` not `off` and Show activity on — otherwise the state alone (with a line saying so when

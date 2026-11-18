@@ -24,7 +24,7 @@ import { CardMenu, cardAt, cardMenuItems, pageOrder, stepsOf } from "./fleet-tas
 import { ListView, SubList, TaskToolbar, doneShown, formatFilters, keepFilters, listRows, mainMatches, readDisplay, startFilters, writeDisplay } from "./fleet-task-view.js";
 import { CreateMainDialog } from "./fleet-task-create.js";
 import { InstancesDrawer } from "./fleet-task-work.js";
-import { RunMark, inProgressBy, useRun } from "./fleet-task-run.js";
+import { RunMark, inProgressBy, runOf, useRunContext } from "./fleet-task-run.js";
 import { InsightsDialog } from "./fleet-task-stats.js";
 
 const PROJECT_KEY = "agend_tasks_project";
@@ -423,8 +423,9 @@ function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filter
     return m;
   }, [cards]);
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
-  // AGEND-296: how many cards each instance has in progress — a tile or row says "running" only when it is the one.
-  const doing = useMemo(() => inProgressBy(cards), [cards]);
+  // AGEND-296: what each instance with a card in progress is doing, and how many cards it has — one read of the store for
+  // the whole board; a tile or row says "running" only when it is the instance's one.
+  const runs = useRunContext(cards);
   const live = cards.filter((c) => c.kind === "main" && projectKey(c) === key && c.status !== "cancelled");
   // What the filters offer: this project's main tasks and their sub tasks.
   const own = live.flatMap((c) => [c, ...(subsOf.get(c.id) || [])]);
@@ -444,7 +445,7 @@ function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filter
     : mains.flatMap((c) => [c, ...(subsOf.get(c.id) || [])]));
   const listBody = () => {
     const rows = listRows(mains, subsOf, display, filters, now, query);
-    return rows.length === 0 ? empty() : html`<${ListView} rows=${rows} display=${display} subsOf=${subsOf} byId=${byId} flashed=${flashed} now=${now} doing=${doing}
+    return rows.length === 0 ? empty() : html`<${ListView} rows=${rows} display=${display} subsOf=${subsOf} byId=${byId} flashed=${flashed} now=${now} runs=${runs}
       expanded=${expanded} onToggleSubs=${toggleSubs} onOpen=${onOpen} onMore=${onMore} onDisplay=${onDisplay} scope=${String(key)} />`;
   };
 
@@ -545,7 +546,7 @@ function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filter
             <span class="tb-count">${list.length}</span></h3>
           ${cellItems(list, drag ? drag.id : null, line, (card, dragging) => {
             const lit = Math.max(flashed.get(card.id) || 0, ...(subsOf.get(card.id) || []).map((s) => flashed.get(s.id) || 0));
-            return html`<${Tile} key=${card.id} card=${card} dragging=${dragging} flash=${now - lit < 4000} subs=${subsOf.get(card.id)} doing=${doing} writable=${writable}
+            return html`<${Tile} key=${card.id} card=${card} dragging=${dragging} flash=${now - lit < 4000} subs=${subsOf.get(card.id)} runs=${runs} writable=${writable}
               expanded=${!!expanded[card.id]} onToggleSubs=${() => toggleSubs(card.id)}
               onOpen=${onOpen} onMore=${onMore} onKeyMove=${(e) => keyMove(card, e)}
               onDragStart=${(e) => { e.dataTransfer.setData("text/plain", card.id); e.dataTransfer.effectAllowed = "move"; setDrag(card); }} onDragEnd=${end} />`;
@@ -575,7 +576,7 @@ function cellItems(list, draggingId, lineAt, render) {
 }
 
 /** A card on the board: a main task shows its sub-task progress, and can open up the list. */
-function Tile({ card, dragging, flash, subs = [], doing, expanded, writable, onToggleSubs, onOpen, onMore, onKeyMove, onDragStart, onDragEnd }) {
+function Tile({ card, dragging, flash, subs = [], runs, expanded, writable, onToggleSubs, onOpen, onMore, onKeyMove, onDragStart, onDragEnd }) {
   const accepted = card.acceptance.filter((a) => a.done).length;
   const progress = card.progress;
   const hasSubs = !!progress && progress.total > 0;
@@ -587,7 +588,7 @@ function Tile({ card, dragging, flash, subs = [], doing, expanded, writable, onT
   const now = hasSubs ? currentWork(card, subs) : null;
   const workers = now ? workersOf(now.cards) : [];
   // AGEND-296: its assignee (or, for a main task, a sub task's) is working on it now.
-  const run = useRun(card, doing, subs);
+  const run = runOf(card, runs, subs);
   // The tile is a group, not a button: its title is the control (keyboard, screen readers); a click anywhere opens it.
   return html`<div class=${`tb-tile st-${card.status}${dragging ? " dragging" : ""}${flash ? " flash" : ""}${run && run.state === "working" && !run.shared ? " running" : ""}`} data-tile=${card.id}
     draggable=${writable} onDragStart=${writable ? onDragStart : undefined} onDragEnd=${writable ? onDragEnd : undefined}

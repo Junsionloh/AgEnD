@@ -9,7 +9,7 @@ import { html, useState } from "/assets/app-html.js";
 import { t, register, lang } from "/assets/app-i18n.js";
 import { Icon } from "/assets/ui-icons.js";
 import { Menu } from "/assets/ui-menu.js";
-import { RunMark, useRun } from "./fleet-task-run.js";
+import { RunMark, runOf } from "./fleet-task-run.js";
 import { COLUMNS, ProgressBar, UNASSIGNED, Who, readStored, recentlyDone, relTime, reviewLabel, waitsForYou, wrapUpText, writeStored } from "./fleet-task-common.js";
 
 /** The task board's stylesheet, linked once (a tab opened before an upgrade has an app.css without these rules). */
@@ -386,7 +386,7 @@ function ListHead({ display, onDisplay, who }) {
  * count (a click folds it away). A row shows its number, title, priority, assignee and last change; it opens its card; a
  * main task's sub-task progress opens up its sub tasks under it (unless they are rows already); its ⋯ opens the card's menu.
  */
-export function ListView({ rows, display, subsOf, byId, flashed, now, doing, expanded, onToggleSubs, onOpen, onMore, onDisplay, scope = "" }) {
+export function ListView({ rows, display, subsOf, byId, flashed, now, runs, expanded, onToggleSubs, onOpen, onMore, onDisplay, scope = "" }) {
   const [folded, setFolded] = useState(readCollapsed);
   const toggle = (id) => setFolded((cur) => { const next = new Set(cur); if (next.has(id)) next.delete(id); else next.add(id); writeCollapsed(next); return next; });
   const groups = groupRows(orderRows(rows, display.order, byId, display.dir), display.group);
@@ -403,7 +403,7 @@ export function ListView({ rows, display, subsOf, byId, flashed, now, doing, exp
         ${shut ? null : html`<ul class="tb-rows">${g.rows.map((c) => {
           const subs = subsOf.get(c.id) || [];
           const lit = Math.max(flashed.get(c.id) || 0, ...(display.subs ? [] : subs.map((s) => flashed.get(s.id) || 0)));
-          return html`<${Row} key=${c.id} card=${c} subs=${subs} main=${c.kind === "sub" ? byId.get(c.parentId) : null} flash=${now - lit < 4000} now=${now} doing=${doing}
+          return html`<${Row} key=${c.id} card=${c} subs=${subs} main=${c.kind === "sub" ? byId.get(c.parentId) : null} flash=${now - lit < 4000} now=${now} runs=${runs}
             subsAsRows=${display.subs} who=${who} expanded=${!!expanded[c.id]} onToggleSubs=${() => onToggleSubs(c.id)} onOpen=${onOpen} onMore=${onMore} />`;
         })}</ul>`}
       </section>`;
@@ -411,14 +411,14 @@ export function ListView({ rows, display, subsOf, byId, flashed, now, doing, exp
 }
 
 /** One card's row; its assignee is left out under an assignee's own heading. */
-function Row({ card, subs, main, flash, now, doing, subsAsRows, who, expanded, onToggleSubs, onOpen, onMore }) {
+function Row({ card, subs, main, flash, now, runs, subsAsRows, who, expanded, onToggleSubs, onOpen, onMore }) {
   const progress = card.progress;
   const hasSubs = card.kind === "main" && !!progress && progress.total > 0;
   const accepted = card.acceptance.filter((a) => a.done).length;
   const gap = card.status === "review" ? wrapUpText(card) : "";
   const replied = card.lastComment && card.lastComment.authorKind !== "person";
   // AGEND-296: its assignee (or, for a main task, a sub task's) is working on it now.
-  const run = useRun(card, doing, subs);
+  const run = runOf(card, runs, subs);
   const bar = hasSubs ? html`<${ProgressBar} progress=${progress} /><span>${t("tasks.subProgress", progress.done, progress.total)}</span>` : null;
   return html`<li class=${`tb-row st-${card.status}${card.kind === "sub" ? " is-sub" : ""}${flash ? " flash" : ""}${run && run.state === "working" && !run.shared ? " running" : ""}`} data-row=${card.id} onClick=${() => onOpen(card.id)}>
     <div class="tb-row-line">
