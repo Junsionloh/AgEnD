@@ -39,6 +39,8 @@ export const ACTION_FIELDS: Readonly<Record<string, readonly string[]>> = {
   projects: [],
   create_project: ["name", "description"],
   move_project: ["ids", "project"],
+  watch: ["id", "watcher"],
+  unwatch: ["id", "watcher"],
 };
 /** What to do instead, for the fields agents reach for most. */
 const INSTEAD: Readonly<Record<string, string>> = {
@@ -145,6 +147,15 @@ export function boardToolAction(db: SchedulerDb, instance: string, args: Record<
       });
       const notes = board.takeNotes().filter((n) => n !== "no change");
       return [`moved ${moved} of ${ids.length} to ${target}`, ...lines, ...notes].join("\n");
+    }
+    case "watch":
+    case "unwatch": {
+      // Following a card (docs/design/task-board.md): a watcher hears when the card is finished, waits for confirmation,
+      // is sent back, is blocked or changes hands — itself by default; another instance only on a card the caller may edit.
+      const name = str(args.watcher)?.trim() || instance;
+      const { card, watchers, notes } = board.setWatchers(actor, need(args.id, "id"), args.action === "watch" ? { add: [name] } : { remove: [name] });
+      const said = notes.filter((n) => n !== "no change");
+      return [`ok ${card.code} watchers: ${watchers.length ? watchers.join(", ") : "none"}${notes.length > said.length ? " (no change)" : ""}`, ...said].join("\n");
     }
     case "move": {
       const id = need(args.id, "id");
@@ -285,6 +296,20 @@ export function boardCardLimit(fleet: { instances?: Record<string, { board_cards
  */
 export function boardCommentWakesOn(fleet: { defaults?: { task_board?: { comment_wakes?: unknown } } } | null | undefined): boolean {
   return fleet?.defaults?.task_board?.comment_wakes !== false;
+}
+
+/**
+ * Following a card (docs/design/task-board.md, "Following a card"): `defaults.task_board.progress_wakes`, on unless
+ * `false`; read at every write, so an edit applies to the next one.
+ */
+export function boardProgressWakesOn(fleet: { defaults?: { task_board?: { progress_wakes?: unknown } } } | null | undefined): boolean {
+  return fleet?.defaults?.task_board?.progress_wakes !== false;
+}
+
+/** `defaults.task_board.leader`: the board's leader instance, or null when none is set. */
+export function boardLeader(fleet: { defaults?: { task_board?: { leader?: unknown } } } | null | undefined): string | null {
+  const leader = fleet?.defaults?.task_board?.leader;
+  return typeof leader === "string" && leader.trim() ? leader.trim() : null;
 }
 
 function cardTitle(card: Card) {
