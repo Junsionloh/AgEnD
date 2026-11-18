@@ -251,9 +251,7 @@ export function CardPage({ id, tick, projects, boardOff = [], doing = new Map(),
     <nav class="tp-crumbs" aria-label=${t("taskcard.crumbs")}>${where ? html`<span class="tp-crumb">${where}</span>` : null}
       ${card && card.parent ? html`<button type="button" class="tb-link tp-crumb" onClick=${() => onOpen(card.parent.id)}><span class="tb-code">${card.parent.id}</span> ${card.parent.title}</button>` : null}
       <span class="tp-crumb tb-code">${id}</span></nav>
-    <span class="tb-grow"></span>
-    ${tools}
-    ${card ? card.actions : null}
+    <span class="tp-tools">${tools}${card ? card.actions : null}</span>
   </div>`;
   if (missing || !detail) {
     return html`<div class="tp" ref=${root}>${bar(null)}${missing ? html`<${Empty} icon="tasks" title=${t("taskcard.missing", id)} />` : html`<${Skeleton} lines=${6} />`}</div>`;

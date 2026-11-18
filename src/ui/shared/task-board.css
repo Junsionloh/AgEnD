@@ -138,6 +138,8 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 /* ── A card as a page ──────────────────────────────────────────────────────────────────────────────────────────── */
 .tp { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
 .tp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); min-width: 0; }
+/* Previous / Next, the link, Mark blocked and ⋯ stay together at the right edge — on their own line, right-aligned, when the bar wraps. */
+.tp-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s-2); margin-left: auto; min-width: 0; }
 .tp-crumbs { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1) var(--s-2); min-width: 0; font-size: var(--fs-sm); color: var(--text-2); }
 .tp-crumbs > .tp-crumb + .tp-crumb::before { content: "›"; margin-right: var(--s-2); color: var(--text-3); }
 .tp-crumb { overflow-wrap: anywhere; }
