@@ -1,7 +1,8 @@
 // A card's activity (Fleet › Tasks › a card's page), as Multica draws an issue's: the comments, the progress log and the
 // history are one timeline, oldest first, with the comment box under it. The card API still returns the three lists
 // apart (comments, logs, history); they are merged here, so nothing on the server changes. A history line that only
-// repeats a comment or a log entry ("commented", "logged") is dropped from the merge — the entry itself is shown.
+// repeats a comment or a log entry ("commented", "logged") is dropped from the merge — the entry itself is shown. The one
+// "logged" line with no entry of its own, a change of the card's watchers (`data.watchers`), stays as a history line.
 // The comment box completes `@` with the fleet's instance names: it only types `@<instance name>` into the text; what an
 // @ does to that instance is the board's business (it reads the same plain text), not this box's.
 // No style attribute anywhere (the CSP).
@@ -28,7 +29,8 @@ export function timelineOf(detail) {
   for (const e of (detail && detail.comments) || []) out.push({ key: `c${e.id}`, type: "comment", at: e.at, who: e.author, by: e.authorKind || "", text: e.text, kind: e.kind, authorKind: e.authorKind });
   for (const e of (detail && detail.logs) || []) out.push({ key: `l${e.id}`, type: "log", at: e.at, who: e.author, by: e.authorKind || "", text: e.text });
   for (const ev of (detail && detail.history) || []) {
-    if (ev.type === "commented" || ev.type === "logged" || ev.type === "reordered") continue;
+    if (ev.type === "commented" || ev.type === "reordered") continue;
+    if (ev.type === "logged" && !(ev.data && ev.data.watchers)) continue;   // a log entry is shown as itself; a watcher change has none (the board writes the event only)
     out.push({ key: `h${ev.id}`, type: "event", at: ev.at, who: ev.actor, by: ev.actorKind || "", ev });
   }
   return out.map((e, i) => ({ e, i })).sort((a, b) => when(a.e.at) - when(b.e.at) || RANK[a.e.type] - RANK[b.e.type] || a.i - b.i).map((x) => x.e);

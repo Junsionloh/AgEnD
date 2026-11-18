@@ -42,7 +42,7 @@ register("taskcard", {
     noActivity: "Nothing yet — a comment, a progress note or a change shows here", nothingHere: "Nothing of this kind yet",
     rejectTag: "Sent back", approveTag: "Confirmed", commentTo: "Comment to {0} — @ names an instance (Ctrl+Enter sends)", commentHint: "Comment — @ names an instance (Ctrl+Enter sends)", send: "Send",
     mentionList: "Instances to mention", boardOffShort: "task board off",
-    evCreated: "opened it", evMoved: "{0} → {1}", evAuto: " (automatic)", evAssigned: "assignee {0} → {1}", evUpdated: "changed {0}", evCommented: "commented", evLogged: "log: {0}",
+    evCreated: "opened it", evMoved: "{0} → {1}", evAuto: " (automatic)", evAssigned: "assignee {0} → {1}", evUpdated: "changed {0}", evCommented: "commented", evLogged: "log: {0}", evWatchers: "changed watchers: {0}",
     fTitle: "title", fGoal: "goal", fScope: "scope", fContext: "context", fState: "state", fResult: "result", fBlockedReason: "blocked reason", fSize: "size",
     fPriority: "priority", fNeedsReview: "needs review", fDependsOn: "dependencies", fAcceptance: "acceptance", fProjectId: "project",
     position: "Position", moveUp: "Move up", moveDown: "Move down", properties: "Properties", crumbs: "Where this card is", backBoard: "Back to the board", backList: "Back to the list",
@@ -71,7 +71,7 @@ register("taskcard", {
     noActivity: "還沒有動態 — 留言、進度紀錄與變更都會出現在這裡", nothingHere: "這類還沒有內容",
     rejectTag: "退回", approveTag: "確認", commentTo: "留言給 {0} — 輸入 @ 可選 Agent（Ctrl+Enter 送出）", commentHint: "留言 — 輸入 @ 可選 Agent（Ctrl+Enter 送出）", send: "送出",
     mentionList: "可提及的 Agent", boardOffShort: "任務板已關閉",
-    evCreated: "開卡", evMoved: "{0}→{1}", evAuto: "（自動）", evAssigned: "負責人 {0}→{1}", evUpdated: "修改{0}", evCommented: "留言", evLogged: "紀錄：{0}",
+    evCreated: "開卡", evMoved: "{0}→{1}", evAuto: "（自動）", evAssigned: "負責人 {0}→{1}", evUpdated: "修改{0}", evCommented: "留言", evLogged: "紀錄：{0}", evWatchers: "修改關注者：{0}",
     fTitle: "標題", fGoal: "目標", fScope: "範圍", fContext: "背景", fState: "目前狀態", fResult: "產出", fBlockedReason: "卡住原因", fSize: "大小",
     fPriority: "優先度", fNeedsReview: "需要確認", fDependsOn: "相依", fAcceptance: "驗收條件", fProjectId: "專案",
     position: "位置", moveUp: "往上移", moveDown: "往下移", properties: "屬性", crumbs: "這張卡的位置", backBoard: "回到看板", backList: "回到清單",
@@ -92,10 +92,20 @@ export function describeEvent(ev) {
     case "assigned": return t("taskcard.evAssigned", d.from || "—", d.to || "—");
     case "updated": return t("taskcard.evUpdated", Object.keys(d.changes || {}).map((k) => fieldName(k)).join(", "));
     case "commented": return t("taskcard.evCommented");
-    case "logged": return t("taskcard.evLogged", d.text || "");
+    case "logged": return d.watchers ? t("taskcard.evWatchers", watcherChange(d)) : t("taskcard.evLogged", d.text || "");
     default: return ev.type;
   }
 }
+/**
+ * A watcher change as the board wrote it (`data.watchers`: { added, removed }): "+ops, −dev-b" — the true minus sign, not a hyphen,
+ * so a narrow line never breaks between the sign and the name; the event's own text when the lists are not there.
+ */
+const watcherChange = (d) => {
+  const w = d.watchers || {};
+  const names = (list) => (Array.isArray(list) ? list.filter((n) => typeof n === "string") : []);
+  const parts = [...names(w.added).map((n) => `+${n}`), ...names(w.removed).map((n) => `\u2212${n}`)];
+  return parts.length ? parts.join(", ") : String(d.text || "").replace(/^watchers:\s*/, "");
+};
 const fieldName = (k) => { const key = `taskcard.f${k[0].toUpperCase()}${k.slice(1)}`; const s = t(key); return s === key ? k : s; };
 
 // ── What each chip offers (pure: tests import these) ────────
