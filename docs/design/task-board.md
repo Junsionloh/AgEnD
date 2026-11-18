@@ -121,7 +121,10 @@ dispatcher is an instance with `cross_instance_visibility: hidden` (in lists, se
 still count them. A visible card follows the same rule for what it shows around it (#2303 review): its sub tasks, its
 main task (also a search hit's main task title), and the comments, logs and history such an instance left on it —
 which also do not count in a card's comment numbers, name its last comment, or make search find it (#2304 review). On the dashboard itself the person sees every card: hiding is about what instances and outsiders see, and the
-board is the person's record.
+board is the person's record. A main task kept out of sight is not numbered by its sub tasks either (AGEND-309): over the link a
+visible sub task's `parentId` (the card's read, the board's, the work drawer's, the search's) and the `parent` of its "created" event
+read as none, as its `parent` already did — the card number alone says there is a main task. Nothing changes on the dashboard or for an
+admin session.
 
 ## Storage and other releases
 
@@ -181,7 +184,9 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   box last) and a side column of properties (status, assignee, dispatcher, project, priority, size, your confirmation,
   dependencies) that stays in view; one column on a phone (≤ 899 px, the app's breakpoint) with the properties right
   under the title. The merge is the page's: the card API still returns `comments`, `logs` and `history` apart, and the
-  history lines that only repeat a comment or a log entry are dropped from it. No API, schema or column changed.
+  history lines that only repeat a comment or a log entry are dropped from it — except a change of the card's watchers (a
+  `logged` event carrying `data.watchers`, which has no log entry of its own; AGEND-309): it stays, as "changed watchers: +ops,
+  −dev-b" (a true minus sign, so a narrow line does not split it from the name) in the same line style, under the History filter. No API, schema or column changed.
 - **A card in the address.** The open card is `?card=` in the page's address, beside `?tp=` and `?tf=`. Opening a card
   from the board adds one history entry, so Back returns to the board or the list (its scroll and the card's tile focus
   come back); opening another from the card (a sub task, a dependency) adds one more, and "Back" on the page goes all the
