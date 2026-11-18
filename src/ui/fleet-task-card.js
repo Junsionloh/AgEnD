@@ -12,7 +12,7 @@ import { Empty, Skeleton } from "/assets/ui-states.js";
 import { Icon } from "/assets/ui-icons.js";
 import { Menu } from "/assets/ui-menu.js";
 import { toast } from "/assets/ui-toast.js";
-import { StatusPill, Who, answerBlocked, askText, boardApi, currentWork, errorText, followsSubs, moveCard, notesForPeople, relTime, scrollBox, wrapUpText, COLUMNS } from "./fleet-task-common.js";
+import { StatusPill, Who, answerBlocked, askText, boardApi, currentWork, errorText, followsSubs, hiddenWaits, moveCard, notesForPeople, relTime, scrollBox, wrapUpText, COLUMNS } from "./fleet-task-common.js";
 import { StepButtons, movesFor } from "./fleet-task-menu.js";
 import { Checklist, EditableText, InlineTitle, PropChip, QuickAdd } from "./fleet-task-edit.js";
 import { Composer, Timeline } from "./fleet-task-activity.js";
@@ -337,7 +337,8 @@ export function CardPage({ id, tick, projects, boardOff = [], doing = new Map(),
             : html`<span class="muted">${card.status === "review" ? t("tasks.review") : t("taskcard.nowNone")}</span>`, "tp-block") : null}
           ${parent ? row(t("taskcard.parent"), html`<button type="button" class="tb-link" onClick=${() => onOpen(parent.id)}><span class="tb-code">${parent.id}</span> ${parent.title}</button>`) : null}
           ${row(t("taskcard.deps"), html`${card.dependsOn.length ? card.dependsOn.map((d) => html`<button key=${d} type="button" class=${`tc-dep${card.unmetDeps.includes(d) ? " waiting" : ""}`}
-              title=${card.unmetDeps.includes(d) ? t("taskcard.depWaiting") : t("taskcard.depDone")} onClick=${() => onOpen(d)}>${d}</button>`) : html`<span class="muted">${t("taskcard.none")}</span>`}
+              title=${card.unmetDeps.includes(d) ? t("taskcard.depWaiting") : t("taskcard.depDone")} onClick=${() => onOpen(d)}>${d}</button>`) : hiddenWaits(card) ? null : html`<span class="muted">${t("taskcard.none")}</span>`}
+            ${hiddenWaits(card) ? html`<span class="muted" title=${t("taskcard.depWaiting")}>${hiddenWaits(card)}</span>` : null}
             ${can ? html`<button type="button" class="btn btn-ghost btn-sm" onClick=${editDeps}>${t("taskcard.edit")}</button>` : null}`)}
           ${place && (place.up || place.down) ? row(t("taskcard.position"), html`<button type="button" class="btn btn-ghost btn-sm" disabled=${!place.up} aria-label=${t("taskcard.moveUp")} title=${t("taskcard.moveUp")} onClick=${place.up}><${Icon} name="up" size=${16} /></button>
             <button type="button" class="btn btn-ghost btn-sm" disabled=${!place.down} aria-label=${t("taskcard.moveDown")} title=${t("taskcard.moveDown")} onClick=${place.down}><${Icon} name="down" size=${16} /></button>`) : null}

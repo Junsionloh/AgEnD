@@ -123,8 +123,14 @@ main task (also a search hit's main task title), and the comments, logs and hist
 which also do not count in a card's comment numbers, name its last comment, or make search find it (#2304 review). On the dashboard itself the person sees every card: hiding is about what instances and outsiders see, and the
 board is the person's record. A main task kept out of sight is not numbered by its sub tasks either (AGEND-309): over the link a
 visible sub task's `parentId` (the card's read, the board's, the work drawer's, the search's) and the `parent` of its "created" event
-read as none, as its `parent` already did — the card number alone says there is a main task. Nothing changes on the dashboard or for an
-admin session.
+read as none, as its `parent` already did — the card number alone says there is a main task. The same goes for every other place a
+card number is read (AGEND-311): a card's `dependsOn` and `unmetDeps` (the number is left out of the list; over the link the read adds
+`hiddenUnmet`, how many unfinished dependencies were left out, so a card that waits for a card kept out of sight still shows its clock,
+is not counted as ready, and says "waits for a card that is not public" — how many, never which; the dashboard and an admin session
+have no such field), an "updated" event's `changes.dependsOn` (left out of both its lists; a change
+that is then the same on both sides is not shown, nor an event with nothing left) and the `cascade` / `restored` of a sub task's "moved"
+event (the main task it was taken down with; the key is dropped). Free text a person typed — a title, a goal, a comment — is not read
+for card numbers. Nothing changes on the dashboard or for an admin session.
 
 ## Storage and other releases
 
