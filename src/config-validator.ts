@@ -640,6 +640,15 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
       if (isObj(config.defaults.task_board) && config.defaults.task_board.comment_wakes !== undefined && typeof config.defaults.task_board.comment_wakes !== "boolean") {
         err("defaults.task_board.comment_wakes", "must be true or false");
       }
+      // Following a card (docs/design/task-board.md, "Following a card"): on unless false; the board's leader is an instance.
+      if (isObj(config.defaults.task_board) && config.defaults.task_board.progress_wakes !== undefined && typeof config.defaults.task_board.progress_wakes !== "boolean") {
+        err("defaults.task_board.progress_wakes", "must be true or false");
+      }
+      if (isObj(config.defaults.task_board) && config.defaults.task_board.leader !== undefined) {
+        const leader = config.defaults.task_board.leader;
+        if (typeof leader !== "string" || !leader.trim()) err("defaults.task_board.leader", "must be the name of an instance");
+        else if (isObj(config.instances) && !Object.hasOwn(config.instances, leader.trim())) warn("defaults.task_board.leader", `"${leader.trim()}" is not one of the fleet's instances — nobody is told until it is`);
+      }
     }
     if (config.defaults.startup !== undefined) {
       if (!isObj(config.defaults.startup)) err("defaults.startup", "must be a mapping");

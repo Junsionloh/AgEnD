@@ -313,6 +313,14 @@ finishing it from review with done.
   stop waking each other after 4 turns until a person writes on the card;
   `defaults.task_board.comment_wakes: false` brings back the old rule that a
   comment notifies nobody.
+- Following a card (AGEND-299; the owner's request, 2026-11-18): the instance
+  that handed a card out, the instances that watch it (`task watch`) and the
+  leader of its project (else `defaults.task_board.leader`) hear, in a
+  `[Task board]` notice, when it is finished, goes to review, is sent back, is
+  blocked or changes hands — never the one who did it, never for a comment. Step
+  in only if it needs you. `defaults.task_board.progress_wakes: false` turns it
+  off; agents changing one card back and forth stop telling followers after 6
+  changes until a person touches it.
 - Can't: substitute for chat consensus — a blocked card still needs the person
   (or the dispatcher) to answer.
 - Roles, projects (#3195; the user's decision 9af8d799, 2026-11-06): an agent

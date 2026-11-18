@@ -343,6 +343,15 @@ Working together on the board:
 
     Comments written before this rule are never told after an upgrade; only a comment written after is.
 
+- **Following a card.** The instance that handed a card out (its dispatcher), the instances that **watch** it and the **leader** of its project hear, as a `[Task board]` notice, when it is **finished**, goes to **review**, is **sent back**, is **blocked** or **changes hands** — with who did it and the words that came with it, so a project leader can look in or hand out the next card without being asked. Never the one who made the change, and never for a comment (comments are the previous bullet). A card a person opened has no instance dispatcher: nobody is told unless it has a watcher or a leader. **Watchers:** `task watch` / `task unwatch` (yourself, or another instance on a card you may edit), or the dashboard's route; at most 10 per card, and a main task's watchers follow its sub tasks. **Leader:** the project's lead (set on the project; until now it only chose where Needs you's buttons go), else `defaults.task_board.leader`, which also covers cards in no project. A dispatcher already told that a card is blocked on a question, or waits for its confirmation, is not told twice. **Loop guard:** agents changing one card back and forth tell its followers for 6 changes within 30 minutes, then nobody, until a person touches the card; a person's changes are never limited. **Switch:** `defaults.task_board.progress_wakes: false` (default on, read at each write). Nothing from before the upgrade is told.
+
+  ```yaml
+  defaults:
+    task_board:
+      progress_wakes: true     # false: followers hear nothing of a card's progress
+      leader: lead             # an instance that follows every card whose project has no lead (and cards in no project)
+  ```
+
 Creating, claiming and completing a task are written to the activity log. Every tool profile except `minimal` has `task`.
 
 ### When an assignee stops

@@ -70,6 +70,17 @@ export const AGENT_COMMENT_CHAIN = 4;      // turns
 export const AGENT_COMMENT_WINDOW_MS = 30 * 60_000;
 export const MAX_COMMENT_WAKES = 5;
 
+/**
+ * Following a card (docs/design/task-board.md, "Following a card"): the instances that handed it out, watch it, or lead
+ * its project hear how it moved on — finished, waiting for confirmation, sent back, blocked, or given to someone else.
+ * The same loop guard as comments, read from the card's own events: the progress agents made on a card, back to the
+ * last thing a person did to it and within AGENT_COMMENT_WINDOW_MS. Past AGENT_PROGRESS_CHAIN of them the next one is
+ * kept on the card and tells no one until a person touches it or the window passes. A person's change has no limit.
+ */
+export const AGENT_PROGRESS_CHAIN = 6;
+/** How many instances may watch one card. */
+export const MAX_WATCHERS = 10;
+
 /** Whom one comment may wake, settled when it is written (its notes go back to its writer) and read when the write ends. */
 export interface CommentAudience {
   /** The instances its `@` marks name (the board's own names), without its writer, those with the task board off, and the surplus. */
@@ -84,6 +95,14 @@ export interface CommentRouting {
   instances: () => Iterable<string>;
   /** `defaults.task_board.comment_wakes` (default on): whether comments and mentions wake at all. */
   enabled: () => boolean;
+}
+
+/** What the fleet tells the board for following a card; read at every write, so a fleet.yaml edit applies to the next. */
+export interface ProgressRouting {
+  /** `defaults.task_board.progress_wakes` (default on): whether followers hear a card's progress at all. */
+  enabled: () => boolean;
+  /** `defaults.task_board.leader`: the leader of the cards whose project has none of its own (null: none). */
+  leader: () => string | null;
 }
 
 /**
@@ -278,7 +297,23 @@ export interface CardEvent {
  * card's assignee hears a comment someone else wrote on it (comment), and an instance a comment names with
  * `@<instance>` hears it whether or not the card is its own (mention).
  */
-export type WakeReason = "assigned" | "start" | "sent_back" | "answered" | "answer_kept" | "ready" | "decide" | "to_confirm" | "confirm_own" | "wrap_up" | "cancelled" | "comment" | "mention";
+export type WakeReason = "assigned" | "start" | "sent_back" | "answered" | "answer_kept" | "ready" | "decide" | "to_confirm" | "confirm_own" | "wrap_up" | "cancelled" | "comment" | "mention" | "progress";
+
+/**
+ * How a card moved on, as a follower is told (WakeReason "progress"): finished, in review (waiting for its confirmer),
+ * sent back from review, blocked, or handed to another assignee. These are the only changes a follower hears; starting
+ * a card, a comment or a reorder is not progress.
+ */
+export type ProgressKind = "done" | "review" | "sent_back" | "blocked" | "reassigned";
+/** Why an instance follows a card: it handed it out, it watches it, or it leads the card's project (or the board). */
+export type FollowRole = "dispatcher" | "watcher" | "leader";
+/** A progress wake's news: what happened, why the instance hears it, and (reassigned) who has the card now and had it. */
+export interface ProgressNews {
+  kind: ProgressKind;
+  as: FollowRole;
+  assignee?: string | null;
+  from?: string | null;
+}
 
 /** One card's news for one instance from one committed write. Never sent to a page (it carries titles and text). */
 export interface Wake {
@@ -298,6 +333,8 @@ export interface Wake {
    * this wake while gathering — the notice quotes the last and says there are more.
    */
   earlier?: number;
+  /** What a "progress" reason says (the latest, when several came while it gathered). */
+  news?: ProgressNews;
 }
 
 /** What one committed write changed, for live views: the card numbers touched (none for a project change). */
@@ -320,6 +357,8 @@ export interface CardDetail {
   comments: Entry[];
   logs: Entry[];
   history: CardEvent[];
+  /** The instances that watch this card (its own list: a sub task's main task's watchers follow it too). */
+  watchers: string[];
 }
 
 export interface NewCard {
@@ -556,6 +595,16 @@ function parseJsonArray<T>(raw: unknown, fallback: T[]): T[] {
   }
 }
 
+function parseJsonObject(raw: unknown): Record<string, unknown> {
+  if (typeof raw !== "string" || raw === "") return {};
+  try {
+    const v = JSON.parse(raw) as unknown;
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 function toCard(r: Row): Card {
   return {
     uuid: r.id as string,
@@ -620,6 +669,7 @@ export class TaskBoard {
   private cardLimit: (name: string) => number = () => 1;
   private boardOff: (name: string) => boolean = () => false;
   private routing: CommentRouting = { instances: () => [], enabled: () => true };
+  private following: ProgressRouting = { enabled: () => true, leader: () => null };
   private pending: Array<{ code: string; uuid: string; actor: Actor; type: CardEventType; data: Record<string, unknown>; audience?: CommentAudience }> = [];
   private projectsChanged = false;
   private notes: Note[] = [];
@@ -702,6 +752,13 @@ export class TaskBoard {
       );
       CREATE INDEX IF NOT EXISTS idx_task_events_task ON task_events(task_id, id);
       CREATE TABLE IF NOT EXISTS task_counters (prefix TEXT PRIMARY KEY, next INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS task_watchers (
+        task_id     TEXT NOT NULL,
+        instance    TEXT NOT NULL,
+        added_by    TEXT NOT NULL,
+        at          TEXT NOT NULL,
+        PRIMARY KEY (task_id, instance)
+      );
     `);
     // #2352: a project's lead instance, added in place (null: its waiting cards' buttons stay in General).
     const projectCols = new Set((this.db.prepare("PRAGMA table_info(task_projects)").all() as Array<{ name: string }>).map((c) => c.name));
@@ -1039,6 +1096,7 @@ export class TaskBoard {
       comments: this.entries(card.uuid, ["comment", "reject", "approve"], 200),
       logs: this.entries(card.uuid, ["log"], 200),
       history: this.events(card.uuid, 200).filter((e) => e.type !== "reordered"),
+      watchers: this.watchersOf(card.uuid),
     };
   }
 
@@ -2057,6 +2115,14 @@ export class TaskBoard {
     this.routing = routing;
   }
 
+  /**
+   * The fleet's follow-the-card settings: whether followers hear progress at all, and the board's default leader (the
+   * leader of the cards whose project has no lead of its own). Read at every write.
+   */
+  setProgressRouting(routing: ProgressRouting): void {
+    this.following = routing;
+  }
+
   /** Refuses `name` as the new assignee of a card or task when it is an instance with the task board switched off. */
   private checkAssignable(name: string | null, current: string | null = null): void {
     if (name === null || name === current || !this.boardOff(name)) return;
@@ -2204,6 +2270,117 @@ export class TaskBoard {
     return notes;
   }
 
+  // ── Following a card ────────────────────────────────────
+
+  /** The instances that watch exactly this card (not its main task's), in the order they began. */
+  watchersOf(uuid: string): string[] {
+    return (this.db.prepare("SELECT instance FROM task_watchers WHERE task_id = ? ORDER BY at, rowid").all(uuid) as Array<{ instance: string }>).map((r) => r.instance);
+  }
+
+  /**
+   * Starts and stops instances watching a card (`add`, `remove`: instance names), in one write. A watcher hears the
+   * card's progress (settleWakes) — and, on a main task, its sub tasks' too. A person changes anyone's; an instance
+   * watches or stops watching itself on any board card, and changes another's only on a card it may edit (its
+   * assignee, creator or dispatcher, or an unassigned one). Names must be fleet instances with the task board on (one
+   * that has since left the fleet can still be removed). Not a change of the card's content: no new version, so a page
+   * editing the card meanwhile is not told it conflicts; the board's revision moves and the card's log says who.
+   */
+  setWatchers(actor: Actor, ref: string, change: { add?: readonly string[]; remove?: readonly string[] }): { card: Card; watchers: string[]; notes: string[]; said: Note[] } {
+    return this.tx(() => {
+      const card = this.getCard(ref);
+      if (!this.isOnBoard(card)) throw new TaskBoardError("invalid", `${card.code} is one of the \`task\` tool's own tasks: only cards on the board can be watched`, "watch_not_board", [card.code]);
+      const names = (list: readonly string[] | undefined) => [...new Set((list ?? []).map((n) => normalizeAssignee(n)).filter((n): n is string => n !== null))];
+      const add = names(change.add), remove = names(change.remove).filter((n) => !add.includes(n));
+      const ai = !isPerson(actor);
+      const others = [...add, ...remove].filter((n) => n !== actor.name);
+      if (ai && others.length && !this.canEdit(card, actor)) {
+        throw new TaskBoardError("forbidden", `${card.code} belongs to ${card.assignee}; you can only watch or stop watching it yourself`, "watch_others_forbidden", [card.code, card.assignee ?? ""]);
+      }
+      const known = new Set(this.routing.instances());
+      const have = new Set(this.watchersOf(card.uuid));
+      for (const n of add) {
+        if (!known.has(n)) throw new TaskBoardError("invalid", `"${n.slice(0, 64)}" is not one of the fleet's instances`, "watcher_unknown", [n.slice(0, 64)]);
+        if (!have.has(n) && this.boardOff(n)) throw new TaskBoardError("forbidden", `${n} has the task board switched off (dashboard.task_board: false): it cannot read or move cards, so a notice would reach nothing it can act on`, "watcher_board_off", [n]);
+      }
+      const added = add.filter((n) => !have.has(n)), removed = remove.filter((n) => have.has(n));
+      if (have.size + added.length - removed.length > MAX_WATCHERS) {
+        throw new TaskBoardError("invalid", `${card.code} can have at most ${MAX_WATCHERS} watchers`, "watchers_max", [card.code, MAX_WATCHERS]);
+      }
+      if (added.length || removed.length) {
+        const insert = this.db.prepare("INSERT OR IGNORE INTO task_watchers (task_id, instance, added_by, at) VALUES (?, ?, ?, ?)");
+        for (const n of added) insert.run(card.uuid, n, actor.name, this.nowIso());
+        for (const n of removed) this.db.prepare("DELETE FROM task_watchers WHERE task_id = ? AND instance = ?").run(card.uuid, n);
+        const text = `watchers: ${[...added.map((n) => `+${n}`), ...removed.map((n) => `-${n}`)].join(", ")}`;
+        this.entry(card, "log", actor, text);
+        this.event(actor, card, "logged", { text });
+      } else this.say("no_change", [], "no change");
+      return { card, watchers: this.watchersOf(card.uuid), ...this.spoken() };
+    });
+  }
+
+  /** The instances that follow a card, each with its reason: see {@link FollowRole}. */
+  followersOf(card: Card): Map<string, FollowRole> {
+    const out = new Map<string, FollowRole>();
+    if (!this.isOnBoard(card)) return out;
+    const fleet = new Set(this.routing.instances());
+    // Its assignee has the card's own news already; one that cannot read it (task board off) is sent nothing.
+    const put = (name: string | null | undefined, role: FollowRole) => {
+      if (name && !out.has(name) && name !== card.assignee && fleet.has(name) && !this.boardOff(name)) out.set(name, role);
+    };
+    if (card.dispatcher?.kind === "instance") put(card.dispatcher.name, "dispatcher");
+    for (const n of card.parent ? [...this.watchersOf(card.uuid), ...this.watchersOf(card.parent)] : this.watchersOf(card.uuid)) put(n, "watcher");
+    const projectLead = card.projectId === null ? null
+      : (this.db.prepare("SELECT lead_instance FROM task_projects WHERE id = ?").get(card.projectId) as { lead_instance: string | null } | undefined)?.lead_instance ?? null;
+    put(projectLead ?? this.following.leader(), "leader");
+    return out;
+  }
+
+  /**
+   * How an event moved a card on, for its followers; null when it is not progress. Pure on the event's type and data, so
+   * the loop guard reads the same thing back from the stored events.
+   */
+  private progressOf(type: string, d: { from?: unknown; to?: unknown }): { kind: ProgressKind; assignee?: string | null; from?: string | null } | null {
+    if (type === "assigned") {
+      const to = typeof d.to === "string" ? d.to : null, from = typeof d.from === "string" ? d.from : null;
+      return to !== from ? { kind: "reassigned", assignee: to, from } : null;
+    }
+    if (type !== "moved") return null;
+    if (d.to === "done") return { kind: "done" };
+    if (d.to === "review") return { kind: "review" };
+    if (d.to === "blocked") return { kind: "blocked" };
+    if (d.from === "review" && (d.to === "claimed" || d.to === "open")) return { kind: "sent_back" };
+    return null;
+  }
+
+  /** Whether a progress news still describes the card (the wake goes out seconds later, and the card may have moved on). */
+  private progressStands(card: Card, news: ProgressNews): boolean {
+    switch (news.kind) {
+      case "done": return card.status === "done";
+      case "review": return card.status === "review";
+      case "blocked": return card.status === "blocked";
+      case "sent_back": return card.status === "claimed" || card.status === "open";
+      case "reassigned": return card.assignee === (news.assignee ?? null);
+    }
+  }
+
+  /**
+   * How many progress changes agents (anything but a person) have made on the card, within AGENT_COMMENT_WINDOW_MS and
+   * back to the last event a person caused: the loop guard for followers, read from the card's own events — the write
+   * being settled is already among them. A person's comment, move, edit or watch resets it.
+   */
+  private agentProgressRun(card: Card): number {
+    const since = new Date(this.now().getTime() - AGENT_COMMENT_WINDOW_MS).toISOString();
+    const rows = this.db.prepare("SELECT actor_kind, type, data FROM task_events WHERE task_id = ? AND at >= ? ORDER BY id DESC LIMIT 200")
+      .all(card.uuid, since) as Array<{ actor_kind: string; type: string; data: string }>;
+    let run = 0;
+    for (const r of rows) {
+      if (r.actor_kind === "person") break;
+      if (r.type !== "moved" && r.type !== "assigned") continue;
+      if (this.progressOf(r.type, parseJsonObject(r.data))) run++;
+    }
+    return run;
+  }
+
   // ── Wakes ───────────────────────────────────────────────
 
   /**
@@ -2214,13 +2391,16 @@ export class TaskBoard {
    */
   private settleWakes(events: TaskBoard["pending"]): Wake[] {
     const out = new Map<string, Wake>();
-    const add = (card: Card, instance: string | null | undefined, reason: WakeReason, by: Actor, text?: string) => {
+    const add = (card: Card, instance: string | null | undefined, reason: WakeReason, by: Actor, text?: string, news?: ProgressNews) => {
       // Never its own write — but a person's `@name` is not the instance of that name's own write.
       if (!instance || (instance === by.name && !(reason === "mention" && isPerson(by)))) return;
       const key = `${instance}\u0000${card.uuid}`;
       const w = out.get(key) ?? { instance, uuid: card.uuid, code: card.code, title: card.title, parent: card.parent ? this.codeOf(card.parent) : null, reasons: [], by: {}, texts: {} };
       if (!w.reasons.includes(reason)) w.reasons.push(reason);
+      // A later progress replaces the earlier one whole: its words are its own, never the earlier change's.
+      if (news && !text) delete w.texts[reason];
       if (text) w.texts[reason] = text;
+      if (news) w.news = news;
       w.by[reason] = by.name;
       out.set(key, w);
     };
@@ -2279,7 +2459,46 @@ export class TaskBoard {
         add(card, card.assignee, "comment", e.actor, text);
       }
     }
-    return [...out.values()].map((w) => this.wakeHolds(w)).filter((w): w is Wake => w !== null);
+    this.settleProgress(events, add);
+    const wakes = [...out.values()].map((w) => this.wakeHolds(w)).filter((w): w is Wake => w !== null);
+    // Said to the writer, so an agent knows the followers are told and need no message of its own.
+    const told = wakes.filter((w) => w.reasons.includes("progress") && w.news).map((w) => `${w.instance} (${w.news!.as})`);
+    if (told.length) this.say("progress_wakes", [told.join(", ")], `how this changed the card is told to ${told.join(", ")} as a [Task board] notice: no need to message them about it`);
+    return wakes;
+  }
+
+  /**
+   * Followers: the instances that handed a card out, watch it or lead its project hear it was finished, went to
+   * review, was sent back, was blocked or got another assignee (docs/design/task-board.md, "Following a card"). The
+   * board's own catch-up (actor system) tells nobody; an agent's change is held to the loop guard.
+   */
+  private settleProgress(events: TaskBoard["pending"], add: (card: Card, instance: string, reason: WakeReason, by: Actor, text?: string, news?: ProgressNews) => void): void {
+    if (!this.following.enabled()) return;
+    const runs = new Map<string, number>();
+    const stopped = new Set<string>();
+    for (const e of events) {
+      if (e.actor.kind === "system") continue;
+      const found = this.progressOf(e.type, e.data as { from?: unknown; to?: unknown });
+      const card = found ? this.byUuid(e.uuid) : undefined;
+      if (!found || !card) continue;
+      const followers = this.followersOf(card);
+      if (!followers.size) continue;
+      if (e.actor.kind !== "person") {
+        const run = runs.get(card.uuid) ?? this.agentProgressRun(card);
+        runs.set(card.uuid, run);
+        if (run > AGENT_PROGRESS_CHAIN) {
+          if (!stopped.has(card.uuid)) this.say("progress_chain", [card.code, run], `nobody was told how ${card.code} changed: agents have changed it ${run} times in a row (a loop guard). It is kept on the card; `
+            + `followers hear again once a person touches it, or when these are ${AGENT_COMMENT_WINDOW_MS / 60_000} minutes old`);
+          stopped.add(card.uuid);
+          continue;
+        }
+      }
+      const d = e.data as { reason?: unknown };
+      const words = found.kind === "done" || found.kind === "review" ? card.result || (typeof d.reason === "string" ? d.reason : "")
+        : found.kind === "blocked" ? card.blockedReason || (typeof d.reason === "string" ? d.reason : "")
+        : found.kind === "sent_back" ? (typeof d.reason === "string" ? d.reason : "") : "";
+      for (const [name, as] of followers) add(card, name, "progress", e.actor, words || undefined, { ...found, as });
+    }
   }
 
   /** A finished card readies the open cards that waited only for it (a sub task also waits for its main task's). */
@@ -2307,6 +2526,8 @@ export class TaskBoard {
       if (r === "cancelled") return card.status === "cancelled" && own;
       // A mention was asked for by name: it holds whatever state the card is in, finished too.
       if (r === "mention") return true;
+      // A follower is told how the card moved on while it still stands there (finished too), and while it still follows it.
+      if (r === "progress") return !!wake.news && this.followersOf(card).has(wake.instance) && this.progressStands(card, wake.news);
       if (isFinished(card)) return false;
       if (r === "decide") return handedOut && card.status === "blocked";
       // #2341 review: and still waiting for the person — its confirmation not switched off during the gather.
@@ -2328,10 +2549,14 @@ export class TaskBoard {
     if (reasons.includes("sent_back")) reasons = reasons.filter((r) => r !== "start");
     if (reasons.includes("assigned")) reasons = reasons.filter((r) => r !== "start" && r !== "ready");
     if (reasons.includes("mention")) reasons = reasons.filter((r) => r !== "comment");
+    // The dispatcher's own, actionable news (a question to answer, a card to confirm) says what progress would.
+    if (reasons.includes("decide") || reasons.includes("to_confirm")) reasons = reasons.filter((r) => r !== "progress");
     if (reasons.includes("cancelled")) reasons = ["cancelled"];
     if (!reasons.length) return null;
     const keep = <T>(o: Partial<Record<WakeReason, T>>) => Object.fromEntries(Object.entries(o).filter(([r]) => reasons.includes(r as WakeReason))) as Partial<Record<WakeReason, T>>;
-    return { ...wake, title: card.title, reasons, texts: keep(wake.texts), by: keep(wake.by) };
+    const held: Wake = { ...wake, title: card.title, reasons, texts: keep(wake.texts), by: keep(wake.by) };
+    if (!reasons.includes("progress")) delete held.news;
+    return held;
   }
 
   // ── Helpers ─────────────────────────────────────────────
@@ -2350,7 +2575,14 @@ export class TaskBoard {
       const result = this.db.transaction(() => {
         const r = fn();
         if (this.pending.length || this.projectsChanged) this.db.prepare("UPDATE task_counters SET next = next + 1 WHERE prefix = 'R'").run();
+        const spokenBefore = this.notes.length;
         wakes = this.settleWakes(this.pending);
+        // What settling the wakes said (who is told, a loop guard) reaches the writer's answer like the notes of the write itself.
+        const late = this.notes.slice(spokenBefore);
+        const answer = r as { notes?: unknown; said?: unknown } | null;
+        if (late.length && answer && typeof answer === "object" && Array.isArray(answer.notes) && Array.isArray(answer.said)) {
+          for (const n of late) { answer.notes.push(n.text); answer.said.push(n); }
+        }
         return r;
       }).immediate();
       this.lastNotes = this.notes.map((n) => n.text);
