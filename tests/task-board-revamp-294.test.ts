@@ -145,6 +145,28 @@ describe("the timeline: comments, progress log and history in one list", () => {
   });
 });
 
+describe("AGEND-309: a change of the card's watchers is a line of the timeline", () => {
+  const WATCH = { id: 36, actor: "Ann", type: "logged", data: { text: "watchers: +ops, -dev-b", watchers: { added: ["ops"], removed: ["dev-b"] } }, at: "2026-11-04T08:00:00.000Z" };
+  it("the history event that carries `data.watchers` stays in the merge, among the other history lines; a plain log's event is still dropped (its entry is shown)", () => {
+    const tl = activity.timelineOf(detailOf("M-1", { history: [...ENTRIES.history, WATCH] }));
+    expect(tl.map((e: any) => `${e.type}:${e.key}`)).toEqual(["event:h31", "event:h32", "comment:c11", "log:l21", "comment:c12", "event:h35", "comment:c13", "event:h36"]);
+    expect(activity.timelineShown(tl, "history").map((e: any) => e.key)).toEqual(["h31", "h32", "h35", "h36"]);
+    expect(activity.timelineShown(tl, "log").map((e: any) => e.key), "the log filter lists log entries only").toEqual(["l21"]);
+  });
+  it("it is worded in English and in Traditional Chinese, from the names the board wrote (the event's text when the lists are missing)", async () => {
+    const i18n = await import("/assets/app-i18n.js");
+    try {
+      i18n.setLang("en", { store: false });
+      expect(cardMod.describeEvent(WATCH)).toBe("changed watchers: +ops, \u2212dev-b");
+      expect(cardMod.describeEvent({ ...WATCH, data: { text: "watchers: +ops", watchers: { added: ["ops"] } } })).toBe("changed watchers: +ops");
+      expect(cardMod.describeEvent({ ...WATCH, data: { text: "watchers: -dev-b", watchers: {} } }), "no lists: the text without its prefix").toBe("changed watchers: -dev-b");
+      expect(cardMod.describeEvent(ENTRIES.history[3]), "a plain log line is worded as before").toBe("log: Endpoint skeleton done");
+      i18n.setLang("zh-TW", { store: false });
+      expect(cardMod.describeEvent(WATCH)).toBe("修改關注者：+ops, \u2212dev-b");
+    } finally { i18n.setLang("en", { store: false }); }
+  });
+});
+
 describe("completing an @ in the comment box", () => {
   it("the @name at the caret: after a space, a bracket or the start — never inside a word (an e-mail)", () => {
     expect(activity.mentionAt("hi @al", 6)).toEqual({ start: 3, query: "al" });
@@ -592,6 +614,22 @@ describe("the timeline and the comment box on the page", () => {
     expect(text(q(".tl-item"))).toContain("Endpoint skeleton done");
     fire(filters[0], "click"); await settle(4);
     expect(qa(".tl-item").length).toBe(7);
+  });
+  it("AGEND-309: a watcher change is a history line on the card's page (not a log entry), in the existing line style and under the History filter", async () => {
+    const watched = { id: 36, actor: "Ann", actorKind: "person", type: "logged", data: { text: "watchers: +beta", watchers: { added: ["beta"], removed: [] } }, at: "2026-11-04T08:00:00.000Z" };
+    handler = (path, method) => (path.startsWith("/ui/tasks/board") ? { rev: 1, projects: [PROJECT], cards: CARDS } : method === "GET" ? detailOf("M-1", { history: [...ENTRIES.history, watched] }) : {});
+    await mount();
+    await openCard("M-1");
+    expect(qa(".tl-item").length).toBe(8);
+    const last = qa(".tl-item")[7];
+    expect(last.className).toContain("tl-line tl-event");
+    expect(text(last.querySelector(".tl-text"))).toBe("Ann changed watchers: +beta");
+    const filters = qa(".tl-filter button");
+    expect(filters.map((b) => text(b))).toEqual(["All", "Comments 3", "Progress 1", "History 4"]);
+    fire(filters[3], "click"); await settle(4);
+    expect(qa(".tl-item").map((li) => text(li.querySelector(".tl-text")))).toContain("Ann changed watchers: +beta");
+    fire(filters[2], "click"); await settle(4);
+    expect(text(q(".tl-list"))).not.toContain("changed watchers");
   });
   it("a card with no activity says what shows here", async () => {
     handler = (path, method) => (path.startsWith("/ui/tasks/board") ? { rev: 1, projects: [PROJECT], cards: CARDS } : method === "GET" ? detailOf("M-1", { comments: [], logs: [], history: [] }) : {});

@@ -601,6 +601,59 @@ describe("4f. AGEND-299: who follows a card, from the dashboard", () => {
   });
 });
 
+describe("4f2. AGEND-309: a main task kept out of sight is not numbered by its sub tasks over the link", () => {
+  const fleetConfig = { defaults: {}, instances: { "dev-a": {}, ops: {}, spy: { cross_instance_visibility: "hidden" } } };
+  const seed = () => {
+    const db = scratchDb();
+    db.board.setCommentRouting({ instances: () => ["dev-a", "ops", "spy"], enabled: () => true });
+    // The main task is held by a hidden instance; its sub task by a visible one. A second, visible main task has a sub task too.
+    const hidden = db.board.createCards(ANN, { cards: [{ title: "Hidden main", assignee: "spy" }] }).cards[0]!;
+    const sub = db.board.createCards(ANN, { cards: [{ parent: hidden.code, title: "Visible sub", assignee: "dev-a" }] }).cards[0]!;
+    const open = db.board.createCards(ANN, { cards: [{ title: "Open main", assignee: "dev-a" }] }).cards[0]!;
+    const openSub = db.board.createCards(ANN, { cards: [{ parent: open.code, title: "Open sub", assignee: "dev-a" }] }).cards[0]!;
+    return { db, hidden, sub, open, openSub };
+  };
+  const get = (db: SchedulerDb, path: string, opts: { tier?: "admin" | "read"; local?: boolean }) => viaLink(db, "GET", path, undefined, { fleetConfig, ...opts });
+  const created = (body: any) => body.history.find((e: any) => e.type === "created");
+
+  it("over the link a sub task's `card.parentId` and its \"created\" event's `parent` read as none, and the main task's number is nowhere in the read; a visible main task is still named", async () => {
+    const { db, hidden, sub, open, openSub } = seed();
+    const link = (await get(db, `/ui/tasks/cards/${sub.code}`, { tier: "read" })).body;
+    expect(link.card.id).toBe(sub.code);
+    expect(link.card.parentId, "the card's own read").toBeNull();
+    expect(created(link).data.parent, "its created event").toBeNull();
+    expect(link.parent).toBeNull();
+    expect(JSON.stringify(link), "the hidden main task's number is not in the read at all").not.toContain(`"${hidden.code}"`);
+    // …nor in the board's, the work drawer's or the search's.
+    const board = (await get(db, "/ui/tasks/board", { tier: "read" })).body;
+    expect(board.cards.find((c: any) => c.id === sub.code).parentId).toBeNull();
+    expect(JSON.stringify(board)).not.toContain(`"${hidden.code}"`);
+    const work = (await get(db, "/ui/tasks/work", { tier: "read" })).body;
+    const mine = work.instances.flatMap((i: any) => [...i.doing, ...i.blocked, ...i.review, ...i.ready, ...i.waiting, ...i.mains]).filter((c: any) => c.id === sub.code);
+    expect(mine.length).toBeGreaterThan(0);
+    for (const c of mine) expect(c.parentId, "the work drawer").toBeNull();
+    const found = (await get(db, "/ui/tasks/search?q=Visible", { tier: "read" })).body;
+    expect(found.results.map((r: any) => r.card.id)).toEqual([sub.code]);
+    expect(found.results[0].card.parentId, "the search").toBeNull();
+    // A main task in plain sight is named, over the link and on the card.
+    const shown = (await get(db, `/ui/tasks/cards/${openSub.code}`, { tier: "read" })).body;
+    expect(shown.card.parentId).toBe(open.code);
+    expect(created(shown).data.parent).toBe(open.code);
+    expect(shown.parent?.id).toBe(open.code);
+    expect((await get(db, "/ui/tasks/board", { tier: "read" })).body.cards.find((c: any) => c.id === openSub.code).parentId).toBe(open.code);
+  });
+
+  it("the local page and an admin session over the link still see the main task's number", async () => {
+    const { db, hidden, sub } = seed();
+    for (const opts of [{ local: true }, {}] as const) {
+      const full = (await get(db, `/ui/tasks/cards/${sub.code}`, opts)).body;
+      expect(full.card.parentId, JSON.stringify(opts)).toBe(hidden.code);
+      expect(created(full).data.parent, JSON.stringify(opts)).toBe(hidden.code);
+      expect((await get(db, "/ui/tasks/board", opts)).body.cards.find((c: any) => c.id === sub.code).parentId, JSON.stringify(opts)).toBe(hidden.code);
+    }
+  });
+});
+
 describe("4e. #2756: whom a card waits for, through the routes (#2757 review: a dispatcher deleted, caches warm)", () => {
   it("lead's card in review is lead's to confirm — on the board, the card's own read and the work drawer; once lead is deleted, the person's on all three", async () => {
     const h = rig();
