@@ -530,13 +530,31 @@ describe("4f. AGEND-299: who follows a card, from the dashboard", () => {
     expect((await viaLink(db, "POST", "/ui/tasks/cards/M-9/watchers", { add: ["ops"] }, { local: true, fleetConfig })).status).toBe(404);
   });
 
-  it("over the link a read-only session does not see a hidden instance among a card's watchers (an admin session and the local page do)", async () => {
+  it("over the link a read-only session does not see a hidden instance among a card's watchers — not in the card's read as a whole, its history, its logs, a search for it or the board (an admin session and the local page do)", async () => {
     const db = named();
     db.board.setWatchers(ANN, "M-1", { add: ["ops", "spy"] });
-    const read = (opts: { tier?: "admin" | "read"; local?: boolean }) => viaLink(db, "GET", "/ui/tasks/cards/M-1", undefined, { fleetConfig, ...opts }).then((r) => r.body.watchers);
-    expect(await read({ tier: "read" })).toEqual(["ops"]);
-    expect(await read({})).toEqual(["ops", "spy"]);
-    expect(await read({ local: true })).toEqual(["ops", "spy"]);
+    db.board.setWatchers(ANN, "M-1", { remove: ["spy"] });
+    db.board.setWatchers(ANN, "M-1", { add: ["spy"] });
+    const get = (path: string, opts: { tier?: "admin" | "read"; local?: boolean }) => viaLink(db, "GET", path, undefined, { fleetConfig, ...opts });
+    const card = await get("/ui/tasks/cards/M-1", { tier: "read" });
+    expect(card.body.watchers).toEqual(["ops"]);
+    expect(JSON.stringify(card.body), "the whole read").not.toContain("spy");
+    for (const path of ["/ui/tasks/search?q=spy", "/ui/tasks/search?q=watchers", "/ui/tasks/search?q=%2Bspy", "/ui/tasks/board"]) {
+      const body = (await get(path, { tier: "read" })).body;
+      expect(JSON.stringify(body), `${path} for a read-only session`).not.toContain("spy");
+    }
+    expect((await get("/ui/tasks/search?q=spy", { tier: "read" })).body.results).toEqual([]);
+    // An event that names a hidden instance goes whole (the first one here added ops and spy together); what the person
+    // did about visible instances only stays in the history the link shows.
+    db.board.setWatchers(ANN, "M-1", { add: ["dev-a"] });
+    const after = (await get("/ui/tasks/cards/M-1", { tier: "read" })).body;
+    expect(after.history.filter((e: any) => e.type === "logged").map((e: any) => e.data.text)).toEqual(["watchers: +dev-a"]);
+    // The admin session over the link and the local page see all of it.
+    for (const opts of [{}, { local: true }] as const) {
+      const full = (await get("/ui/tasks/cards/M-1", opts)).body;
+      expect(full.watchers).toEqual(["ops", "spy", "dev-a"]);
+      expect(full.history.filter((e: any) => e.type === "logged").map((e: any) => e.data.text)).toContain("watchers: +ops, +spy");
+    }
   });
 });
 

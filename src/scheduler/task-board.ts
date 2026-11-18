@@ -2310,9 +2310,11 @@ export class TaskBoard {
         const insert = this.db.prepare("INSERT OR IGNORE INTO task_watchers (task_id, instance, added_by, at) VALUES (?, ?, ?, ?)");
         for (const n of added) insert.run(card.uuid, n, actor.name, this.nowIso());
         for (const n of removed) this.db.prepare("DELETE FROM task_watchers WHERE task_id = ? AND instance = ?").run(card.uuid, n);
+        // History only — no log entry: an entry's text is shown and searched as any reader's, and a hidden instance's name
+        // in it would reach a read-only viewer over the public link. The event carries the names as values (`watchers`),
+        // which the link's reads check one by one, and drop the whole event for; the page says `text` as a log line.
         const text = `watchers: ${[...added.map((n) => `+${n}`), ...removed.map((n) => `-${n}`)].join(", ")}`;
-        this.entry(card, "log", actor, text);
-        this.event(actor, card, "logged", { text });
+        this.event(actor, card, "logged", { text, watchers: { added, removed } });
       } else this.say("no_change", [], "no change");
       return { card, watchers: this.watchersOf(card.uuid), ...this.spoken() };
     });
@@ -2370,12 +2372,13 @@ export class TaskBoard {
    */
   private agentProgressRun(card: Card): number {
     const since = new Date(this.now().getTime() - AGENT_COMMENT_WINDOW_MS).toISOString();
-    const rows = this.db.prepare("SELECT actor_kind, type, data FROM task_events WHERE task_id = ? AND at >= ? ORDER BY id DESC LIMIT 200")
+    // Only the rows that count or reset: an agent's log lines and comments, however many, cannot push progress changes out
+    // of the window. A person's event of any kind stops the count at once, so what is read is a handful of rows.
+    const rows = this.db.prepare("SELECT actor_kind, type, data FROM task_events WHERE task_id = ? AND at >= ? AND (actor_kind = 'person' OR type IN ('moved', 'assigned')) ORDER BY id DESC LIMIT 200")
       .all(card.uuid, since) as Array<{ actor_kind: string; type: string; data: string }>;
     let run = 0;
     for (const r of rows) {
       if (r.actor_kind === "person") break;
-      if (r.type !== "moved" && r.type !== "assigned") continue;
       if (this.progressOf(r.type, parseJsonObject(r.data))) run++;
     }
     return run;

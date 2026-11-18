@@ -391,7 +391,9 @@ rule as every other notice (an agent that also messaged the follower naming the 
 
 **Loop guard.** A follower that is also an agent can change the card in answer (send it back, hand it on), which its other
 followers hear. Counting the progress changes agents (anything but a person) made on the card within 30 minutes, back to the last
-event a person caused on it (`TaskBoard.agentProgressRun`, from the card's own `task_events`: no counter, no column), the followers
+event a person caused on it (`TaskBoard.agentProgressRun`, from the card's own `task_events`: no counter, no column; it reads only
+moves, reassignments and a person's events, so an agent's log lines and comments, however many, cannot push changes out of the
+count), the followers
 are told only while the count is `AGENT_PROGRESS_CHAIN` (6) or fewer; past it the change is kept and tells no follower, and the
 writer's answer says so (`progress_chain`), until a person touches the card or the older changes are 30 minutes old. A person's
 changes are never limited. The guard holds *followers* only: the assignee's and the dispatcher's own news (sent back, to confirm,
@@ -403,7 +405,10 @@ agent need not message them.
 
 **Watchers** are rows in `task_watchers (task_id, instance, added_by, at)`. Setting them is not a change of the card's content: it
 does not bump the card's `version` (a page editing the card is not told it conflicts) but moves the board's revision, and the card's
-log says who started or stopped a watch (`watchers: +ops, -dev-b`). A person changes anyone's; an instance its own on any board card,
+history says who started or stopped a watch (a `logged` event: `watchers: +ops, -dev-b`, with the names also as `watchers.added` /
+`watchers.removed`). It writes no log entry or comment: an entry's text is shown and searched by every reader, and a hidden instance's
+name in it would reach a read-only viewer over the public link, while an event is checked value by value and dropped whole when it
+names a hidden instance (AGEND-300 review). A person changes anyone's; an instance its own on any board card,
 and another's only on a card it may edit (assignee, creator, dispatcher, or an unassigned card). A name must be a fleet instance with
 the task board on (an instance that left the fleet can still be removed). The card's detail (`GET /ui/tasks/cards/<id>`) lists them
 (`watchers`); over the public link a read-only session does not see hidden instances among them.
@@ -415,7 +420,7 @@ have a reason to follow a card. A project's lead, until now only the Needs you l
 **Compatibility.** Wakes are read from a write's events as it commits, never from stored data: opening a database from before this
 rule tells nobody anything about old events. The one addition is the `task_watchers` table (`CREATE TABLE IF NOT EXISTS` on open;
 a release without it ignores it, and its prune leaves watchers of a pruned card behind, which the next prune here sweeps). No column
-changes, and a watch writes what a log line always wrote: an entry and a `logged` event.
+changes, and a watch writes only a `logged` event (a release without this shows its `text` as it shows any log line's).
 
 ## Step 3: the person in the chat
 

@@ -265,7 +265,7 @@ describe("2. the leader: a project's lead, else the board's", () => {
 });
 
 describe("3. watchers", () => {
-  it("the person sets them; the card's log says who; the card keeps its version (a page editing it is not told it conflicts)", () => {
+  it("the person sets them; the card's history says who and what, as names a reader can check; the card keeps its version (a page editing it is not told it conflicts)", () => {
     const { board, projectId } = rig();
     const c = card(board, LEAD, { assignee: "dev-a" });
     const revision = board.revision();
@@ -274,10 +274,14 @@ describe("3. watchers", () => {
     expect(board.getCard(c.code).version).toBe(c.version);
     expect(board.revision()).toBeGreaterThan(revision);
     expect(board.detail(c.code).watchers).toEqual(["ops", "dev-b"]);
-    expect(board.detail(c.code).logs.map((e) => [e.author, e.text])).toEqual([["Ann", "watchers: +ops, +dev-b"]]);
+    const watched = () => board.detail(c.code).history.filter((e) => e.type === "logged").map((e) => [e.actor, e.data]);
+    expect(watched()).toEqual([["Ann", { text: "watchers: +ops, +dev-b", watchers: { added: ["ops", "dev-b"], removed: [] } }]]);
     board.setWatchers(ANN, c.code, { remove: ["ops"] });
     expect(board.detail(c.code).watchers).toEqual(["dev-b"]);
-    expect(board.detail(c.code).logs.map((e) => e.text).slice(-1)).toEqual(["watchers: -ops"]);
+    expect(watched().slice(-1)).toEqual([["Ann", { text: "watchers: -ops", watchers: { added: [], removed: ["ops"] } }]]);
+    // No log entry and no comment: an entry's text is shown and searched by every reader, so the names stay in the event.
+    expect(board.detail(c.code).logs).toEqual([]);
+    expect(board.search("ops").filter((h) => h.card.uuid === c.uuid)).toEqual([]);
     expect(projectId).toBeGreaterThan(0);
   });
 
@@ -329,11 +333,11 @@ describe("3. watchers", () => {
     const { board } = rig(join(tmp(), "scheduler.db"), names);
     const c = card(board, LEAD, { assignee: "dev-a" });
     board.setWatchers(ANN, c.code, { add: ["ops"] });
-    const logs = () => board.detail(c.code).logs.length;
-    const before = logs();
+    const events = () => board.detail(c.code).history.length;
+    const before = events();
     expect(noteKeys(board.setWatchers(ANN, c.code, { add: ["ops"] }))).toEqual(["no_change"]);
     expect(noteKeys(board.setWatchers(ANN, c.code, { remove: ["dev-b"] }))).toEqual(["no_change"]);
-    expect(logs()).toBe(before);
+    expect(events()).toBe(before);
     board.setCommentRouting({ instances: () => ["lead", "dev-a"], enabled: () => true });     // ops left the fleet
     expect(board.setWatchers(ANN, c.code, { remove: ["ops"] }).watchers).toEqual([]);
   });
@@ -394,6 +398,19 @@ describe("4. the loop guard", () => {
     step(r, AGENT_PROGRESS_CHAIN + 2);
     expect(brief(r.take())).toEqual(["dev-a:sent_back"]);
     expect(r.board.getCard(r.c.code).status).toBe("claimed");
+  });
+
+  it("an agent's many log lines and comments on the card do not push its progress changes out of the count", () => {
+    const r = cycle();
+    for (let n = 1; n <= 2; n++) step(r, n);
+    // far more than the window's rows: log lines and comments by agents between the early changes and the late ones
+    for (let i = 0; i < 230; i++) r.board.updateCard(DEV, r.c.code, i % 2 ? { log: `step ${i}` } : { state: `done ${i}` });
+    for (let i = 0; i < 20; i++) r.board.updateCard(LEAD, r.c.code, { comment: `note ${i}` });
+    r.take();
+    const told: string[][] = [];
+    for (let n = 3; n <= AGENT_PROGRESS_CHAIN + 1; n++) { step(r, n); told.push(followers(r.take())); }
+    expect(told.slice(0, -1).every((t) => t.length === 1)).toBe(true);
+    expect(told.at(-1), "the 7th agent change, whatever came between").toEqual([]);
   });
 
   it("a person touching the card lifts it: the agents' count starts again", () => {
@@ -692,10 +709,11 @@ describe("7. compatibility", () => {
       const cols = (t: string) => (raw.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((x) => x.name);
       expect(cols("task_watchers")).toEqual(["task_id", "instance", "added_by", "at"]);
       expect(cols("tasks")).not.toContain("watchers");
-      // A watch leaves what a log line always left: an entry and a `logged` event with its text.
+      // A watch is one `logged` event with its text (a release without this shows it as it shows any log line's), the names
+      // also as values; no entry, so no reader's log or search carries a name.
       const ev = raw.prepare("SELECT type, data FROM task_events WHERE data LIKE '%watchers:%'").get() as { type: string; data: string };
-      expect([ev.type, JSON.parse(ev.data)]).toEqual(["logged", { text: "watchers: +ops" }]);
-      expect((raw.prepare("SELECT kind FROM task_entries WHERE text LIKE 'watchers:%'").get() as { kind: string }).kind).toBe("log");
+      expect([ev.type, JSON.parse(ev.data)]).toEqual(["logged", { text: "watchers: +ops", watchers: { added: ["ops"], removed: [] } }]);
+      expect(raw.prepare("SELECT kind FROM task_entries WHERE text LIKE 'watchers:%'").all()).toEqual([]);
     } finally { raw.close(); }
   });
 
