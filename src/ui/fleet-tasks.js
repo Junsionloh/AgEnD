@@ -681,7 +681,7 @@ function placeOf(cards, id, reload) {
   const card = cards.find((c) => c.id === id);
   if (!card || card.status === "cancelled") return null;
   const column = cards.filter((c) => c.status !== "cancelled" && (card.kind === "sub"
-    ? c.kind === "sub" && c.parentId === card.parentId
+    ? c.kind === "sub" && !!card.parentId && c.parentId === card.parentId
     : c.kind === "main" && projectKey(c) === projectKey(card) && c.status === card.status)).sort((a, b) => a.sort - b.sort);
   const i = column.findIndex((c) => c.id === id);
   const go = (after, before) => async () => { try { await boardApi.reorder(id, after, before); reload(); } catch (err) { toast(errorText(err), false); } };

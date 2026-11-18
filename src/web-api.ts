@@ -3895,8 +3895,15 @@ export function handleWebRequest(
     const scope = { leaveOutAuthors: gateway ? Object.keys(ctx.fleetConfig?.instances ?? {}).filter(hiddenName) : [] };
     const hiddenRef = (ref: string | null) => { const c = ref ? board.findCard(ref) : undefined; return !!c && hidden(c); };
     const mentionsHidden = (v: unknown): boolean => (typeof v === "string" ? hiddenName(v) : !!v && typeof v === "object" && Object.values(v).some(mentionsHidden));
+    // AGEND-309: a main task kept out of sight is not numbered by its sub tasks either — a card's `parentId`, and the `parent`
+    // of its "created" event, read as none over the link (the card number alone says a main task is there). Each main task
+    // is looked up once per request, whatever the number of its sub tasks.
+    const mainHidden = new Map<string, boolean>();
+    const hiddenMain = (code: string): boolean => { let h = mainHidden.get(code); if (h === undefined) { h = hiddenRef(code); mainHidden.set(code, h); } return h; };
+    const unparented = <T extends { parentId: string | null }>(v: T): T => gateway && v.parentId && hiddenMain(v.parentId) ? { ...v, parentId: null } : v;
     const shown = (d: ReturnType<typeof board.detail>): typeof d => !gateway ? d : {
       ...d,
+      card: unparented(d.card),
       parent: d.card.parentId && hiddenRef(d.card.parentId) ? null : d.parent,
       children: d.children.filter((c) => !hidden(c)),
       watchers: d.watchers.filter((n) => !hiddenName(n)),
@@ -3905,7 +3912,10 @@ export function handleWebRequest(
       leader: d.leader && hiddenName(d.leader.name) ? null : d.leader,       // as a project's hidden lead: read as none
       comments: d.comments.filter((e) => !hiddenName(e.author)),
       logs: d.logs.filter((e) => !hiddenName(e.author)),
-      history: d.history.filter((e) => !hiddenName(e.actor) && !mentionsHidden(e.data)),
+      history: d.history.filter((e) => !hiddenName(e.actor) && !mentionsHidden(e.data)).map((e) => {
+        const main = e.type === "created" && e.data && typeof e.data === "object" ? (e.data as { parent?: unknown }).parent : null;
+        return typeof main === "string" && hiddenMain(main) ? { ...e, data: { ...e.data, parent: null } } : e;
+      }),
     };
     const card = /^\/ui\/tasks\/cards\/([^/]+)(?:\/(move|reorder|watchers))?$/.exec(path);
     const project = /^\/ui\/tasks\/projects\/(\d+)$/.exec(path);
@@ -3932,7 +3942,7 @@ export function handleWebRequest(
         // #2355 review: the names a project's lead may be — the fleet's instances (a Classic-only room is not one); over the
         // public link, not a hidden one.
         const leads = Object.keys(ctx.fleetConfig?.instances ?? {}).filter((n) => !hiddenName(n)).sort();
-        const body = JSON.stringify({ rev, cards: board.views(cards, scope, ctx.dispatcherGone), projects, leads, boardOff, stats: board.projectStats(ctx.dispatcherGone) });
+        const body = JSON.stringify({ rev, cards: board.views(cards, scope, ctx.dispatcherGone).map(unparented), projects, leads, boardOff, stats: board.projectStats(ctx.dispatcherGone) });
         if (key) boardBodies.set(board, { key, body });
         jsonText(res, 200, body);
         return true;
@@ -3953,7 +3963,7 @@ export function handleWebRequest(
         const works = names.map((name) => ({ name, w: byName.get(name)! }));
         const all = new Map<string, Parameters<typeof board.views>[0][number]>();
         for (const { w } of works) for (const c of [...w.doing, ...w.blocked, ...w.review, ...w.ready, ...w.waiting.map((x) => x.card), ...w.mains.map((x) => x.card)]) if (!hidden(c)) all.set(c.uuid, c);
-        const viewOf = new Map(board.views([...all.values()], scope, ctx.dispatcherGone).map((v) => [v.uuid, v]));
+        const viewOf = new Map(board.views([...all.values()], scope, ctx.dispatcherGone).map((v) => [v.uuid, unparented(v)]));
         const drawn = (cards: Array<{ uuid: string }>) => cards.flatMap((c) => (viewOf.has(c.uuid) ? [viewOf.get(c.uuid)!] : []));
         const codes = (cards: Array<{ card: { uuid: string; code: string } }>) => cards.filter((x) => all.has(x.card.uuid)).map((x) => x.card.code);
         const body = JSON.stringify({ instances: works.map(({ name, w }) => ({
@@ -3969,7 +3979,7 @@ export function handleWebRequest(
       if (method === "GET" && path === "/ui/tasks/search") {
         const names = new Map(board.listProjects(true).map((p) => [p.id, p.name]));
         const hits = board.search(url.searchParams.get("q") ?? "", Number(url.searchParams.get("limit")) || 20, scope).filter((h) => !hidden(h.card));
-        const views = board.views(hits.map((h) => h.card), scope, ctx.dispatcherGone);
+        const views = board.views(hits.map((h) => h.card), scope, ctx.dispatcherGone).map(unparented);
         const results = hits.map(({ card: c, match }, i) => ({
           card: views[i],
           match,
