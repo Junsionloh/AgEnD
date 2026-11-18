@@ -232,7 +232,7 @@ describe("what the agent writes is its own block, a line while it has nothing", 
   });
 });
 
-describe("the sub tasks: a bordered list", () => {
+describe("the sub tasks: rows on the page's grid", () => {
   it("done / total and the bar on top, the sub tasks, the line to add one last", async () => {
     await mount(); await openCard("M-2");
     const subs = q(".tp-subs");
@@ -240,7 +240,10 @@ describe("the sub tasks: a bordered list", () => {
     expect(text(subs.querySelector(".tp-subs-count"))).toBe("1 / 2");
     expect(subs.querySelector("svg.tb-bar"), "the shared progress bar").toBeTruthy();
     expect(qa(".tp-subs .tc-children li").map((li) => text(li))).toEqual(["Done S-1 Price list alpha", "To do S-2 Checkout beta"]);
-    const last = subs.lastElementChild ?? subs.children[subs.children.length - 1];
+    expect(qa(".tp-subs .tc-children button").map((b) => [...b.children].map((c: any) => c.className.split(" ")[0])), "a row's columns: status, number, title, who")
+      .toEqual([["tb-pill", "tb-code", "tc-child-title", "tb-who"], ["tb-pill", "tb-code", "tc-child-title", "tb-who"]]);
+    const body = subs.querySelector(".tc-field-body");
+    const last = body.children[body.children.length - 1];
     expect(last.className).toBe("tc-quick-add");
     await typeInto(last, "Receipts");
     fire(last, "keydown", { key: "Enter", cancelable: true }); await settle(12);
@@ -366,5 +369,42 @@ describe("both languages", () => {
     expect(text(q(".tp-agent-note"))).toBe("待啟動：beta 接手後會在這裡更新");
     expect(text(q(".tp-subs-count"))).toBe("1 / 2");
     expect(qa(".tp-group")[2].querySelectorAll(".tp-row dt").map((d: any) => text(d))).toEqual(["待我確認", "相依卡片", "位置"]);
+  });
+});
+
+describe("one invisible grid: label column, value column", () => {
+  it("every labelled row of the main column is a label and a body — the spec, the agent's fields, the sub tasks", async () => {
+    await mount(); await openCard("M-1");
+    for (const f of qa(".tp-body .tc-field")) {
+      expect([...f.children].map((c: any) => c.tagName + "." + c.className), text(f.querySelector("h3"))!).toEqual(["H3.", "DIV.tc-field-body"]);
+    }
+    expect([...q(".tp-subs").children].map((c: any) => c.tagName + "." + c.className)).toEqual(["H3.", "DIV.tc-field-body"]);
+    expect(qa(".tp-body .tc-field").length, "goal, scope, definition, context, state, result").toBe(6);
+  });
+
+  it("the number and the status are above the title; the 'follows sub tasks' chip is on the same row", async () => {
+    await mount(); await openCard("M-2");
+    const row = q(".tp-idrow");
+    expect(text(row.querySelector(".tp-code"))).toBe("M-2");
+    expect(row.querySelector(".tb-pill.st-open")).toBeTruthy();
+    expect(text(row.querySelector(".tp-derived"))).toBe("It has sub tasks: its status follows them");
+    expect([...q(".tp-head").children].map((c: any) => c.className.split(" ")[0])).toEqual(["tp-idrow", "tc-head", "tc-actions"]);
+    expect(text(q(".tc-head")), "the heading is the title only").toBe("Add the shop");
+  });
+
+  it("a timeline line is columns: mark, who, words, time", async () => {
+    CARDS = build();
+    const base = handler;
+    handler = (path, method, body) => {
+      const r: any = base(path, method, body);
+      if (r && r.card && r.card.id === "M-1" && !r.logs?.length && method === "GET") return { ...r, logs: [{ id: 1, author: "alpha", authorKind: "instance", text: "Endpoint done", at: "2026-11-02T11:00:00.000Z" }], history: [{ id: 2, actor: "Ann", actorKind: "person", type: "created", data: {}, at: "2026-11-01T08:00:00.000Z" }] };
+      return r;
+    };
+    await mount(); await openCard("M-1");
+    const lines = qa(".tl-line");
+    expect(lines.length).toBe(2);
+    for (const l of lines) expect([...l.children].map((c: any) => c.className.split(" ")[0].replace(/^icon.*/, "icon")).slice(1), "who, words, time").toEqual(["tl-who", "tl-text", "muted"]);
+    expect(lines.map((l) => text(l.querySelector(".tl-who")))).toEqual(["Ann", "alpha Agent"]);
+    expect(lines.map((l) => text(l.querySelector(".tl-text")))).toEqual(["opened it", "Endpoint done"]);
   });
 });

@@ -147,9 +147,10 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tp-head { grid-area: head; display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
 .tp-body { grid-area: body; display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
 .tp-activity { grid-area: activity; display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
-/* The title, and beside it (under it when the column is narrow) that the status follows the sub tasks. */
-.tp-titlerow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); min-width: 0; }
-.tp-titlerow > .tc-head { flex: 1 1 12em; min-width: 0; }
+/* Above the title: the card's number and status, and (at the right edge) that the status follows the sub tasks. */
+.tp-idrow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); min-width: 0; }
+.tp-idrow > .tp-derived { margin-left: auto; }
+.tp-code { font-size: var(--fs-sm); }
 .tp-derived { display: inline-flex; align-items: center; padding: 2px var(--s-2); border-radius: var(--r-full); background: var(--warn-bg); color: var(--warn); font-size: var(--fs-xs); font-weight: var(--fw-semibold); }
 .tp-block-btn { border-radius: var(--r-full); }
 /* The side column is the app's plain .card (surface, --r-md, its padding and gap); this only places it. */
@@ -165,7 +166,7 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tp-row > dt { color: var(--text-2); }
 .tp-row > dd { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: 0; min-width: 0; }
 .tp-opened { margin: 0; padding-top: var(--s-3); border-top: 1px solid var(--border); font-size: var(--fs-xs); }
-.tp-static { padding: var(--s-1) var(--s-2); }
+.tp-static { display: inline-flex; align-items: center; min-height: 30px; padding: 0 var(--s-2); border: 1px solid transparent; }
 .tp-prio.p-urgent { color: var(--danger); font-weight: var(--fw-semibold); }
 .tp-prio.p-high { color: var(--warn); font-weight: var(--fw-semibold); }
 /* A property is a chip: its value on a button; it shows a border on hover and when open. The menu opens under it. */
@@ -206,7 +207,7 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .p-fleet input.s-ui-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 
 /* The spec (what people wrote): a field that holds text, and the quiet "+ Add" buttons for the ones that do not. */
-.tp-spec { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
+.tp-spec { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
 .tp-adders { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); min-width: 0; }
 .tp-add { display: inline-flex; align-items: center; gap: var(--s-1); min-height: 30px; padding: 0 var(--s-3) 0 var(--s-2); border: 1px solid var(--border); border-radius: var(--r-full); background: none; color: var(--text-2); font: inherit; font-size: var(--fs-sm); white-space: nowrap; cursor: pointer; }
 .tp-add > .icon { color: var(--text-3); }
@@ -217,24 +218,51 @@ button.tb-row-progress:hover { background: var(--surface-2); }
    nothing to show it is one line (.is-strip). */
 .tr-run.tp-agent { --lbar-color: var(--accent); margin: 0; border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border)); background: color-mix(in srgb, var(--accent) 5%, var(--surface)); padding-left: calc(var(--s-3) + 3px); }
 .tp-agent-icon { display: inline-flex; flex: none; color: var(--accent); }
-.tp-agent-fields { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
+.tp-agent-fields { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
 .tp-agent-add { display: flex; }
 .tp-agent .tc-text:hover { background: var(--bg); }
 .tr-run.tp-agent.is-strip { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); min-height: 40px; padding: var(--s-1) var(--s-3); border-radius: var(--r-md); background: var(--accent-dim); color: var(--text-2); font-size: var(--fs-sm); }
 .tp-agent-note { min-width: 0; overflow-wrap: anywhere; }
 .tp-agent.is-strip .tp-add { min-height: 26px; background: var(--bg); font-size: var(--fs-xs); }
 
-/* The sub tasks: a bordered list — done / total with the bar, the sub tasks, a line to add one. */
-.tp-subs { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); overflow: hidden; min-width: 0; }
-.tp-subs-head { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); }
-.tp-subs-head > h3 { margin: 0; font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+/* ── One invisible grid for the page (AGEND-314) ─────────────────────────────────────────────────────────────────────
+   Nothing is drawn: every row of the main column has the same two columns — a label (--tp-label), then its value — so the
+   texts of the spec, the agent's fields and the sub tasks start on one vertical line, and a label sits on its value's first
+   baseline. What a hover box or an edit box takes (its padding and border, --tp-inset) hangs out into the gutter on the left
+   (a negative margin), so the TEXT is on the line, not the box. The side column does the same: a label column and a value
+   column, a chip's text on the value column's edge. On a phone the label is above its value, the left edge the same. */
+.tp { --tp-label: 7rem; --tp-gap: var(--s-3); --tp-inset: calc(var(--s-2) + 1px); }
+.tp .tc-field, .tp .tp-subs { display: grid; grid-template-columns: var(--tp-label) minmax(0, 1fr); column-gap: var(--tp-gap); align-items: start; min-width: 0; }
+.tp .tc-field > h3, .tp .tp-subs > h3 { margin: 0; padding-top: var(--tp-inset); font-size: var(--fs-sm); line-height: var(--lh-sm); font-weight: var(--fw-regular); letter-spacing: 0; text-transform: none; color: var(--text-2); overflow-wrap: anywhere; }
+.tp .tc-field.tone-blocked > h3 { color: var(--danger); }
+.tp .tp-subs > h3 { font-weight: var(--fw-semibold); color: var(--text); }
+.tc-field-body { min-width: 0; }
+.tp .tc-text { width: calc(100% + var(--tp-inset)); margin-left: calc(-1 * var(--tp-inset)); line-height: var(--lh-sm); }
+.tp .tc-text.empty { min-height: 0; padding-block: var(--s-2); font-size: var(--fs-sm); }
+.tp .tc-edit { width: calc(100% + var(--tp-inset)); margin-left: calc(-1 * var(--tp-inset)); }
+.tp .tc-title { margin-left: calc(-1 * var(--tp-inset)); }
+.tp .tc-title-edit { margin-left: calc(-1 * var(--tp-inset)); }
+/* The definition of done: its first row on the label's baseline, the checkboxes on the value column's edge. */
+.tp .tc-checklist { gap: 0; padding-top: calc(var(--tp-inset) - 2px); }
+.tp .tc-checklist li { padding-block: 2px; }
+.tp .tc-checklist .tb-check { line-height: var(--lh-sm); }
+.tp .tc-editlist { margin-left: calc(-1 * var(--s-3)); }
+/* The agent's block: its fields share the page's value column — its own left padding (and bar and border) is taken off the label column. */
+.tp-agent { --tp-agent-inset: calc(var(--s-3) + 4px); }
+.tp-agent .tc-field { grid-template-columns: calc(var(--tp-label) - var(--tp-agent-inset)) minmax(0, 1fr); }
+/* The sub tasks: a count and the bar, then a row each of four columns — status, number, title, who — and a line to add one. */
+.tp-subs-head { display: flex; align-items: center; gap: var(--s-3); padding-top: var(--tp-inset); min-height: calc(var(--lh-sm) + var(--tp-inset)); }
 .tp-subs-count { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; color: var(--text-2); white-space: nowrap; }
-.tp-subs-head > .tb-bar { flex: 0 1 160px; margin-left: auto; }
-.tp-subs .tc-children { gap: 0; margin: 0; border-top: 1px solid var(--border); }
-.tp-subs .tc-children li + li { border-top: 1px solid var(--border); }
-.tp-subs .tc-children button { padding: var(--s-2) var(--s-3); border-radius: 0; }
-.tp-subs .tc-quick-add { display: block; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: none; padding: var(--s-2) var(--s-3); resize: none; }
-.tp-subs .tc-quick-add:focus { background: var(--bg); box-shadow: inset 0 0 0 2px var(--focus); }
+.tp-subs-head > .tb-bar { flex: 0 1 12rem; margin-left: auto; }
+.tp-subs .tc-children { gap: 0; margin: var(--s-1) 0 0; }
+.tp-subs .tc-children button { display: grid; grid-template-columns: 6.5rem 3.5rem minmax(0, 1fr) auto; align-items: center; column-gap: var(--s-2); width: calc(100% + var(--s-2)); min-height: 32px; margin-left: calc(-1 * var(--s-2)); padding: var(--s-1) 0 var(--s-1) var(--s-2); }
+.tp-subs .tc-children .tb-pill { justify-self: start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-subs .tc-children .tb-who { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.tp-subs .tc-quick-add { display: block; width: calc(100% + var(--tp-inset)); min-height: 32px; margin-left: calc(-1 * var(--tp-inset)); padding: var(--s-1) var(--s-2); border: 1px solid transparent; background: none; resize: none; }
+.tp-subs .tc-quick-add:hover { background: var(--surface); }
+.tp-subs .tc-quick-add:focus { border-color: var(--focus); background: var(--bg); }
+/* The side column: a chip's (or a plain value's) text on the value column's edge. */
+.tp-side .tp-chip, .tp-side .tp-static { margin-left: calc(-1 * var(--tp-inset)); }
 
 /* Text edited in place: the title, the fields, the checklist (fleet-task-edit.js). No buttons unless a conflict asks. */
 .tc-title-edit { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
@@ -258,10 +286,13 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tl-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-bottom: var(--s-1); font-size: var(--fs-xs); }
 .tl-time { margin-left: auto; font-size: var(--fs-xs); white-space: nowrap; }
 .tl-body { white-space: pre-wrap; }
-.tl-line { display: flex; align-items: baseline; gap: var(--s-2); padding: 0 var(--s-1); color: var(--text-2); font-size: var(--fs-xs); }
-.tl-line > .icon { flex: none; align-self: center; color: var(--ok); }
-.tl-line > .tb-dot { align-self: center; }
-.tl-text { flex: 1; min-width: 0; }
+.tl-line { display: grid; grid-template-columns: 1rem 9rem minmax(0, 1fr) auto; align-items: baseline; column-gap: var(--s-2); padding: 0 0 0 calc(var(--s-2) + 3px); color: var(--text-2); font-size: var(--fs-xs); }
+.tl-line > .icon { align-self: center; justify-self: center; color: var(--ok); }
+.tl-line > .tb-dot { align-self: center; justify-self: center; }
+.tl-who { display: flex; align-items: baseline; gap: var(--s-1); min-width: 0; }
+.tl-who > b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-text { min-width: 0; }
+.tl-line > .tl-time { justify-self: end; margin-left: 0; }
 .tl-none { margin: 0; }
 .tc-composer { align-items: stretch; }
 .tc-compose-box { position: relative; flex: 1; min-width: 0; }
@@ -299,6 +330,17 @@ button.tb-row-progress:hover { background: var(--surface-2); }
   .tp-add { min-height: var(--tap); }
   .tp-agent.is-strip .tp-add { min-height: var(--tap); }
   .tp-subs .tc-children button, .tp-subs .tc-quick-add { min-height: var(--tap); }
+  /* The label above its value, the same left edge; the sub task's who under its title; a timeline line's actor above its words. */
+  .tp .tc-field, .tp .tp-subs, .tp-agent .tc-field { grid-template-columns: minmax(0, 1fr); }
+  .tp .tc-field > h3, .tp .tp-subs > h3 { padding-top: 0; }
+  .tp .tc-checklist { padding-top: 0; }
+  .tp-subs-head { padding-top: var(--s-1); min-height: 0; }
+  .tp-subs .tc-children button { grid-template-columns: 5.5rem 3rem minmax(0, 1fr); }
+  .tp-subs .tc-children .tb-who { grid-column: 3; justify-self: start; max-width: 100%; }
+  .tl-line { grid-template-columns: 1rem minmax(0, 1fr) auto; }
+  .tl-line > .tl-who { grid-column: 2; grid-row: 1; }
+  .tl-line > .tl-text { grid-column: 2; grid-row: 2; }
+  .tl-line > .tl-time { grid-column: 3; grid-row: 1; }
   .tc-composer { flex-direction: column; }
   .tc-composer > .btn { align-self: stretch; min-height: var(--tap); }
   .tl-filter .tb-seg-btn { min-height: var(--tap); }

@@ -85,9 +85,9 @@ function Entry({ entry, describe }) {
       <div class="tl-body">${entry.text}</div></li>`;
   }
   if (entry.type === "log") {
-    return html`<li class=${`tl-item tl-line tl-log${mark}`}><${Icon} name="check" size=${14} /><span class="tl-text"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null} ${entry.text}</span>${time}</li>`;
+    return html`<li class=${`tl-item tl-line tl-log${mark}`}><${Icon} name="check" size=${14} /><span class="tl-who"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null}</span><span class="tl-text">${entry.text}</span>${time}</li>`;
   }
-  return html`<li class=${`tl-item tl-line tl-event${mark}`}><span class="tb-dot" aria-hidden="true"></span><span class="tl-text"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null} ${describe(entry.ev)}</span>${time}</li>`;
+  return html`<li class=${`tl-item tl-line tl-event${mark}`}><span class="tb-dot" aria-hidden="true"></span><span class="tl-who"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null}</span><span class="tl-text">${describe(entry.ev)}</span>${time}</li>`;
 }
 
 /** The merged timeline with its filter (all, comments, progress log, history). `describe(ev)` words a history event. */
