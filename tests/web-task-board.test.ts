@@ -505,6 +505,59 @@ describe("4b. who handed a card out, from the dashboard", () => {
   });
 });
 
+describe("4f. AGEND-299: who follows a card, from the dashboard", () => {
+  const fleetConfig = { defaults: {}, instances: { "dev-a": {}, ops: {}, spy: { cross_instance_visibility: "hidden" } } };
+  const named = () => {
+    const db = scratchDb();
+    db.board.setCommentRouting({ instances: () => ["dev-a", "ops", "spy"], enabled: () => true });
+    db.board.createCards(ANN, { cards: [{ title: "Work", assignee: "dev-a" }] });
+    return db;
+  };
+
+  it("a signed-in person adds and removes watchers; the card's read lists them; a name that is no instance, or a field it does not take, is a 400", async () => {
+    const db = named();
+    const set = (body: unknown, opts: { tier?: "admin" | "read" } = {}) => viaLink(db, "POST", "/ui/tasks/cards/M-1/watchers", body, { local: true, fleetConfig, ...opts });
+    const added = await set({ add: ["ops", "dev-a"] });
+    expect(added.status).toBe(200);
+    expect(added.body.watchers).toEqual(["ops", "dev-a"]);
+    expect(added.body.card).toMatchObject({ id: "M-1", version: 1 });                 // watching does not bump the card's version
+    expect((await viaLink(db, "GET", "/ui/tasks/cards/M-1", undefined, { local: true, fleetConfig })).body.watchers).toEqual(["ops", "dev-a"]);
+    expect((await set({ remove: ["dev-a"] })).body.watchers).toEqual(["ops"]);
+    const ghost = await set({ add: ["ghost"] });
+    expect([ghost.status, ghost.body.code, ghost.body.key]).toEqual([400, "invalid", "watcher_unknown"]);
+    expect((await set({ add: ["ops"], nothing: 1 })).status).toBe(400);
+    expect((await set({ add: ["ops"] }, { tier: "read" })).status).toBe(403);
+    expect((await viaLink(db, "POST", "/ui/tasks/cards/M-9/watchers", { add: ["ops"] }, { local: true, fleetConfig })).status).toBe(404);
+  });
+
+  it("over the link a read-only session does not see a hidden instance among a card's watchers — not in the card's read as a whole, its history, its logs, a search for it or the board (an admin session and the local page do)", async () => {
+    const db = named();
+    db.board.setWatchers(ANN, "M-1", { add: ["ops", "spy"] });
+    db.board.setWatchers(ANN, "M-1", { remove: ["spy"] });
+    db.board.setWatchers(ANN, "M-1", { add: ["spy"] });
+    const get = (path: string, opts: { tier?: "admin" | "read"; local?: boolean }) => viaLink(db, "GET", path, undefined, { fleetConfig, ...opts });
+    const card = await get("/ui/tasks/cards/M-1", { tier: "read" });
+    expect(card.body.watchers).toEqual(["ops"]);
+    expect(JSON.stringify(card.body), "the whole read").not.toContain("spy");
+    for (const path of ["/ui/tasks/search?q=spy", "/ui/tasks/search?q=watchers", "/ui/tasks/search?q=%2Bspy", "/ui/tasks/board"]) {
+      const body = (await get(path, { tier: "read" })).body;
+      expect(JSON.stringify(body), `${path} for a read-only session`).not.toContain("spy");
+    }
+    expect((await get("/ui/tasks/search?q=spy", { tier: "read" })).body.results).toEqual([]);
+    // An event that names a hidden instance goes whole (the first one here added ops and spy together); what the person
+    // did about visible instances only stays in the history the link shows.
+    db.board.setWatchers(ANN, "M-1", { add: ["dev-a"] });
+    const after = (await get("/ui/tasks/cards/M-1", { tier: "read" })).body;
+    expect(after.history.filter((e: any) => e.type === "logged").map((e: any) => e.data.text)).toEqual(["watchers: +dev-a"]);
+    // The admin session over the link and the local page see all of it.
+    for (const opts of [{}, { local: true }] as const) {
+      const full = (await get("/ui/tasks/cards/M-1", opts)).body;
+      expect(full.watchers).toEqual(["ops", "spy", "dev-a"]);
+      expect(full.history.filter((e: any) => e.type === "logged").map((e: any) => e.data.text)).toContain("watchers: +ops, +spy");
+    }
+  });
+});
+
 describe("4e. #2756: whom a card waits for, through the routes (#2757 review: a dispatcher deleted, caches warm)", () => {
   it("lead's card in review is lead's to confirm — on the board, the card's own read and the work drawer; once lead is deleted, the person's on all three", async () => {
     const h = rig();

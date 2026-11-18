@@ -254,6 +254,7 @@ is still blocked —
 | cancelled | the assignee | someone else cancelled it — or its main task, taking it down — with why |
 | comment | the assignee | someone else commented on its card, with the words (not while the card is finished or still waits on its dependencies, and not once the assignee has read the comment with a write of its own) |
 | mention | the instance named | a comment names it with `@<instance>`, whoever's card it is and whatever its state, with the words |
+| progress | the card's followers | a card finished, went to review, was sent back, was blocked or changed hands, with who did it and the words (see "Following a card") |
 
 Never its own write, never a finished card (but for a cancel and a mention), never a name that is not one of the
 fleet's instances. `TaskBoard.wakeHolds` drops what no longer stands — at the end of the write and again when it goes
@@ -351,11 +352,75 @@ own message the way an assignment is, because a reply must not wait minutes — 
 instance naming the card, the board does not repeat it.
 
 **Compatibility.** Wakes are read from a write's events as it commits (Step 2), never from stored comments: opening a
-database from before this rule wakes nobody, and comments written before it are never told. No column or table is added
+database from before this rule wakes nobody, and comments written before it are never told. No column or table is added by this rule
 (`task_entries` and `task_events` are written as they always were: the event keeps its `text` only), so a release
 without the rule reads the same database. The stored comments, the `task` tool's `comment` field and the dashboard's
 comment box are unchanged; `@` autocomplete in the box is the Tasks page's, and it needs only to insert the same plain
 `@<instance name>`.
+
+## Following a card
+
+**The rule.** The instances that follow a card hear how it moved on, as a `[Task board]` notice (reason `progress`): it was
+**finished**, went to **review**, was **sent back**, was **blocked**, or **changed hands**. Nothing else is progress — not a
+start, an edit, a log line, a reorder, a cancel or a comment (comments are "Comments and mentions"). The notice carries the
+card's number and title, what happened, who did it, the words that came with it (the result, a send-back's or a block's
+reason) and why the instance hears it ("you handed it out", "you watch it", "you lead its project"), and says to step in
+(comment, reassign, open the next card) only if it needs you. **Why.** A card finished, or blocked by the person, told nobody
+(#2801: "a confirmation wakes nobody"), so a project's leader had to be asked, or look, to learn what was done. The owner asked
+(AGEND-292, 2026-11-18) that finishing or progress can wake the instance that coordinates — a project leader — without a
+person calling it.
+
+**Who follows** (`TaskBoard.followersOf`), in this order of reason when one instance is several of them:
+1. *Its dispatcher*, when it is an instance: the instance that opened it for another one (AGEND-299 reuses the existing
+   concept — the creator or assigner — and adds no field). A sub task takes its main task's.
+2. *Its watchers*: instances set on the card by the person, by the instance itself or by someone who may edit the card
+   (`task watch` / `unwatch`, `POST /ui/tasks/cards/<id>/watchers`); at most 10 per card. A main task's watchers follow its
+   sub tasks too.
+3. *Its leader*: the lead of its project (`task_projects.lead_instance`, #2352 — until now only the lane for Needs you's
+   buttons), else the board's leader, `defaults.task_board.leader` in fleet.yaml, which also leads the cards in no project.
+
+Never: the instance that made the change; the card's assignee (it has its own news); a name that is not a fleet instance, or
+an instance with the task board off; a card the `task` tool opened for itself (not on the board). A card the person opened has
+no instance dispatcher — nobody hears it was finished unless it has a watcher or a leader. The board's own catch-up (a main task
+settling after a release without the board moved its sub tasks) tells nobody.
+
+**Not twice.** A dispatcher's own news outranks it: an instance told `decide` (blocked on a question for it) or `to_confirm`
+(a card waiting for its confirmation) is not also told `progress` for the same change. An instance that is dispatcher, watcher
+and leader hears once. Everything goes through the same 10 s gather, the delivery outbox, the withdrawals and the told-already
+rule as every other notice (an agent that also messaged the follower naming the card has told it).
+
+**Loop guard.** A follower that is also an agent can change the card in answer (send it back, hand it on), which its other
+followers hear. Counting the progress changes agents (anything but a person) made on the card within 30 minutes, back to the last
+event a person caused on it (`TaskBoard.agentProgressRun`, from the card's own `task_events`: no counter, no column; it reads only
+moves, reassignments and a person's events, so an agent's log lines and comments, however many, cannot push changes out of the
+count), the followers
+are told only while the count is `AGENT_PROGRESS_CHAIN` (6) or fewer; past it the change is kept and tells no follower, and the
+writer's answer says so (`progress_chain`), until a person touches the card or the older changes are 30 minutes old. A person's
+changes are never limited. The guard holds *followers* only: the assignee's and the dispatcher's own news (sent back, to confirm,
+decide) are the board's older rules and are as they were. It is separate from the comment guard (4 turns): each counts its own
+kind, so a card cannot be kept awake by alternating them without limit — each is bounded by the person's next touch.
+
+**Said, not refused.** The writer's answer lists who will be told (`progress_wakes`: "lead (dispatcher), ops (leader)"), so an
+agent need not message them.
+
+**Watchers** are rows in `task_watchers (task_id, instance, added_by, at)`. Setting them is not a change of the card's content: it
+does not bump the card's `version` (a page editing the card is not told it conflicts) but moves the board's revision, and the card's
+history says who started or stopped a watch (a `logged` event: `watchers: +ops, -dev-b`, with the names also as `watchers.added` /
+`watchers.removed`). It writes no log entry or comment: an entry's text is shown and searched by every reader, and a hidden instance's
+name in it would reach a read-only viewer over the public link, while an event is checked value by value and dropped whole when it
+names a hidden instance (AGEND-300 review). A person changes anyone's; an instance its own on any board card,
+and another's only on a card it may edit (assignee, creator, dispatcher, or an unassigned card). A name must be a fleet instance with
+the task board on (an instance that left the fleet can still be removed). The card's detail (`GET /ui/tasks/cards/<id>`) lists them
+(`watchers`); over the public link a read-only session does not see hidden instances among them.
+
+**Switch.** `defaults.task_board.progress_wakes: false` turns all of this off at once (comments and mentions, and every other
+notice, are unchanged). It is on by default, read at each write: the owner asked for it, and it tells only instances that already
+have a reason to follow a card. A project's lead, until now only the Needs you lane, now also hears its project's progress.
+
+**Compatibility.** Wakes are read from a write's events as it commits, never from stored data: opening a database from before this
+rule tells nobody anything about old events. The one addition is the `task_watchers` table (`CREATE TABLE IF NOT EXISTS` on open;
+a release without it ignores it, and its prune leaves watchers of a pruned card behind, which the next prune here sweeps). No column
+changes, and a watch writes only a `logged` event (a release without this shows its `text` as it shows any log line's).
 
 ## Step 3: the person in the chat
 
@@ -401,4 +466,7 @@ confirming and sending back work, and answering a blocked card, happen in the ch
 
 ## Next
 
+- **Watchers on the page.** The detail page's property side (AGEND-294) lists a card's watchers and lets the person add and
+  remove them, over `POST /ui/tasks/cards/<id>/watchers` (`{ add: [...], remove: [...] }`); until then they are set by the
+  `task` tool and the route.
 - **Step 3, rest.** Each instance's board work on its details page (and a list of every instance's on the board).
