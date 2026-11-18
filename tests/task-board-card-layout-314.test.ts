@@ -1,0 +1,370 @@
+/**
+ * AGEND-314: the card's page, laid out lighter (scheme A).
+ *  - a spec field nobody filled in (goal, scope, definition of done, context) is a small "+ Add" button, not an empty block;
+ *    a button opens its field in place, an empty one closed again folds back, a saved one is a field like the others;
+ *  - what an agent writes (state, result) is not in the spec: it is in the agent's block with "Agent activity" — one line while
+ *    there is nothing to show (and the buttons to write them by hand), open once there is;
+ *  - the sub tasks are a bordered list with done / total, a bar and a line to add one;
+ *  - the properties are three groups; "needs my confirmation" is a switch; the "Now" row is gone; Mark blocked is in the header;
+ *  - nothing changes in what can be seen or edited, nor over a read-only link; both languages say it.
+ */
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { page, settle, h, type AppPage } from "./helpers/app-harness.js";
+import { fire } from "./helpers/mini-dom.js";
+
+let p: AppPage;
+let fleet: any, cardMod: any, i18n: any, preact: any, app: any, nav: any;
+const calls: Array<{ method: string; path: string; body: any }> = [];
+let handler: (path: string, method: string, body: any) => unknown = () => ({});
+const fetchFake = async (path: string, o: any = {}) => {
+  const method = o.method ?? "GET";
+  const body = o.body ? JSON.parse(o.body) : null;
+  calls.push({ method, path, body });
+  const out: any = await handler(path, method, body);
+  const status = out && typeof out === "object" && "__status" in out ? out.__status : 200;
+  return { ok: status < 400, status, json: async () => out };
+};
+
+const ago = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+const card = (over: Record<string, unknown>) => ({ id: "M-1", uuid: String(over.id ?? "M-1"), kind: "main", projectId: 1, parentId: null, title: "A card", status: "open",
+  assignee: null, dispatcher: { kind: "person", name: "Ann" }, waitsForPerson: false, confirmer: null, priority: "normal", size: null, needsReview: true, dependsOn: [], goal: "", scope: "",
+  acceptance: [] as Array<{ text: string; done: boolean }>, context: "", state: "", blockedReason: "", result: "", sort: 1, createdBy: "Ann", version: 4, createdAt: ago(10), updatedAt: ago(1), startedAt: null, submittedAt: null,
+  doneAt: null, progress: { total: 0, open: 0, claimed: 0, blocked: 0, review: 0, done: 0 }, unmetDeps: [], commentCount: 0, newCommentCount: 0, lastComment: null, ...over });
+const PROJECT = { id: 1, name: "Leaderboard", description: "", archived: false, sort: 1, createdAt: ago(30) };
+
+let CARDS: any[] = [];
+const build = () => {
+  // M-2: a main task with sub tasks and nothing written; M-1: every field filled; M-5: no sub tasks, nothing written; M-6: finished.
+  const m1 = card({ id: "M-1", title: "Serve the weekly leaderboard", status: "claimed", assignee: "alpha", goal: "Players see their rank", scope: "In: ranks / Out: prizes",
+    acceptance: [{ text: "Ties share a rank", done: true }, { text: "Under 300 ms", done: false }], context: "See M-4", state: "Endpoint done, tests next", result: "src/rank.ts; npm test passes", sort: 1 });
+  const m2 = card({ id: "M-2", title: "Add the shop", status: "open", assignee: "beta", sort: 2, progress: { total: 2, open: 1, claimed: 0, blocked: 0, review: 0, done: 1 } });
+  const s1 = card({ id: "S-1", kind: "sub", parentId: "M-2", title: "Price list", status: "done", assignee: "alpha", sort: 1 });
+  const s2 = card({ id: "S-2", kind: "sub", parentId: "M-2", title: "Checkout", status: "open", assignee: "beta", sort: 2 });
+  const m5 = card({ id: "M-5", title: "Nobody has it", status: "open", sort: 5 });
+  const m6 = card({ id: "M-6", title: "Shipped", status: "done", assignee: "alpha", doneAt: ago(1), sort: 6, progress: { total: 2, open: 0, claimed: 0, blocked: 0, review: 0, done: 2 } });
+  return [m1, m2, s1, s2, m5, m6];
+};
+const detailOf = (id: string) => {
+  const c: any = CARDS.find((x: any) => x.id === id) ?? card({ id });
+  return { card: c, parent: c.parentId ? { id: "M-2", title: "Add the shop", status: "open" } : null, children: c.kind === "main" ? CARDS.filter((x: any) => x.parentId === c.id) : [],
+    comments: [], logs: [], history: [], watchers: [], inheritedWatchers: [], leader: null, followsProgress: true };
+};
+
+beforeAll(async () => {
+  p = page({ url: "http://127.0.0.1:19280/ui/fleet", storage: { agend_tour_done: "1" } });
+  (globalThis as any).fetch = fetchFake;
+  app = await import("/assets/app-store.js");
+  nav = await import("/assets/app-nav.js");
+  i18n = await import("/assets/app-i18n.js");
+  preact = await import("/assets/app-html.js");
+  fleet = await import("/ui/js/panel-fleet.js");
+  cardMod = await import("/ui/js/fleet-task-card.js");
+  nav.startRouter(p.window);
+});
+afterAll(() => { p.restore(); delete (globalThis as any).fetch; });
+
+beforeEach(async () => {
+  await p.unmount();
+  i18n.setLang("en", { store: false });
+  const ls = (globalThis as any).localStorage;
+  for (const k of ["agend_tasks_project", "agend_tasks_display", "agend_tasks_filters", "agend_tasks_assignee", "agend_tasks_query", "agend_tasks_collapsed"]) ls.removeItem(k);
+  (globalThis as any).history.replaceState(null, "", "/ui/fleet");
+  (globalThis as any).history.entries.length = 1;
+  (globalThis as any).history.states.length = 1;
+  (globalThis as any).history.at = 0;
+  calls.length = 0;
+  CARDS = build();
+  handler = (path, method, body) => {
+    if (path.startsWith("/ui/tasks/board")) return { rev: 1, projects: [PROJECT], cards: CARDS, boardOff: [] };
+    if (path === "/ui/tasks/cards" && method === "POST") return { card: card({ id: "S-9", kind: "sub", parentId: body.parent, title: body.title }), notes: [] };
+    const m = /^\/ui\/tasks\/cards\/([^/]+)(\/move)?$/.exec(path);
+    if (m && method === "POST") {
+      // A write lands on the card, so the page's next read shows it (the version moves on as the board's does).
+      const c: any = CARDS.find((x: any) => x.id === decodeURIComponent(m[1]!));
+      if (c && body) { for (const k of ["goal", "scope", "context", "state", "result", "needsReview"]) if (k in body) c[k] = body[k]; if ("acceptance" in body) c.acceptance = body.acceptance.map((text: string) => ({ text, done: false })); c.version += 1; }
+      return { card: c, notes: [] };
+    }
+    if (m) return detailOf(decodeURIComponent(m[1]!));
+    return {};
+  };
+  app.applyStatus({ uptime: 1, instances: ["alpha", "beta", "gamma"].map((name) => ({ name, status: "running", state: "idle", execution_state: "idle" })) });
+});
+
+let mounts = 0;
+async function mount(display: Record<string, unknown> | null = null) {
+  await p.unmount();
+  (globalThis as any).history.replaceState(null, "", "/ui/fleet");
+  (globalThis as any).localStorage.setItem("agend_tasks_project", "1");
+  if (display) (globalThis as any).localStorage.setItem("agend_tasks_display", JSON.stringify(display));
+  await p.mount(h(fleet.FleetPanel, { route: { panel: "fleet", tab: "tasks" }, navKey: `fleet:tasks|l314-${++mounts}|en` }));
+  await settle(8);
+}
+const q = (sel: string) => p.root.querySelector(sel);
+const qa = (sel: string) => [...p.root.querySelectorAll(sel)] as any[];
+const text = (el: any): string | null => (el ? el.childNodes.map((n: any) => (n.nodeType === 3 ? n.textContent : text(n)) ?? "").map((s: string) => s.replace(/\s+/g, " ").trim()).filter(Boolean).join(" ") : null);
+const doc = () => (globalThis as any).document;
+const posts = () => calls.filter((c) => c.method === "POST");
+async function openCard(id: string) { fire(q(`[data-tile="${id}"] .tb-tile-title`) ?? q(`[data-row="${id}"] .tb-row-title`), "click"); await settle(10); }
+const typeInto = async (el: any, value: string) => { el.value = value; el.selectionStart = value.length; fire(el, "input"); await settle(4); };
+const linkBtn = () => qa(".tp-bar .icon-btn").find((b) => (b.getAttribute("aria-label") ?? "").includes("link"));
+const adders = (scope = ".tp-body > .tp-adders") => qa(`${scope} .tp-add`).map((b) => text(b));
+const fieldOf = (title: string) => qa(".tp-body .tc-field").find((f) => text(f.querySelector("h3")) === title);
+
+describe("a spec field nobody filled in is a button", () => {
+  it("a card with nothing written has the four buttons and no empty block; a filled card has its four fields and no button", async () => {
+    await mount(); await openCard("M-2");
+    expect(q(".tp-spec"), "no field is shown").toBeNull();
+    expect(qa(".tp-body .tc-field").length).toBe(0);
+    expect(adders()).toEqual(["Add goal", "Add scope", "Add definition of done", "Add context"]);
+    await mount(); await openCard("M-1");
+    expect(qa(".tp-spec .tc-field h3").map((h) => text(h))).toEqual(["Goal", "Scope", "Definition of done", "Context"]);
+    expect(q(".tp-body > .tp-adders"), "every spec field holds text: no button").toBeNull();
+    expect(text(q(".tp-spec .tc-text"))).toBe("Players see their rank");
+  });
+
+  it("a sub task says Acceptance, has no scope, and keeps the same buttons", async () => {
+    await mount(); await openCard("M-2");
+    fire(qa(".tc-children button").find((b) => text(b)!.includes("S-2")), "click"); await settle(10);
+    expect(adders()).toEqual(["Add goal", "Add acceptance", "Add context"]);
+  });
+
+  it("a button opens its field in place with the focus; left empty it folds back and sends nothing", async () => {
+    await mount(); await openCard("M-2");
+    fire(q('.tp-add[data-add="scope"]'), "click"); await settle(4);
+    expect(text(fieldOf("Scope")!.querySelector("h3"))).toBe("Scope");
+    const box = fieldOf("Scope")!.querySelector("textarea");
+    expect(box, "open as it appears").toBeTruthy();
+    expect(doc().activeElement).toBe(box);
+    expect(adders(), "its button is gone while it is open").toEqual(["Add goal", "Add definition of done", "Add context"]);
+    fire(box, "blur"); await settle(8);
+    expect(posts()).toEqual([]);
+    expect(fieldOf("Scope"), "folded back").toBeUndefined();
+    expect(adders()).toEqual(["Add goal", "Add scope", "Add definition of done", "Add context"]);
+    fire(q('.tp-add[data-add="goal"]'), "click"); await settle(4);                  // Esc folds it back too
+    fire(fieldOf("Goal")!.querySelector("textarea"), "keydown", { key: "Escape", cancelable: true }); await settle(6);
+    expect(fieldOf("Goal")).toBeUndefined();
+    expect(q(".tp"), "the box took the Esc, the page stays").toBeTruthy();
+  });
+
+  it("what is typed saves as it does anywhere (the version it started from) and the field is then a field, in its place", async () => {
+    await mount(); await openCard("M-2");
+    fire(q('.tp-add[data-add="context"]'), "click"); await settle(4);
+    fire(q('.tp-add[data-add="goal"]'), "click"); await settle(4);                  // opened second, shown first (the spec's order)
+    expect(qa(".tp-spec .tc-field h3").map((h) => text(h))).toEqual(["Goal", "Context"]);
+    const box = fieldOf("Context")!.querySelector("textarea");
+    await typeInto(box, "See M-4");
+    fire(box, "keydown", { key: "Enter", ctrlKey: true, cancelable: true }); await settle(12);
+    expect(posts().map((c) => [c.path, c.body])).toEqual([["/ui/tasks/cards/M-2", { context: "See M-4", version: 4 }]]);
+    expect(text(fieldOf("Context")!.querySelector(".tc-text"))).toBe("See M-4");
+    expect(fieldOf("Context")!.querySelector("textarea"), "the edit is closed, the field stays").toBeNull();
+    expect(fieldOf("Goal")!.querySelector("textarea"), "another open field is not disturbed by it").toBeTruthy();
+    expect(adders()).toEqual(["Add scope", "Add definition of done"]);
+  });
+
+  it("the definition of done opens its list editor, one item per line", async () => {
+    await mount(); await openCard("M-2");
+    fire(q('.tp-add[data-add="definition"]'), "click"); await settle(4);
+    const box = fieldOf("Definition of done")!.querySelector("textarea");
+    expect(doc().activeElement).toBe(box);
+    await typeInto(box, "Prices shown\nCheckout works");
+    fire(box, "blur"); await settle(12);
+    expect(posts().map((c) => c.body)).toEqual([{ acceptance: ["Prices shown", "Checkout works"], version: 4 }]);
+    expect(qa(".tc-checklist li").length).toBe(2);
+  });
+
+  it("a filled field closed by emptying it is a button again; the next card starts with its own buttons", async () => {
+    await mount(); await openCard("M-1");
+    fire(fieldOf("Scope")!.querySelector(".tc-text"), "click"); await settle(4);
+    const box = fieldOf("Scope")!.querySelector("textarea");
+    await typeInto(box, "");
+    fire(box, "blur"); await settle(12);
+    expect(posts().map((c) => c.body)).toEqual([{ scope: "", version: 4 }]);
+    expect(fieldOf("Scope")).toBeUndefined();
+    expect(adders()).toEqual(["Add scope"]);
+  });
+});
+
+describe("what the agent writes is its own block, a line while it has nothing", () => {
+  it("nothing written, not running: one line; no State or Result field in the spec; the buttons are in the line", async () => {
+    await mount(); await openCard("M-2");
+    const line = q(".tr-run");
+    expect(line.className).toContain("is-strip");
+    expect(text(q(".tp-agent-note"))).toBe("Not started: beta will update this once it takes the card");
+    expect(text(line.querySelector(".tr-title"))).toBe("Agent activity");
+    expect(adders(".tr-run")).toEqual(["Add state", "Add result"]);
+    expect(fieldOf("State")).toBeUndefined();
+    expect(qa(".tp-spec h3").map((h) => text(h)), "State and Result are not spec").not.toContain("State");
+    expect(qa(".tp-body > *").map((el) => el.className.split(" ")[0]), "the line is after the spec, before the sub tasks").toEqual(["tp-adders", "tr-run", "tp-subs"]);
+  });
+
+  it("a button in the line opens that field inside the block, which then opens up; closing it empty is the line again", async () => {
+    await mount(); await openCard("M-2");
+    fire(q('.tr-run .tp-add[data-add="state"]'), "click"); await settle(4);
+    const block = q(".tr-run");
+    expect(block.className).not.toContain("is-strip");
+    expect(block.querySelector(".tp-agent-fields .tc-field h3").textContent).toBe("State");
+    expect(doc().activeElement).toBe(block.querySelector("textarea"));
+    expect(q(".tp-spec"), "not in the spec").toBeNull();
+    expect(adders(".tr-run")).toEqual(["Add result"]);
+    fire(block.querySelector("textarea"), "keydown", { key: "Escape", cancelable: true }); await settle(6);
+    expect(q(".tr-run").className).toContain("is-strip");
+  });
+
+  it("a card with a state and a result: the block is open with both fields, apart from the spec", async () => {
+    await mount(); await openCard("M-1");
+    const block = q(".tr-run");
+    expect(block.className).not.toContain("is-strip");
+    expect(qa(".tr-run .tc-field h3").map((h) => text(h))).toEqual(["State", "Result"]);
+    expect(qa(".tp-spec .tc-field h3").map((h) => text(h))).toEqual(["Goal", "Scope", "Definition of done", "Context"]);
+    expect(text(block.querySelector(".tr-title"))).toBe("Agent activity");
+    expect(text(block.querySelector(".tb-who"))).toBe("alpha");
+    expect(block.querySelector("a.tr-open").getAttribute("href")).toBe("/ui/chat/alpha");
+    expect(q(".tr-run .tp-agent-add"), "both are written: no button left").toBeNull();
+  });
+
+  it("a state is edited in place and saved like any text", async () => {
+    await mount(); await openCard("M-1");
+    fire(qa(".tr-run .tc-field").find((f) => text(f.querySelector("h3")) === "State")!.querySelector(".tc-text"), "click"); await settle(4);
+    const box = q(".tr-run textarea");
+    await typeInto(box, "Tests green");
+    fire(box, "blur"); await settle(12);
+    expect(posts().map((c) => c.body)).toEqual([{ state: "Tests green", version: 4 }]);
+  });
+});
+
+describe("the sub tasks: a bordered list", () => {
+  it("done / total and the bar on top, the sub tasks, the line to add one last", async () => {
+    await mount(); await openCard("M-2");
+    const subs = q(".tp-subs");
+    expect(text(subs.querySelector("h3"))).toBe("Sub tasks");
+    expect(text(subs.querySelector(".tp-subs-count"))).toBe("1 / 2");
+    expect(subs.querySelector("svg.tb-bar"), "the shared progress bar").toBeTruthy();
+    expect(qa(".tp-subs .tc-children li").map((li) => text(li))).toEqual(["Done S-1 Price list alpha", "To do S-2 Checkout beta"]);
+    const last = subs.lastElementChild ?? subs.children[subs.children.length - 1];
+    expect(last.className).toBe("tc-quick-add");
+    await typeInto(last, "Receipts");
+    fire(last, "keydown", { key: "Enter", cancelable: true }); await settle(12);
+    expect(posts().map((c) => [c.path, c.body])).toEqual([["/ui/tasks/cards", { parent: "M-2", title: "Receipts" }]]);
+  });
+
+  it("a main task without sub tasks has the list to add the first; a finished one only reads", async () => {
+    await mount(); await openCard("M-5");
+    expect(text(q(".tp-subs h3"))).toBe("Sub tasks");
+    expect(q(".tp-subs .tp-subs-count"), "nothing to count yet").toBeNull();
+    expect(q(".tp-subs .tc-quick-add")).toBeTruthy();
+    await mount({ done: "all" }); await openCard("M-6");
+    expect(text(q(".tp-subs .tp-subs-count"))).toBe("2 / 2");
+    expect(q(".tp-subs .tc-quick-add"), "a finished card takes no more").toBeNull();
+  });
+
+  it("a sub task has no list of its own", async () => {
+    await mount(); await openCard("M-2");
+    fire(qa(".tc-children button").find((b) => text(b)!.includes("S-2")), "click"); await settle(10);
+    expect(q(".tp-subs")).toBeNull();
+  });
+});
+
+describe("the properties in three groups", () => {
+  it("core state, project and people, flow — and no 'Now' row", async () => {
+    await mount(); await openCard("M-2");
+    const rows = (i: number) => qa(".tp-group")[i].querySelectorAll(".tp-row dt").map((d: any) => text(d));
+    expect(qa(".tp-group").length).toBe(3);
+    expect(rows(0)).toEqual(["Status", "Assignee", "Priority", "Size"]);
+    expect(rows(1)).toEqual(["Project", "Leader", "Dispatched by", "Watchers"]);
+    expect(rows(2), "(Position: this card has a neighbour to move past)").toEqual(["Needs my confirmation", "Waits for", "Position"]);
+    expect(qa(".tp-group").map((g) => g.getAttribute("role"))).toEqual(["group", "group", "group"]);
+    expect(qa(".tp-props .tp-row dt").map((d) => text(d))).not.toContain("Now");
+    expect(q(".tp-side").textContent).not.toContain("Next");
+  });
+
+  it("a sub task's group has its main task where the project is", async () => {
+    await mount(); await openCard("M-2");
+    fire(qa(".tc-children button").find((b) => text(b)!.includes("S-2")), "click"); await settle(10);
+    expect(qa(".tp-group")[1].querySelectorAll(".tp-row dt").map((d: any) => text(d))).toEqual(["Main task", "Leader", "Dispatched by", "Watchers"]);
+  });
+
+  it("needs my confirmation is a switch that saves at once", async () => {
+    await mount(); await openCard("M-2");
+    const sw = q(".tp-switch input");
+    expect(sw.getAttribute("role")).toBe("switch");
+    expect(sw.className).toContain("s-ui-toggle");
+    expect(sw.getAttribute("aria-label")).toBe("Stop at review for my confirmation");
+    expect(sw.checked).toBe(true);
+    sw.checked = false;
+    fire(sw, "change"); await settle(12);
+    expect(posts().map((c) => [c.path, c.body])).toEqual([["/ui/tasks/cards/M-2", { needsReview: false, version: 4 }]]);
+  });
+});
+
+describe("the header toolbar", () => {
+  it("Mark blocked is beside the link and ⋯, not under the title; only where it was offered before", async () => {
+    await mount(); await openCard("M-2");
+    const bar = q(".tp-bar");
+    expect(text(bar.querySelector(".tp-block-btn"))).toBe("Mark blocked");
+    expect(linkBtn(), "the link is in the toolbar").toBeTruthy();
+    expect(bar.querySelector(".tp-more")).toBeTruthy();
+    expect(qa(".tc-actions .btn").map((b) => text(b)), "not the page's most obvious button under the title").toEqual([]);
+    expect(text(q(".tp-derived"))).toBe("It has sub tasks: its status follows them");
+    expect(text(q(".tc-head")), "the chip is not in the heading").toBe("Add the shop");
+    fire(bar.querySelector(".tp-block-btn"), "click"); await settle(6);
+    expect(qa("dialog[open]").at(-1)?.textContent, "it asks why, as before").toContain("Blocked on");
+  });
+
+  it("a card that does not follow sub tasks, a blocked one and a finished one have none", async () => {
+    await mount(); await openCard("M-5");
+    expect(q(".tp-block-btn")).toBeNull();
+    expect(q(".tp-derived")).toBeNull();
+    expect(q(".tp-bar .tp-more"), "⋯ keeps cancel").toBeTruthy();
+    await mount({ done: "all" }); await openCard("M-6");
+    expect(q(".tp-block-btn")).toBeNull();
+    expect(q(".tp-bar .tp-more"), "nothing to put in ⋯ for a finished card").toBeNull();
+    expect(linkBtn(), "the link is always there").toBeTruthy();
+    expect(qa(".tc-actions .btn").map((b) => text(b))).toEqual(["Reopen"]);
+  });
+});
+
+describe("read only: what is there is shown, nothing is offered", () => {
+  it("over a link that cannot write: no buttons, no empty field, the text of the others", async () => {
+    await p.unmount();
+    const c = CARDS.find((x: any) => x.id === "M-2");
+    CARDS = CARDS.map((x: any) => (x.id === "M-2" ? { ...c, goal: "Players buy badges" } : x));
+    await p.mount(h(cardMod.CardPage, { id: "M-2", tick: 0, projects: [PROJECT], writable: false, back: "Back to the board", onBack() {}, onOpen() {}, onStep() {}, reloadBoard() {} }));
+    await settle(10);
+    expect(q(".tp-add")).toBeNull();
+    expect(qa(".tp-body .tc-field h3").map((h) => text(h))).toEqual(["Goal"]);
+    expect(text(q(".tp-spec .tc-text"))).toBe("Players buy badges");
+    expect(q(".tr-run").className, "the agent's line says it, and has no button").toContain("is-strip");
+    expect(q(".tr-run .tp-add")).toBeNull();
+    expect(q(".tc-quick-add")).toBeNull();
+    expect(q(".tp-switch")).toBeNull();
+    expect(q(".tp-props input")).toBeNull();
+    expect(q(".tp-props button.tp-chip")).toBeNull();
+    expect(q(".tp-block-btn")).toBeNull();
+    expect(q(".tc-composer")).toBeNull();
+  });
+});
+
+describe("both languages", () => {
+  it("every string the new layout uses is in English and Traditional Chinese, with the same holes", () => {
+    const keys = ["groupCore", "groupTeam", "groupFlow", "addGoal", "addScope", "addDefinition", "addAcceptance", "addContext", "addState", "addResult", "subs", "subsDone", "reviewShort", "review", "deps"]
+      .map((k) => `taskcard.${k}`).concat(["waiting", "waitingNobody", "viaSubs", "nothingYet"].map((k) => `taskrun.${k}`));
+    const holes = (s: string) => [...new Set(s.match(/\{\d\}/g) ?? [])].sort().join();
+    for (const key of keys) {
+      const en = i18n.tIn("en", key), zh = i18n.tIn("zh-TW", key);
+      expect(en, key).not.toBe(key);
+      expect(zh, key).not.toBe(key);
+      expect(zh, `${key} is translated`).not.toBe(en);
+      expect(holes(zh), `${key} placeholders`).toBe(holes(en));
+    }
+  });
+
+  it("in Traditional Chinese: the buttons, the groups, the line", async () => {
+    i18n.setLang("zh-TW", { store: false });
+    await mount(); await openCard("M-2");
+    expect(adders()).toEqual(["新增目標", "新增範圍", "完成定義", "補充背景"]);
+    expect(qa(".tp-group-title").map((g) => text(g))).toEqual(["核心狀態", "專案與協作", "流程控制"]);
+    expect(text(q(".tp-agent-note"))).toBe("待啟動：beta 接手後會在這裡更新");
+    expect(text(q(".tp-subs-count"))).toBe("1 / 2");
+    expect(qa(".tp-group")[2].querySelectorAll(".tp-row dt").map((d: any) => text(d))).toEqual(["待我確認", "相依卡片", "位置"]);
+  });
+});

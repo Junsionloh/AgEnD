@@ -388,7 +388,7 @@ describe("a card is a page of its own", () => {
     expect(hist().entries.length, "one history entry for it").toBe(entries + 1);
     expect(hist().state).toEqual({ tbCard: 1 });
     expect(doc().activeElement.className).toBe("tc-head");
-    expect(qa(".tp-grid > *").map((el) => el.className), "the properties are the app's plain .card").toEqual(["tp-head", "card tp-side", "tp-body"]);
+    expect(qa(".tp-grid > *").map((el) => el.className), "a phone's single column is this order; the properties are the app's plain .card").toEqual(["tp-head", "tp-body", "card tp-side", "tp-activity"]);
   });
 
   it("Back (its button, or the browser's) returns to the board with the card's tile; the entry it added is gone", async () => {
@@ -463,12 +463,18 @@ describe("a card is a page of its own", () => {
     expect(q(".tp")).toBeNull();
   });
 
-  it("the page's order: properties right under the title (a phone's single column keeps this order), the body after them", async () => {
+  it("the page's order: title, spec, the agent's line, sub tasks, properties, activity (a phone's single column keeps this order)", async () => {
     await mount();
     await openCard("M-1");
-    expect(qa(".tp-props .tp-row dt").map((d) => text(d))).toEqual(["Status", "Assignee", "Dispatched by", "Watchers", "Leader", "Project", "Priority", "Size", "Your confirmation", "Waits for"]);   // AGEND-301: Watchers and Leader follow Dispatched by
-    expect(qa(".tp-body > *").map((el) => el.className.split(" ")[0]), "the assignee's activity (AGEND-296: a card with an assignee); goal, scope, definition, context, state, result, sub tasks; then the timeline and the comment box")
-      .toEqual(["card", "tc-field", "tc-field", "tc-field", "tc-field", "tc-field", "tc-field", "tc-field", "tl", "tc-composer"]);
+    expect(qa(".tp-group").map((g) => text(g.querySelector(".tp-group-title"))), "AGEND-314: three groups").toEqual(["Core", "Project and people", "Flow"]);
+    expect(qa(".tp-props .tp-row dt").map((d) => text(d))).toEqual(["Status", "Assignee", "Priority", "Size",
+      "Project", "Leader", "Dispatched by", "Watchers",          // AGEND-301: Watchers and Leader are with the project and the dispatcher
+      "Needs my confirmation", "Waits for"]);
+    expect(qa(".tp-group").map((g) => qa(".tp-group").indexOf(g) + ":" + g.querySelectorAll(".tp-row").length)).toEqual(["0:4", "1:4", "2:2"]);
+    // M-1: its goal and definition of done are filled (the spec); scope and context are buttons; the agent has written nothing (a line); no sub tasks yet (the list is there to add one).
+    expect(qa(".tp-body > *").map((el) => el.className.split(" ")[0])).toEqual(["tp-spec", "tp-adders", "tr-run", "tp-subs"]);
+    expect(qa(".tp-spec .tc-field h3").map((h) => text(h))).toEqual(["Goal", "Definition of done"]);
+    expect(qa(".tp-activity > *").map((el) => el.className.split(" ")[0]), "then the timeline and the comment box").toEqual(["tl", "tc-composer"]);
   });
 });
 
@@ -544,14 +550,22 @@ describe("a property is a chip: choosing saves at once", () => {
   it("the page's controls are the dashboard's: every property but the dependencies' list is a chip", async () => {
     await mount();
     await openCard("M-1");
-    expect(qa(".tp-props button.tp-chip").map((b) => b.getAttribute("aria-label"))).toEqual(["Status", "Assignee", "Dispatched by", "Project", "Priority", "Size"]);
-    expect(qa(".tp-props input[type=checkbox]").length, "your confirmation is a tick").toBe(1);
+    expect(qa(".tp-props button.tp-chip").map((b) => b.getAttribute("aria-label"))).toEqual(["Status", "Assignee", "Priority", "Size", "Project", "Dispatched by"]);
+    expect(qa(".tp-props input[type=checkbox]").length, "needs my confirmation is a switch").toBe(1);
+    expect(q(".tp-props input[type=checkbox]").getAttribute("role")).toBe("switch");
   });
 });
 
 describe("text edits where it is read", () => {
   const fieldOf = (title: string) => qa(".tp-body .tc-field").find((f) => text(f.querySelector("h3")) === title);
-  const open = async (title: string) => { fire(fieldOf(title).querySelector(".tc-text"), "click"); await settle(4); return fieldOf(title).querySelector("textarea"); };
+  const ADD: Record<string, string> = { Goal: "goal", Scope: "scope", "Definition of done": "definition", Context: "context", State: "state", Result: "result" };
+  /** A field that holds text opens on a click; an empty one is a "+ Add" button first (and opens as it appears). */
+  const open = async (title: string) => {
+    if (fieldOf(title)) fire(fieldOf(title).querySelector(".tc-text"), "click");
+    else fire(q(`.tp-add[data-add="${ADD[title]}"]`), "click");
+    await settle(4);
+    return fieldOf(title).querySelector("textarea");
+  };
 
   it("leaving the box saves, and there is no Save or Cancel button on the way", async () => {
     await mount();
@@ -577,7 +591,8 @@ describe("text edits where it is read", () => {
     fire(box, "keydown", { key: "Escape", cancelable: true }); await settle(4);
     fire(box, "blur"); await settle(8);
     expect(posts()).toEqual([]);
-    expect(fieldOf("State").querySelector("textarea")).toBeNull();
+    expect(fieldOf("State"), "an empty field closed again folds back into its button").toBeUndefined();
+    expect(q('.tp-add[data-add="state"]')).toBeTruthy();
     box = await open("Goal");                                   // opened and left as it was
     fire(box, "blur"); await settle(8);
     expect(posts()).toEqual([]);

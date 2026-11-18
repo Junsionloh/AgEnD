@@ -37,25 +37,28 @@ const windowAway = () => typeof document !== "undefined" && typeof document.hasF
  * `phase`: "idle", "saving", "conflict" (the card changed meanwhile: Ctrl+Enter / overwrite() sends it anyway) or
  * "failed" (not saved: leaving the box or Ctrl+Enter tries again).
  */
-export function useInlineEdit({ value, version, onSave, valid = () => true, prepare = (d) => d.trim(), same = (d, v) => d === v, emptyDrops = false }) {
-  const [draft, setDraft] = useState(null);
+export function useInlineEdit({ value, version, onSave, valid = () => true, prepare = (d) => d.trim(), same = (d, v) => d === v, emptyDrops = false, open = false, onClose }) {
+  // `open`: the edit is already open as it first draws (a field a person asked for with its "+ Add" button). `onClose`: the
+  // edit has ended — saved, dropped or nothing changed — so a field that opened empty can fold back into its button.
+  const [draft, setDraft] = useState(open ? value : null);
   const [phase, setPhase] = useState("idle");
   const base = useEditBase(version);
   const ref = useAutoFocus(draft !== null);
   const dropped = useRef(false);   // Esc: the blur that follows must not save
   const busy = useRef(false);
   const start = (text = value) => { dropped.current = false; setPhase("idle"); setDraft(text); base.start(); };
-  const cancel = () => { dropped.current = true; setDraft(null); setPhase("idle"); };
+  const close = () => { setDraft(null); setPhase("idle"); if (onClose) onClose(); };
+  const cancel = () => { dropped.current = true; close(); };
   async function commit() {
     if (draft === null || busy.current) return;
     const next = prepare(draft);
-    if (same(next, value) || (emptyDrops && next === "")) { setDraft(null); setPhase("idle"); return; }   // nothing changed, or nothing left: as it was
+    if (same(next, value) || (emptyDrops && next === "")) { close(); return; }   // nothing changed, or nothing left: as it was
     if (!valid(next)) return;
     busy.current = true;
     setPhase("saving");
     let outcome = "error";
     try { outcome = await onSave(next, base.current()); } finally { busy.current = false; }
-    if (outcome === "ok") { setDraft(null); setPhase("idle"); return; }
+    if (outcome === "ok") { close(); return; }
     base.afterSave(outcome);
     setPhase(outcome === "conflict" ? "conflict" : "failed");
   }
@@ -101,8 +104,8 @@ export function InlineTitle({ value, version, limit, onSave }) {
 }
 
 /** A longer text: a block that opens as a box on a click. Its own limit counts as you type. */
-export function EditableText({ value, limit, placeholder, version, readOnly = false, onSave }) {
-  const edit = useInlineEdit({ value, version, onSave, valid: (v) => [...v].length <= limit });
+export function EditableText({ value, limit, placeholder, version, readOnly = false, onSave, open = false, onClose }) {
+  const edit = useInlineEdit({ value, version, onSave, valid: (v) => [...v].length <= limit, open: open && !readOnly, onClose });
   if (readOnly) return html`<p class=${`tc-text${value ? "" : " empty"}`}>${value || "—"}</p>`;
   if (edit.draft === null) {
     return html`<button type="button" class=${`tc-text${value ? "" : " empty"}`} title=${t("taskcard.clickToEdit")} onClick=${() => edit.start()}>${value || placeholder || t("taskcard.empty")}</button>`;
@@ -117,11 +120,11 @@ export function EditableText({ value, limit, placeholder, version, readOnly = fa
 }
 
 /** The definition of done: ticks save at once; "Edit the list" opens one item per line, saved like any text. */
-export function Checklist({ card, readOnly = false, limit, onToggle, onReplace }) {
+export function Checklist({ card, readOnly = false, limit, onToggle, onReplace, open = false, onClose }) {
   const items = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean);
   const current = card.acceptance.map((a) => a.text);
   const edit = useInlineEdit({
-    value: current.join("\n"), version: card.version, prepare: (d) => items(d).join("\n"),
+    value: current.join("\n"), version: card.version, prepare: (d) => items(d).join("\n"), open: open && !readOnly, onClose,
     valid: (v) => (v === "" ? true : items(v).length <= limit),
     onSave: (v, base) => onReplace(items(v), base),
   });
