@@ -4,6 +4,7 @@
 //     title at two lines and the status at one at most (cut with "…", the whole text is the tooltip);
 //  2. a card whose agent is running says "Running" once (the mark in its status line; no moving light);
 //  3. no coloured bar on the left edge, in any status;
+//  7. in the list a running card's "Running" mark is before its title (after the number), not among the tags at the right;
 //  6. the project's list fills the content area like the board (same side margins; at 1440 and 1920 px), the title column takes
 //     the extra width and number / priority / assignee / time keep theirs; a phone's list is unchanged;
 //  5. the card page's activity (heading, filter, timeline) and the comment box are one panel: its own surface, radius and padding,
@@ -131,6 +132,8 @@ const LISTM = `(() => {
   return { viewport: innerWidth, page: Math.round(page.width), left: Math.round(page.left), right: Math.round(innerWidth - page.right), row: row ? Math.round(row.getBoundingClientRect().width) : null,
     title: w(".tb-row-text"), code: w(".tb-row-code"), prio: w(".tb-row-prio"), who: w(".tb-row-who"), time: w(".tb-row-time"),
     headTitle: head(".tb-lh-title"), headPrio: head(".tb-lh-prio"), headWho: head(".tb-lh-who"), headTime: head(".tb-lh-time"),
+    marks: [...document.querySelectorAll(".tb-row .tr-mark")].map((m) => { const row = m.closest(".tb-row"), t = row.querySelector(".tb-row-title").getBoundingClientRect(), c = row.querySelector(".tb-row-code").getBoundingClientRect(), b = m.getBoundingClientRect();
+      return { id: row.dataset.row, afterCode: b.left >= c.right - 1, beforeTitle: b.right <= t.left + 1, sameLine: Math.abs((b.top + b.height / 2) - (t.top + t.height / 2)) < 8, inTags: !!m.closest(".tb-row-tags") }; }),
     rows: document.querySelectorAll(".tb-row").length, overflowX: document.documentElement.scrollWidth - innerWidth };
 })()`;
 
@@ -211,6 +214,7 @@ for (const c of matrix(process.env.MATRIX ?? "desk-dark-zh-TW,desk-light-en,phon
         const list = await page.evaluate(LISTM) as any;
         r.list = { phone: list };
         chk.phoneListNoSideScroll = list.overflowX <= 0;
+        chk.phoneListMarkBeforeTitle = list.marks.length >= 1 && list.marks.every((m: any) => m.afterCode && m.beforeTitle && m.sameLine && !m.inTags);
         chk.phoneListUnchanged = list.page === 358 || list.page === 390 - 2 * list.left;   // the phone's gutters, as before: the page is the window less its margins
         await page.screenshot({ path: shotPath(SMOKE, c, "7-list") });
       } else {
@@ -227,6 +231,8 @@ for (const c of matrix(process.env.MATRIX ?? "desk-dark-zh-TW,desk-light-en,phon
           && ["headPrio", "headWho", "headTime"].every((k) => L[1920][k] === L[1440][k]);
         chk.listTitleTakesTheRest = Math.abs((L[1920].title - L[1440].title) - (L[1920].page - L[1440].page)) <= 2 && L[1920].title > L[1440].title && Math.abs(L[1920].headTitle - L[1440].headTitle - (L[1920].page - L[1440].page)) <= 2;
         chk.listNoSideScroll = [1366, 1440, 1920].every((w) => L[w].overflowX <= 0);
+        // The Running mark leads the title (after the number), on the title's line, at every width.
+        chk.listMarkBeforeTitle = [1366, 1440, 1920].every((w) => L[w].marks.length >= 2 && L[w].marks.every((m: any) => m.afterCode && m.beforeTitle && m.sameLine && !m.inTags));
         await page.setViewportSize({ width: 1470, height: 760 }); await page.waitForTimeout(250);
       }
       await toggle.nth(0).click(); await page.waitForSelector(".tb-tile", { state: "attached", timeout: 10000 }); await page.waitForTimeout(300);

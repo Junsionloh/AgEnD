@@ -428,11 +428,11 @@ function Row({ card, subs, main, flash, now, runs, subsAsRows, who, expanded, on
       <span class="tb-code tb-row-code">${card.id}</span>
       ${main ? html`<span class="tb-row-main" title=${t("taskview.inMain", main.id, main.title)}>${main.id} ›</span>` : null}
       <span class="tb-row-text">
+        <${RunMark} run=${run} />
         <button type="button" class="tb-row-title" onClick=${(e) => { e.stopPropagation(); onOpen(card.id); }}>${card.title}</button>
         ${card.status === "blocked" && card.blockedReason ? html`<span class="tb-row-note">${card.blockedReason}</span>` : null}
       </span>
       <span class="tb-row-tags">
-        <${RunMark} run=${run} />
         ${card.status === "review" ? html`<span class=${`tb-tag st-review${waitsForYou(card) ? " you" : ""}`}>${reviewLabel(card)}</span>` : null}
         ${gap ? html`<span class="tb-tag wrapup" title=${t("tasks.wrapLine", gap)}>${t("tasks.wrapTag")}</span>` : null}
         ${card.size ? html`<span class="tb-size" title=${t("tasks.size")}>${t(`tasks.size${card.size}`)}</span>` : null}

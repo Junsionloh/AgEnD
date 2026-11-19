@@ -252,7 +252,8 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   stuck (its own reason, else a blocked sub task) → whom it waits for → what is running (the agent's mark and/or the sub task in
   progress) → what is next → the sub tasks' progress; a card with nothing to say has no row. When it is not the progress, the sub
   tasks' count (done/total, red once one is blocked) is a small button in the foot that opens the list. A blocked or waiting card
-  says it in its text colour (`--danger`, `--warn`). (3) *No bar on the left edge*, in any status, on the board's tiles (the
+  says it in its text colour (`--danger`, `--warn`). In the list a running row's "Running" mark leads the title (after the number,
+  in the title's cell, as Multica draws it) instead of sitting among the tags at the right. (3) *No bar on the left edge*, in any status, on the board's tiles (the
   list's rows never had one; the card page's agent block keeps its own).
   (4) *The assignee's avatar is a button* (`fleet-task-owner.js`, tile and list row): it opens the card page's picker
   (`assigneeItems`: nobody, each instance, Other…) as the card menu draws it, fixed under the button so the columns' scroll box

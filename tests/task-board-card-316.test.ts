@@ -645,3 +645,29 @@ describe("the card page's activity is one panel", () => {
     expect(CSS).toMatch(/\n  \.tl-line \{ grid-template-columns: 1rem minmax\(0, 1fr\) auto; \}/);
   });
 });
+
+describe("in the list, the Running mark leads the title", () => {
+  const LIST = { view: "list", group: "status", order: "manual", dir: "asc", done: "recent", subs: false };
+  it("a running row has the mark first in its title cell, before the title button; it is no longer among the row's tags", async () => {
+    await mount(LIST);
+    const cell = q('[data-row="M-1"] .tb-row-text');
+    const kids = [...cell.childNodes].filter((n: any) => n.nodeType === 1);
+    expect(kids[0].className).toContain("tr-mark");
+    expect(text(kids[0])).toBe("Running");
+    expect(kids[1].className, "then the title").toContain("tb-row-title");
+    expect(q('[data-row="M-1"] .tb-row-tags .tr-mark'), "not among the tags any more").toBeNull();
+    expect(qa('[data-row="M-1"] .tr-mark').length, "once").toBe(1);
+    expect(q('[data-row="M-2"] .tr-mark'), "a row that does not run has none").toBeNull();
+    expect([...q('[data-row="M-2"] .tb-row-text').childNodes].filter((n: any) => n.nodeType === 1)[0].className).toContain("tb-row-title");
+  });
+  it("it follows the run: the agent idle → no mark; a sub task row of a running main task is the one that runs", async () => {
+    await mount({ ...LIST, subs: true });
+    expect(q('[data-row="S-1"] .tb-row-text .tr-mark'), "the sub task in progress").toBeTruthy();
+    app.applyStatus({ uptime: 2, instances: STORE("idle") }); await settle(6);
+    expect(qa(".tb-row .tr-mark").length).toBe(0);
+  });
+  it("the mark does not take the title's cell off its column: it is a flex item that does not shrink", () => {
+    expect(rule(".tb-row-text")).toMatch(/flex: 1;/);
+    expect(CSS).toMatch(/\.tb-row-text > \.tr-mark \{ flex: none;/);
+  });
+});
