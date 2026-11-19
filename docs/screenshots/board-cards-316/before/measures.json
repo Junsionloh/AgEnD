@@ -22,8 +22,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -51,8 +52,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -80,8 +82,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -109,8 +112,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -138,8 +142,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -167,8 +172,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -196,8 +202,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -225,8 +232,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -254,8 +262,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -283,8 +292,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -344,6 +354,28 @@
      "overflowX": 0
     }
    },
+   "panel": {
+    "x": 280,
+    "width": 846,
+    "bg": "rgba(0, 0, 0, 0)",
+    "pageBg": "rgb(255, 255, 255)",
+    "radius": "0px",
+    "padding": [
+     "0px",
+     "0px",
+     "0px",
+     "0px"
+    ],
+    "heading": 0,
+    "filterGap": 0,
+    "filter": 576.1,
+    "first": 4,
+    "composer": 0,
+    "boxInside": true,
+    "composerLast": true,
+    "gapAboveSubs": 16,
+    "overflowX": 0
+   },
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -355,9 +387,16 @@
     "columnsWide": false,
     "noPageOverflow": true,
     "pageFillsAt1920": false,
-    "runningTiles": false,
-    "lightMoves": false,
-    "reducedMotionStill": false
+    "runningMark": true,
+    "nothingAnimates": true,
+    "panelHasItsOwnSurface": false,
+    "panelRounded": false,
+    "panelPaddedAlike": false,
+    "panelOneLeftEdge": true,
+    "panelTimelineOnItsEdge": true,
+    "panelHoldsTheBox": true,
+    "panelApartFromSubs": true,
+    "panelNoSideScroll": true
    },
    "errors": []
   },
@@ -382,8 +421,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -411,8 +451,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -440,8 +481,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -469,8 +511,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -498,8 +541,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -527,8 +571,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -556,8 +601,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -585,8 +631,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -614,8 +661,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -643,8 +691,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -704,6 +753,28 @@
      "overflowX": 0
     }
    },
+   "panel": {
+    "x": 280,
+    "width": 846,
+    "bg": "rgba(0, 0, 0, 0)",
+    "pageBg": "rgb(255, 255, 255)",
+    "radius": "0px",
+    "padding": [
+     "0px",
+     "0px",
+     "0px",
+     "0px"
+    ],
+    "heading": 0,
+    "filterGap": 0,
+    "filter": 647.5,
+    "first": 4,
+    "composer": 0,
+    "boxInside": true,
+    "composerLast": true,
+    "gapAboveSubs": 16,
+    "overflowX": 0
+   },
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -715,9 +786,16 @@
     "columnsWide": false,
     "noPageOverflow": true,
     "pageFillsAt1920": false,
-    "runningTiles": false,
-    "lightMoves": false,
-    "reducedMotionStill": false
+    "runningMark": true,
+    "nothingAnimates": true,
+    "panelHasItsOwnSurface": false,
+    "panelRounded": false,
+    "panelPaddedAlike": false,
+    "panelOneLeftEdge": true,
+    "panelTimelineOnItsEdge": true,
+    "panelHoldsTheBox": true,
+    "panelApartFromSubs": true,
+    "panelNoSideScroll": true
    },
    "errors": []
   },
@@ -742,8 +820,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -771,8 +850,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -800,8 +880,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -829,8 +910,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -858,8 +940,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -887,8 +970,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -916,8 +1000,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -945,8 +1030,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -974,8 +1060,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1003,8 +1090,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1064,6 +1152,28 @@
      "overflowX": 0
     }
    },
+   "panel": {
+    "x": 280,
+    "width": 846,
+    "bg": "rgba(0, 0, 0, 0)",
+    "pageBg": "rgb(33, 33, 33)",
+    "radius": "0px",
+    "padding": [
+     "0px",
+     "0px",
+     "0px",
+     "0px"
+    ],
+    "heading": 0,
+    "filterGap": 0,
+    "filter": 576.1,
+    "first": 4,
+    "composer": 0,
+    "boxInside": true,
+    "composerLast": true,
+    "gapAboveSubs": 16,
+    "overflowX": 0
+   },
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -1075,9 +1185,16 @@
     "columnsWide": false,
     "noPageOverflow": true,
     "pageFillsAt1920": false,
-    "runningTiles": false,
-    "lightMoves": false,
-    "reducedMotionStill": false
+    "runningMark": true,
+    "nothingAnimates": true,
+    "panelHasItsOwnSurface": false,
+    "panelRounded": false,
+    "panelPaddedAlike": false,
+    "panelOneLeftEdge": true,
+    "panelTimelineOnItsEdge": true,
+    "panelHoldsTheBox": true,
+    "panelApartFromSubs": true,
+    "panelNoSideScroll": true
    },
    "errors": []
   },
@@ -1102,8 +1219,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1131,8 +1249,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1160,8 +1279,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1189,8 +1309,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1218,8 +1339,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1247,8 +1369,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1276,8 +1399,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1305,8 +1429,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1334,8 +1459,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1363,8 +1489,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1424,6 +1551,28 @@
      "overflowX": 0
     }
    },
+   "panel": {
+    "x": 280,
+    "width": 846,
+    "bg": "rgba(0, 0, 0, 0)",
+    "pageBg": "rgb(33, 33, 33)",
+    "radius": "0px",
+    "padding": [
+     "0px",
+     "0px",
+     "0px",
+     "0px"
+    ],
+    "heading": 0,
+    "filterGap": 0,
+    "filter": 647.5,
+    "first": 4,
+    "composer": 0,
+    "boxInside": true,
+    "composerLast": true,
+    "gapAboveSubs": 16,
+    "overflowX": 0
+   },
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -1435,9 +1584,16 @@
     "columnsWide": false,
     "noPageOverflow": true,
     "pageFillsAt1920": false,
-    "runningTiles": false,
-    "lightMoves": false,
-    "reducedMotionStill": false
+    "runningMark": true,
+    "nothingAnimates": true,
+    "panelHasItsOwnSurface": false,
+    "panelRounded": false,
+    "panelPaddedAlike": false,
+    "panelOneLeftEdge": true,
+    "panelTimelineOnItsEdge": true,
+    "panelHoldsTheBox": true,
+    "panelApartFromSubs": true,
+    "panelNoSideScroll": true
    },
    "errors": []
   },
@@ -1462,8 +1618,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1491,8 +1648,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1520,8 +1678,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1549,8 +1708,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1578,8 +1738,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1607,8 +1768,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1636,8 +1798,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1665,8 +1828,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1694,8 +1858,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1723,8 +1888,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1746,6 +1912,28 @@
     "M-3": "null: ",
     "M-4": "null: "
    },
+   "panel": {
+    "x": 16,
+    "width": 358,
+    "bg": "rgba(0, 0, 0, 0)",
+    "pageBg": "rgb(255, 255, 255)",
+    "radius": "0px",
+    "padding": [
+     "0px",
+     "0px",
+     "0px",
+     "0px"
+    ],
+    "heading": 0,
+    "filterGap": 71,
+    "filter": 0,
+    "first": 4,
+    "composer": 0,
+    "boxInside": true,
+    "composerLast": true,
+    "gapAboveSubs": 835,
+    "overflowX": 0
+   },
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -1755,7 +1943,16 @@
     "heightFollowsContent": true,
     "leftEdgesAlign": true,
     "phoneNoSideScroll": true,
-    "runningTiles": false
+    "runningMark": true,
+    "nothingAnimates": true,
+    "panelHasItsOwnSurface": false,
+    "panelRounded": false,
+    "panelPaddedAlike": false,
+    "panelOneLeftEdge": true,
+    "panelTimelineOnItsEdge": true,
+    "panelHoldsTheBox": true,
+    "panelApartFromSubs": true,
+    "panelNoSideScroll": true
    },
    "errors": []
   },
@@ -1780,8 +1977,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1809,8 +2007,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1838,8 +2037,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1867,8 +2067,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1896,8 +2097,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1925,8 +2127,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1954,8 +2157,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -1983,8 +2187,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2012,8 +2217,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2041,8 +2247,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2064,6 +2271,28 @@
     "M-3": "null: ",
     "M-4": "null: "
    },
+   "panel": {
+    "x": 16,
+    "width": 358,
+    "bg": "rgba(0, 0, 0, 0)",
+    "pageBg": "rgb(255, 255, 255)",
+    "radius": "0px",
+    "padding": [
+     "0px",
+     "0px",
+     "0px",
+     "0px"
+    ],
+    "heading": 0,
+    "filterGap": 0,
+    "filter": 148.8,
+    "first": 4,
+    "composer": 0,
+    "boxInside": true,
+    "composerLast": true,
+    "gapAboveSubs": 827,
+    "overflowX": 0
+   },
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -2073,7 +2302,16 @@
     "heightFollowsContent": true,
     "leftEdgesAlign": true,
     "phoneNoSideScroll": true,
-    "runningTiles": false
+    "runningMark": true,
+    "nothingAnimates": true,
+    "panelHasItsOwnSurface": false,
+    "panelRounded": false,
+    "panelPaddedAlike": false,
+    "panelOneLeftEdge": true,
+    "panelTimelineOnItsEdge": true,
+    "panelHoldsTheBox": true,
+    "panelApartFromSubs": true,
+    "panelNoSideScroll": true
    },
    "errors": []
   },
@@ -2098,8 +2336,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2127,8 +2366,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2156,8 +2396,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2185,8 +2426,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2214,8 +2456,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2243,8 +2486,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2272,8 +2516,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2301,8 +2546,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2330,8 +2576,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2359,8 +2606,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2382,6 +2630,28 @@
     "M-3": "null: ",
     "M-4": "null: "
    },
+   "panel": {
+    "x": 16,
+    "width": 358,
+    "bg": "rgba(0, 0, 0, 0)",
+    "pageBg": "rgb(33, 33, 33)",
+    "radius": "0px",
+    "padding": [
+     "0px",
+     "0px",
+     "0px",
+     "0px"
+    ],
+    "heading": 0,
+    "filterGap": 71,
+    "filter": 0,
+    "first": 4,
+    "composer": 0,
+    "boxInside": true,
+    "composerLast": true,
+    "gapAboveSubs": 835,
+    "overflowX": 0
+   },
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -2391,7 +2661,16 @@
     "heightFollowsContent": true,
     "leftEdgesAlign": true,
     "phoneNoSideScroll": true,
-    "runningTiles": false
+    "runningMark": true,
+    "nothingAnimates": true,
+    "panelHasItsOwnSurface": false,
+    "panelRounded": false,
+    "panelPaddedAlike": false,
+    "panelOneLeftEdge": true,
+    "panelTimelineOnItsEdge": true,
+    "panelHoldsTheBox": true,
+    "panelApartFromSubs": true,
+    "panelNoSideScroll": true
    },
    "errors": []
   },
@@ -2416,8 +2695,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2445,8 +2725,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2474,8 +2755,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2503,8 +2785,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2532,8 +2815,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2561,8 +2845,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": true,
+     "mark": true,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2590,8 +2875,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2619,8 +2905,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2648,8 +2935,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2677,8 +2965,9 @@
      "paddingLeft": "14px",
      "paddingTop": "12px",
      "running": false,
+     "mark": false,
      "shine": false,
-     "shineAnim": null,
+     "animated": false,
      "owner": null,
      "leftEdges": [
       15,
@@ -2700,6 +2989,28 @@
     "M-3": "null: ",
     "M-4": "null: "
    },
+   "panel": {
+    "x": 16,
+    "width": 358,
+    "bg": "rgba(0, 0, 0, 0)",
+    "pageBg": "rgb(33, 33, 33)",
+    "radius": "0px",
+    "padding": [
+     "0px",
+     "0px",
+     "0px",
+     "0px"
+    ],
+    "heading": 0,
+    "filterGap": 0,
+    "filter": 148.8,
+    "first": 4,
+    "composer": 0,
+    "boxInside": true,
+    "composerLast": true,
+    "gapAboveSubs": 827,
+    "overflowX": 0
+   },
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -2709,7 +3020,16 @@
     "heightFollowsContent": true,
     "leftEdgesAlign": true,
     "phoneNoSideScroll": true,
-    "runningTiles": false
+    "runningMark": true,
+    "nothingAnimates": true,
+    "panelHasItsOwnSurface": false,
+    "panelRounded": false,
+    "panelPaddedAlike": false,
+    "panelOneLeftEdge": true,
+    "panelTimelineOnItsEdge": true,
+    "panelHoldsTheBox": true,
+    "panelApartFromSubs": true,
+    "panelNoSideScroll": true
    },
    "errors": []
   }
