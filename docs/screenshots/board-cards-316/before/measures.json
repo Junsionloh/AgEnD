@@ -327,6 +327,8 @@
      ],
      "scrolls": false,
      "pageWidth": 1066,
+     "left": 280,
+     "right": 20,
      "overflowX": 0
     },
     "1440": {
@@ -339,6 +341,8 @@
      ],
      "scrolls": false,
      "pageWidth": 1140,
+     "left": 280,
+     "right": 20,
      "overflowX": 0
     },
     "1920": {
@@ -351,6 +355,64 @@
      ],
      "scrolls": false,
      "pageWidth": 1200,
+     "left": 490,
+     "right": 230,
+     "overflowX": 0
+    }
+   },
+   "list": {
+    "1366": {
+     "viewport": 1366,
+     "page": 1066,
+     "left": 280,
+     "right": 20,
+     "row": 1066,
+     "title": 377.6,
+     "code": 54,
+     "prio": 84,
+     "who": 140,
+     "time": 84,
+     "headTitle": 600,
+     "headPrio": 84,
+     "headWho": 140,
+     "headTime": 84,
+     "rows": 10,
+     "overflowX": 0
+    },
+    "1440": {
+     "viewport": 1440,
+     "page": 1140,
+     "left": 280,
+     "right": 20,
+     "row": 1140,
+     "title": 451.6,
+     "code": 54,
+     "prio": 84,
+     "who": 140,
+     "time": 84,
+     "headTitle": 674,
+     "headPrio": 84,
+     "headWho": 140,
+     "headTime": 84,
+     "rows": 10,
+     "overflowX": 0
+    },
+    "1920": {
+     "viewport": 1920,
+     "page": 1200,
+     "left": 490,
+     "right": 230,
+     "row": 1200,
+     "title": 511.6,
+     "code": 54,
+     "prio": 84,
+     "who": 140,
+     "time": 84,
+     "headTitle": 734,
+     "headPrio": 84,
+     "headWho": 140,
+     "headTime": 84,
+     "rows": 10,
      "overflowX": 0
     }
    },
@@ -389,6 +451,11 @@
     "pageFillsAt1920": false,
     "runningMark": true,
     "nothingAnimates": true,
+    "listFillsContent": false,
+    "listMarginsLikeTheBoard": true,
+    "listOtherColumnsKeepWidth": true,
+    "listTitleTakesTheRest": true,
+    "listNoSideScroll": true,
     "panelHasItsOwnSurface": false,
     "panelRounded": false,
     "panelPaddedAlike": false,
@@ -726,6 +793,8 @@
      ],
      "scrolls": false,
      "pageWidth": 1066,
+     "left": 280,
+     "right": 20,
      "overflowX": 0
     },
     "1440": {
@@ -738,6 +807,8 @@
      ],
      "scrolls": false,
      "pageWidth": 1140,
+     "left": 280,
+     "right": 20,
      "overflowX": 0
     },
     "1920": {
@@ -750,6 +821,64 @@
      ],
      "scrolls": false,
      "pageWidth": 1200,
+     "left": 490,
+     "right": 230,
+     "overflowX": 0
+    }
+   },
+   "list": {
+    "1366": {
+     "viewport": 1366,
+     "page": 1066,
+     "left": 280,
+     "right": 20,
+     "row": 1066,
+     "title": 416.4,
+     "code": 54,
+     "prio": 84,
+     "who": 140,
+     "time": 84,
+     "headTitle": 600,
+     "headPrio": 84,
+     "headWho": 140,
+     "headTime": 84,
+     "rows": 10,
+     "overflowX": 0
+    },
+    "1440": {
+     "viewport": 1440,
+     "page": 1140,
+     "left": 280,
+     "right": 20,
+     "row": 1140,
+     "title": 490.4,
+     "code": 54,
+     "prio": 84,
+     "who": 140,
+     "time": 84,
+     "headTitle": 674,
+     "headPrio": 84,
+     "headWho": 140,
+     "headTime": 84,
+     "rows": 10,
+     "overflowX": 0
+    },
+    "1920": {
+     "viewport": 1920,
+     "page": 1200,
+     "left": 490,
+     "right": 230,
+     "row": 1200,
+     "title": 550.4,
+     "code": 54,
+     "prio": 84,
+     "who": 140,
+     "time": 84,
+     "headTitle": 734,
+     "headPrio": 84,
+     "headWho": 140,
+     "headTime": 84,
+     "rows": 10,
      "overflowX": 0
     }
    },
@@ -788,6 +917,11 @@
     "pageFillsAt1920": false,
     "runningMark": true,
     "nothingAnimates": true,
+    "listFillsContent": false,
+    "listMarginsLikeTheBoard": true,
+    "listOtherColumnsKeepWidth": true,
+    "listTitleTakesTheRest": true,
+    "listNoSideScroll": true,
     "panelHasItsOwnSurface": false,
     "panelRounded": false,
     "panelPaddedAlike": false,
@@ -1125,6 +1259,8 @@
      ],
      "scrolls": false,
      "pageWidth": 1066,
+     "left": 280,
+     "right": 20,
      "overflowX": 0
     },
     "1440": {
@@ -1137,6 +1273,8 @@
      ],
      "scrolls": false,
      "pageWidth": 1140,
+     "left": 280,
+     "right": 20,
      "overflowX": 0
     },
     "1920": {
@@ -1149,6 +1287,64 @@
      ],
      "scrolls": false,
      "pageWidth": 1200,
+     "left": 490,
+     "right": 230,
+     "overflowX": 0
+    }
+   },
+   "list": {
+    "1366": {
+     "viewport": 1366,
+     "page": 1066,
+     "left": 280,
+     "right": 20,
+     "row": 1066,
+     "title": 377.6,
+     "code": 54,
+     "prio": 84,
+     "who": 140,
+     "time": 84,
+     "headTitle": 600,
+     "headPrio": 84,
+     "headWho": 140,
+     "headTime": 84,
+     "rows": 10,
+     "overflowX": 0
+    },
+    "1440": {
+     "viewport": 1440,
+     "page": 1140,
+     "left": 280,
+     "right": 20,
+     "row": 1140,
+     "title": 451.6,
+     "code": 54,
+     "prio": 84,
+     "who": 140,
+     "time": 84,
+     "headTitle": 674,
+     "headPrio": 84,
+     "headWho": 140,
+     "headTime": 84,
+     "rows": 10,
+     "overflowX": 0
+    },
+    "1920": {
+     "viewport": 1920,
+     "page": 1200,
+     "left": 490,
+     "right": 230,
+     "row": 1200,
+     "title": 511.6,
+     "code": 54,
+     "prio": 84,
+     "who": 140,
+     "time": 84,
+     "headTitle": 734,
+     "headPrio": 84,
+     "headWho": 140,
+     "headTime": 84,
+     "rows": 10,
      "overflowX": 0
     }
    },
@@ -1187,6 +1383,11 @@
     "pageFillsAt1920": false,
     "runningMark": true,
     "nothingAnimates": true,
+    "listFillsContent": false,
+    "listMarginsLikeTheBoard": true,
+    "listOtherColumnsKeepWidth": true,
+    "listTitleTakesTheRest": true,
+    "listNoSideScroll": true,
     "panelHasItsOwnSurface": false,
     "panelRounded": false,
     "panelPaddedAlike": false,
@@ -1524,6 +1725,8 @@
      ],
      "scrolls": false,
      "pageWidth": 1066,
+     "left": 280,
+     "right": 20,
      "overflowX": 0
     },
     "1440": {
@@ -1536,6 +1739,8 @@
      ],
      "scrolls": false,
      "pageWidth": 1140,
+     "left": 280,
+     "right": 20,
      "overflowX": 0
     },
     "1920": {
@@ -1548,6 +1753,64 @@
      ],
      "scrolls": false,
      "pageWidth": 1200,
+     "left": 490,
+     "right": 230,
+     "overflowX": 0
+    }
+   },
+   "list": {
+    "1366": {
+     "viewport": 1366,
+     "page": 1066,
+     "left": 280,
+     "right": 20,
+     "row": 1066,
+     "title": 416.4,
+     "code": 54,
+     "prio": 84,
+     "who": 140,
+     "time": 84,
+     "headTitle": 600,
+     "headPrio": 84,
+     "headWho": 140,
+     "headTime": 84,
+     "rows": 10,
+     "overflowX": 0
+    },
+    "1440": {
+     "viewport": 1440,
+     "page": 1140,
+     "left": 280,
+     "right": 20,
+     "row": 1140,
+     "title": 490.4,
+     "code": 54,
+     "prio": 84,
+     "who": 140,
+     "time": 84,
+     "headTitle": 674,
+     "headPrio": 84,
+     "headWho": 140,
+     "headTime": 84,
+     "rows": 10,
+     "overflowX": 0
+    },
+    "1920": {
+     "viewport": 1920,
+     "page": 1200,
+     "left": 490,
+     "right": 230,
+     "row": 1200,
+     "title": 550.4,
+     "code": 54,
+     "prio": 84,
+     "who": 140,
+     "time": 84,
+     "headTitle": 734,
+     "headPrio": 84,
+     "headWho": 140,
+     "headTime": 84,
+     "rows": 10,
      "overflowX": 0
     }
    },
@@ -1586,6 +1849,11 @@
     "pageFillsAt1920": false,
     "runningMark": true,
     "nothingAnimates": true,
+    "listFillsContent": false,
+    "listMarginsLikeTheBoard": true,
+    "listOtherColumnsKeepWidth": true,
+    "listTitleTakesTheRest": true,
+    "listNoSideScroll": true,
     "panelHasItsOwnSurface": false,
     "panelRounded": false,
     "panelPaddedAlike": false,
@@ -1912,6 +2180,26 @@
     "M-3": "null: ",
     "M-4": "null: "
    },
+   "list": {
+    "phone": {
+     "viewport": 390,
+     "page": 358,
+     "left": 16,
+     "right": 16,
+     "row": 358,
+     "title": 294.5,
+     "code": 23.5,
+     "prio": 44.5,
+     "who": 62,
+     "time": 51.5,
+     "headTitle": 0,
+     "headPrio": 0,
+     "headWho": 0,
+     "headTime": 0,
+     "rows": 10,
+     "overflowX": 0
+    }
+   },
    "panel": {
     "x": 16,
     "width": 358,
@@ -1945,6 +2233,8 @@
     "phoneNoSideScroll": true,
     "runningMark": true,
     "nothingAnimates": true,
+    "phoneListNoSideScroll": true,
+    "phoneListUnchanged": true,
     "panelHasItsOwnSurface": false,
     "panelRounded": false,
     "panelPaddedAlike": false,
@@ -2271,6 +2561,26 @@
     "M-3": "null: ",
     "M-4": "null: "
    },
+   "list": {
+    "phone": {
+     "viewport": 390,
+     "page": 358,
+     "left": 16,
+     "right": 16,
+     "row": 358,
+     "title": 262.5,
+     "code": 23.5,
+     "prio": 26,
+     "who": 62,
+     "time": 26,
+     "headTitle": 0,
+     "headPrio": 0,
+     "headWho": 0,
+     "headTime": 0,
+     "rows": 10,
+     "overflowX": 0
+    }
+   },
    "panel": {
     "x": 16,
     "width": 358,
@@ -2304,6 +2614,8 @@
     "phoneNoSideScroll": true,
     "runningMark": true,
     "nothingAnimates": true,
+    "phoneListNoSideScroll": true,
+    "phoneListUnchanged": true,
     "panelHasItsOwnSurface": false,
     "panelRounded": false,
     "panelPaddedAlike": false,
@@ -2630,6 +2942,26 @@
     "M-3": "null: ",
     "M-4": "null: "
    },
+   "list": {
+    "phone": {
+     "viewport": 390,
+     "page": 358,
+     "left": 16,
+     "right": 16,
+     "row": 358,
+     "title": 294.5,
+     "code": 23.5,
+     "prio": 44.5,
+     "who": 62,
+     "time": 51.5,
+     "headTitle": 0,
+     "headPrio": 0,
+     "headWho": 0,
+     "headTime": 0,
+     "rows": 10,
+     "overflowX": 0
+    }
+   },
    "panel": {
     "x": 16,
     "width": 358,
@@ -2663,6 +2995,8 @@
     "phoneNoSideScroll": true,
     "runningMark": true,
     "nothingAnimates": true,
+    "phoneListNoSideScroll": true,
+    "phoneListUnchanged": true,
     "panelHasItsOwnSurface": false,
     "panelRounded": false,
     "panelPaddedAlike": false,
@@ -2989,6 +3323,26 @@
     "M-3": "null: ",
     "M-4": "null: "
    },
+   "list": {
+    "phone": {
+     "viewport": 390,
+     "page": 358,
+     "left": 16,
+     "right": 16,
+     "row": 358,
+     "title": 262.5,
+     "code": 23.5,
+     "prio": 26,
+     "who": 62,
+     "time": 26,
+     "headTitle": 0,
+     "headPrio": 0,
+     "headWho": 0,
+     "headTime": 0,
+     "rows": 10,
+     "overflowX": 0
+    }
+   },
    "panel": {
     "x": 16,
     "width": 358,
@@ -3022,6 +3376,8 @@
     "phoneNoSideScroll": true,
     "runningMark": true,
     "nothingAnimates": true,
+    "phoneListNoSideScroll": true,
+    "phoneListUnchanged": true,
     "panelHasItsOwnSurface": false,
     "panelRounded": false,
     "panelPaddedAlike": false,
