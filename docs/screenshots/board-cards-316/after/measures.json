@@ -416,6 +416,22 @@
      "headPrio": 84,
      "headWho": 140,
      "headTime": 84,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     },
@@ -434,6 +450,22 @@
      "headPrio": 84,
      "headWho": 140,
      "headTime": 84,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     },
@@ -452,6 +484,22 @@
      "headPrio": 84,
      "headWho": 140,
      "headTime": 84,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     }
@@ -497,6 +545,7 @@
     "listOtherColumnsKeepWidth": true,
     "listTitleTakesTheRest": true,
     "listNoSideScroll": true,
+    "listMarkBeforeTitle": true,
     "panelHasItsOwnSurface": true,
     "panelRounded": true,
     "panelPaddedAlike": true,
@@ -937,6 +986,22 @@
      "headPrio": 84,
      "headWho": 140,
      "headTime": 84,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     },
@@ -955,6 +1020,22 @@
      "headPrio": 84,
      "headWho": 140,
      "headTime": 84,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     },
@@ -973,6 +1054,22 @@
      "headPrio": 84,
      "headWho": 140,
      "headTime": 84,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     }
@@ -1018,6 +1115,7 @@
     "listOtherColumnsKeepWidth": true,
     "listTitleTakesTheRest": true,
     "listNoSideScroll": true,
+    "listMarkBeforeTitle": true,
     "panelHasItsOwnSurface": true,
     "panelRounded": true,
     "panelPaddedAlike": true,
@@ -1458,6 +1556,22 @@
      "headPrio": 84,
      "headWho": 140,
      "headTime": 84,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     },
@@ -1476,6 +1590,22 @@
      "headPrio": 84,
      "headWho": 140,
      "headTime": 84,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     },
@@ -1494,6 +1624,22 @@
      "headPrio": 84,
      "headWho": 140,
      "headTime": 84,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     }
@@ -1539,6 +1685,7 @@
     "listOtherColumnsKeepWidth": true,
     "listTitleTakesTheRest": true,
     "listNoSideScroll": true,
+    "listMarkBeforeTitle": true,
     "panelHasItsOwnSurface": true,
     "panelRounded": true,
     "panelPaddedAlike": true,
@@ -1979,6 +2126,22 @@
      "headPrio": 84,
      "headWho": 140,
      "headTime": 84,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     },
@@ -1997,6 +2160,22 @@
      "headPrio": 84,
      "headWho": 140,
      "headTime": 84,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     },
@@ -2015,6 +2194,22 @@
      "headPrio": 84,
      "headWho": 140,
      "headTime": 84,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     }
@@ -2060,6 +2255,7 @@
     "listOtherColumnsKeepWidth": true,
     "listTitleTakesTheRest": true,
     "listNoSideScroll": true,
+    "listMarkBeforeTitle": true,
     "panelHasItsOwnSurface": true,
     "panelRounded": true,
     "panelPaddedAlike": true,
@@ -2456,6 +2652,22 @@
      "headPrio": 0,
      "headWho": 0,
      "headTime": 0,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     }
@@ -2494,6 +2706,7 @@
     "runningMark": true,
     "nothingAnimates": true,
     "phoneListNoSideScroll": true,
+    "phoneListMarkBeforeTitle": true,
     "phoneListUnchanged": true,
     "panelHasItsOwnSurface": true,
     "panelRounded": true,
@@ -2884,6 +3097,22 @@
      "headPrio": 0,
      "headWho": 0,
      "headTime": 0,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     }
@@ -2922,6 +3151,7 @@
     "runningMark": true,
     "nothingAnimates": true,
     "phoneListNoSideScroll": true,
+    "phoneListMarkBeforeTitle": true,
     "phoneListUnchanged": true,
     "panelHasItsOwnSurface": true,
     "panelRounded": true,
@@ -3312,6 +3542,22 @@
      "headPrio": 0,
      "headWho": 0,
      "headTime": 0,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     }
@@ -3350,6 +3596,7 @@
     "runningMark": true,
     "nothingAnimates": true,
     "phoneListNoSideScroll": true,
+    "phoneListMarkBeforeTitle": true,
     "phoneListUnchanged": true,
     "panelHasItsOwnSurface": true,
     "panelRounded": true,
@@ -3740,6 +3987,22 @@
      "headPrio": 0,
      "headWho": 0,
      "headTime": 0,
+     "marks": [
+      {
+       "id": "M-1",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      },
+      {
+       "id": "M-6",
+       "afterCode": true,
+       "beforeTitle": true,
+       "sameLine": true,
+       "inTags": false
+      }
+     ],
      "rows": 10,
      "overflowX": 0
     }
@@ -3778,6 +4041,7 @@
     "runningMark": true,
     "nothingAnimates": true,
     "phoneListNoSideScroll": true,
+    "phoneListMarkBeforeTitle": true,
     "phoneListUnchanged": true,
     "panelHasItsOwnSurface": true,
     "panelRounded": true,
