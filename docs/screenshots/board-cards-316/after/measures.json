@@ -1,0 +1,3189 @@
+{
+ "browser": "156.0.8078.4",
+ "cases": {
+  "desk-light-en": {
+   "tiles": [
+    {
+     "id": "M-2",
+     "col": "To do",
+     "width": 254,
+     "height": 142.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Add the shop\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "next",
+     "statusText": "NextS-4Price list+1",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-7",
+     "col": "To do",
+     "width": 254,
+     "height": 130.4,
+     "titleLines": 2,
+     "titleCut": true,
+     "titleAttr": "Rework the nightly leaderboard rebuild so that ties, late submissions and region merges are all hand\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-8",
+     "col": "To do",
+     "width": 254,
+     "height": 110.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Nothing but a title\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Unassigned",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-10",
+     "col": "To do",
+     "width": 254,
+     "height": 110.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "A card with only a size\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Unassigned",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-1",
+     "col": "In progress",
+     "width": 254,
+     "height": 146.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Serve the weekly leaderboard\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "RunningS-2Build the score API",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(10, 98, 194)",
+     "borderTopColor": "rgb(10, 98, 194)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-6",
+     "col": "In progress",
+     "width": 254,
+     "height": 146.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Write the season rules\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "Running",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(10, 98, 194)",
+     "borderTopColor": "rgb(10, 98, 194)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-5",
+     "col": "Blocked",
+     "width": 254,
+     "height": 144.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Adjust the anti-cheat rules\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "Which scores count: ranked games only?",
+     "statusCut": true,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-9",
+     "col": "Blocked",
+     "width": 254,
+     "height": 144.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Fix the season rollover\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "Waiting for the season calendar from the game team — nobody on this side knows which week the new season starts, and the dates in the old design doc disagree with the shop's.",
+     "statusCut": true,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-3",
+     "col": "To confirm",
+     "width": 254,
+     "height": 144.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Pick the badges\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "review",
+     "statusText": "Waiting for you",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-4",
+     "col": "Done",
+     "width": 254,
+     "height": 110.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Build the score store\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "SPAN",
+      "text": "Ddocs",
+      "static": true
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    }
+   ],
+   "statuses": {
+    "M-2": "next: NextS-4Price list+1",
+    "M-7": "null: ",
+    "M-8": "null: ",
+    "M-10": "null: ",
+    "M-1": "running: RunningS-2Build the score API",
+    "M-6": "running: Running",
+    "M-5": "blocked: Which scores count: ranked games only?",
+    "M-9": "blocked: Waiting for the season calendar from the game team — nobody on this side knows which week the new season starts, and the dates in the old design doc disagree with the shop's.",
+    "M-3": "review: Waiting for you",
+    "M-4": "null: "
+   },
+   "widths": {
+    "1366": {
+     "viewport": 1366,
+     "scroll": 1082,
+     "columns": 5,
+     "visible": 3,
+     "widths": [
+      272
+     ],
+     "scrolls": true,
+     "pageWidth": 1066,
+     "overflowX": 0
+    },
+    "1440": {
+     "viewport": 1440,
+     "scroll": 1156,
+     "columns": 5,
+     "visible": 4,
+     "widths": [
+      272
+     ],
+     "scrolls": true,
+     "pageWidth": 1140,
+     "overflowX": 0
+    },
+    "1920": {
+     "viewport": 1920,
+     "scroll": 1636,
+     "columns": 5,
+     "visible": 5,
+     "widths": [
+      314
+     ],
+     "scrolls": false,
+     "pageWidth": 1620,
+     "overflowX": 0
+    }
+   },
+   "info": "Ddev-aRunningNowWorking on S-2 Build the score APICards2 open · 1 in progress · 1 to doRoleProject leadDispatched byoperator",
+   "checks": {
+    "noLeftBar": true,
+    "tilePaddingEven": true,
+    "titleTwoLinesMax": true,
+    "cutTitleHasTooltip": true,
+    "statusOneLine": true,
+    "heightFollowsContent": true,
+    "leftEdgesAlign": true,
+    "columnsWide": true,
+    "noPageOverflow": true,
+    "pageFillsAt1920": true,
+    "runningTiles": true,
+    "lightMoves": true,
+    "reducedMotionStill": true,
+    "avatarIsButton": true,
+    "pickerOpens": true,
+    "cardStaysClosed": true,
+    "pickerHasCurrentTicked": true,
+    "escClosesAndFocusReturns": true,
+    "choiceSaves": true,
+    "cardStillClosed": true,
+    "focusShowsInfo": true,
+    "escHidesInfo": true,
+    "enterOpensPicker": true,
+    "hoverShowsInfo": true,
+    "leavingHidesInfo": true,
+    "listHasAvatarButtons": true,
+    "listPickerOpens": true
+   },
+   "errors": []
+  },
+  "desk-light-zh-TW": {
+   "tiles": [
+    {
+     "id": "M-2",
+     "col": "待辦",
+     "width": 254,
+     "height": 142.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "新增商店\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "next",
+     "statusText": "下一步S-4價目表+1",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-7",
+     "col": "待辦",
+     "width": 254,
+     "height": 130.4,
+     "titleLines": 2,
+     "titleCut": true,
+     "titleAttr": "重新設計每晚的排行榜重建流程，讓同分、延遲提交、跨區合併與賽季切換都能在同一次處理中完成並且不會漏算任何一位玩家的成績\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-8",
+     "col": "待辦",
+     "width": 254,
+     "height": 110.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "只有標題\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "沒人負責",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-10",
+     "col": "待辦",
+     "width": 254,
+     "height": 110.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "只有大小的卡片\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "沒人負責",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-1",
+     "col": "進行中",
+     "width": 254,
+     "height": 146.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "提供每週排行榜\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "執行中S-2建立分數 API",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(10, 98, 194)",
+     "borderTopColor": "rgb(10, 98, 194)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-6",
+     "col": "進行中",
+     "width": 254,
+     "height": 146.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "撰寫賽季規則\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "執行中",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(10, 98, 194)",
+     "borderTopColor": "rgb(10, 98, 194)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-5",
+     "col": "卡住",
+     "width": 254,
+     "height": 144.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "調整防作弊規則\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "哪些分數算數：只算排位賽嗎？",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-9",
+     "col": "卡住",
+     "width": 254,
+     "height": 144.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "修正賽季交接\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "等遊戲團隊提供賽季日曆 — 這邊沒有人知道新賽季從哪一週開始，舊設計文件與商店頁面的日期也對不起來。",
+     "statusCut": true,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-3",
+     "col": "待確認",
+     "width": 254,
+     "height": 144.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "挑選徽章\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "review",
+     "statusText": "等你確認",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-4",
+     "col": "完成",
+     "width": 254,
+     "height": 110.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "建立分數儲存\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "SPAN",
+      "text": "Ddocs",
+      "static": true
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    }
+   ],
+   "statuses": {
+    "M-2": "next: 下一步S-4價目表+1",
+    "M-7": "null: ",
+    "M-8": "null: ",
+    "M-10": "null: ",
+    "M-1": "running: 執行中S-2建立分數 API",
+    "M-6": "running: 執行中",
+    "M-5": "blocked: 哪些分數算數：只算排位賽嗎？",
+    "M-9": "blocked: 等遊戲團隊提供賽季日曆 — 這邊沒有人知道新賽季從哪一週開始，舊設計文件與商店頁面的日期也對不起來。",
+    "M-3": "review: 等你確認",
+    "M-4": "null: "
+   },
+   "widths": {
+    "1366": {
+     "viewport": 1366,
+     "scroll": 1082,
+     "columns": 5,
+     "visible": 3,
+     "widths": [
+      272
+     ],
+     "scrolls": true,
+     "pageWidth": 1066,
+     "overflowX": 0
+    },
+    "1440": {
+     "viewport": 1440,
+     "scroll": 1156,
+     "columns": 5,
+     "visible": 4,
+     "widths": [
+      272
+     ],
+     "scrolls": true,
+     "pageWidth": 1140,
+     "overflowX": 0
+    },
+    "1920": {
+     "viewport": 1920,
+     "scroll": 1636,
+     "columns": 5,
+     "visible": 5,
+     "widths": [
+      314
+     ],
+     "scrolls": false,
+     "pageWidth": 1620,
+     "overflowX": 0
+    }
+   },
+   "info": "Ddev-a執行中目前執行中 S-2 建立分數 API手上2 張 · 1 進行中 · 1 待辦角色專案 leader派工者operator",
+   "checks": {
+    "noLeftBar": true,
+    "tilePaddingEven": true,
+    "titleTwoLinesMax": true,
+    "cutTitleHasTooltip": true,
+    "statusOneLine": true,
+    "heightFollowsContent": true,
+    "leftEdgesAlign": true,
+    "columnsWide": true,
+    "noPageOverflow": true,
+    "pageFillsAt1920": true,
+    "runningTiles": true,
+    "lightMoves": true,
+    "reducedMotionStill": true,
+    "avatarIsButton": true,
+    "pickerOpens": true,
+    "cardStaysClosed": true,
+    "pickerHasCurrentTicked": true,
+    "escClosesAndFocusReturns": true,
+    "choiceSaves": true,
+    "cardStillClosed": true,
+    "focusShowsInfo": true,
+    "escHidesInfo": true,
+    "enterOpensPicker": true,
+    "hoverShowsInfo": true,
+    "leavingHidesInfo": true,
+    "listHasAvatarButtons": true,
+    "listPickerOpens": true
+   },
+   "errors": []
+  },
+  "desk-dark-en": {
+   "tiles": [
+    {
+     "id": "M-2",
+     "col": "To do",
+     "width": 254,
+     "height": 142.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Add the shop\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "next",
+     "statusText": "NextS-4Price list+1",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-7",
+     "col": "To do",
+     "width": 254,
+     "height": 130.4,
+     "titleLines": 2,
+     "titleCut": true,
+     "titleAttr": "Rework the nightly leaderboard rebuild so that ties, late submissions and region merges are all hand\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-8",
+     "col": "To do",
+     "width": 254,
+     "height": 110.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Nothing but a title\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Unassigned",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-10",
+     "col": "To do",
+     "width": 254,
+     "height": 110.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "A card with only a size\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Unassigned",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-1",
+     "col": "In progress",
+     "width": 254,
+     "height": 146.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Serve the weekly leaderboard\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "RunningS-2Build the score API",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(122, 183, 255)",
+     "borderTopColor": "rgb(122, 183, 255)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-6",
+     "col": "In progress",
+     "width": 254,
+     "height": 146.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Write the season rules\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "Running",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(122, 183, 255)",
+     "borderTopColor": "rgb(122, 183, 255)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-5",
+     "col": "Blocked",
+     "width": 254,
+     "height": 144.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Adjust the anti-cheat rules\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "Which scores count: ranked games only?",
+     "statusCut": true,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-9",
+     "col": "Blocked",
+     "width": 254,
+     "height": 144.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Fix the season rollover\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "Waiting for the season calendar from the game team — nobody on this side knows which week the new season starts, and the dates in the old design doc disagree with the shop's.",
+     "statusCut": true,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-3",
+     "col": "To confirm",
+     "width": 254,
+     "height": 144.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Pick the badges\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "review",
+     "statusText": "Waiting for you",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-4",
+     "col": "Done",
+     "width": 254,
+     "height": 110.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Build the score store\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "SPAN",
+      "text": "Ddocs",
+      "static": true
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    }
+   ],
+   "statuses": {
+    "M-2": "next: NextS-4Price list+1",
+    "M-7": "null: ",
+    "M-8": "null: ",
+    "M-10": "null: ",
+    "M-1": "running: RunningS-2Build the score API",
+    "M-6": "running: Running",
+    "M-5": "blocked: Which scores count: ranked games only?",
+    "M-9": "blocked: Waiting for the season calendar from the game team — nobody on this side knows which week the new season starts, and the dates in the old design doc disagree with the shop's.",
+    "M-3": "review: Waiting for you",
+    "M-4": "null: "
+   },
+   "widths": {
+    "1366": {
+     "viewport": 1366,
+     "scroll": 1082,
+     "columns": 5,
+     "visible": 3,
+     "widths": [
+      272
+     ],
+     "scrolls": true,
+     "pageWidth": 1066,
+     "overflowX": 0
+    },
+    "1440": {
+     "viewport": 1440,
+     "scroll": 1156,
+     "columns": 5,
+     "visible": 4,
+     "widths": [
+      272
+     ],
+     "scrolls": true,
+     "pageWidth": 1140,
+     "overflowX": 0
+    },
+    "1920": {
+     "viewport": 1920,
+     "scroll": 1636,
+     "columns": 5,
+     "visible": 5,
+     "widths": [
+      314
+     ],
+     "scrolls": false,
+     "pageWidth": 1620,
+     "overflowX": 0
+    }
+   },
+   "info": "Ddev-aRunningNowWorking on S-2 Build the score APICards2 open · 1 in progress · 1 to doRoleProject leadDispatched byoperator",
+   "checks": {
+    "noLeftBar": true,
+    "tilePaddingEven": true,
+    "titleTwoLinesMax": true,
+    "cutTitleHasTooltip": true,
+    "statusOneLine": true,
+    "heightFollowsContent": true,
+    "leftEdgesAlign": true,
+    "columnsWide": true,
+    "noPageOverflow": true,
+    "pageFillsAt1920": true,
+    "runningTiles": true,
+    "lightMoves": true,
+    "reducedMotionStill": true,
+    "avatarIsButton": true,
+    "pickerOpens": true,
+    "cardStaysClosed": true,
+    "pickerHasCurrentTicked": true,
+    "escClosesAndFocusReturns": true,
+    "choiceSaves": true,
+    "cardStillClosed": true,
+    "focusShowsInfo": true,
+    "escHidesInfo": true,
+    "enterOpensPicker": true,
+    "hoverShowsInfo": true,
+    "leavingHidesInfo": true,
+    "listHasAvatarButtons": true,
+    "listPickerOpens": true
+   },
+   "errors": []
+  },
+  "desk-dark-zh-TW": {
+   "tiles": [
+    {
+     "id": "M-2",
+     "col": "待辦",
+     "width": 254,
+     "height": 142.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "新增商店\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "next",
+     "statusText": "下一步S-4價目表+1",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-7",
+     "col": "待辦",
+     "width": 254,
+     "height": 130.4,
+     "titleLines": 2,
+     "titleCut": true,
+     "titleAttr": "重新設計每晚的排行榜重建流程，讓同分、延遲提交、跨區合併與賽季切換都能在同一次處理中完成並且不會漏算任何一位玩家的成績\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-8",
+     "col": "待辦",
+     "width": 254,
+     "height": 110.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "只有標題\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "沒人負責",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-10",
+     "col": "待辦",
+     "width": 254,
+     "height": 110.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "只有大小的卡片\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "沒人負責",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-1",
+     "col": "進行中",
+     "width": 254,
+     "height": 146.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "提供每週排行榜\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "執行中S-2建立分數 API",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(122, 183, 255)",
+     "borderTopColor": "rgb(122, 183, 255)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-6",
+     "col": "進行中",
+     "width": 254,
+     "height": 146.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "撰寫賽季規則\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "執行中",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(122, 183, 255)",
+     "borderTopColor": "rgb(122, 183, 255)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-5",
+     "col": "卡住",
+     "width": 254,
+     "height": 144.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "調整防作弊規則\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "哪些分數算數：只算排位賽嗎？",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-9",
+     "col": "卡住",
+     "width": 254,
+     "height": 144.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "修正賽季交接\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "等遊戲團隊提供賽季日曆 — 這邊沒有人知道新賽季從哪一週開始，舊設計文件與商店頁面的日期也對不起來。",
+     "statusCut": true,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-3",
+     "col": "待確認",
+     "width": 254,
+     "height": 144.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "挑選徽章\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "review",
+     "statusText": "等你確認",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-4",
+     "col": "完成",
+     "width": 254,
+     "height": 110.2,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "建立分數儲存\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "SPAN",
+      "text": "Ddocs",
+      "static": true
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    }
+   ],
+   "statuses": {
+    "M-2": "next: 下一步S-4價目表+1",
+    "M-7": "null: ",
+    "M-8": "null: ",
+    "M-10": "null: ",
+    "M-1": "running: 執行中S-2建立分數 API",
+    "M-6": "running: 執行中",
+    "M-5": "blocked: 哪些分數算數：只算排位賽嗎？",
+    "M-9": "blocked: 等遊戲團隊提供賽季日曆 — 這邊沒有人知道新賽季從哪一週開始，舊設計文件與商店頁面的日期也對不起來。",
+    "M-3": "review: 等你確認",
+    "M-4": "null: "
+   },
+   "widths": {
+    "1366": {
+     "viewport": 1366,
+     "scroll": 1082,
+     "columns": 5,
+     "visible": 3,
+     "widths": [
+      272
+     ],
+     "scrolls": true,
+     "pageWidth": 1066,
+     "overflowX": 0
+    },
+    "1440": {
+     "viewport": 1440,
+     "scroll": 1156,
+     "columns": 5,
+     "visible": 4,
+     "widths": [
+      272
+     ],
+     "scrolls": true,
+     "pageWidth": 1140,
+     "overflowX": 0
+    },
+    "1920": {
+     "viewport": 1920,
+     "scroll": 1636,
+     "columns": 5,
+     "visible": 5,
+     "widths": [
+      314
+     ],
+     "scrolls": false,
+     "pageWidth": 1620,
+     "overflowX": 0
+    }
+   },
+   "info": "Ddev-a執行中目前執行中 S-2 建立分數 API手上2 張 · 1 進行中 · 1 待辦角色專案 leader派工者operator",
+   "checks": {
+    "noLeftBar": true,
+    "tilePaddingEven": true,
+    "titleTwoLinesMax": true,
+    "cutTitleHasTooltip": true,
+    "statusOneLine": true,
+    "heightFollowsContent": true,
+    "leftEdgesAlign": true,
+    "columnsWide": true,
+    "noPageOverflow": true,
+    "pageFillsAt1920": true,
+    "runningTiles": true,
+    "lightMoves": true,
+    "reducedMotionStill": true,
+    "avatarIsButton": true,
+    "pickerOpens": true,
+    "cardStaysClosed": true,
+    "pickerHasCurrentTicked": true,
+    "escClosesAndFocusReturns": true,
+    "choiceSaves": true,
+    "cardStillClosed": true,
+    "focusShowsInfo": true,
+    "escHidesInfo": true,
+    "enterOpensPicker": true,
+    "hoverShowsInfo": true,
+    "leavingHidesInfo": true,
+    "listHasAvatarButtons": true,
+    "listPickerOpens": true
+   },
+   "errors": []
+  },
+  "phone-light-en": {
+   "tiles": [
+    {
+     "id": "M-2",
+     "col": "To do",
+     "width": 340,
+     "height": 152.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Add the shop\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "next",
+     "statusText": "NextS-4Price list+1",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-7",
+     "col": "To do",
+     "width": 340,
+     "height": 139.2,
+     "titleLines": 2,
+     "titleCut": true,
+     "titleAttr": "Rework the nightly leaderboard rebuild so that ties, late submissions and region merges are all hand\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-8",
+     "col": "To do",
+     "width": 340,
+     "height": 119.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Nothing but a title\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Unassigned",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-10",
+     "col": "To do",
+     "width": 340,
+     "height": 119.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "A card with only a size\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Unassigned",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-1",
+     "col": "In progress",
+     "width": 340,
+     "height": 153.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Serve the weekly leaderboard\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "RunningS-2Build the score API",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(10, 98, 194)",
+     "borderTopColor": "rgb(10, 98, 194)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-6",
+     "col": "In progress",
+     "width": 340,
+     "height": 153.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Write the season rules\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "Running",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(10, 98, 194)",
+     "borderTopColor": "rgb(10, 98, 194)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-5",
+     "col": "Blocked",
+     "width": 340,
+     "height": 151.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Adjust the anti-cheat rules\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "Which scores count: ranked games only?",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-9",
+     "col": "Blocked",
+     "width": 340,
+     "height": 151.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Fix the season rollover\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "Waiting for the season calendar from the game team — nobody on this side knows which week the new season starts, and the dates in the old design doc disagree with the shop's.",
+     "statusCut": true,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-3",
+     "col": "To confirm",
+     "width": 340,
+     "height": 151.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Pick the badges\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "review",
+     "statusText": "Waiting for you",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-4",
+     "col": "Done",
+     "width": 340,
+     "height": 119.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Build the score store\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "SPAN",
+      "text": "Ddocs",
+      "static": true
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    }
+   ],
+   "statuses": {
+    "M-2": "next: NextS-4Price list+1",
+    "M-7": "null: ",
+    "M-8": "null: ",
+    "M-10": "null: ",
+    "M-1": "running: RunningS-2Build the score API",
+    "M-6": "running: Running",
+    "M-5": "blocked: Which scores count: ranked games only?",
+    "M-9": "blocked: Waiting for the season calendar from the game team — nobody on this side knows which week the new season starts, and the dates in the old design doc disagree with the shop's.",
+    "M-3": "review: Waiting for you",
+    "M-4": "null: "
+   },
+   "checks": {
+    "noLeftBar": true,
+    "tilePaddingEven": true,
+    "titleTwoLinesMax": true,
+    "cutTitleHasTooltip": true,
+    "statusOneLine": true,
+    "heightFollowsContent": true,
+    "leftEdgesAlign": true,
+    "phoneNoSideScroll": true,
+    "runningTiles": true,
+    "avatarIsButton": true,
+    "pickerOpens": true,
+    "cardStaysClosed": true,
+    "pickerHasCurrentTicked": true,
+    "escClosesAndFocusReturns": true,
+    "choiceSaves": true,
+    "cardStillClosed": true
+   },
+   "errors": []
+  },
+  "phone-light-zh-TW": {
+   "tiles": [
+    {
+     "id": "M-2",
+     "col": "待辦",
+     "width": 340,
+     "height": 152.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "新增商店\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "next",
+     "statusText": "下一步S-4價目表+1",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-7",
+     "col": "待辦",
+     "width": 340,
+     "height": 139.2,
+     "titleLines": 2,
+     "titleCut": true,
+     "titleAttr": "重新設計每晚的排行榜重建流程，讓同分、延遲提交、跨區合併與賽季切換都能在同一次處理中完成並且不會漏算任何一位玩家的成績\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-8",
+     "col": "待辦",
+     "width": 340,
+     "height": 119.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "只有標題\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "沒人負責",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-10",
+     "col": "待辦",
+     "width": 340,
+     "height": 119.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "只有大小的卡片\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "沒人負責",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-1",
+     "col": "進行中",
+     "width": 340,
+     "height": 153.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "提供每週排行榜\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "執行中S-2建立分數 API",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(10, 98, 194)",
+     "borderTopColor": "rgb(10, 98, 194)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-6",
+     "col": "進行中",
+     "width": 340,
+     "height": 153.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "撰寫賽季規則\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "執行中",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(10, 98, 194)",
+     "borderTopColor": "rgb(10, 98, 194)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-5",
+     "col": "卡住",
+     "width": 340,
+     "height": 151.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "調整防作弊規則\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "哪些分數算數：只算排位賽嗎？",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-9",
+     "col": "卡住",
+     "width": 340,
+     "height": 151.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "修正賽季交接\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "等遊戲團隊提供賽季日曆 — 這邊沒有人知道新賽季從哪一週開始，舊設計文件與商店頁面的日期也對不起來。",
+     "statusCut": true,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-3",
+     "col": "待確認",
+     "width": 340,
+     "height": 151.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "挑選徽章\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "review",
+     "statusText": "等你確認",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-4",
+     "col": "完成",
+     "width": 340,
+     "height": 119.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "建立分數儲存\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(229, 229, 229)",
+     "borderTopColor": "rgb(229, 229, 229)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "SPAN",
+      "text": "Ddocs",
+      "static": true
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    }
+   ],
+   "statuses": {
+    "M-2": "next: 下一步S-4價目表+1",
+    "M-7": "null: ",
+    "M-8": "null: ",
+    "M-10": "null: ",
+    "M-1": "running: 執行中S-2建立分數 API",
+    "M-6": "running: 執行中",
+    "M-5": "blocked: 哪些分數算數：只算排位賽嗎？",
+    "M-9": "blocked: 等遊戲團隊提供賽季日曆 — 這邊沒有人知道新賽季從哪一週開始，舊設計文件與商店頁面的日期也對不起來。",
+    "M-3": "review: 等你確認",
+    "M-4": "null: "
+   },
+   "checks": {
+    "noLeftBar": true,
+    "tilePaddingEven": true,
+    "titleTwoLinesMax": true,
+    "cutTitleHasTooltip": true,
+    "statusOneLine": true,
+    "heightFollowsContent": true,
+    "leftEdgesAlign": true,
+    "phoneNoSideScroll": true,
+    "runningTiles": true,
+    "avatarIsButton": true,
+    "pickerOpens": true,
+    "cardStaysClosed": true,
+    "pickerHasCurrentTicked": true,
+    "escClosesAndFocusReturns": true,
+    "choiceSaves": true,
+    "cardStillClosed": true
+   },
+   "errors": []
+  },
+  "phone-dark-en": {
+   "tiles": [
+    {
+     "id": "M-2",
+     "col": "To do",
+     "width": 340,
+     "height": 152.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Add the shop\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "next",
+     "statusText": "NextS-4Price list+1",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-7",
+     "col": "To do",
+     "width": 340,
+     "height": 139.2,
+     "titleLines": 2,
+     "titleCut": true,
+     "titleAttr": "Rework the nightly leaderboard rebuild so that ties, late submissions and region merges are all hand\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-8",
+     "col": "To do",
+     "width": 340,
+     "height": 119.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Nothing but a title\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Unassigned",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-10",
+     "col": "To do",
+     "width": 340,
+     "height": 119.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "A card with only a size\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Unassigned",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-1",
+     "col": "In progress",
+     "width": 340,
+     "height": 153.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Serve the weekly leaderboard\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "RunningS-2Build the score API",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(122, 183, 255)",
+     "borderTopColor": "rgb(122, 183, 255)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-6",
+     "col": "In progress",
+     "width": 340,
+     "height": 153.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Write the season rules\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "Running",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(122, 183, 255)",
+     "borderTopColor": "rgb(122, 183, 255)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-5",
+     "col": "Blocked",
+     "width": 340,
+     "height": 151.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Adjust the anti-cheat rules\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "Which scores count: ranked games only?",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-9",
+     "col": "Blocked",
+     "width": 340,
+     "height": 151.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Fix the season rollover\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "Waiting for the season calendar from the game team — nobody on this side knows which week the new season starts, and the dates in the old design doc disagree with the shop's.",
+     "statusCut": true,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-3",
+     "col": "To confirm",
+     "width": 340,
+     "height": 151.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Pick the badges\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 1,
+     "statusKind": "review",
+     "statusText": "Waiting for you",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-4",
+     "col": "Done",
+     "width": 340,
+     "height": 119.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "Build the score store\nEnter opens it · Alt+↑/↓ moves it in its column · Alt+←/→ to the next status",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "SPAN",
+      "text": "Ddocs",
+      "static": true
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    }
+   ],
+   "statuses": {
+    "M-2": "next: NextS-4Price list+1",
+    "M-7": "null: ",
+    "M-8": "null: ",
+    "M-10": "null: ",
+    "M-1": "running: RunningS-2Build the score API",
+    "M-6": "running: Running",
+    "M-5": "blocked: Which scores count: ranked games only?",
+    "M-9": "blocked: Waiting for the season calendar from the game team — nobody on this side knows which week the new season starts, and the dates in the old design doc disagree with the shop's.",
+    "M-3": "review: Waiting for you",
+    "M-4": "null: "
+   },
+   "checks": {
+    "noLeftBar": true,
+    "tilePaddingEven": true,
+    "titleTwoLinesMax": true,
+    "cutTitleHasTooltip": true,
+    "statusOneLine": true,
+    "heightFollowsContent": true,
+    "leftEdgesAlign": true,
+    "phoneNoSideScroll": true,
+    "runningTiles": true,
+    "avatarIsButton": true,
+    "pickerOpens": true,
+    "cardStaysClosed": true,
+    "pickerHasCurrentTicked": true,
+    "escClosesAndFocusReturns": true,
+    "choiceSaves": true,
+    "cardStillClosed": true
+   },
+   "errors": []
+  },
+  "phone-dark-zh-TW": {
+   "tiles": [
+    {
+     "id": "M-2",
+     "col": "待辦",
+     "width": 340,
+     "height": 152.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "新增商店\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "next",
+     "statusText": "下一步S-4價目表+1",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-7",
+     "col": "待辦",
+     "width": 340,
+     "height": 139.2,
+     "titleLines": 2,
+     "titleCut": true,
+     "titleAttr": "重新設計每晚的排行榜重建流程，讓同分、延遲提交、跨區合併與賽季切換都能在同一次處理中完成並且不會漏算任何一位玩家的成績\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-8",
+     "col": "待辦",
+     "width": 340,
+     "height": 119.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "只有標題\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "沒人負責",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-10",
+     "col": "待辦",
+     "width": 340,
+     "height": 119.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "只有大小的卡片\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "沒人負責",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    },
+    {
+     "id": "M-1",
+     "col": "進行中",
+     "width": 340,
+     "height": 153.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "提供每週排行榜\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "執行中S-2建立分數 API",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(122, 183, 255)",
+     "borderTopColor": "rgb(122, 183, 255)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-a",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-6",
+     "col": "進行中",
+     "width": 340,
+     "height": 153.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "撰寫賽季規則\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "running",
+     "statusText": "執行中",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(122, 183, 255)",
+     "borderTopColor": "rgb(122, 183, 255)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": true,
+     "shine": true,
+     "shineAnim": [
+      "tb-shine",
+      "tb-breathe",
+      "block"
+     ],
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-5",
+     "col": "卡住",
+     "width": 340,
+     "height": 151.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "調整防作弊規則\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "哪些分數算數：只算排位賽嗎？",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-9",
+     "col": "卡住",
+     "width": 340,
+     "height": 151.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "修正賽季交接\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "blocked",
+     "statusText": "等遊戲團隊提供賽季日曆 — 這邊沒有人知道新賽季從哪一週開始，舊設計文件與商店頁面的日期也對不起來。",
+     "statusCut": true,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddocs",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-3",
+     "col": "待確認",
+     "width": 340,
+     "height": 151.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "挑選徽章\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 1,
+     "statusKind": "review",
+     "statusText": "等你確認",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "BUTTON",
+      "text": "Ddev-b",
+      "static": false
+     },
+     "leftEdges": [
+      13,
+      13,
+      13,
+      13
+     ]
+    },
+    {
+     "id": "M-4",
+     "col": "完成",
+     "width": 340,
+     "height": 119.6,
+     "titleLines": 1,
+     "titleCut": false,
+     "titleAttr": "建立分數儲存\nEnter 打開 · Alt+↑/↓ 在欄內移動 · Alt+←/→ 移到前一個／下一個狀態",
+     "statusLines": 0,
+     "statusKind": null,
+     "statusText": "",
+     "statusCut": false,
+     "barContent": "none",
+     "borderLeft": "1px",
+     "borderLeftColor": "rgb(61, 61, 61)",
+     "borderTopColor": "rgb(61, 61, 61)",
+     "paddingLeft": "12px",
+     "paddingTop": "12px",
+     "running": false,
+     "shine": false,
+     "shineAnim": null,
+     "owner": {
+      "tag": "SPAN",
+      "text": "Ddocs",
+      "static": true
+     },
+     "leftEdges": [
+      13,
+      13,
+      null,
+      13
+     ]
+    }
+   ],
+   "statuses": {
+    "M-2": "next: 下一步S-4價目表+1",
+    "M-7": "null: ",
+    "M-8": "null: ",
+    "M-10": "null: ",
+    "M-1": "running: 執行中S-2建立分數 API",
+    "M-6": "running: 執行中",
+    "M-5": "blocked: 哪些分數算數：只算排位賽嗎？",
+    "M-9": "blocked: 等遊戲團隊提供賽季日曆 — 這邊沒有人知道新賽季從哪一週開始，舊設計文件與商店頁面的日期也對不起來。",
+    "M-3": "review: 等你確認",
+    "M-4": "null: "
+   },
+   "checks": {
+    "noLeftBar": true,
+    "tilePaddingEven": true,
+    "titleTwoLinesMax": true,
+    "cutTitleHasTooltip": true,
+    "statusOneLine": true,
+    "heightFollowsContent": true,
+    "leftEdgesAlign": true,
+    "phoneNoSideScroll": true,
+    "runningTiles": true,
+    "avatarIsButton": true,
+    "pickerOpens": true,
+    "cardStaysClosed": true,
+    "pickerHasCurrentTicked": true,
+    "escClosesAndFocusReturns": true,
+    "choiceSaves": true,
+    "cardStillClosed": true
+   },
+   "errors": []
+  }
+ }
+}
