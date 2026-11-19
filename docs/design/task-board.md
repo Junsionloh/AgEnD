@@ -94,7 +94,8 @@ or the board itself.
 - **Taking a card back out of review.** An instance that withdraws its own card from `review` says why: the reason is
   a comment on the card ("withdrawn from review: …"), so the card never leaves the person's queue silently.
 - **Comments an assignee has not seen.** Comments and send-backs by others after the assignee's last write are new to
-  it; its next write returns them first (`notes`), so a comment posted mid-task is never acknowledged unread.
+  it; its next write returns them first (`notes`), so a comment posted mid-task is never acknowledged unread. Since
+  comments wake (see "Comments and mentions"), the assignee is also told of one as it is written.
 - **Words.** A refusal carries a stable `code` (`forbidden`, `invalid`, `conflict`, `not_found`), a `key` naming the
   sentence and its `args`; a write's notes are `{ text, key, args }`. Agents read the English `text`; the page says
   each `key` in the person's language (`tasks.err.*`, `tasks.note.*`) and falls back to the text for one it lacks.
@@ -120,7 +121,16 @@ dispatcher is an instance with `cross_instance_visibility: hidden` (in lists, se
 still count them. A visible card follows the same rule for what it shows around it (#2303 review): its sub tasks, its
 main task (also a search hit's main task title), and the comments, logs and history such an instance left on it —
 which also do not count in a card's comment numbers, name its last comment, or make search find it (#2304 review). On the dashboard itself the person sees every card: hiding is about what instances and outsiders see, and the
-board is the person's record.
+board is the person's record. A main task kept out of sight is not numbered by its sub tasks either (AGEND-309): over the link a
+visible sub task's `parentId` (the card's read, the board's, the work drawer's, the search's) and the `parent` of its "created" event
+read as none, as its `parent` already did — the card number alone says there is a main task. The same goes for every other place a
+card number is read (AGEND-311): a card's `dependsOn` and `unmetDeps` (the number is left out of the list; over the link the read adds
+`hiddenUnmet`, how many unfinished dependencies were left out, so a card that waits for a card kept out of sight still shows its clock,
+is not counted as ready, and says "waits for a card that is not public" — how many, never which; the dashboard and an admin session
+have no such field), an "updated" event's `changes.dependsOn` (left out of both its lists; a change
+that is then the same on both sides is not shown, nor an event with nothing left) and the `cascade` / `restored` of a sub task's "moved"
+event (the main task it was taken down with; the key is dropped). Free text a person typed — a title, a goal, a comment — is not read
+for card numbers. Nothing changes on the dashboard or for an admin session.
 
 ## Storage and other releases
 
@@ -156,25 +166,93 @@ kept out of sight) and is built each time.
 
 ## The page (Fleet › Tasks)
 
-`fleet-tasks.js` (Home and a project's board), `fleet-task-card.js` (one card in the app's dialog, as a drawer),
-`fleet-task-common.js` (words, requests, moves, marks). Home: what waits for the person (confirm, send back, answer),
+`fleet-tasks.js` (Home and a project's board), `fleet-task-card.js` (one card as a page of its own), with
+`fleet-task-edit.js` (editing in place: a text, the title, the checklist, a property's chip), `fleet-task-activity.js`
+(the timeline and the comment box) and `fleet-task-create.js` (the quick create); `fleet-task-view.js` (the toolbar and
+the list), `fleet-task-menu.js` (a card's menu, stepping), `fleet-task-common.js` (words, requests, moves, marks). Home: what waits for the person (confirm, send back, answer),
 then the projects (with % done) and No project. A board read carries live cards and the last 14 days' finished ones
 (`?done=all`: every done main task, for the Done column's "All"), each project's numbers over all its cards, and is a
-handful of statements whatever its size (`views()`, `projectStats()`). A project: its main tasks by status, a filter by
-assignee, drag to move or reorder, a main task's sub tasks inside its tile. A card: every field edits in place with the
-version it started from; a 409 shows the newer card with the draft still open, and saving again overwrites. `?card=M-3`
-opens a card. Bars are SVG rects (the CSP allows no style attribute); a bar fills with done work only — the percentage beside it (#2299: a project whose only card was blocked drew a full red bar at 0 %) — and the chips name what is blocked or waiting.
+handful of statements whatever its size (`views()`, `projectStats()`). A project: its main tasks by status (or as a list), the toolbar's search and filters, drag to move or reorder,
+a main task's sub tasks inside its tile. A card: every field edits in place with the version it started from; a 409
+shows the newer card with the draft still open, and saving again overwrites. `?card=M-3` opens a card. Bars are SVG rects (the CSP allows no style attribute); a bar fills with done work only — the percentage beside it (#2299: a project whose only card was blocked drew a full red bar at 0 %) — and the chips name what is blocked or waiting.
 
 - **Live.** A `tasks` stream event older than the board on screen is ignored; otherwise the page asks again (once per
   burst, 250 ms) with its revision, and is sent the board only when it moved. Same on a stream reconnect.
 - **Moves keep their text.** Every move sends the version the person saw. When an agent changed the card meanwhile
   (409), a typed reason is not lost: the card is read again and the person is asked once more, the text in place.
 - **Without a mouse.** A tile's title is its button (the tile is not a button around buttons): Enter opens the card,
-  Alt+←/→ moves it to the status before or after, Alt+↑/↓ within its column. The card's dialog has Move to… and a
-  Position row (up, down) — reordering on a phone, where HTML5 dragging does not fire.
-- **taskhall's looks.** On a desk a card opens as a drawer from the right edge (the app's dialog with `drawer`: focus,
-  Esc and the backdrop as before), its fields in a grey block; a phone keeps the bottom sheet. The columns reach the
-  bottom of the page (a card drops anywhere down a column). Tiles are white with a shadow and a bold title; a bar on the
+  Alt+←/→ moves it to the status before or after, Alt+↑/↓ within its column. A tile and a list row also have a ⋯ button
+  that opens the card's menu (Move to…): a phone has no right click and HTML5 dragging does not fire there. The card's
+  page has a Status chip and a Position row (up, down).
+- **The card is a page (AGEND-294, after Multica's issue page).** It replaces the board in the tab instead of a drawer
+  over it, so a desk's width is used: a main column (title, the spec, the agent's block, sub tasks, then the activity —
+  comments, progress log and history merged into one timeline, oldest first, with the comment box last) and a side column
+  of properties that stays in view; one column on a phone (≤ 899 px, the app's breakpoint). The merge is the page's: the card API still returns `comments`, `logs` and `history` apart, and the
+  history lines that only repeat a comment or a log entry are dropped from it — except a change of the card's watchers (a
+  `logged` event carrying `data.watchers`, which has no log entry of its own; AGEND-309): it stays, as "changed watchers: +ops,
+  −dev-b" (a true minus sign, so a narrow line does not split it from the name) in the same line style, under the History filter. No API, schema or column changed.
+- **The page, laid lighter (AGEND-314, scheme A).** Only layout and style: no API, schema, permission or stored value changed,
+  and every field is still readable and editable. (1) *The spec folds what is empty.* Goal, scope, definition of done (a sub
+  task's acceptance) and context are fields only while they hold text; an empty one is a **+ Add** button in one row under
+  them (a writer's way in; over a read-only link an empty one is not there at all). A button opens its field in place with
+  the focus (`open` on `EditableText` / `Checklist`, `useInlineEdit`'s `open`/`onClose`); closed still empty — Esc, or leaving
+  it unchanged — it folds back into its button, and a saved one is a field like the rest (also a filled one whose text is
+  emptied). The page keeps which ones it opened, per card. (2) *The agent's handoff is apart from the spec.* **State** and
+  **Result** (written by the assignee, `fleet-task-run.js` `AgentRun`) are in the same block as the **Agent activity**
+  (#92), marked with the accent's straight bar and a tint: while there is nothing to show (no state, no result, the assignee
+  not running) it is one line — "Not started: dev-b will update this once it takes the card", the idle note, the work being in the
+  sub tasks, or "No state or result written yet" — with the buttons for the two fields and the way to the conversation; with
+  a state or result, or while the assignee works, it opens: who, state, **Open conversation**, the live steps, the fields. (3) *The
+  sub tasks are a bordered list*: a header with done / total (the card's own `progress`) and the shared `ProgressBar`, the rows,
+  and the quick-create line last (same `QuickAdd`). (4) *The properties are three groups* with a thin line between: core (status,
+  assignee, priority, size); project and people (project — or a sub task's main task — leader, dispatched by, watchers); flow
+  (**Needs my confirmation** as a switch, the app's `.s-ui-toggle` look, then dependencies, and the position arrows where
+  they apply). The "Now" row is gone (the sub task list says it). (5) *Mark blocked* — a main task that follows its sub
+  tasks, by hand — moved to the header toolbar, beside Previous / Next, the copy-link button and ⋯ (which keeps Cancel); the
+  note that the status follows the sub tasks is a chip at the right edge of the row above the title, which also has the card's
+  number and status. (6) *A phone* (one column): title, spec, the agent's line, sub tasks, properties, activity — the grid's areas
+  are that order. (7) *One invisible grid.* Nothing is drawn; every labelled row of the main column — the spec fields, the agent's
+  State / Result, the sub tasks — has the same two columns, a label (`--tp-label`) and its value, a label on its value's first
+  baseline (`tc-field` is `h3` + `.tc-field-body`), so the texts start on one vertical line. What a hover or edit box takes (its
+  padding and border, `--tp-inset`) hangs out into the gutter by a negative margin, so the text, not the box, is on the line (the
+  agent's block takes its own padding off its label column, so its values are on the same line). A sub task is a row of four
+  columns (status, number, title, who); a timeline line is four columns (mark, who, words, time) with its words on the value
+  column; in the side column a chip's text is on the value column's edge. On a phone the label is above its value, the left edge
+  the same. (8) *The timeline is read for progress.* A comment has no box: its author and time on a line, the text under the
+  name, drawn by the chat's own renderer (`AgendChatRender.renderMarkdown`: it escapes first, so nothing in a comment makes a
+  tag of its own; a stored comment is still the plain text it was). A progress note is a line in the text colour; the history is
+  the quietest thing on the page — small, grey, the actor not bold, no bar even for an agent's — and a run of the same line from
+  the same hand is one line "×N" with the latest time (`collapseEvents`, only history lines merge). A day change is a thin
+  separator (Today / Yesterday / a date), only when the list spans more than one day (`dayLabel`).
+- **A card in the address.** The open card is `?card=` in the page's address, beside `?tp=` and `?tf=`. Opening a card
+  from the board adds one history entry, so Back returns to the board or the list (its scroll and the card's tile focus
+  come back); opening another from the card (a sub task, a dependency) adds one more, and "Back" on the page goes all the
+  way (the entry's state counts the cards deep); stepping to the previous / next card replaces. A link opens the card
+  directly, and Back then drops the parameter.
+- **Edit in place, saved when you leave.** A property is a chip that opens a menu (the app's `Menu`); a choice saves at
+  once. A text opens as a box on a click: leaving the box or Ctrl+Enter saves, Esc drops it — and the blur that follows
+  an Esc, or a switch to another window, saves nothing. Every save keeps the version the edit started from. After a 409
+  the box stays open with a line saying the card changed and two answers (Overwrite, Discard my change): leaving the box
+  never overwrites silently. Chip saves go one after another, each on the version the one before left. A comment carries
+  no version, as before.
+- **The toolbar.** Board | List, search, Filter and Display are one row (`TaskToolbar`). The view, grouping, order and
+  direction (`agend_tasks_display`), the filters (`agend_tasks_filters`, also `?tf=`), the folded list groups
+  (`agend_tasks_collapsed`, per project) and the search (`agend_tasks_query`) are kept on the device; a value an older build stored
+  still reads, an unknown one falls back to its default. Needs you is a filter field (`waits:you`, the rule of Waiting for
+  you). The list's header sorts by ID, Title, Priority, Assignee or Updated; the same column again reverses it.
+- **A phone.** The board shows one status at a time (the switch is hidden on a desk; every column is drawn, a class
+  shows the current one), starting at the first of To confirm, In progress, Blocked, To do, Done that has cards.
+- **The comment box's @.** Typing `@` completes with the fleet's instance names (those with the board off are listed,
+  disabled; a name no longer in the fleet is not) and only types `@<name> ` into the text. What an @ does to that
+  instance is the board's business, which reads the same plain text; the box sends the comment as typed. The list
+  follows the board's reading (`task-board-mentions.ts`): none right after a letter, digit, `_`, `.`, `-`, `@`, `/` or
+  `\`, none inside inline code or a fenced block (`mentionAt`, with the board's `withoutCode`), and when the text after
+  the caret would run the name on into a longer instance name, the box adds a space of its own, so the name typed is the
+  name read. A test runs both over a battery of texts (it waits for the board's parser to be in the tree). The word at the
+  caret and its replacement are one function for this `@` and the chat's `#` (`src/ui/trigger-complete.js`: `triggerAt` /
+  `insertAtTrigger`, a rule per trigger character; `mentionAt` / `insertMention` and `taskRefAt` / `insertTaskRef` are it with
+  their trigger), so a rule fixed for one list is fixed for both.
+- **taskhall's looks.** The columns reach the bottom of the page (a card drops anywhere down a column). Tiles are white with a shadow and a bold title; a bar on the
   left only while a card is under way (in progress, blocked, waiting for you); a size in a box. Who works on a card has
   a round initial: an instance's in its identity colour (#1958), a person's grey.
 - **Who works on what (step 3).** `GET /ui/tasks/work` (`?instance=` for one): each instance's `myWork` — what its
@@ -183,15 +261,33 @@ opens a card. Bars are SVG rects (the CSP allows no style attribute); a bar fill
   (`fleet-task-work.js`, taskhall's): by team as the sidebar groups them, working ones first, then those with cards;
   each line says what the card is to it (sent back, in progress, blocked, waiting for you, owns, can start, waiting on)
   and opens it. It is read again on each board change. An instance's Details page reads its own once.
+- **What the agent is doing (AGEND-296).** `fleet-task-run.js`. A card in `claimed` whose assignee is an instance the
+  viewer sees and that is working (the dashboard's own `exec` / `awaiting`, live by the `activity` event) is "running":
+  a mark on its tile and list row, a main task's from its in-progress sub tasks (the strongest), and an **Agent
+  activity** block on the card's page (who, their state, **Open conversation** → `/ui/chat/<instance>`). The match is an
+  inference, not a record: AgEnD has no run per card (an instance is one continuing session), and nothing was added to
+  record one. It is exact while the assignee has that one card in progress (`board_cards_at_once` defaults to 1); with
+  several (`inProgressBy` over the board's cards — the rule of `inProgress()`), no card says "running", each says "Busy
+  · N cards", and the page says what it cannot know. The board reads the dashboard's store once (`useRunContext`), only for the instances that have a card in
+  progress, and redraws when one of their states changes: a tile or a row subscribes to nothing. The live steps are the chat's own feed (`observeActivity`, `GET
+  /ui/steps?chat=1`, live by `steps_tick`), held only while the card's page is open and its assignee is working, drawn
+  by the chat's `ActivityBlock` from the steps since the card was last moved to `claimed`: for an admin session, with
+  the instance's `tool_progress` not `off` and Show activity on — otherwise the state alone (with a line saying so when
+  it is the agent's `tool_progress` that is off). Not used on purpose: `instance_activity` (the statusline's one-line tool label) — it is not
+  governed by `tool_progress` and carries commands, which a read-only viewer must not see — and a transcript per
+  finished card: the transcript is one continuing session read within a byte limit, so an old card's window may not be
+  there; a finished card gets the conversation link only. The timeline's entries carry `authorKind` / `actorKind`
+  already; an instance's are tagged **Agent**. No API, schema or column changed; a viewer who cannot see the instance,
+  a card nobody has and an older server's entries (no kind) show as before.
 - **The public link** shows the board with a read-only note and no write controls (see above): a card's project, priority, size and review are text, not disabled controls (#2299).
-- **Toasts** are a manual popover (the top layer): a toast raised while a card's dialog is open is above its backdrop, not dimmed under it. On a phone the board's toasts come in above the tabs (an older confirmation gives way to two newer toasts; an error stays), not over its title and search; while a card's sheet is open, at the top (#2299).
+- **Toasts** are a manual popover (the top layer), above any dialog's backdrop (the board's asks — a reason, an answer, a name — are dialogs). On a phone the board's toasts come in above the tabs (an older confirmation gives way to two newer toasts; an error stays), not over its title and search (#2299).
 - **Wrapped up before you confirm (step 2).** A main task goes to review by itself when its last sub task is done —
   often a reviewer's — before its owner ticked its definition of done or wrote its result. Such a card shows "To fill
   in", the waiting row and the card say what is missing, and Confirm asks first (send it back, or confirm anyway with
   an optional note). Agents read the same in `get` and `mine`.
 - **Who works on a main task now (step 2).** Its owner is not always the one at work (a review step is the
   reviewer's): a main task with sub tasks shows the sub task in progress and its worker, else a blocked one, else the
-  next one that can start; waiting for you, it says so. The owner is in the tooltip; the card has a "Now" row.
+  next one that can start; waiting for you, it says so. The owner is in the tooltip (the card's page does not repeat it: AGEND-314, its sub task list says it).
 
 ## Agents: the `task` tool on the board
 
@@ -233,9 +329,11 @@ it on purpose, and #1267 (a Kanban) left that to the person. What this PR takes,
 
 **Who hears what** (`TaskBoard.settleWakes`, read from a write's events once it is all written, still inside it): an
 instance hears what someone else did to a card that is its own, or that it handed out. #2801: only a change of status
-or assignee is news, and each change goes to one instance — the one that acts next. A comment and a confirmation wake
-nobody (the card lists new comments for its assignee: `mine`, `get`), but for the answer to a busy assignee's blocked
-question, kept on the card as a comment (#2303): its assignee is told (answer kept) while the card is still blocked —
+or assignee is news, and each change goes to one instance — the one that acts next. A confirmation wakes nobody (the
+work is finished); a comment, which #2801 had made news for nobody (the card listed new comments for its assignee:
+`mine`, `get`), wakes again — its assignee, and each instance it names (see "Comments and mentions"). The answer to a
+busy assignee's blocked question, kept on the card as a comment (#2303), tells its assignee (answer kept) while the card
+is still blocked —
 
 | News | Who | When |
 |---|---|---|
@@ -249,16 +347,21 @@ question, kept on the card as a comment (#2303): its assignee is told (answer ke
 | to confirm | the dispatcher | its card waits for its confirmation (#2434), with what it still lacks — also when it went there by itself |
 | wrap up | the main task's owner | it went to review by itself, its definition of done or result still missing — only when no instance dispatcher is told to confirm it |
 | cancelled | the assignee | someone else cancelled it — or its main task, taking it down — with why |
+| comment | the assignee | someone else commented on its card, with the words (not while the card is finished or still waits on its dependencies, and not once the assignee has read the comment with a write of its own) |
+| mention | the instance named | a comment names it with `@<instance>`, whoever's card it is and whatever its state, with the words |
+| progress | the card's followers | a card finished, went to review, was sent back, was blocked or changed hands, with who did it and the words (see "Following a card") |
 
-Never its own write, never a finished card (but for a cancel), never a name that is not one of the
+Never its own write, never a finished card (but for a cancel and a mention), never a name that is not one of the
 fleet's instances. `TaskBoard.wakeHolds` drops what no longer stands — at the end of the write and again when it goes
 out: a card finished meanwhile, no longer the instance's, a question already answered, a card wrapped up meanwhile.
 What asks the instance to act holds only while it can (#2303 review): `ready` while the card is open with nothing
-left to wait for, `start` and `answered` while it is in progress, `sent back` while it is back with the instance.
+left to wait for, `start` and `answered` while it is in progress, `sent back` while it is back with the instance,
+`comment` while the assignee has not read it.
 
 **Sending** (`src/task-board-waker.ts`). The fleet gathers an instance's news for 10 s into one `[Task board]` notice:
-a line per card, each reason with its own words and who did it; a main task assigned with its sub tasks is one line;
-more than three assignments at once (a whole plan) are a count ("You were assigned 6 main tasks (M-11–M-16) and 9 sub
+a line per card, each reason with its own words and who did it (several comments on one card in the window: the last
+is quoted and the line says "+N earlier comments: task get <card>", so it never reads as the only one); a main task
+assigned with its sub tasks is one line; more than three assignments at once (a whole plan) are a count ("You were assigned 6 main tasks (M-11–M-16) and 9 sub
 tasks… one at a time, by priority"). The notice is AgEnD's own (`admitSystemNotice`: sender AgEnD, not a person's
 words) and the delivery outbox holds it until the instance can take it, across a fleet restart too. News still
 gathering when the fleet stops is lost; the card keeps it (`mine`, the comments new to its assignee). Blocked cards
@@ -275,6 +378,157 @@ with an instance dispatcher still wait for you on Home, marked as asked first.
   names it is withdrawn once every card on it has changed since it was admitted (`TaskBoard.lastChangeAt`): `cancelled`,
   "superseded: its card changed again", still readable in `delivery_status` and Fleet traffic. What still concerns the
   instance is told anew from the change. A notice from before #2801 (no cards in its key) is never withdrawn.
+
+## Comments and mentions
+
+**The rule.** A comment is news: it wakes the card's assignee when someone else wrote it, and an `@<instance name>` in
+it wakes the instance named, whether or not the card is its own. Both go through the same `[Task board]` notice, the
+10 s gather, the outbox and the told-already rule as every other piece of news (Step 2). Confirmation notes still wake
+nobody. **Why.** #2801 took the comment notice out to cut notice volume (163 a week, most of them repeats on busy cards:
+"a comment sends nothing"). The owner has since decided (AGEND-292, 2026-11-18) that the board should be a place where
+people and agents talk the way they do in Multica and Linear: a comment or an `@mention` reaches the one it is for, so
+the person can steer an agent from its card and agents can bring each other in, without a side message
+(`send_to_instance`) that names the card. What keeps it from the old noise: only the assignee and the instances named
+are told — never the dispatcher or everyone on the card; never the writer; never an assignee that already read the
+comment; a notice the writer already told by message is not repeated; and agent-to-agent wakes are capped (below).
+`defaults.task_board.comment_wakes: false` brings #2801's rule back as it was.
+
+**Who and when** (`TaskBoard.routeComment` at the write, `settleWakes` and `wakeHolds` at its end).
+- *Assignee, `comment`.* Not the writer; not an assignee with the task board off (no tool to act on a notice with); not
+  for the answer to a blocked question (`answered`, `answer kept` carry it) or a card the `task` tool opened for itself
+  (not on the board). `wakeHolds`: not while the card is finished, not while it is open and still waits on what it
+  depends on (it reads the comment when it can start, as it learns of its assignment then), and only while the comment
+  is still unread — the assignee's own write marks the comments so far as seen, so a comment it has read by the time the
+  notice goes out is dropped.
+- *Mentioned instance, `mention`.* Any instance in `fleetConfig.instances`, not the writer, not one with the task board
+  off; whatever the card's state, finished too — it was asked for by name. It may comment on any card, so it can answer.
+  A mentioned assignee gets one `mention`, not a `comment` as well. A *person* whose name is also an instance's name
+  is not that instance: their `@name` wakes it (only an instance's own `@name` is ignored as a self-mention).
+- *Said, not refused.* The writer's notes (`task` tool answer; the dashboard's `said`) tell who will be woken
+  (`comment_wakes`), and what was not: `mention_off` (task board off), `mention_unknown` (no such instance; at most three
+  shown), `mention_cap`, `comment_chain` (below). Nothing is rejected: the comment is kept either way. The dashboard
+  shows only the notes its page lists for people (`PERSON_NOTES`), so these are for agents for now.
+
+**Reading `@name`** (`src/scheduler/task-board-mentions.ts`, pure text → names; every rule has a test).
+1. `@` at the start of the text or after anything but a letter, digit, `_`, `-`, `.`, `@`, `/` or `\` (so addresses,
+   paths and `@@` are not mentions; brackets, quotes, punctuation, spaces and CJK text before it are fine).
+2. The name ends at the end of the text or at a character that cannot continue a name: ASCII letters, digits, `_` and
+   `-` continue it, and so does `.` when a name character follows (`@svc.v2`); a sentence's closing `.` does not, and
+   CJK text after the name ends it. So `@lead,` / `@lead.` / `@lead請看` are `lead`; `@lead-2` is `lead-2`, never `lead`.
+3. Case-insensitive; an exact-case instance wins over one that differs only by case; a name that fits several equally
+   names none. The longest name wins (`dev-a` over `dev`).
+4. Text between backticks (inline or fenced) is never read — the way to name an instance without waking it.
+5. One instance once per comment, in the order first written. A comment's `@word` that is no instance is only a hint.
+
+**Loop guard.** Instances (and scripts, held to an instance's rules) can wake each other: `A: @B …` wakes B, whose reply
+`@A …` wakes A. So an *agent's* comment wakes someone only while `agentCommentRun(card) ≤ AGENT_COMMENT_CHAIN` (4 turns).
+The run is the agents' comments on the card within `AGENT_COMMENT_WINDOW_MS` (30 min), newest first, back to the last
+entry a person wrote (a comment, a send-back or a confirmation); of those, only the ones that woke someone count — the
+comment names an instance other than its writer, or the card's assignee *when it was written* was an instance other than
+its writer — so an agent's note to itself on its own card is skipped, and a change of writer starts the next turn: one
+agent writing again before anyone answered it is one turn, since a loop needs someone to answer. A comment is read as
+it was written: the text again for its `@names`, and the card's own assignment events (`assigned`: from, to; the first
+one after the comment says who had the card before it) for its assignee — never today's assignee, or handing the card to
+one of the two talking would turn the other's comments into notes to itself and lift the guard. Plain comments count as
+well as mentions: a loop can run through the assignee alone (`lead: ok` wakes dev-a, `dev-a: @lead done` wakes lead).
+An agent's send-back or log neither counts nor breaks the chain. Past the limit the comment is kept and wakes nobody
+(`comment_chain` says so to its writer) until a person writes on the card or the older comments leave the window. It is
+computed from the card's own `task_entries` — no counter, no new column. An agent's comment also wakes at most
+`MAX_COMMENT_WAKES` (5) instances. A person's comment has neither limit.
+
+*Per card only.* The guard bounds the talk on one card; it is not a global or per-instance rate limit. Two agents
+that move from card to card, mentioning each other, get up to 4 turns on each, so the total is bounded by the number
+of cards they can touch, not by the guard. That is a deliberate trade: a global ceiling would silence legitimate work
+on a busy fleet, and an agent that spends turns this way is also bounded by the board's other rules (one card in
+progress at a time, the dispatcher alerts of #3647). A fleet that wants none of it sets
+`defaults.task_board.comment_wakes: false`; a global or per-instance rate limit is a follow-up if upstream wants one.
+The 10 s gather and the 2-minute told-already rule apply as before; an agent's comment is not *held* for its writer's
+own message the way an assignment is, because a reply must not wait minutes — if the writer has already messaged the
+instance naming the card, the board does not repeat it.
+
+**Compatibility.** Wakes are read from a write's events as it commits (Step 2), never from stored comments: opening a
+database from before this rule wakes nobody, and comments written before it are never told. No column or table is added by this rule
+(`task_entries` and `task_events` are written as they always were: the event keeps its `text` only), so a release
+without the rule reads the same database. The stored comments, the `task` tool's `comment` field and the dashboard's
+comment box are unchanged; `@` autocomplete in the box is the Tasks page's, and it needs only to insert the same plain
+`@<instance name>`.
+
+## Following a card
+
+**The rule.** The instances that follow a card hear how it moved on, as a `[Task board]` notice (reason `progress`): it was
+**finished**, went to **review**, was **sent back**, was **blocked**, or **changed hands**. Nothing else is progress — not a
+start, an edit, a log line, a reorder, a cancel or a comment (comments are "Comments and mentions"). The notice carries the
+card's number and title, what happened, who did it, the words that came with it (the result, a send-back's or a block's
+reason) and why the instance hears it ("you handed it out", "you watch it", "you lead its project"), and says to step in
+(comment, reassign, open the next card) only if it needs you. **Why.** A card finished, or blocked by the person, told nobody
+(#2801: "a confirmation wakes nobody"), so a project's leader had to be asked, or look, to learn what was done. The owner asked
+(AGEND-292, 2026-11-18) that finishing or progress can wake the instance that coordinates — a project leader — without a
+person calling it.
+
+**Who follows** (`TaskBoard.followersOf`), in this order of reason when one instance is several of them:
+1. *Its dispatcher*, when it is an instance: the instance that opened it for another one (AGEND-299 reuses the existing
+   concept — the creator or assigner — and adds no field). A sub task takes its main task's.
+2. *Its watchers*: instances set on the card by the person, by the instance itself or by someone who may edit the card
+   (`task watch` / `unwatch`, `POST /ui/tasks/cards/<id>/watchers`); at most 10 per card. A main task's watchers follow its
+   sub tasks too.
+3. *Its leader*: the lead of its project (`task_projects.lead_instance`, #2352 — until now only the lane for Needs you's
+   buttons), else the board's leader, `defaults.task_board.leader` in fleet.yaml, which also leads the cards in no project.
+
+Never: the instance that made the change; the card's assignee (it has its own news); a name that is not a fleet instance, or
+an instance with the task board off; a card the `task` tool opened for itself (not on the board). A card the person opened has
+no instance dispatcher — nobody hears it was finished unless it has a watcher or a leader. The board's own catch-up (a main task
+settling after a release without the board moved its sub tasks) tells nobody.
+
+**Not twice.** A dispatcher's own news outranks it: an instance told `decide` (blocked on a question for it) or `to_confirm`
+(a card waiting for its confirmation) is not also told `progress` for the same change. An instance that is dispatcher, watcher
+and leader hears once. Everything goes through the same 10 s gather, the delivery outbox, the withdrawals and the told-already
+rule as every other notice (an agent that also messaged the follower naming the card has told it).
+
+**Loop guard.** A follower that is also an agent can change the card in answer (send it back, hand it on), which its other
+followers hear. Counting the progress changes agents (anything but a person) made on the card within 30 minutes, back to the last
+event a person caused on it (`TaskBoard.agentProgressRun`, from the card's own `task_events`: no counter, no column; it reads only
+moves, reassignments and a person's events, so an agent's log lines and comments, however many, cannot push changes out of the
+count), the followers
+are told only while the count is `AGENT_PROGRESS_CHAIN` (6) or fewer; past it the change is kept and tells no follower, and the
+writer's answer says so (`progress_chain`), until a person touches the card or the older changes are 30 minutes old. A person's
+changes are never limited. The guard holds *followers* only: the assignee's and the dispatcher's own news (sent back, to confirm,
+decide) are the board's older rules and are as they were. It is separate from the comment guard (4 turns): each counts its own
+kind, so a card cannot be kept awake by alternating them without limit — each is bounded by the person's next touch.
+
+**Said, not refused.** The writer's answer lists who will be told (`progress_wakes`: "lead (dispatcher), ops (leader)"), so an
+agent need not message them.
+
+**Watchers** are rows in `task_watchers (task_id, instance, added_by, at)`. Setting them is not a change of the card's content: it
+does not bump the card's `version` (a page editing the card is not told it conflicts) but moves the board's revision, and the card's
+history says who started or stopped a watch (a `logged` event: `watchers: +ops, -dev-b`, with the names also as `watchers.added` /
+`watchers.removed`). It writes no log entry or comment: an entry's text is shown and searched by every reader, and a hidden instance's
+name in it would reach a read-only viewer over the public link, while an event is checked value by value and dropped whole when it
+names a hidden instance (AGEND-300 review). A person changes anyone's; an instance its own on any board card,
+and another's only on a card it may edit (assignee, creator, dispatcher, or an unassigned card). A name must be a fleet instance with
+the task board on (an instance that left the fleet can still be removed). The card's detail (`GET /ui/tasks/cards/<id>`) lists them
+(`watchers`); over the public link a read-only session does not see hidden instances among them.
+
+**On the page (AGEND-301).** A card's page lists them in its property column, under *Project and people* (AGEND-314: *Leader*, *Dispatched by*, then *Watchers*;
+`fleet-task-follow.js` — `LeaderRow` and `WatchersRow`). *Watchers*: one chip per instance with a ✕, and an Add menu of the fleet's other instances — one with the
+task board off is listed greyed with why (the board refuses it), and at ten the menu gives way to the reason; a sub task shows its
+main task's watchers as "Also from M-n", read-only, since they follow it too. A write is `POST …/watchers` with no `version` (a watch is
+not an edit), then the card and the board are read again; a refusal is the page's toast in its own words (`tasks.err.watcher_unknown`,
+`watcher_board_off`, `watchers_max`, `watch_not_board`). *Leader*: the project's lead, else the board's default, with which of the two it
+is — read-only (the lead is set on the project, the default in fleet.yaml) — and, when it would hear nothing of this card, why: it has the
+card itself, it is not in the fleet, its task board is off, or the fleet's notices are off. The card's read gained three fields for this,
+all additive: `leader` (`{ name, via: "project" | "board" }` or null; `TaskBoard.leaderOf`, the lookup `followersOf` uses), `inheritedWatchers`
+(a sub task's main task's) and `followsProgress` (`progress_wakes`). Over the public link a hidden instance is named in none of them (a hidden
+leader reads as none, as a hidden project lead does, and its hint is the neutral "nobody is named", not a way to set one), and a sub
+task whose main task is kept out of sight reads no inherited watchers at all. An older page ignores the new fields; this page reads an older board's card without them.
+
+**Switch.** `defaults.task_board.progress_wakes: false` turns all of this off at once (comments and mentions, and every other
+notice, are unchanged). It is on by default, read at each write: the owner asked for it, and it tells only instances that already
+have a reason to follow a card. A project's lead, until now only the Needs you lane, now also hears its project's progress.
+
+**Compatibility.** Wakes are read from a write's events as it commits, never from stored data: opening a database from before this
+rule tells nobody anything about old events. The one addition is the `task_watchers` table (`CREATE TABLE IF NOT EXISTS` on open;
+a release without it ignores it, and its prune leaves watchers of a pruned card behind, which the next prune here sweeps). No column
+changes, and a watch writes only a `logged` event (a release without this shows its `text` as it shows any log line's).
 
 ## Step 3: the person in the chat
 
@@ -304,7 +558,7 @@ confirming and sending back work, and answering a blocked card, happen in the ch
   world's admins. Over the public link a task item whose card the board hides there (a hidden assignee, creator or
   dispatcher) is left out of `/ui/poll`'s Needs you; the link's page has no stream.
 - **Who acts.** The person, named by the platform (`person: <username>`), through the board's rules — the same as a
-  signed-in page; the web's Needs you list links each card to its dialog.
+  signed-in page; the web's Needs you list links each card to its page.
 
 - **The daily summary** (`task-board-summary.ts`, taskhall's): once a day at `defaults.task_board.summary_at`
   (default 09:00, the fleet's zone; `off`), each world's General gets what waits for the person and what is blocked now,
@@ -317,6 +571,37 @@ confirming and sending back work, and answering a blocked card, happen in the ch
   line carries the card numbers it names (`cards`, kept on disk with the row): over the public link `/ui/poll` and
   `/ui/history` withhold it while one of them is hidden there, read when asked, or is no longer on the board (#2341
   review).
+
+## Cards in the chat (AGEND-298)
+
+An instance's web chat can refer to a card, and the agent is handed it. Nothing about it is stored: a reference is text.
+
+- **The reference is the card's number in the text.** `#M-3` / `#s3`: a `#`, the letter in either case, an optional hyphen, the
+  number — after any character, not inside a longer word, a path, a URL or a decimal. A bare `M-3` is *not* a reference (an
+  upstream-style `M-3304` in a sentence must not pull in a card that has that number). `#` is the page's trigger because it does not
+  collide with anything the chat already types — `/` is the command palette, and Fleet › Tasks' comment box completes `@` with
+  instance names (AGEND-294) — and it reads as "a card number" as it does elsewhere. The rule is one regular expression in three
+  places (`src/chat-task-refs.ts`, `src/ui/chat-task-refs.js`, the renderer `src/ui/shared/chat-render.js`); a test holds them to one
+  list of cases. A number in a fenced block, an inline `code` span, the label of a link or a URL is no reference: the server
+  reads the text without those (`proseOf`, the renderer's own order) before it looks for numbers, and a test holds the cards
+  handed to the agent to exactly the chips the renderer draws, for every case.
+- **Typing `#`.** The composer asks `GET /ui/tasks/refs?q=` (`TaskBoard.suggest`: a number's start, then the title; the latest
+  changes for nothing typed; hidden instances' cards left out over the public link) and offers the cards in the command palette's own
+  list. Choosing puts `#M-3 ` in the draft. A guest has no board and is offered nothing. Where the list opens and what
+  goes in are the same function as the comment box's `@` (`src/ui/trigger-complete.js`, the trigger `#`).
+- **The chip.** A person's message (never an agent's, never the Hub's) that names a card is drawn with a chip — number, title, status
+  (the board's pill) — linking to `/ui/fleet?card=<number>`. The page asks `GET /ui/tasks/refs?codes=` once per number and again
+  after a `tasks` stream event; until the answer arrives, or when the number is no card, the text stays text.
+- **The agent.** `POST /ui/send` reads the numbers in the typed text, reads those cards from the board *now*, and puts a block under
+  the person's words in the message it delivers (`[Task cards this message refers to]`, a line per card as `task get` writes it,
+  and how to read one in full). Not for a guest, a line that starts with `/` (a command for the CLI, `/raw`'s exact paste), an instance
+  whose task board is switched off (it is told nothing of the board: only the person's words go), or a card a hidden instance
+  holds over the link; a sub task whose main task is hidden there does not name it (`sub task`, not `sub task of M-n`). The chat's own copy, the
+  channel echo and the delivery receipt's "what was typed" stay the person's words. A number with no card adds nothing and fails
+  nothing. Telegram and Discord messages take another path (`FleetManager`'s inbound handler) and are unchanged.
+- **Compatibility.** No column, table or stream field is new; a chat stored by an older version reads as before, and an older AgEnD
+  shows `#M-3` as text. The native (Windows) runtime's retry check compares the person's words, so a card that moved between a send
+  and its retry is still the same send.
 
 ## Next
 

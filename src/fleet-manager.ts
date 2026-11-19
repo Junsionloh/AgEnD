@@ -168,7 +168,7 @@ import { createLogger, rotateLogIfNeeded, type Logger } from "./logger.js";
 import { processAttachments } from "./channel/attachment-handler.js";
 import { routeToolCall } from "./channel/tool-router.js";
 import { Scheduler } from "./scheduler/index.js";
-import { boardActivity, boardCardLimit, boardToolAction } from "./task-board-tool.js";
+import { boardActivity, boardCardLimit, boardCommentWakesOn, boardLeader, boardProgressWakesOn, boardToolAction } from "./task-board-tool.js";
 import { TaskBoardWaker, namesCard } from "./task-board-waker.js";
 import { DispatcherLiveness, LIVENESS_STARTUP_GRACE_MS, livenessSettings, questionNotices, turnQuestion, type AssigneeFacts, type LivenessCard } from "./dispatcher-liveness.js";
 import { TaskBoardError, waitsForPerson, wrapUpGap, type Actor } from "./scheduler/task-board.js";
@@ -24155,6 +24155,16 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     db.board.setCardLimit((name) => boardCardLimit(this.fleetConfig, name));
     // An instance with the task board switched off is handed no cards and sent no notices (read at each write and wake).
     db.board.setBoardOff((name) => taskBoardOffIn(this.fleetConfig, name));
+    // Comments and @mentions wake (docs/design/task-board.md): the fleet's instance names, and its switch, read at each comment.
+    db.board.setCommentRouting({
+      instances: () => Object.keys(this.fleetConfig?.instances ?? {}),
+      enabled: () => boardCommentWakesOn(this.fleetConfig),
+    });
+    // Following a card (docs/design/task-board.md): the switch and the board's leader, read at each write.
+    db.board.setProgressRouting({
+      enabled: () => boardProgressWakesOn(this.fleetConfig),
+      leader: () => boardLeader(this.fleetConfig),
+    });
     const waker = this.taskBoardWaker = new TaskBoardWaker({
       deliver: (instance, message, key) => this.admitTaskBoardNotice(instance, message, key),
       isInstance: (name) => this.fleetConfig?.instances?.[name] != null,
