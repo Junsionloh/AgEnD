@@ -209,8 +209,21 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   (**Needs my confirmation** as a switch, the app's `.s-ui-toggle` look, then dependencies, and the position arrows where
   they apply). The "Now" row is gone (the sub task list says it). (5) *Mark blocked* — a main task that follows its sub
   tasks, by hand — moved to the header toolbar, beside Previous / Next, the copy-link button and ⋯ (which keeps Cancel); the
-  note that the status follows the sub tasks is a chip beside the title. (6) *A phone* (one column): title, spec, the agent's
-  line, sub tasks, properties, activity — the grid's areas are that order.
+  note that the status follows the sub tasks is a chip at the right edge of the row above the title, which also has the card's
+  number and status. (6) *A phone* (one column): title, spec, the agent's line, sub tasks, properties, activity — the grid's areas
+  are that order. (7) *One invisible grid.* Nothing is drawn; every labelled row of the main column — the spec fields, the agent's
+  State / Result, the sub tasks — has the same two columns, a label (`--tp-label`) and its value, a label on its value's first
+  baseline (`tc-field` is `h3` + `.tc-field-body`), so the texts start on one vertical line. What a hover or edit box takes (its
+  padding and border, `--tp-inset`) hangs out into the gutter by a negative margin, so the text, not the box, is on the line (the
+  agent's block takes its own padding off its label column, so its values are on the same line). A sub task is a row of four
+  columns (status, number, title, who); a timeline line is four columns (mark, who, words, time) with its words on the value
+  column; in the side column a chip's text is on the value column's edge. On a phone the label is above its value, the left edge
+  the same. (8) *The timeline is read for progress.* A comment has no box: its author and time on a line, the text under the
+  name, drawn by the chat's own renderer (`AgendChatRender.renderMarkdown`: it escapes first, so nothing in a comment makes a
+  tag of its own; a stored comment is still the plain text it was). A progress note is a line in the text colour; the history is
+  the quietest thing on the page — small, grey, the actor not bold, no bar even for an agent's — and a run of the same line from
+  the same hand is one line "×N" with the latest time (`collapseEvents`, only history lines merge). A day change is a thin
+  separator (Today / Yesterday / a date), only when the list spans more than one day (`dayLabel`).
 - **A card in the address.** The open card is `?card=` in the page's address, beside `?tp=` and `?tf=`. Opening a card
   from the board adds one history entry, so Back returns to the board or the list (its scroll and the card's tile focus
   come back); opening another from the card (a sub task, a dependency) adds one more, and "Back" on the page goes all the

@@ -144,7 +144,7 @@ export function Checklist({ card, readOnly = false, limit, onToggle, onReplace, 
   if (!card.acceptance.length) return readOnly ? html`<p class="tc-text empty">—</p>` : html`<button type="button" class="tc-text empty" onClick=${() => edit.start("")}>${t("taskcard.checklistEmpty")}</button>`;
   return html`<ul class="tc-checklist">${card.acceptance.map((a, i) => html`<li key=${`${i}-${a.text}`}><label class="tb-check">
       <input type="checkbox" checked=${ticking && ticking.n === i + 1 ? ticking.done : a.done} disabled=${readOnly || !!ticking} onChange=${() => void tick(i + 1, !a.done)} /><span class=${a.done ? "done" : ""}>${a.text}</span></label></li>`)}</ul>
-    ${readOnly ? null : html`<button type="button" class="btn btn-ghost btn-sm" onClick=${() => edit.start(current.join("\n"))}>${t("taskcard.editList")}</button>`}`;
+    ${readOnly ? null : html`<button type="button" class="btn btn-ghost btn-sm tc-editlist" onClick=${() => edit.start(current.join("\n"))}>${t("taskcard.editList")}</button>`}`;
 }
 
 /** A line to add to a list, by its title and Enter (a sub task). */

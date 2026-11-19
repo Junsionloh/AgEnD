@@ -3,11 +3,16 @@
 // apart (comments, logs, history); they are merged here, so nothing on the server changes. A history line that only
 // repeats a comment or a log entry ("commented", "logged") is dropped from the merge — the entry itself is shown. The one
 // "logged" line with no entry of its own, a change of the card's watchers (`data.watchers`), stays as a history line.
+// AGEND-314: the timeline is read for progress, so what people and agents SAY and DO leads it: a comment has no box — a name and
+// a time, the text under it, drawn by the chat's own Markdown renderer (safe by construction: it escapes first); a progress note
+// is a line with its words in the text colour; the history is the quietest thing on the page (small, grey, a run of the same
+// line from the same hand is one line "×3"); and a day change is a thin separator, as Multica's activity draws it.
 // The comment box completes `@` with the fleet's instance names: it only types `@<instance name>` into the text; what an
 // @ does to that instance is the board's business (it reads the same plain text), not this box's.
 // No style attribute anywhere (the CSP).
 import { html, useEffect, useRef, useState } from "/assets/app-html.js";
-import { t } from "/assets/app-i18n.js";
+import { lang, t } from "/assets/app-i18n.js";
+import "/assets/chat-render.js";
 import { Icon } from "/assets/ui-icons.js";
 import { Who, relTime } from "./fleet-task-common.js";
 import { AgentTag } from "./fleet-task-run.js";
@@ -72,35 +77,90 @@ export const insertMention = (text, m, caret, name, names = []) => insertAtTrigg
 
 const fullTime = (iso) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleString() : ""; };
 
+/**
+ * A run of the same history line from the same hand ("web-user changed acceptance" three times in a row) is one entry with a
+ * `count` and the latest time (pure: tests import it). Only history lines merge; a comment or a progress note never does.
+ * `describe(ev)` words a history event (the page's).
+ */
+export function collapseEvents(entries, describe) {
+  const out = [];
+  for (const e of entries) {
+    const prev = out[out.length - 1];
+    if (prev && e.type === "event" && prev.type === "event" && prev.who === e.who && prev.by === e.by && describe(prev.ev) === describe(e.ev)) {
+      out[out.length - 1] = { ...prev, count: (prev.count || 1) + 1, at: e.at };
+      continue;
+    }
+    out.push(e);
+  }
+  return out;
+}
+
+/** The device's calendar day of a time ("2026-11-18"), or "" when it is none. */
+export function dayKey(iso) {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "";
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+/** A day's name for the separator: Today, Yesterday, else "Wed, Nov 11" (with the year when it is not this one). */
+export function dayLabel(iso, now = Date.now()) {
+  const key = dayKey(iso);
+  if (!key) return "";
+  if (key === dayKey(now)) return t("taskcard.today");
+  if (key === dayKey(new Date(now).setDate(new Date(now).getDate() - 1))) return t("taskcard.yesterday");
+  const d = new Date(iso);
+  const sameYear = d.getFullYear() === new Date(now).getFullYear();
+  return d.toLocaleDateString(lang() === "zh-TW" ? "zh-TW" : "en-US", { weekday: "short", month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
+}
+
+/** A comment's text as the chat draws a message (Markdown, escaped first); the plain text when the renderer is not there. */
+const commentHtml = (text) => {
+  const r = globalThis.AgendChatRender;
+  return r && typeof r.renderMarkdown === "function" ? { __html: r.renderMarkdown(text) } : null;
+};
+
 function Entry({ entry, describe }) {
   const time = html`<time class="muted tl-time" dateTime=${entry.at} title=${fullTime(entry.at)}>${relTime(entry.at)}</time>`;
   const agent = entry.by === "instance";
-  const mark = agent ? " by-agent lbar" : "";   // the shared straight bar (app.css `.lbar`), as the app draws a coloured left edge
+  // The shared straight bar (app.css `.lbar`) marks what an agent said or noted; its history lines stay quiet, without it.
+  const mark = agent && entry.type !== "event" ? " by-agent lbar" : "";
   if (entry.type === "comment") {
+    const body = commentHtml(entry.text);
     return html`<li class=${`tl-item tl-comment${entry.authorKind === "person" ? " person" : ""}${mark}`}>
       <div class="tl-head"><${Who} name=${entry.who} />${agent ? html`<${AgentTag} />` : null}
         ${entry.kind === "reject" ? html`<span class="tb-tag st-blocked">${t("taskcard.rejectTag")}</span>` : null}
         ${entry.kind === "approve" ? html`<span class="tb-tag st-done">${t("taskcard.approveTag")}</span>` : null}
         ${time}</div>
-      <div class="tl-body">${entry.text}</div></li>`;
+      ${body ? html`<div class="tl-body md" dangerouslySetInnerHTML=${body}></div>` : html`<div class="tl-body">${entry.text}</div>`}</li>`;
   }
   if (entry.type === "log") {
-    return html`<li class=${`tl-item tl-line tl-log${mark}`}><${Icon} name="check" size=${14} /><span class="tl-text"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null} ${entry.text}</span>${time}</li>`;
+    return html`<li class=${`tl-item tl-line tl-log${mark}`}><${Icon} name="check" size=${14} /><span class="tl-who"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null}</span><span class="tl-text">${entry.text}</span>${time}</li>`;
   }
-  return html`<li class=${`tl-item tl-line tl-event${mark}`}><span class="tb-dot" aria-hidden="true"></span><span class="tl-text"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null} ${describe(entry.ev)}</span>${time}</li>`;
+  return html`<li class=${`tl-item tl-line tl-event${mark}`}><span class="tb-dot" aria-hidden="true"></span><span class="tl-who"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null}</span><span class="tl-text">${describe(entry.ev)}${entry.count > 1 ? html` <span class="tl-count" title=${t("taskcard.repeated", entry.count)}>×${entry.count}</span>` : null}</span>${time}</li>`;
 }
 
 /** The merged timeline with its filter (all, comments, progress log, history). `describe(ev)` words a history event. */
 export function Timeline({ detail, describe }) {
   const [filter, setFilter] = useState("all");
   const all = timelineOf(detail);
-  const count = (f) => timelineShown(all, f).length;
-  const shown = timelineShown(all, filter);
+  // The number on a filter button is the number of lines the list shows for it: a run of equal history lines is one.
+  const count = (f) => collapseEvents(timelineShown(all, f), describe).length;
+  const shown = collapseEvents(timelineShown(all, filter), describe);
+  // A day change is a separator — only when the list spans more than one day (one day needs no heading).
+  const days = new Set(shown.map((e) => dayKey(e.at)).filter(Boolean));
+  const rows = [];
+  let day = "";
+  for (const e of shown) {
+    const k = dayKey(e.at);
+    if (days.size > 1 && k && k !== day) rows.push(html`<li key=${`d${k}`} class="tl-day" role="presentation"><span>${dayLabel(e.at)}</span></li>`);
+    if (k) day = k;
+    rows.push(html`<${Entry} key=${e.key} entry=${e} describe=${describe} />`);
+  }
   return html`<section class="tl" aria-label=${t("taskcard.activity")}>
     <div class="tl-bar"><h3>${t("taskcard.activity")}</h3>
       <div class="tb-seg tl-filter" role="group" aria-label=${t("taskcard.activityShow")}>${TIMELINE_FILTERS.map((f) =>
         html`<button key=${f} type="button" aria-pressed=${filter === f ? "true" : "false"} class=${`tb-seg-btn${filter === f ? " active" : ""}`} onClick=${() => setFilter(f)}>${t(`taskcard.show.${f}`)}${f === "all" ? "" : ` ${count(f)}`}</button>`)}</div></div>
-    ${shown.length ? html`<ol class="tl-list">${shown.map((e) => html`<${Entry} key=${e.key} entry=${e} describe=${describe} />`)}</ol>`
+    ${shown.length ? html`<ol class="tl-list">${rows}</ol>`
       : html`<p class="muted tl-none">${t(all.length ? "taskcard.nothingHere" : "taskcard.noActivity")}</p>`}
   </section>`;
 }

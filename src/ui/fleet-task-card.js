@@ -51,6 +51,7 @@ register("taskcard", {
     position: "Position", moveUp: "Move up", moveDown: "Move down", properties: "Properties", crumbs: "Where this card is", backBoard: "Back to the board", backList: "Back to the list",
     dispatcher: "Dispatched by", dispatcherHint: "A blocked card's question goes to them first", dispatcherMe: "Me", dispatcherNone: "Nobody",
     dispatcherPerson: "{0} (a person)", fDispatcher: "dispatcher",
+    today: "Today", yesterday: "Yesterday", repeated: "The same, {0} times in a row",
     groupCore: "Core", groupTeam: "Project and people", groupFlow: "Flow",
     addGoal: "Add goal", addScope: "Add scope", addDefinition: "Add definition of done", addAcceptance: "Add acceptance", addContext: "Add context", addState: "Add state", addResult: "Add result",
     subsDone: "{0} of {1} sub tasks done",
@@ -83,6 +84,7 @@ register("taskcard", {
     position: "位置", moveUp: "往上移", moveDown: "往下移", properties: "屬性", crumbs: "這張卡的位置", backBoard: "回到看板", backList: "回到清單",
     dispatcher: "派工", dispatcherHint: "卡住要決定的事會先通知派工者", dispatcherMe: "我", dispatcherNone: "（沒有）",
     dispatcherPerson: "{0}（人）", fDispatcher: "派工者",
+    today: "今天", yesterday: "昨天", repeated: "連續 {0} 次相同",
     groupCore: "核心狀態", groupTeam: "專案與協作", groupFlow: "流程控制",
     addGoal: "新增目標", addScope: "新增範圍", addDefinition: "完成定義", addAcceptance: "驗收條件", addContext: "補充背景", addState: "目前狀態", addResult: "產出",
     subsDone: "{0}／{1} 個子任務已完成",
@@ -339,24 +341,23 @@ export function CardPage({ id, tick, projects, boardOff = [], doing = new Map(),
   // The sub tasks: a bordered list — done / total and the bar on top, the sub tasks, a line to add one at the end.
   const prog = card.progress && card.progress.total ? card.progress : null;
   const subs = isMain ? html`<section class="tp-subs" aria-label=${t("taskcard.subs")}>
-    <div class="tp-subs-head">
-      <h3>${t("taskcard.subs")}</h3>
-      ${prog ? html`<span class="tp-subs-count" title=${t("taskcard.subsDone", prog.done, prog.total)}>${prog.done} / ${prog.total}</span><${ProgressBar} progress=${prog} wide />` : null}
+    <h3>${t("taskcard.subs")}</h3>
+    <div class="tc-field-body">
+      ${prog ? html`<div class="tp-subs-head"><span class="tp-subs-count" title=${t("taskcard.subsDone", prog.done, prog.total)}>${prog.done} / ${prog.total}</span><${ProgressBar} progress=${prog} wide /></div>` : null}
+      ${children.length ? html`<ul class="tc-children">${children.map((c) => html`<li key=${c.id}><button type="button" onClick=${() => onOpen(c.id)}>
+        <${StatusPill} status=${c.status} card=${c} /><span class="tb-code">${c.id}</span><span class="tc-child-title">${c.title}</span><span class="tb-who">${c.assignee || ""}</span></button></li>`)}</ul>` : null}
+      ${finished || !can ? null : html`<${QuickAdd} placeholder=${t("taskcard.quickAdd")} limit=${LIMIT.title} onAdd=${(title) => run(() => boardApi.create({ parent: card.id, title }))} />`}
     </div>
-    ${children.length ? html`<ul class="tc-children">${children.map((c) => html`<li key=${c.id}><button type="button" onClick=${() => onOpen(c.id)}>
-      <${StatusPill} status=${c.status} card=${c} /><span class="tb-code">${c.id}</span><span class="tc-child-title">${c.title}</span><span class="tb-who">${c.assignee || ""}</span></button></li>`)}</ul>` : null}
-    ${finished || !can ? null : html`<${QuickAdd} placeholder=${t("taskcard.quickAdd")} limit=${LIMIT.title} onAdd=${(title) => run(() => boardApi.create({ parent: card.id, title }))} />`}
   </section>` : null;
 
   return html`<div class="tp" ref=${root} data-card=${card.id}>
     ${bar({ parent, actions: html`${copyBtn}${blockBtn}${more}` })}
     <div class="tp-grid">
       <div class="tp-head">
-        <div class="tp-titlerow">
-          <div class="tc-head" ref=${head} tabindex="-1" role="heading" aria-level="2">
-            ${can ? html`<${InlineTitle} value=${card.title} version=${card.version} limit=${LIMIT.title} onSave=${(title, base) => save({ title }, base)} />` : html`<h2 class="tc-title">${card.title}</h2>`}
-          </div>
-          ${derived && !finished ? html`<span class="tp-derived">${t("taskcard.followsSubs")}</span>` : null}
+        <div class="tp-idrow"><span class="tb-code tp-code">${card.id}</span><${StatusPill} status=${card.status} card=${card} />
+          ${derived && !finished ? html`<span class="tp-derived">${t("taskcard.followsSubs")}</span>` : null}</div>
+        <div class="tc-head" ref=${head} tabindex="-1" role="heading" aria-level="2">
+          ${can ? html`<${InlineTitle} value=${card.title} version=${card.version} limit=${LIMIT.title} onSave=${(title, base) => save({ title }, base)} />` : html`<h2 class="tc-title">${card.title}</h2>`}
         </div>
         ${can ? html`<div class="tc-actions">
           ${card.status === "review" ? html`
@@ -416,6 +417,7 @@ export function CardPage({ id, tick, projects, boardOff = [], doing = new Map(),
   </div>`;
 }
 
+/** A labelled row of the page's grid: the label in the first column, whatever it holds (a text, a list, an editor) in the second. */
 function Field({ title, tone, children }) {
-  return html`<section class=${`tc-field${tone ? ` tone-${tone}` : ""}`}><h3>${title}</h3>${children}</section>`;
+  return html`<section class=${`tc-field${tone ? ` tone-${tone}` : ""}`}><h3>${title}</h3><div class="tc-field-body">${children}</div></section>`;
 }

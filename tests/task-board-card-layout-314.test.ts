@@ -232,7 +232,7 @@ describe("what the agent writes is its own block, a line while it has nothing", 
   });
 });
 
-describe("the sub tasks: a bordered list", () => {
+describe("the sub tasks: rows on the page's grid", () => {
   it("done / total and the bar on top, the sub tasks, the line to add one last", async () => {
     await mount(); await openCard("M-2");
     const subs = q(".tp-subs");
@@ -240,7 +240,10 @@ describe("the sub tasks: a bordered list", () => {
     expect(text(subs.querySelector(".tp-subs-count"))).toBe("1 / 2");
     expect(subs.querySelector("svg.tb-bar"), "the shared progress bar").toBeTruthy();
     expect(qa(".tp-subs .tc-children li").map((li) => text(li))).toEqual(["Done S-1 Price list alpha", "To do S-2 Checkout beta"]);
-    const last = subs.lastElementChild ?? subs.children[subs.children.length - 1];
+    expect(qa(".tp-subs .tc-children button").map((b) => [...b.children].map((c: any) => c.className.split(" ")[0])), "a row's columns: status, number, title, who")
+      .toEqual([["tb-pill", "tb-code", "tc-child-title", "tb-who"], ["tb-pill", "tb-code", "tc-child-title", "tb-who"]]);
+    const body = subs.querySelector(".tc-field-body");
+    const last = body.children[body.children.length - 1];
     expect(last.className).toBe("tc-quick-add");
     await typeInto(last, "Receipts");
     fire(last, "keydown", { key: "Enter", cancelable: true }); await settle(12);
@@ -366,5 +369,144 @@ describe("both languages", () => {
     expect(text(q(".tp-agent-note"))).toBe("待啟動：beta 接手後會在這裡更新");
     expect(text(q(".tp-subs-count"))).toBe("1 / 2");
     expect(qa(".tp-group")[2].querySelectorAll(".tp-row dt").map((d: any) => text(d))).toEqual(["待我確認", "相依卡片", "位置"]);
+  });
+});
+
+describe("one invisible grid: label column, value column", () => {
+  it("every labelled row of the main column is a label and a body — the spec, the agent's fields, the sub tasks", async () => {
+    await mount(); await openCard("M-1");
+    for (const f of qa(".tp-body .tc-field")) {
+      expect([...f.children].map((c: any) => c.tagName + "." + c.className), text(f.querySelector("h3"))!).toEqual(["H3.", "DIV.tc-field-body"]);
+    }
+    expect([...q(".tp-subs").children].map((c: any) => c.tagName + "." + c.className)).toEqual(["H3.", "DIV.tc-field-body"]);
+    expect(qa(".tp-body .tc-field").length, "goal, scope, definition, context, state, result").toBe(6);
+  });
+
+  it("the number and the status are above the title; the 'follows sub tasks' chip is on the same row", async () => {
+    await mount(); await openCard("M-2");
+    const row = q(".tp-idrow");
+    expect(text(row.querySelector(".tp-code"))).toBe("M-2");
+    expect(row.querySelector(".tb-pill.st-open")).toBeTruthy();
+    expect(text(row.querySelector(".tp-derived"))).toBe("It has sub tasks: its status follows them");
+    expect([...q(".tp-head").children].map((c: any) => c.className.split(" ")[0])).toEqual(["tp-idrow", "tc-head", "tc-actions"]);
+    expect(text(q(".tc-head")), "the heading is the title only").toBe("Add the shop");
+  });
+
+  it("a timeline line is columns: mark, who, words, time", async () => {
+    CARDS = build();
+    const base = handler;
+    handler = (path, method, body) => {
+      const r: any = base(path, method, body);
+      if (r && r.card && r.card.id === "M-1" && !r.logs?.length && method === "GET") return { ...r, logs: [{ id: 1, author: "alpha", authorKind: "instance", text: "Endpoint done", at: "2026-11-02T11:00:00.000Z" }], history: [{ id: 2, actor: "Ann", actorKind: "person", type: "created", data: {}, at: "2026-11-01T08:00:00.000Z" }] };
+      return r;
+    };
+    await mount(); await openCard("M-1");
+    const lines = qa(".tl-line");
+    expect(lines.length).toBe(2);
+    for (const l of lines) expect([...l.children].map((c: any) => c.className.split(" ")[0].replace(/^icon.*/, "icon")).slice(1), "who, words, time").toEqual(["tl-who", "tl-text", "muted"]);
+    expect(lines.map((l) => text(l.querySelector(".tl-who")))).toEqual(["Ann", "alpha Agent"]);
+    expect(lines.map((l) => text(l.querySelector(".tl-text")))).toEqual(["opened it", "Endpoint done"]);
+  });
+});
+
+describe("the timeline: what is said and done leads, the history is quiet", () => {
+  const at = (days: number, h = 10) => { const d = new Date(Date.now() - days * 86_400_000); d.setHours(h, 0, 0, 0); return d.toISOString(); };
+  const detailWith = (over: Record<string, unknown>) => {
+    const base = handler;
+    handler = (path, method, body) => {
+      const r: any = base(path, method, body);
+      return r && r.card && r.card.id === "M-1" && method === "GET" ? { ...r, ...over } : r;
+    };
+  };
+  const ev = (id: number, actor: string, at: string, type = "updated", data: any = { changes: { acceptance: [] } }, actorKind = "person") => ({ id, actor, actorKind, type, data, at });
+
+  it("collapseEvents: a run of the same line from the same hand is one with a count and the latest time; nothing else merges", async () => {
+    const act = await import("/ui/js/fleet-task-activity.js");
+    const describe = (e: any) => e.data.text ?? e.type;
+    const E = (key: string, who: string, text: string, at: string, type = "event") => ({ key, type, who, by: "person", at, ev: { type: "updated", data: { text } } });
+    const out = act.collapseEvents([E("a", "ann", "x", "2026-11-01T10:00:00Z"), E("b", "ann", "x", "2026-11-01T11:00:00Z"), E("c", "ann", "x", "2026-11-01T12:00:00Z"),
+      E("d", "ann", "y", "2026-11-01T13:00:00Z"), E("e", "bob", "y", "2026-11-01T14:00:00Z"), E("f", "bob", "y", "2026-11-01T15:00:00Z"),
+      { key: "g", type: "comment", who: "bob", by: "person", at: "2026-11-01T16:00:00Z", text: "hi" }, E("h", "bob", "y", "2026-11-01T17:00:00Z")], describe);
+    expect(out.map((e: any) => [e.key, e.count ?? 1, e.at.slice(11, 13)])).toEqual([["a", 3, "12"], ["d", 1, "13"], ["e", 2, "15"], ["g", 1, "16"], ["h", 1, "17"]]);
+    const same = [E("a", "ann", "x", "2026-11-01T10:00:00Z", "log"), E("b", "ann", "x", "2026-11-01T11:00:00Z", "log")].map((e: any) => ({ ...e, type: "log" }));
+    expect(act.collapseEvents(same, describe).length, "progress notes never merge").toBe(2);
+  });
+
+  it("three equal history lines are one line ×3; the history is not bold and an agent's has no bar; a progress note is a line of its own", async () => {
+    const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+    detailWith({ comments: [], logs: [{ id: 1, author: "alpha", authorKind: "instance", text: "Endpoint done", at: ago(10) }],
+      history: [ev(1, "web-user", ago(4)), ev(2, "web-user", ago(3)), ev(3, "web-user", ago(2)), ev(4, "alpha", ago(1), "moved", { from: "open", to: "claimed", auto: true }, "instance")] });
+    await mount(); await openCard("M-1");
+    const lines = qa(".tl-line");
+    const kind = (l: any) => (l.className.includes("tl-log") ? "log" : "event");
+    expect(lines.map(kind).sort(), "four history lines and a note: the three equal ones are one").toEqual(["event", "event", "log"]);
+    const merged = lines.find((l) => l.querySelector(".tl-count"));
+    expect(merged.querySelector(".tl-count").textContent).toBe("×3");
+    expect(merged.querySelector(".tl-count").getAttribute("title")).toBe("The same, 3 times in a row");
+    expect(lines.filter((l) => l.className.includes("by-agent")).map(kind), "only the agent's progress note has the bar").toEqual(["log"]);
+    expect(qa(".tl-filter button").map((b) => text(b)), "the numbers are the lines each filter shows: four history entries, three of them one line").toEqual(["All", "Comments 0", "Progress 1", "History 2"]);
+    fire(qa(".tl-filter button")[3], "click"); await settle(4);
+    expect(qa(".tl-item").length, "History shows as many lines as its button says").toBe(2);
+  });
+
+  it("a comment has no box: who and when, then its text as Markdown (escaped first)", async () => {
+    detailWith({ comments: [{ id: 1, author: "Ann", authorKind: "person", kind: "comment", text: "Use **bold**, `code` and\n- a\n- b\n<script>x</script>", at: at(0) }], logs: [], history: [] });
+    await mount(); await openCard("M-1");
+    const c = q(".tl-comment");
+    expect(c.className).not.toContain("box");
+    expect(c.querySelector(".tl-head .tb-who").textContent).toBe("Ann");
+    const body = c.querySelector(".tl-body");
+    expect(body.className).toContain("md");
+    expect(body.querySelector("strong").textContent).toBe("bold");
+    expect(body.querySelector("code").textContent).toBe("code");
+    expect([...body.querySelectorAll("li")].map((li: any) => li.textContent)).toEqual(["a", "b"]);
+    expect(body.querySelector("script"), "no tag of the message's own").toBeNull();
+    expect(body.textContent).toContain("<script>x</script>");
+  });
+
+  it("a hostile comment makes no link of a script URL and no attribute of its own (the page's last regression net for the chat's renderer)", async () => {
+    const hostile = [
+      "[x](javascript:alert(1))", "[x](JaVaScRiPt:alert(1))", "[x]( javascript:alert(1))", "[x](vbscript:msgbox(1))", "[x](//evil.example/x)",
+      "[x](data:text/html,<script>alert(1)</script>)", '"onmouseover="alert(1)" x', '[x](https://a.example" onmouseover="alert(1))',
+      'https://a.example/x"onmouseover="alert(1)', "<img src=x onerror=alert(1)>", '<a href="javascript:alert(1)" onclick="alert(2)">y</a>', "[x](mailto:a@b.example)",
+    ];
+    detailWith({ comments: [{ id: 1, author: "Mallory", authorKind: "person", kind: "comment", text: hostile.join("\n\n"), at: at(0) }], logs: [], history: [] });
+    await mount(); await openCard("M-1");
+    const body = q(".tl-comment .tl-body");
+    const els = [...body.querySelectorAll("*")] as any[];
+    expect(els.length, "it did render").toBeGreaterThan(hostile.length);
+    // Only the tags the renderer's own Markdown makes: nothing a message could add of its own.
+    expect([...new Set(els.map((e) => e.localName))].sort()).toEqual(["a", "p"]);
+    const allowed = new Set(["href", "target", "rel", "data-trust"]);
+    for (const e of els) {
+      for (const a of e.attributes) {
+        expect(allowed.has(a.name), `${e.localName}: ${a.name}`).toBe(true);
+        expect(a.name.startsWith("on"), `${e.localName}: ${a.name}`).toBe(false);
+      }
+    }
+    // A link is only an http(s) or mailto one, opened in a new tab without the opener.
+    const links = els.filter((e) => e.localName === "a");
+    expect(links.length, "the mailto, and the https one that ends before its quote (a URL with a quote in it stays text)").toBe(2);
+    for (const a of links) {
+      expect(a.getAttribute("href")).toMatch(/^(https?:\/\/|mailto:)/);
+      expect([a.getAttribute("target"), a.getAttribute("rel")]).toEqual(["_blank", "noopener noreferrer"]);
+    }
+    expect(links.map((a) => a.getAttribute("href")).filter((h: string) => /^https?:/.test(h)).every((h: string) => h.startsWith("https://a.example")), "no link to a host the text did not name").toBe(true);
+    // What is not a link stays the text it was, not a link without an address either.
+    for (const t of ["[x](javascript:alert(1))", "[x](JaVaScRiPt:alert(1))", "[x](vbscript:msgbox(1))", "[x](//evil.example/x)", "<img src=x onerror=alert(1)>"]) expect(body.textContent, t).toContain(t);
+    expect(els.filter((e) => e.localName === "a" && !e.hasAttribute("href")).length).toBe(0);
+  });
+
+  it("a day change is a separator (Today / Yesterday / a date) only when the list spans days", async () => {
+    detailWith({ comments: [{ id: 1, author: "Ann", authorKind: "person", kind: "comment", text: "first", at: at(3) }, { id: 2, author: "Ann", authorKind: "person", kind: "comment", text: "second", at: at(1) }, { id: 3, author: "Ann", authorKind: "person", kind: "comment", text: "third", at: at(0) }], logs: [], history: [] });
+    await mount(); await openCard("M-1");
+    const labels = qa(".tl-day").map((d) => text(d));
+    expect(labels.length).toBe(3);
+    expect(labels.slice(1)).toEqual(["Yesterday", "Today"]);
+    expect(labels[0]).toMatch(/^[A-Z][a-z]{2}, [A-Z][a-z]{2} \d{1,2}$/);
+    expect(qa(".tl-item").length, "the separators are not entries").toBe(3);
+    detailWith({ comments: [{ id: 1, author: "Ann", authorKind: "person", kind: "comment", text: "only today", at: at(0, 8) }, { id: 2, author: "Ann", authorKind: "person", kind: "comment", text: "also today", at: at(0, 9) }], logs: [], history: [] });
+    await mount(); await openCard("M-1");
+    expect(qa(".tl-day").length, "one day needs no heading").toBe(0);
   });
 });

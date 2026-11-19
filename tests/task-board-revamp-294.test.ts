@@ -702,11 +702,11 @@ describe("the timeline and the comment box on the page", () => {
     expect(qa(".tl-item").length).toBe(8);
     const last = qa(".tl-item")[7];
     expect(last.className).toContain("tl-line tl-event");
-    expect(text(last.querySelector(".tl-text"))).toBe("Ann changed watchers: +beta");
+    expect([text(last.querySelector(".tl-who")), text(last.querySelector(".tl-text"))], "AGEND-314: who and what are columns of the line").toEqual(["Ann", "changed watchers: +beta"]);
     const filters = qa(".tl-filter button");
     expect(filters.map((b) => text(b))).toEqual(["All", "Comments 3", "Progress 1", "History 4"]);
     fire(filters[3], "click"); await settle(4);
-    expect(qa(".tl-item").map((li) => text(li.querySelector(".tl-text")))).toContain("Ann changed watchers: +beta");
+    expect(qa(".tl-item").map((li) => text(li.querySelector(".tl-who")) + " " + text(li.querySelector(".tl-text")))).toContain("Ann changed watchers: +beta");
     fire(filters[2], "click"); await settle(4);
     expect(text(q(".tl-list"))).not.toContain("changed watchers");
   });

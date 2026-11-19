@@ -512,7 +512,8 @@ describe("a card's page: the timeline marks the agent's actions", () => {
     await openCard("M-1");
     const items = qa(".tl-item");
     expect(items.length).toBe(6);
-    expect(items.map((li) => li.className.includes("by-agent"))).toEqual([false, true, false, true, true, false]);
+    // AGEND-314: an agent's history line keeps its tag (a robot mark) but not the bar — the history is the quietest thing on the page.
+    expect(items.map((li) => li.className.includes("by-agent"))).toEqual([false, false, false, true, true, false]);
     expect(items.map((li) => qa(".tr-by").filter((tag) => li.contains(tag)).length)).toEqual([0, 1, 0, 1, 1, 0]);
     expect(text(items[1])).toContain("alpha Agent");
   });
