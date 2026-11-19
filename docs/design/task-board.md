@@ -276,6 +276,15 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   timeline alone. Everything in it is on the panel's one inner left edge; the timeline's first column gives back the padding
   (`--tp-panel-pad`), so its words still start on the page's value column, as the spec's values do. The filter, the history's ×N and
   the Markdown are unchanged.
+  (7) *Dressed as Settings is.* Tasks reused no part of Settings' look and read as a second product; its shared pieces are now
+  Settings' own, by the same classes and tokens (no colour of its own): a page head is `.s-page-head` — a 24px title with its
+  badge (`.s-scope` for Archived), the project's description as the muted lead (`.s-page-lead`), the actions at the right — on
+  Home and on a project; the search field is `.s-search`'s (surface fill, `--r-sm`, no border, the focus ring); the list is the
+  Agent page's list — one rounded bordered container on `--surface`, its header row and each group's heading on `--surface-2`,
+  rows between thin lines, 16px inside; a project's tile and the card page's two boxes (properties, activity) are Settings' card
+  (1px border, `--r-md`, 20px inside, no shadow; the activity's heading is sentence-case at `--fs-lg`). What Settings has no
+  counterpart for stays: the board's columns and white tiles (the Kanban convention taskhall's looks keep), the segmented
+  Board / List switch (as the Fleet tabs are), the pills.
 - **A phone.** The board shows one status at a time (the switch is hidden on a desk; every column is drawn, a class
   shows the current one), starting at the first of To confirm, In progress, Blocked, To do, Done that has cards.
 - **The comment box's @.** Typing `@` completes with the fleet's instance names (those with the board off are listed,

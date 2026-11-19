@@ -118,9 +118,9 @@ const PANEL = `(() => {
   const left = (el) => (el ? Math.round((el.getBoundingClientRect().left - r.left) * 10) / 10 : null);
   const first = document.querySelector(".tp-activity .tl-list > li .tl-who, .tp-activity .tl-list > li .tl-head, .tp-activity .tl-list > li > .tb-dot, .tp-activity .tl-list > li > .icon");
   const bg = (el) => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (c !== "rgba(0, 0, 0, 0)" && c !== "transparent") return c; } return "none"; };
-  return { x: Math.round(r.left), width: Math.round(r.width), bg: cs.backgroundColor, pageBg: bg(p.parentElement), radius: cs.borderTopLeftRadius, padding: [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft],
+  return { x: Math.round(r.left), width: Math.round(r.width), bg: cs.backgroundColor, pageBg: bg(p.parentElement), radius: cs.borderTopLeftRadius, padding: [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft], border: cs.borderTopWidth, edgeL: parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft), edgeR: parseFloat(cs.borderRightWidth) + parseFloat(cs.paddingRight),
     heading: left(document.querySelector(".tp-activity .tl-bar h3")), filterGap: Math.round(r.right - document.querySelector(".tp-activity .tl-filter").getBoundingClientRect().right), filter: left(document.querySelector(".tp-activity .tl-filter")), first: left(first), composer: left(box),
-    boxInside: !!box && box.getBoundingClientRect().bottom <= r.bottom - parseFloat(cs.paddingBottom) + 1, composerLast: p.lastElementChild === document.querySelector(".tp-activity .tc-composer"),
+    boxInside: !!box && box.getBoundingClientRect().bottom <= r.bottom - parseFloat(cs.paddingBottom) - parseFloat(cs.borderBottomWidth) + 1, composerLast: p.lastElementChild === document.querySelector(".tp-activity .tc-composer"),
     gapAboveSubs: subs ? Math.round(r.top - subs.getBoundingClientRect().bottom) : null, overflowX: document.documentElement.scrollWidth - innerWidth };
 })()`;
 
@@ -157,6 +157,14 @@ for (const c of matrix(process.env.MATRIX ?? "desk-dark-zh-TW,desk-light-en,phon
     if (!phone) await page.setViewportSize({ width: 1470, height: 760 });
     await page.waitForTimeout(700);
     await page.screenshot({ path: shotPath(SMOKE, c, "1-board") });
+    // Home (the projects) and back: the page heads and the project tile, as Settings' are.
+    await page.locator(".tb-bar-head .btn-ghost").first().click();
+    await page.waitForSelector(".tb-home .tb-project", { timeout: 10000 });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: shotPath(SMOKE, c, "0-home") });
+    await page.locator(".tb-project-open").first().click();
+    await page.waitForSelector(".tb-tile", { state: "attached", timeout: 10000 });
+    await page.waitForTimeout(300);
     let tiles: any[];
     if (phone) {
       tiles = [];
@@ -251,9 +259,10 @@ for (const c of matrix(process.env.MATRIX ?? "desk-dark-zh-TW,desk-light-en,phon
     chk.panelPaddedAlike = pad.length === 4 && uniq(pad).length === 1 && parseFloat(pad[0]!) >= 12;
     // heading and box on the left padding edge; the filter ends on the right one (beside the heading), or, wrapped under it on a
     // narrow phone, starts on the left one
-    chk.panelOneLeftEdge = !!panel && [panel.heading, panel.composer].every((x: number | null) => x === parseFloat(pad[3] ?? "x"))
-      && (panel.filterGap === parseFloat(pad[1] ?? "x") || panel.filter === parseFloat(pad[3] ?? "x"));
-    chk.panelTimelineOnItsEdge = !!panel && panel.first !== null && Math.abs(panel.first - parseFloat(pad[3] ?? "x")) <= 10;
+    chk.panelOneLeftEdge = !!panel && [panel.heading, panel.composer].every((x: number | null) => x === panel.edgeL)
+      && (panel.filterGap === panel.edgeR || panel.filter === panel.edgeL);
+    chk.panelHasItsBorder = !!panel && parseFloat(panel.border) >= 1;
+    chk.panelTimelineOnItsEdge = !!panel && panel.first !== null && Math.abs(panel.first - panel.edgeL) <= 10;
     chk.panelHoldsTheBox = !!panel && panel.boxInside && panel.composerLast;
     chk.panelApartFromSubs = !!panel && (panel.gapAboveSubs === null || panel.gapAboveSubs >= 8);
     chk.panelNoSideScroll = !!panel && panel.overflowX <= 0;

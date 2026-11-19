@@ -3119,11 +3119,11 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 .tb-wait-title:hover { text-decoration: underline; }
 .tb-wait-reason { flex-basis: 100%; margin-top: 2px; color: var(--danger); font-size: var(--fs-xs); line-height: var(--lh-xs); overflow-wrap: anywhere; }
 .tb-projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s-3); }
-.tb-project { position: relative; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; }
+.tb-project { position: relative; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); min-width: 0; }
 .tb-project:hover { border-color: var(--border-strong); }
 .tb-project.is-archived { opacity: 0.7; }
-.tb-project-open { display: flex; flex-direction: column; gap: var(--s-2); width: 100%; padding: var(--s-4); padding-right: calc(var(--s-4) + 32px); background: none; border: 0; color: inherit; text-align: left; cursor: pointer; border-radius: inherit; }
-.tb-project-name { font-weight: var(--fw-bold); font-size: var(--fs-md); overflow-wrap: anywhere; }
+.tb-project-open { display: flex; flex-direction: column; gap: var(--s-2); width: 100%; padding: var(--s-5); padding-right: calc(var(--s-5) + 32px); background: none; border: 0; color: inherit; text-align: left; cursor: pointer; border-radius: inherit; }
+.tb-project-name { font-weight: var(--fw-semibold); font-size: var(--fs-lg); overflow-wrap: anywhere; }
 .tb-project-desc { color: var(--text-2); font-size: var(--fs-xs); overflow-wrap: anywhere; }
 .tb-project-pct { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-sm); }
 .tb-project-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); font-size: var(--fs-xs); color: var(--text-2); }
@@ -3132,8 +3132,9 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 .tb-archived > .tb-projects { align-self: stretch; }
 
 .tb-search { position: relative; min-width: 180px; flex: 0 1 280px; }
-.tb-search input { width: 100%; min-height: 34px; padding: 0 var(--s-3) 0 30px; border: 1px solid var(--border); border-radius: var(--r-full); background: var(--bg); color: var(--text); font-size: var(--fs-sm); }
-.tb-search input:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3px var(--accent-dim); }
+/* AGEND-316: the search field is Settings' (.s-search): the surface fill, --r-sm, no border, the focus ring. */
+.tb-search input { width: 100%; min-height: 36px; padding: 0 var(--s-3) 0 30px; border: 0; border-radius: var(--r-sm); background: var(--surface); color: var(--text); font-size: var(--fs-sm); }
+.tb-search input:focus { outline: none; box-shadow: 0 0 0 2px var(--focus); }
 .tb-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
 .tb-search-results { position: absolute; z-index: 5; top: calc(100% + 4px); right: 0; width: min(440px, calc(100vw - 32px)); max-height: 60vh; overflow-y: auto; margin: 0; padding: var(--s-1); list-style: none; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--r-md); box-shadow: var(--shadow-2); }
 .tb-search-results button { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); width: 100%; padding: var(--s-2); background: none; border: 0; border-radius: var(--r-sm); color: var(--text); text-align: left; cursor: pointer; font-size: var(--fs-sm); }
@@ -3143,10 +3144,16 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 .tb-search-none { padding: var(--s-2); font-size: var(--fs-sm); }
 
 /* A project: its header, then one column per status. */
-.tb-bar-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
-.tb-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); min-width: 0; }
-.tb-title h2 { margin: 0; font-size: var(--fs-lg); overflow-wrap: anywhere; }
-.tb-stats { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: var(--fs-sm); }
+/* AGEND-316: the page head is Settings' (.s-page-head: a 24px title with its badge, a muted lead under it, the actions at the right),
+   so Tasks and Settings read as one product. The project's back link, then the title, its description as the lead, its numbers. */
+.tb-bar-head, .tb-head { margin-bottom: var(--s-4); }
+.tb-head-main { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); flex: 1 1 320px; min-width: 0; }
+.tb-head-back { margin-left: calc(-1 * var(--s-3)); flex: none; }
+.tb-title { min-width: 0; }
+.tb-title h2 { overflow-wrap: anywhere; }
+.tb-head-lead { margin: 0; }
+.tb-head-actions { display: flex; flex: none; align-items: center; gap: var(--s-2); }
+.tb-stats { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-1); font-size: var(--fs-sm); }
 .tb-scroll { overflow-x: auto; margin: 0 calc(-1 * var(--s-2)); padding: 0 var(--s-2) var(--s-2); }
 /* AGEND-316: a column is 272–360 px wide however many there are (statuses may become the person's own): a few columns
    widen up to 360 px, more than fit scroll sideways — a card is never squeezed narrower to fit another column in. */
@@ -3302,6 +3309,8 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 @media (max-width: 899px), (pointer: coarse) and (max-height: 500px) and (max-width: 1023px) {
   /* A phone stacks the columns: no sideways scrolling, and a card moves through its dialog's "Move to…". */
   .tb-scroll { overflow-x: visible; margin: 0; padding: 0; }
+  /* The page head's actions go under the title and wrap, as Settings' do. */
+  .tb-head-actions { flex-wrap: wrap; flex: 1 1 100%; }
   .tb-columns { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: minmax(0, 1fr); min-width: 0; }
   .tb-col { min-height: 0; }
   .tb-form-row { grid-template-columns: minmax(0, 1fr); }

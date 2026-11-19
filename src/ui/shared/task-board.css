@@ -51,14 +51,17 @@
 .tb-chip .menu { min-width: 0; }
 .tb-chip .menu-text { min-height: 28px; max-width: 240px; padding: 0 var(--s-2); border: 0; border-left: 1px solid var(--border); border-radius: 0; background: none; }
 .tb-chip .menu-text > span { overflow: hidden; text-overflow: ellipsis; }
-.tb-list { display: flex; flex-direction: column; gap: var(--s-4); }
-.tb-group-head { display: flex; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-1); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); background: var(--surface); font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-2); }
+/* AGEND-316: the list is Settings' list (the Agent page's): one rounded, bordered container on the surface, a header row and each
+   group's heading on --surface-2, rows between thin lines — so Tasks and Settings read as one product. */
+.tb-list { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); overflow: hidden; }
+.tb-group-head { display: flex; align-items: center; gap: var(--s-2); margin: 0; padding: 10px var(--s-4); border-top: 1px solid var(--border); border-radius: 0; background: var(--surface-2); font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-2); }
 .tb-rows { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 .tb-row { border-bottom: 1px solid var(--border); cursor: pointer; }
-.tb-row:hover { background: var(--surface); }
+.tb-row:hover { background: var(--surface-2); }
+.tb-group:last-child .tb-rows > .tb-row:last-child { border-bottom: 0; }
 .tb-row.flash { animation: tb-flash 1.6s var(--ease); }
-.tb-row-line { display: flex; align-items: center; gap: var(--s-2); min-height: 40px; padding: var(--s-1) var(--s-2); font-size: var(--fs-sm); min-width: 0; }
-.tb-row.is-sub .tb-row-line { padding-left: var(--s-6); }
+.tb-row-line { display: flex; align-items: center; gap: var(--s-2); min-height: 44px; padding: var(--s-1) var(--s-4); font-size: var(--fs-sm); min-width: 0; }
+.tb-row.is-sub .tb-row-line { padding-left: calc(var(--s-4) * 2); }
 .tb-row-main { flex-shrink: 0; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; }
 .tb-row-text { flex: 1; display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
 .tb-row-title { flex-shrink: 1; min-width: 0; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: var(--fw-medium); text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -73,14 +76,14 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tb-row-who { display: inline-flex; flex-shrink: 0; width: 140px; min-width: 0; font-size: var(--fs-xs); }
 .tb-row-who .tb-who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tb-row-time { flex-shrink: 0; width: 7em; font-size: var(--fs-xs); text-align: right; white-space: nowrap; }
-.tb-row > .tb-subs { margin: 0 var(--s-2) var(--s-2) var(--s-6); }
+.tb-row > .tb-subs { margin: 0 var(--s-4) var(--s-2) calc(var(--s-4) * 2); }
 @media (max-width: 899px), (pointer: coarse) and (max-height: 500px) and (max-width: 1023px) {
   /* A phone's row: number and title on the first line, the rest under them. */
   .tb-row-line { flex-wrap: wrap; row-gap: var(--s-1); }
   .tb-row-text { flex: 1 1 calc(100% - 96px); }
   .tb-row-who { width: auto; }
   .tb-row-time { width: auto; margin-left: auto; }
-  .tb-row.is-sub .tb-row-line { padding-left: var(--s-4); }
+  .tb-row.is-sub .tb-row-line { padding-left: calc(var(--s-4) + var(--s-3)); }
 }
 
 /* A card's menu at the pointer (fleet-task-menu.js): the app's menu, fixed where the right click was; and the card's
@@ -107,7 +110,7 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tb-find input { min-height: 30px; }
 
 /* ── The list: a header to sort by, folding groups, priority and ⋯ per row ─────────────────────────────────────── */
-.tb-list-head { display: flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-2); min-height: 32px; border-bottom: 1px solid var(--border); font-size: var(--fs-xs); color: var(--text-2); }
+.tb-list-head { display: flex; align-items: center; gap: var(--s-2); padding: 12px var(--s-4); background: var(--surface-2); font-size: var(--fs-xs); color: var(--text-2); }
 .tb-lh-dot { flex: none; width: 8px; }
 .tb-lh { display: inline-flex; align-items: center; gap: 2px; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: var(--fw-semibold); cursor: pointer; white-space: nowrap; }
 .tb-lh:hover, .tb-lh.active { color: var(--text); }
@@ -150,7 +153,10 @@ button.tb-row-progress:hover { background: var(--surface-2); }
    above it: the app's plain .card (surface, --r-md), padded alike on every side, the comment box at its foot under a thin line.
    Without a comment box (a read-only link) the panel holds the timeline alone. Everything in it starts on the panel's one inner
    left edge; the timeline's words still start on the page's value column (its first column gives back the padding). */
-.tp-activity.card { --tp-panel-pad: var(--s-4); margin: 0; padding: var(--tp-panel-pad); gap: var(--s-3); }
+.tp-activity.card { --tp-panel-pad: var(--s-5); margin: 0; padding: var(--tp-panel-pad); gap: var(--s-3); }
+/* Settings' card (.s-section-layout .card): a thin border, --r-md, 20px inside, a sentence-case heading at --fs-lg. */
+.tp-side.card, .tp-activity.card { border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: none; }
+.tp-side.card { padding: var(--s-5); }
 .tp-activity .tl-day > span { background: var(--surface); }
 .tp-activity .tc-composer { padding-top: var(--s-3); border-top: 1px solid var(--border); }
 /* Above the title: the card's number and status, and (at the right edge) that the status follows the sub tasks. */
@@ -281,7 +287,7 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 /* The timeline: comments, progress and history in one list; the comment box under it (fleet-task-activity.js). */
 .tl { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
 .tl-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2); }
-.tl-bar > h3 { margin: 0; font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.tl-bar > h3 { margin: 0; font-size: var(--fs-lg); font-weight: var(--fw-semibold); color: var(--text); text-transform: none; letter-spacing: 0; }
 .tl-filter { padding: 0; background: none; }
 .tl-filter .tb-seg-btn { min-height: 28px; padding: 0 var(--s-2); font-size: var(--fs-xs); }
 .tl-filter .tb-seg-btn.active { background: var(--surface-2); box-shadow: none; }
@@ -362,6 +368,7 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 @media (max-width: 899px), (pointer: coarse) and (max-height: 500px) and (max-width: 1023px) {
   .tp-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "head" "body" "side" "activity"; }
   .tp-side { position: static; padding: var(--s-3); }
+  .tp-activity.card { --tp-panel-pad: var(--s-4); }
   .tp-row { grid-template-columns: 88px minmax(0, 1fr); min-height: var(--tap); }
   .tp-chip { min-height: var(--tap); }
   .tp-watch-x { width: var(--tap); height: var(--tap); }

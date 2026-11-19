@@ -315,11 +315,12 @@ function Home({ cards, projects, stats, writable, onOpenProject, onOpen, onDialo
   const archived = projects.filter((p) => p.archived);
   const loose = stats(NO_PROJECT).mains > 0;
   return html`<div class="tb-home">
-    <div class="list-head tb-head"><span>${t("tasks.projects")}</span>
-      <span class="tb-grow"></span>
-      <${SearchBox} onOpen=${onOpen} />
-      <${InstancesButton} onClick=${onInstances} />
-      ${writable ? html`<button type="button" class="btn btn-primary" onClick=${() => onDialog({ kind: "project", project: null })}><${Icon} name="plus" size=${16} />${t("tasks.newProject")}</button>` : null}</div>
+    <div class="list-head tb-head s-page-head"><div class="s-page-title"><h2>${t("tasks.projects")}</h2></div>
+      <div class="tb-head-actions">
+        <${SearchBox} onOpen=${onOpen} />
+        <${InstancesButton} onClick=${onInstances} />
+        ${writable ? html`<button type="button" class="btn btn-primary" onClick=${() => onDialog({ kind: "project", project: null })}><${Icon} name="plus" size=${16} />${t("tasks.newProject")}</button>` : null}</div>
+    </div>
     <${Waiting} cards=${cards} writable=${writable} onOpen=${onOpen} reload=${reload} />
     ${active.length || loose ? html`<div class="tb-projects">
       ${active.map((p) => html`<${ProjectTile} key=${p.id} project=${p} stats=${stats(p.id)} onOpen=${() => onOpenProject(p.id)} onDialog=${writable ? onDialog : null} reload=${reload} />`)}
@@ -547,23 +548,26 @@ function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filter
   }
 
   return html`<div class="tb-board-page">
-    <div class="tb-bar-head">
-      <button type="button" class="btn btn-ghost btn-sm" onClick=${onBack}><${Icon} name="back" size=${16} />${t("tasks.back")}</button>
-      <div class="tb-title">
-        <h2>${project === NO_PROJECT ? t("tasks.noProject") : project.name}</h2>
-        ${archived ? html`<span class="tb-flag">${t("tasks.archived")}</span>` : null}
-        ${project !== NO_PROJECT && project.description ? html`<span class="tb-project-desc">${project.description}</span>` : null}
+    <div class="tb-bar-head s-page-head">
+      <div class="tb-head-main">
+        <div class="tb-title s-page-title">
+          <button type="button" class="btn btn-ghost btn-sm tb-head-back" onClick=${onBack}><${Icon} name="back" size=${16} />${t("tasks.back")}</button>
+          <h2>${project === NO_PROJECT ? t("tasks.noProject") : project.name}</h2>
+          ${archived ? html`<span class="s-scope">${t("tasks.archived")}</span>` : null}
+        </div>
+        ${project !== NO_PROJECT && project.description ? html`<p class="s-page-lead tb-head-lead">${project.description}</p>` : null}
+        <div class="tb-stats" title=${t("tasks.percentTitle")}>
+          <span class="tb-pct">${stats.percent}%</span><${ProgressBar} progress=${stats.units} />
+          <span class="muted">${stats.mains === 1 ? t("tasks.mainOne") : t("tasks.mainCount", stats.mains)}</span>
+          ${stats.waiting ? html`<span class="tb-flag st-review">${t("tasks.waiting", stats.waiting)}</span>` : null}
+          ${stats.blocked ? html`<span class="tb-flag st-blocked">${t("tasks.blockedN", stats.blocked)}</span>` : null}
+          <button type="button" class="btn btn-ghost btn-sm tb-insights" title=${t("taskstats.buttonTip")} onClick=${() => setInsights(true)}><${Icon} name="chart" size=${16} />${t("taskstats.button")}</button>
+        </div>
       </div>
-      <div class="tb-stats" title=${t("tasks.percentTitle")}>
-        <span class="tb-pct">${stats.percent}%</span><${ProgressBar} progress=${stats.units} />
-        <span class="muted">${stats.mains === 1 ? t("tasks.mainOne") : t("tasks.mainCount", stats.mains)}</span>
-        ${stats.waiting ? html`<span class="tb-flag st-review">${t("tasks.waiting", stats.waiting)}</span>` : null}
-        ${stats.blocked ? html`<span class="tb-flag st-blocked">${t("tasks.blockedN", stats.blocked)}</span>` : null}
-        <button type="button" class="btn btn-ghost btn-sm tb-insights" title=${t("taskstats.buttonTip")} onClick=${() => setInsights(true)}><${Icon} name="chart" size=${16} />${t("taskstats.button")}</button>
+      <div class="tb-head-actions">
+        <${InstancesButton} onClick=${onInstances} />
+        ${archived || !writable ? null : html`<button type="button" class="btn btn-primary" onClick=${onCreate}><${Icon} name="plus" size=${16} />${t("tasks.newMain")}</button>`}
       </div>
-      <span class="tb-grow"></span>
-      <${InstancesButton} onClick=${onInstances} />
-      ${archived || !writable ? null : html`<button type="button" class="btn btn-primary" onClick=${onCreate}><${Icon} name="plus" size=${16} />${t("tasks.newMain")}</button>`}
     </div>
     <${TaskToolbar} cards=${own} display=${display} onDisplay=${onDisplay} filters=${filters} onFilters=${onFilters} query=${query} onQuery=${onQuery} />
     ${display.view === "list" ? listBody() : mains.length === 0 && !drag ? empty()

@@ -626,15 +626,20 @@ describe("the card page's activity is one panel", () => {
     expect([...panel.childNodes].filter((n: any) => n.nodeType === 1).map((n: any) => n.className.split(" ")[0])).toEqual(["tl"]);
     expect(q(".tc-composer")).toBeNull();
   });
-  it("its look: the app's .card padded alike on every side, no outer margin, a thin line above the box, tokens only", () => {
+  it("its look is Settings' card: the app's .card with a thin border, --r-md, padding alike on every side, no shadow, a sentence-case heading, a thin line above the box, tokens only", () => {
     const panel = rule(".tp-activity.card")!;
-    expect(panel).toMatch(/--tp-panel-pad: var\(--s-4\)/);
+    expect(panel).toMatch(/--tp-panel-pad: var\(--s-5\)/);
     expect(panel).toMatch(/padding: var\(--tp-panel-pad\)/);
     expect(panel).toMatch(/margin: 0/);
+    expect(rule(".tp-side.card, .tp-activity.card")).toMatch(/border: 1px solid var\(--border\)/);
+    expect(rule(".tp-side.card, .tp-activity.card")).toMatch(/border-radius: var\(--r-md\)/);
+    expect(rule(".tp-side.card, .tp-activity.card")).toMatch(/box-shadow: none/);
+    expect(rule(".tl-bar > h3")).toMatch(/font-size: var\(--fs-lg\)/);
+    expect(rule(".tl-bar > h3")).toMatch(/text-transform: none/);
     expect(rule(".tp-activity .tc-composer")).toMatch(/border-top: 1px solid var\(--border\)/);
     expect(rule(".tp-activity .tc-composer")).toMatch(/padding-top: var\(--s-3\)/);
     expect(rule(".tp-activity .tl-day > span")).toMatch(/background: var\(--surface\)/);
-    for (const sel of [".tp-activity.card", ".tp-activity .tc-composer", ".tp-activity .tl-day > span"]) expect(rule(sel), sel).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i);
+    for (const sel of [".tp-activity.card", ".tp-side.card, .tp-activity.card", ".tp-activity .tc-composer", ".tp-activity .tl-day > span", ".tl-bar > h3"]) expect(rule(sel), sel).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i);
     // The card is the .card of app.css (surface, radius, gap): the page does not draw its own.
     expect(rule(".card")).toMatch(/background: var\(--surface\)/);
     expect(rule(".card")).toMatch(/border-radius: var\(--r-md\)/);
@@ -669,5 +674,70 @@ describe("in the list, the Running mark leads the title", () => {
   it("the mark does not take the title's cell off its column: it is a flex item that does not shrink", () => {
     expect(rule(".tb-row-text")).toMatch(/flex: 1;/);
     expect(CSS).toMatch(/\.tb-row-text > \.tr-mark \{ flex: none;/);
+  });
+});
+
+
+describe("Tasks is dressed as Settings is (one product)", () => {
+  const LIST = { view: "list", group: "status", order: "manual", dir: "asc", done: "recent", subs: false };
+  it("a project's page head is Settings' page head: its classes, a title with its badge, the description as the lead, the actions at the right", async () => {
+    PROJECT.description = "Weekly and seasonal rankings";
+    await mount();
+    const head = q(".tb-bar-head");
+    expect(head.className).toBe("tb-bar-head s-page-head");
+    const kids = [...head.childNodes].filter((n: any) => n.nodeType === 1);
+    expect(kids.map((n: any) => n.className.split(" ")[0]), "what it says, then what it offers").toEqual(["tb-head-main", "tb-head-actions"]);
+    expect(q(".tb-head-main .tb-title.s-page-title h2")).toBeTruthy();
+    expect(text(q(".tb-head-main .tb-title h2"))).toBe("Leaderboard");
+    expect(text(q(".tb-head-main > p.s-page-lead"))).toBe("Weekly and seasonal rankings");
+    expect(q(".tb-head-main .tb-stats"), "its numbers").toBeTruthy();
+    expect(q(".tb-head-actions .btn-primary"), "the main action").toBeTruthy();
+    // The first ghost button of the head is still the way back (tests, smokes and keyboards rely on it).
+    expect(text(q(".tb-bar-head .btn-ghost"))).toBe("Projects");
+    PROJECT.description = "";
+  });
+  it("an archived project says so as Settings badges a scope (.s-scope)", async () => {
+    (PROJECT as any).archived = true;
+    await mount();
+    expect(text(q(".tb-title .s-scope"))).toBe("Archived");
+    (PROJECT as any).archived = false;
+  });
+  it("Home has the same head: the title, then the search, Instances and New project", async () => {
+    await p.unmount();
+    (globalThis as any).localStorage.removeItem("agend_tasks_project");
+    (globalThis as any).history.replaceState(null, "", "/ui/fleet");
+    await p.mount(h(fleet.FleetPanel, { route: { panel: "fleet", tab: "tasks" }, navKey: `fleet:tasks|l316-head-${++mounts}|en` }));
+    await settle(8);
+    const head = q(".tb-head");
+    expect(head.className).toBe("list-head tb-head s-page-head");
+    expect(text(q(".tb-head .s-page-title h2"))).toBe("Projects");
+    expect([...q(".tb-head .tb-head-actions").childNodes].filter((n: any) => n.nodeType === 1).length).toBeGreaterThanOrEqual(3);
+    expect(q(".tb-head .btn-primary")).toBeTruthy();
+  });
+  it("the CSS takes Settings' values (tokens only): the 24px title from .s-page-head, the search field, the list container, the project tile", () => {
+    expect(CSS).toMatch(/\.s-page-head h2 \{[^}]*font-size: 24px/);
+    expect(rule(".tb-title h2"), "no size of its own: Settings' title").not.toMatch(/font-size/);
+    expect(rule(".tb-search input")).toMatch(/background: var\(--surface\)/);
+    expect(rule(".tb-search input")).toMatch(/border: 0/);
+    expect(rule(".tb-search input")).toMatch(/border-radius: var\(--r-sm\)/);
+    const list = rule(".tb-list")!;
+    expect(list).toMatch(/border: 1px solid var\(--border\)/);
+    expect(list).toMatch(/border-radius: var\(--r-md\)/);
+    expect(list).toMatch(/background: var\(--surface\)/);
+    expect(list).toMatch(/gap: 0/);
+    expect(rule(".tb-group-head")).toMatch(/background: var\(--surface-2\)/);
+    expect(rule(".tb-group-head")).toMatch(/border-radius: 0/);
+    expect(rule(".tb-list-head")).toMatch(/background: var\(--surface-2\)/);
+    expect(rule(".tb-project")).toMatch(/border-radius: var\(--r-md\)/);
+    for (const sel of [".tb-list", ".tb-group-head", ".tb-list-head", ".tb-search input", ".tb-project", ".tb-head-main", ".tb-head-actions"]) expect(rule(sel), sel).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i);
+  });
+  it("the list is one container with its header and groups inside; rows and groups behave as before", async () => {
+    await mount(LIST);
+    const list = q(".tb-list");
+    expect([...list.childNodes].filter((n: any) => n.nodeType === 1).map((n: any) => n.className.split(" ")[0])[0]).toBe("tb-list-head");
+    expect(qa(".tb-list > .tb-group").length, "one per status").toBe(5);
+    expect(qa(".tb-row").length).toBeGreaterThanOrEqual(8);
+    fire(q(".tb-group-toggle"), "click"); await settle(4);
+    expect(qa(".tb-list > .tb-group.shut").length, "a group still folds").toBe(1);
   });
 });
