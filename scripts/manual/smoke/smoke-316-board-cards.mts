@@ -2,8 +2,10 @@
 //  1. wider: the board fills the content area, a column is 272–360 px however many there are, more columns than fit scroll
 //     sideways (the number of columns each width shows is written to the results); a card is as tall as its content, the
 //     title at two lines and the status at one at most (cut with "…", the whole text is the tooltip);
-//  2. a card whose agent is running has a moving light (a CSS animation on a layer of its own; still under reduced motion);
+//  2. a card whose agent is running says "Running" once (the mark in its status line; no moving light);
 //  3. no coloured bar on the left edge, in any status;
+//  5. the card page's activity (heading, filter, timeline) and the comment box are one panel: its own surface, radius and padding,
+//     apart from the sub tasks above it, the box inside it at the foot, everything on one inner left edge (light / dark, desk / phone);
 //  4. the avatar on a card is a button: it opens the picker the card page has (the card does not open), a choice saves,
 //     Esc closes it and the focus returns; pointing at it shows an info card (state, what it does, cards in hand);
 //     the list's rows have the same avatar; over a read-only link it is not a button and a choice cannot be made.
@@ -92,9 +94,9 @@ const MEASURE = `(() => {
       statusLines: status ? textLines(status) : 0, statusKind: status ? (status.className.match(/k-(\\w+)/) || [])[1] : null, statusText: status ? status.textContent.replace(/\\s+/g, " ").trim() : "",
       statusCut: status ? [...status.querySelectorAll("*")].some((e) => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).textOverflow === "ellipsis") : false,
       barContent: before.content, borderLeft: cs.borderLeftWidth, borderLeftColor: cs.borderLeftColor, borderTopColor: cs.borderTopColor, paddingLeft: cs.paddingLeft, paddingTop: cs.paddingTop,
-      running: t.classList.contains("running"), shine: !!t.querySelector(".tb-tile-shine"),
-      shineAnim: t.querySelector(".tb-tile-shine") ? [getComputedStyle(t.querySelector(".tb-tile-shine"), "::before").animationName, getComputedStyle(t.querySelector(".tb-tile-shine"), "::after").animationName,
-        getComputedStyle(t.querySelector(".tb-tile-shine"), "::before").display] : null,
+      running: t.classList.contains("running"), mark: !!t.querySelector(".tr-mark"), shine: !!t.querySelector(".tb-tile-shine"),
+      // what moves besides the Running mark's own pulsing dot (the mark is the one thing that says "running")
+      animated: [cs, before, ...[...t.querySelectorAll("*")].filter((e) => !e.classList.contains("tr-dot")).map((e) => getComputedStyle(e))].some((c) => c.animationName !== "none" && c.animationName !== "tb-flash"),
       owner: t.querySelector(".tb-owner-btn") ? { tag: t.querySelector(".tb-owner-btn").tagName, text: t.querySelector(".tb-owner-btn").textContent.trim(), static: t.querySelector(".tb-owner-btn").classList.contains("is-static") } : null,
       leftEdges: ["tb-tile-top", "tb-tile-title", "tb-tile-status", "tb-tile-foot"].map((c) => { const e = t.querySelector("." + c); return e ? Math.round(e.getBoundingClientRect().left - r.left) : null; }),
     };
@@ -105,11 +107,24 @@ const COLS = `(() => { const sc = document.querySelector(".tb-scroll"), s = sc.g
   return { viewport: innerWidth, scroll: Math.round(s.width), columns: cols.length, visible: cols.filter((c) => c.left >= s.left - 1 && c.right <= s.right + 1).length, widths: [...new Set(cols.map((c) => Math.round(c.width)))],
     scrolls: sc.scrollWidth > sc.clientWidth + 1, pageWidth: Math.round(document.querySelector(".tb-board-page").getBoundingClientRect().width), overflowX: document.documentElement.scrollWidth - innerWidth }; })()`;
 
+// The card page's activity panel: its box, its padding, and where its parts start.
+const PANEL = `(() => {
+  const p = document.querySelector(".tp-activity");
+  if (!p) return null;
+  const cs = getComputedStyle(p), r = p.getBoundingClientRect(), subs = document.querySelector(".tp-subs"), box = document.querySelector(".tp-activity .tc-compose-box textarea");
+  const left = (el) => (el ? Math.round((el.getBoundingClientRect().left - r.left) * 10) / 10 : null);
+  const first = document.querySelector(".tp-activity .tl-list > li .tl-who, .tp-activity .tl-list > li .tl-head, .tp-activity .tl-list > li > .tb-dot, .tp-activity .tl-list > li > .icon");
+  const bg = (el) => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (c !== "rgba(0, 0, 0, 0)" && c !== "transparent") return c; } return "none"; };
+  return { x: Math.round(r.left), width: Math.round(r.width), bg: cs.backgroundColor, pageBg: bg(p.parentElement), radius: cs.borderTopLeftRadius, padding: [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft],
+    heading: left(document.querySelector(".tp-activity .tl-bar h3")), filterGap: Math.round(r.right - document.querySelector(".tp-activity .tl-filter").getBoundingClientRect().right), filter: left(document.querySelector(".tp-activity .tl-filter")), first: left(first), composer: left(box),
+    boxInside: !!box && box.getBoundingClientRect().bottom <= r.bottom - parseFloat(cs.paddingBottom) + 1, composerLast: p.lastElementChild === document.querySelector(".tp-activity .tc-composer"),
+    gapAboveSubs: subs ? Math.round(r.top - subs.getBoundingClientRect().bottom) : null, overflowX: document.documentElement.scrollWidth - innerWidth };
+})()`;
+
 const uniq = <T,>(xs: T[]) => [...new Set(xs)];
 const results: any = { browser: fx.browser.version(), cases: {} };
 let failed = 0;
 // SHOTS_ONLY=1: only the board's pictures (the same seed), for a checkout that has none of the new behaviour (the "before");
-// FRAMES=1: also frames of the in-progress column over a few seconds (the moving light), to put together as a GIF.
 const shotsOnly = !!process.env.SHOTS_ONLY;
 
 for (const c of matrix(process.env.MATRIX ?? "desk-dark-zh-TW,desk-light-en,phone-dark-zh-TW")) {
@@ -167,30 +182,39 @@ for (const c of matrix(process.env.MATRIX ?? "desk-dark-zh-TW,desk-light-en,phon
     } else {
       chk.phoneNoSideScroll = (await page.evaluate(COLS) as any).overflowX <= 0;
     }
-    // 2. running: the card whose agent works has the layer; its animations run; another card has none.
+    // 2. running: the card whose agent works has the mark and its class, and nothing on the page moves for it.
     const running = rendered.filter((t) => t.running);
-    chk.runningTiles = running.length >= 1 && running.every((t) => t.shine && t.shineAnim && t.shineAnim[0] === "tb-shine" && t.shineAnim[1] === "tb-breathe") && rendered.filter((t) => !t.running).every((t) => !t.shine);
+    chk.runningMark = running.length >= 1 && running.every((t) => t.mark && !t.shine) && rendered.filter((t) => !t.running).every((t) => !t.mark);
+    chk.nothingAnimates = rendered.every((t) => !t.animated);
     if (!phone) {
       await page.locator(".tb-tile.running").first().scrollIntoViewIfNeeded();
-      // Two frames of the band a moment apart: the light has moved.
-      const band = () => page.evaluate(`(() => { const s = document.querySelector(".tb-tile-shine"); return s ? new DOMMatrixReadOnly(getComputedStyle(s, "::before").transform).m41 : null; })()`);
-      const x1 = await band(); await page.waitForTimeout(600); const x2 = await band();
-      chk.lightMoves = x1 !== x2;
       await page.screenshot({ path: shotPath(SMOKE, c, "2-running") });
-      // Reduced motion: the band is gone and the edge is still.
-      await page.emulateMedia({ reducedMotion: "reduce" }); await page.waitForTimeout(300);
-      const still = await page.evaluate(MEASURE) as any[];
-      chk.reducedMotionStill = still.filter((t) => t.running).every((t) => t.shineAnim && t.shineAnim[2] === "none" && t.shineAnim[1] === "none");
-      await page.screenshot({ path: shotPath(SMOKE, c, "2-running-reduced-motion") });
-      await page.emulateMedia({ reducedMotion: "no-preference" });
     }
-    if (process.env.FRAMES && !phone) {
-      const box = await page.locator(".tb-col.st-claimed").boundingBox();
-      for (let i = 0; i < 26; i++) {
-        await page.screenshot({ path: shotPath(SMOKE, c, `frame-${String(i).padStart(2, "0")}`), clip: { x: box.x, y: box.y, width: box.width, height: Math.min(box.height, 330) } });
-        await page.waitForTimeout(90);
-      }
-    }
+    // 5. the card page: the activity is one panel.
+    if (phone) { await page.locator(".tb-status-seg .tb-seg-btn").nth(1).click(); await page.waitForTimeout(200); }
+    await page.locator('[data-tile="' + ids.m1 + '"] .tb-tile-title').click();
+    await page.waitForSelector(".tp-activity", { timeout: 10000 });
+    await page.waitForTimeout(500);
+    const panel = await page.evaluate(PANEL) as any;
+    r.panel = panel;
+    const pad = (panel?.padding ?? []) as string[];
+    chk.panelHasItsOwnSurface = !!panel && panel.bg !== panel.pageBg && panel.bg !== "rgba(0, 0, 0, 0)";
+    chk.panelRounded = !!panel && parseFloat(panel.radius) >= 8;
+    chk.panelPaddedAlike = pad.length === 4 && uniq(pad).length === 1 && parseFloat(pad[0]!) >= 12;
+    // heading and box on the left padding edge; the filter ends on the right one (beside the heading), or, wrapped under it on a
+    // narrow phone, starts on the left one
+    chk.panelOneLeftEdge = !!panel && [panel.heading, panel.composer].every((x: number | null) => x === parseFloat(pad[3] ?? "x"))
+      && (panel.filterGap === parseFloat(pad[1] ?? "x") || panel.filter === parseFloat(pad[3] ?? "x"));
+    chk.panelTimelineOnItsEdge = !!panel && panel.first !== null && Math.abs(panel.first - parseFloat(pad[3] ?? "x")) <= 10;
+    chk.panelHoldsTheBox = !!panel && panel.boxInside && panel.composerLast;
+    chk.panelApartFromSubs = !!panel && (panel.gapAboveSubs === null || panel.gapAboveSubs >= 8);
+    chk.panelNoSideScroll = !!panel && panel.overflowX <= 0;
+    await page.locator(".tp-activity").scrollIntoViewIfNeeded();
+    await page.screenshot({ path: shotPath(SMOKE, c, "6-card-activity") });
+    await page.locator(".tp-activity").screenshot({ path: shotPath(SMOKE, c, "6-card-activity-panel") });
+    await page.locator(".tp-back").first().click();
+    await page.waitForSelector(".tb-tile", { state: "attached", timeout: 10000 });
+    await page.waitForTimeout(300);
     if (!shotsOnly) {
     // 4. the avatar: a button; its picker; a choice saves; the card does not open. The info card.
     const db = fm.scheduler.db;

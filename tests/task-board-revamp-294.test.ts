@@ -388,7 +388,7 @@ describe("a card is a page of its own", () => {
     expect(hist().entries.length, "one history entry for it").toBe(entries + 1);
     expect(hist().state).toEqual({ tbCard: 1 });
     expect(doc().activeElement.className).toBe("tc-head");
-    expect(qa(".tp-grid > *").map((el) => el.className), "a phone's single column is this order; the properties are the app's plain .card").toEqual(["tp-head", "tp-body", "card tp-side", "tp-activity"]);
+    expect(qa(".tp-grid > *").map((el) => el.className), "a phone's single column is this order; the properties and the activity are the app's plain .card").toEqual(["tp-head", "tp-body", "card tp-side", "card tp-activity"]);
   });
 
   it("Back (its button, or the browser's) returns to the board with the card's tile; the entry it added is gone", async () => {

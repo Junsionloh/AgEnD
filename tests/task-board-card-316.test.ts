@@ -3,13 +3,15 @@
  *  - wider, and as tall as the content: the columns are 272–360 px however many there are (more than fit scroll), the board
  *    page is not held to 1240 px; a title takes two lines and the status one at most (the whole text is the tooltip); the
  *    status line says ONE thing, by priority (stuck → waits for the person → running → next → the sub tasks' progress);
- *  - a card whose agent is running has a moving light — a layer of its own, only transform / opacity, CSS only, still under
- *    `prefers-reduced-motion`; it stops with the run;
+ *  - a card whose agent is running says so with the "Running" mark (the moving light of the first version is gone: the user found
+ *    it repeated the mark); it stops with the run;
  *  - no coloured bar on the left edge, in any status;
  *  - the assignee's avatar is a button: the card page's picker (the card does not open), a choice saves with the version
  *    the card was drawn at, a conflict says so; Esc closes it, the focus returns; an info card on hover and on the
  *    keyboard's focus; the list's rows have it too; over a read-only link, and on a finished card, it is not a button;
- *  - the info card names nothing the viewer does not see.
+ *  - the info card names nothing the viewer does not see;
+ *  - the card page's activity (heading, filter, timeline) and its comment box are ONE panel — the app's plain .card, set apart
+ *    from the sub tasks, the box at its foot; without a box (a read-only page) the panel holds the timeline alone.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -248,26 +250,23 @@ describe("no coloured bar on the left edge", () => {
   });
 });
 
-describe("a card whose agent is running has a moving light", () => {
-  it("the running card has a `running` class and its own light layer; others have neither; the layer is out of the way", async () => {
+describe("a card whose agent is running says so once, with the \"Running\" mark (no moving light)", () => {
+  it("the running card has the mark in its status line and its `running` class; others have neither; no light layer", async () => {
     await mount();
     expect(tile("M-1").className).toContain(" running");
-    const shine = tile("M-1").querySelector(".tb-tile-shine");
-    expect(shine, "the layer").toBeTruthy();
-    expect(shine.getAttribute("aria-hidden")).toBe("true");
-    expect(shine.getAttribute("style"), "no style attribute (the CSP)").toBeNull();
-    expect(tile("M-1").getAttribute("style")).toBeNull();
-    for (const id of ["M-2", "M-3", "M-4", "M-5", "M-6", "M-9"]) { expect(tile(id).className, id).not.toContain("running"); expect(tile(id).querySelector(".tb-tile-shine"), id).toBeNull(); }
-    expect(rule(".tb-tile-shine")).toMatch(/pointer-events: none/);
-    expect(rule(".tb-tile-shine")).toMatch(/overflow: hidden/);
+    expect(text(tile("M-1").querySelector(".tb-tile-run .tr-mark"))).toBe("Running");
+    for (const id of ["M-2", "M-3", "M-4", "M-5", "M-6", "M-9"]) { expect(tile(id).className, id).not.toContain("running"); expect(tile(id).querySelector(".tr-mark"), id).toBeNull(); }
+    for (const t of qa(".tb-tile")) expect(t.querySelector(".tb-tile-shine"), t.getAttribute("data-tile")).toBeNull();
+    expect(tile("M-1").getAttribute("style"), "no style attribute (the CSP)").toBeNull();
   });
-  it("it stops when the run does: the agent idle → no class, no layer; working again → back", async () => {
+  it("it stops when the run does: the agent idle → no class, no mark; working again → back", async () => {
     await mount();
     app.applyStatus({ uptime: 2, instances: STORE("idle") }); await settle(6);
     expect(tile("M-1").className).not.toContain("running");
-    expect(tile("M-1").querySelector(".tb-tile-shine")).toBeNull();
+    expect(tile("M-1").querySelector(".tr-mark")).toBeNull();
     app.applyStatus({ uptime: 3, instances: STORE("working") }); await settle(6);
     expect(tile("M-1").className).toContain(" running");
+    expect(tile("M-1").querySelector(".tr-mark")).toBeTruthy();
   });
   it("an agent with two cards in progress runs none of them (which one it is on is not known)", async () => {
     CARDS.push(card({ id: "M-20", title: "Second", status: "claimed", assignee: "beta", sort: 20 }), card({ id: "M-21", title: "Third", status: "claimed", assignee: "beta", sort: 21 }));
@@ -276,19 +275,12 @@ describe("a card whose agent is running has a moving light", () => {
     expect(tile("M-20").className).not.toContain("running");
     expect(tile("M-21").className).not.toContain("running");
   });
-  it("CSS only, and only transform and opacity move; reduced motion: no band, a still edge", () => {
-    const keyframes = (name: string) => { const i = CSS.indexOf(`@keyframes ${name} {`); let depth = 0, j = CSS.indexOf("{", i); const start = j; do { if (CSS[j] === "{") depth++; if (CSS[j] === "}") depth--; j++; } while (depth > 0); return CSS.slice(start, j); };
-    const props = (kf: string) => [...new Set([...kf.matchAll(/([a-z-]+):/g)].map((m) => m[1]))];
-    expect(props(keyframes("tb-shine"))).toEqual(["transform"]);
-    expect(props(keyframes("tb-breathe"))).toEqual(["opacity"]);
-    expect(CSS).toMatch(/\.tb-tile-shine::before \{[^}]*animation: tb-shine /);
-    expect(CSS).toMatch(/\.tb-tile-shine::after \{[^}]*animation: tb-breathe /);
-    const reduce = CSS.slice(CSS.indexOf("@media (prefers-reduced-motion: reduce) {\n  .tb-tile-shine::before"));
-    expect(reduce).toMatch(/\.tb-tile-shine::before \{ display: none; \}/);
-    expect(reduce).toMatch(/\.tb-tile-shine::after \{ animation: none; opacity: 0\.85; \}/);
-    expect(CSS, "tokens only: no colour of its own").not.toMatch(/\.tb-tile-shine[^{]*\{[^}]*#[0-9a-f]{3,8}\b/i);
-    const src = readFileSync(join(UI, "fleet-tasks.js"), "utf8") + readFileSync(join(UI, "fleet-task-owner.js"), "utf8");
-    expect(src, "no timer per card for the light").not.toMatch(/setInterval/);
+  it("the CSS has no light: no layer, no keyframes, no animation on a tile; the original running tile (edge, tint) stays", () => {
+    expect(CSS).not.toMatch(/tb-tile-shine|tb-shine|tb-breathe/);
+    expect(CSS, "nothing on a tile animates but its flash when a card changes").not.toMatch(/\.tb-tile[^{]*\{[^}]*animation: (?!tb-flash|none)/);
+    expect(rule(".tb-tile.running")).toMatch(/border-color: var\(--accent\)/);
+    expect(rule(".tb-tile.running")).toMatch(/background: color-mix\(in srgb, var\(--accent\) 6%, var\(--bg\)\)/);
+    expect(rule(".tb-row.running")).toBeTruthy();
   });
 });
 
@@ -559,5 +551,78 @@ describe("the info card", () => {
       for (const m of readFileSync(join(UI, file), "utf8").matchAll(/\bt\(\s*"(taskowner\.[\w.]+)"/g)) expect(tables.en[m[1]!], `${file}: ${m[1]}`).toBeDefined();
     }
     for (const s of ["claimed", "open", "blocked", "review"]) expect(tables.en[`taskowner.part_${s}`], s).toBeDefined();
+  });
+});
+
+
+describe("the card page's activity is one panel", () => {
+  const AT = "2026-11-02T10:00:00.000Z";
+  const withActivity = () => {
+    handler = (path, method) => {
+      if (path.startsWith("/ui/tasks/board")) return { rev: 1, projects: [PROJECT], cards: CARDS, boardOff: [] };
+      const m = /^\/ui\/tasks\/cards\/([^/]+)$/.exec(path);
+      if (m && method === "GET") {
+        const c = CARDS.find((x: any) => x.id === decodeURIComponent(m[1]!)) ?? CARDS[0];
+        return { card: c, parent: null, children: CARDS.filter((x: any) => x.parentId === c.id), comments: [{ id: 1, author: "Ann", authorKind: "person", text: "Please **check** this", at: AT }],
+          logs: [{ id: 2, author: "alpha", authorKind: "instance", text: "Endpoint done", at: AT }],
+          history: [{ id: 3, type: "created", actor: "Ann", actorKind: "person", at: AT, data: {} }, { id: 4, type: "updated", actor: "Ann", actorKind: "person", at: AT, data: { changes: ["goal"] } }, { id: 5, type: "updated", actor: "Ann", actorKind: "person", at: AT, data: { changes: ["goal"] } }],
+          watchers: [], inheritedWatchers: [], leader: null, followsProgress: true };
+      }
+      return { card: CARDS[0], notes: [] };
+    };
+  };
+  const open = async (id: string) => { fire(tile(id).querySelector(".tb-tile-title"), "click"); await settle(12); };
+  it("heading, filter, timeline and the comment box are in one .card that is not inside the sub tasks; the box is last", async () => {
+    withActivity();
+    await mount(); await open("M-1");
+    const panel = q(".tp-activity");
+    expect(panel.className).toBe("card tp-activity");
+    expect(qa(".tp-grid > *").map((el) => el.className).at(-1)).toBe("card tp-activity");
+    expect([...panel.childNodes].filter((n: any) => n.nodeType === 1).map((n: any) => n.className.split(" ")[0]), "the timeline, then the box").toEqual(["tl", "tc-composer"]);
+    expect(text(panel.querySelector(".tl-bar h3"))).toBe("Activity");
+    expect(qa(".tp-activity .tl-filter button").map((b) => text(b))).toEqual(["All", "Comments 1", "Progress 1", "History 2"]);
+    expect(panel.querySelector(".tc-composer textarea")).toBeTruthy();
+    expect(q(".tp-body").querySelector(".tp-activity"), "apart from the sub tasks and the spec").toBeNull();
+    expect(q(".tp-subs") === null || !panel.contains(q(".tp-subs"))).toBe(true);
+  });
+  it("what it wraps behaves as before: the filter, equal history lines as ×N, Markdown in a comment", async () => {
+    withActivity();
+    await mount(); await open("M-1");
+    expect(qa(".tp-activity .tl-list > li").length, "all: created, a change ×2 as one, the log, the comment").toBe(4);
+    expect(text(q(".tp-activity .tl-list"))).toMatch(/× ?2/);
+    expect(q(".tp-activity .tl-comment .tl-body.md strong"), "Markdown").toBeTruthy();
+    fire(qa(".tp-activity .tl-filter button").find((b) => text(b).startsWith("Comments")), "click"); await settle(4);
+    expect(qa(".tp-activity .tl-list > li").length).toBe(1);
+    expect(q(".tp-activity .tl-comment")).toBeTruthy();
+    expect(q(".tp-activity .tc-composer"), "the box stays under the filter's choice").toBeTruthy();
+  });
+  it("without a comment box (a read-only page) the panel holds the timeline alone", async () => {
+    withActivity();
+    await p.unmount();
+    const card = await import("/ui/js/fleet-task-card.js") as any;
+    await p.mount(h(card.CardPage, { id: "M-1", tick: 0, projects: [PROJECT], writable: false, back: "Back to the board", onBack() {}, onOpen() {}, onStep() {}, reloadBoard() {} }));
+    await settle(12);
+    const panel = q(".tp-activity");
+    expect(panel.className).toBe("card tp-activity");
+    expect([...panel.childNodes].filter((n: any) => n.nodeType === 1).map((n: any) => n.className.split(" ")[0])).toEqual(["tl"]);
+    expect(q(".tc-composer")).toBeNull();
+  });
+  it("its look: the app's .card padded alike on every side, no outer margin, a thin line above the box, tokens only", () => {
+    const panel = rule(".tp-activity.card")!;
+    expect(panel).toMatch(/--tp-panel-pad: var\(--s-4\)/);
+    expect(panel).toMatch(/padding: var\(--tp-panel-pad\)/);
+    expect(panel).toMatch(/margin: 0/);
+    expect(rule(".tp-activity .tc-composer")).toMatch(/border-top: 1px solid var\(--border\)/);
+    expect(rule(".tp-activity .tc-composer")).toMatch(/padding-top: var\(--s-3\)/);
+    expect(rule(".tp-activity .tl-day > span")).toMatch(/background: var\(--surface\)/);
+    for (const sel of [".tp-activity.card", ".tp-activity .tc-composer", ".tp-activity .tl-day > span"]) expect(rule(sel), sel).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i);
+    // The card is the .card of app.css (surface, radius, gap): the page does not draw its own.
+    expect(rule(".card")).toMatch(/background: var\(--surface\)/);
+    expect(rule(".card")).toMatch(/border-radius: var\(--r-md\)/);
+  });
+  it("the timeline's words still start on the page's value column: the first column gives back the padding; a phone's lines are unchanged", () => {
+    expect(rule(".tl-line")).toMatch(/grid-template-columns: 1rem calc\(var\(--tp-label\) \+ var\(--tp-gap\) - 1rem - 2 \* var\(--s-2\) - var\(--tp-panel-pad, 0px\)\) minmax\(0, 1fr\) auto/);
+    expect(CSS, "no override of a line from inside the panel (it would beat the phone's)").not.toMatch(/\.tp-activity[^{]*\.tl-line[^{]*\{/);
+    expect(CSS).toMatch(/\n  \.tl-line \{ grid-template-columns: 1rem minmax\(0, 1fr\) auto; \}/);
   });
 });

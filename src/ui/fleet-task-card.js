@@ -408,7 +408,7 @@ export function CardPage({ id, tick, projects, boardOff = [], doing = new Map(),
         <p class="muted tp-opened">${t("taskcard.opened", card.createdBy, relTime(card.createdAt), relTime(card.updatedAt))} · ${t("taskcard.version", card.version)}</p>
       </aside>
 
-      <div class="tp-activity">
+      <div class="card tp-activity">
         <${Timeline} detail=${detail} describe=${describeEvent} />
         ${can ? html`<${Composer} names=${mentionNames} placeholder=${card.assignee ? t("taskcard.commentTo", card.assignee) : t("taskcard.commentHint")}
           onSend=${(text) => run(() => boardApi.update(card.id, { comment: text }))} />` : null}

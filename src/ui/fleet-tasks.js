@@ -621,8 +621,8 @@ function NowLine({ now, label = true }) {
  * A card on the board (AGEND-316): rows from the top — the number, the priority and the size (and ⋯); the title (two lines at
  * most, its whole text the tooltip); ONE line of status (`tileStatus`: why it is stuck, whom it waits for, what runs, what is
  * next, the sub tasks' progress); the foot with the assignee (a button: the card page's picker, and an info card on hover) and
- * the counts. The tile is as tall as its content; a main task can open up its sub tasks. No coloured bar at its left edge;
- * a card whose agent is running has a soft moving light (CSS only, still under `prefers-reduced-motion`).
+ * the counts. The tile is as tall as its content; a main task can open up its sub tasks. No coloured bar at its left edge.
+ * A card whose agent is running says so with the "Running" mark in its status line (and keeps its accent edge and tint).
  */
 function Tile({ card, dragging, flash, subs = [], runs, expanded, writable, cards, lead, onToggleSubs, onOpen, onMore, onOwner, onKeyMove, onDragStart, onDragEnd }) {
   const accepted = card.acceptance.filter((a) => a.done).length;
@@ -645,7 +645,6 @@ function Tile({ card, dragging, flash, subs = [], runs, expanded, writable, card
   return html`<div class=${`tb-tile st-${card.status}${dragging ? " dragging" : ""}${flash ? " flash" : ""}${running ? " running" : ""}`} data-tile=${card.id}
     draggable=${writable} onDragStart=${writable ? onDragStart : undefined} onDragEnd=${writable ? onDragEnd : undefined}
     onClick=${() => onOpen(card.id)}>
-    ${running ? html`<span class="tb-tile-shine" aria-hidden="true"></span>` : null}
     <div class="tb-tile-top">
       <span class="tb-code">${card.id}</span>
       ${card.priority === "urgent" || card.priority === "high" ? html`<span class=${`tb-tag p-${card.priority}`}>${t(card.priority === "urgent" ? "tasks.urgentTag" : "tasks.highTag")}</span>` : null}

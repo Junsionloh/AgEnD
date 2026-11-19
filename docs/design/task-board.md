@@ -251,19 +251,15 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   progress) → what is next → the sub tasks' progress; a card with nothing to say has no row. When it is not the progress, the sub
   tasks' count (done/total, red once one is blocked) is a small button in the foot that opens the list. A blocked or waiting card
   says it in its text colour (`--danger`, `--warn`). (3) *No bar on the left edge*, in any status, on the board's tiles (the
-  list's rows never had one; the card page's agent block keeps its own). (4) *A card whose agent is running has a moving light*:
-  the existing "running" inference (`runOf`: in progress, its assignee working, and the assignee's only card in progress — a
-  busy agent runs no card) adds a layer (`.tb-tile-shine`, clipped to the tile's corners so the avatar's card and menus are not)
-  with a soft band crossing it and a breathing edge. Only `transform` and `opacity` move, all in CSS (no style attribute, no timer
-  per card), in the accent token; under `prefers-reduced-motion` the band is gone and the edge is still. It stops with the run.
-  (5) *The assignee's avatar is a button* (`fleet-task-owner.js`, tile and list row): it opens the card page's picker
+  list's rows never had one; the card page's agent block keeps its own).
+  (4) *The assignee's avatar is a button* (`fleet-task-owner.js`, tile and list row): it opens the card page's picker
   (`assigneeItems`: nobody, each instance, Other…) as the card menu draws it, fixed under the button so the columns' scroll box
   does not clip it; a choice is one write with the version the tile was drawn at (`assignTo`, shared with the ⋯ menu): a 409 says
   the card changed while choosing and reads the board again, any other error is the host's words. The card stays shut (the click
   is the avatar's), the keyboard works (Enter, Esc closes and gives the focus back). It is not a button on a finished card (the page
   does not offer it either), nor to a viewer whose writes the host refuses (`boardReadOnly`: a guest, or a session over the public
   link that is not an admin's — an admin session over the link writes as itself, M-3278); the avatar still shows its card.
-  (6) *Pointing at the avatar shows the instance's card* after a short pause (the keyboard's focus at once; Esc, a click, a scroll
+  (5) *Pointing at the avatar shows the instance's card* after a short pause (the keyboard's focus at once; Esc, a click, a scroll
   or leaving hides it; one at a time; none when the focus comes back from the picker it opened): its state (running / needs you /
   looks stuck / idle / offline), what it is doing (the card in progress, "Working on S-2 …"), how many cards it holds (finished ones
   and a main task that follows its sub tasks not counted), and two facts the page has: whether it leads the project and who
@@ -271,6 +267,12 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   they do not see has no state line, and a dispatcher that is an instance they do not see is not named — over the link the board has
   already left out the cards of instances kept out of sight, so counts and the "doing" line cannot name one either. On a main task
   whose sub tasks are someone else's, the avatar is the main task's owner and the sub tasks' people follow it after a "›".
+  (6) *On the card's page the activity is one panel.* Its heading and filter, the timeline and the comment box are in one
+  `.tp-activity.card` — the app's plain `.card` (surface, `--r-md`, no colour of its own), padded `--s-4` on every side, set apart
+  from the sub tasks above it — with the comment box at its foot under a thin line; without a box (a read-only page) it holds the
+  timeline alone. Everything in it is on the panel's one inner left edge; the timeline's first column gives back the padding
+  (`--tp-panel-pad`), so its words still start on the page's value column, as the spec's values do. The filter, the history's ×N and
+  the Markdown are unchanged.
 - **A phone.** The board shows one status at a time (the switch is hidden on a desk; every column is drawn, a class
   shows the current one), starting at the first of To confirm, In progress, Blocked, To do, Done that has cards.
 - **The comment box's @.** Typing `@` completes with the fleet's instance names (those with the board off are listed,

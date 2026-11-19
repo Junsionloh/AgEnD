@@ -145,6 +145,13 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tp-head { grid-area: head; display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
 .tp-body { grid-area: body; display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
 .tp-activity { grid-area: activity; display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+/* AGEND-316: the activity — its heading and filter, the timeline and the comment box — is ONE panel, set apart from the sub tasks
+   above it: the app's plain .card (surface, --r-md), padded alike on every side, the comment box at its foot under a thin line.
+   Without a comment box (a read-only link) the panel holds the timeline alone. Everything in it starts on the panel's one inner
+   left edge; the timeline's words still start on the page's value column (its first column gives back the padding). */
+.tp-activity.card { --tp-panel-pad: var(--s-4); margin: 0; padding: var(--tp-panel-pad); gap: var(--s-3); }
+.tp-activity .tl-day > span { background: var(--surface); }
+.tp-activity .tc-composer { padding-top: var(--s-3); border-top: 1px solid var(--border); }
 /* Above the title: the card's number and status, and (at the right edge) that the status follows the sub tasks. */
 .tp-idrow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); min-width: 0; }
 .tp-idrow > .tp-derived { margin-left: auto; }
@@ -308,7 +315,7 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tl-day::before, .tl-day::after { content: ""; border-top: 1px solid var(--border); }
 .tl-day > span { padding: 1px var(--s-3); border: 1px solid var(--border); border-radius: var(--r-full); background: var(--bg); }
 /* A line is four columns — mark, who, words, time — and its words start on the page's value column (the mark and the who fill the label column). */
-.tl-line { display: grid; grid-template-columns: 1rem calc(var(--tp-label) + var(--tp-gap) - 1rem - 2 * var(--s-2)) minmax(0, 1fr) auto; align-items: baseline; column-gap: var(--s-2); padding: 0; color: var(--text-2); font-size: var(--fs-xs); }
+.tl-line { display: grid; grid-template-columns: 1rem calc(var(--tp-label) + var(--tp-gap) - 1rem - 2 * var(--s-2) - var(--tp-panel-pad, 0px)) minmax(0, 1fr) auto; align-items: baseline; column-gap: var(--s-2); padding: 0; color: var(--text-2); font-size: var(--fs-xs); }
 .tl-line > .icon { align-self: center; justify-self: center; color: var(--ok); }
 .tl-line > .tb-dot { align-self: center; justify-self: center; }
 /* A progress note is what the card's progress is read from: its words in the text colour. The history is the quietest thing
@@ -417,22 +424,6 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tb-tile-run { display: flex; align-items: center; gap: var(--s-2); }
 .tb-tile-run > .tb-tile-now { flex: 1; min-width: 0; }
 .tb-tile.running { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
-/* AGEND-316: a tile whose agent is running has a light that moves. It is a layer of its own, clipped to the tile's corners
-   (so the avatar's card and menus are not), under the tile's content: a soft band crossing it and a breathing edge. Only
-   transform and opacity move, all in CSS (no style attribute, no timer per card); still, it is a steady edge. */
-.tb-tile.running > :not(.tb-tile-shine) { position: relative; }
-.tb-tile-shine { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
-.tb-tile-shine::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 55%; background: linear-gradient(100deg, transparent, color-mix(in srgb, var(--accent) 24%, transparent) 50%, transparent);
-  transform: translateX(-120%); animation: tb-shine 2.8s ease-in-out infinite; }
-.tb-tile-shine::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--accent), inset 0 0 14px color-mix(in srgb, var(--accent) 38%, transparent);
-  opacity: 0.25; animation: tb-breathe 2.4s ease-in-out infinite; }
-@keyframes tb-shine { from { transform: translateX(-120%); } 65%, to { transform: translateX(260%); } }
-@keyframes tb-breathe { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.9; } }
-@media (prefers-reduced-motion: reduce) {
-  .tb-tile-shine::before { display: none; }
-  .tb-tile-shine::after { animation: none; opacity: 0.85; }
-}
-
 /* AGEND-316: the assignee on a tile or a row is a button (the card page's picker); pointing at it shows the instance's card. */
 .tb-owner { display: inline-flex; min-width: 0; }
 .tb-owner-btn { display: inline-flex; align-items: center; min-width: 0; margin: -2px; padding: 2px var(--s-2) 2px 2px; border: 1px solid transparent; border-radius: var(--r-full); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
