@@ -546,7 +546,7 @@ function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filter
     void drop(d, status, after, before);
   }
 
-  return html`<div class=${`tb-board-page${display.view === "list" ? "" : " is-board"}`}>
+  return html`<div class="tb-board-page">
     <div class="tb-bar-head">
       <button type="button" class="btn btn-ghost btn-sm" onClick=${onBack}><${Icon} name="back" size=${16} />${t("tasks.back")}</button>
       <div class="tb-title">

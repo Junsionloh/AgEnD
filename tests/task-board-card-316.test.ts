@@ -209,13 +209,32 @@ describe("wider, and as tall as the content", () => {
     expect(phone).toMatch(/\.tb-columns \{ grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: minmax\(0, 1fr\)/);
     expect(CSS).not.toMatch(/\.tb-columns\.no-done/);
   });
-  it("the board (not the list) is not held to 1240 px: its page says so, in a rule that names it", async () => {
+  it("a project's page — the board and the list alike — is not held to 1240 px; Home keeps the Fleet page's width", async () => {
     expect(rule(".col.col-wide")).toMatch(/max-width: 1240px/);
-    expect(rule(".col.col-wide:has(> .tb > .tb-board-page.is-board)")).toMatch(/max-width: none/);
+    expect(rule(".col.col-wide:has(> .tb > .tb-board-page)")).toMatch(/max-width: none/);
+    expect(CSS, "no rule is left that frees the board alone").not.toMatch(/is-board/);
     await mount();
-    expect(q(".tb-board-page").className).toContain("is-board");
+    expect(q(".tb-board-page"), "the board").toBeTruthy();
+    expect(q(".tb-board-page").className).toBe("tb-board-page");
     await mount({ view: "list" });
-    expect(q(".tb-board-page").className, "the list keeps its width").not.toContain("is-board");
+    expect(q(".tb-board-page .tb-list"), "the list is on the same page, so it has the same width").toBeTruthy();
+    expect(q(".tb-board-page").className).toBe("tb-board-page");
+    // Home (the projects) is not a board page: its rule is the Fleet page's.
+    await p.unmount();
+    (globalThis as any).localStorage.removeItem("agend_tasks_project");
+    (globalThis as any).history.replaceState(null, "", "/ui/fleet");            // a project's board writes `?tp=` into the address
+    await p.mount(h(fleet.FleetPanel, { route: { panel: "fleet", tab: "tasks" }, navKey: `fleet:tasks|l316-home-${++mounts}|en` }));
+    await settle(8);
+    expect(q(".tb-home")).toBeTruthy();
+    expect(q(".tb-board-page")).toBeNull();
+  });
+  it("the list's columns: the title takes what is left, every other column keeps its width (head and rows alike)", () => {
+    expect(rule(".tb-row-text")).toMatch(/flex: 1/);
+    expect(rule(".tb-lh-title")).toMatch(/flex: 1/);
+    for (const [sel, width] of [[".tb-lh-prio", "84px"], [".tb-lh-who", "140px"], [".tb-lh-time", "7em"], [".tb-lh-code", "4.5em"], [".tb-row-prio", "84px"], [".tb-row-who", "140px"], [".tb-row-time", "7em"], [".tb-row-code", "4.5em"]] as const) {
+      expect(rule(sel), sel).toContain(`width: ${width}`);
+      expect(rule(sel), sel).not.toMatch(/(^|[ ;{])flex: [1-9]/);
+    }
   });
   it("no fixed height anywhere on a tile: it follows its content", () => {
     for (const sel of [".tb-tile", ".tb-tile-top", ".tb-tile-title", ".tb-tile-status", ".tb-tile-foot"]) {

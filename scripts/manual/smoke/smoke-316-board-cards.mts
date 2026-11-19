@@ -4,6 +4,8 @@
 //     title at two lines and the status at one at most (cut with "…", the whole text is the tooltip);
 //  2. a card whose agent is running says "Running" once (the mark in its status line; no moving light);
 //  3. no coloured bar on the left edge, in any status;
+//  6. the project's list fills the content area like the board (same side margins; at 1440 and 1920 px), the title column takes
+//     the extra width and number / priority / assignee / time keep theirs; a phone's list is unchanged;
 //  5. the card page's activity (heading, filter, timeline) and the comment box are one panel: its own surface, radius and padding,
 //     apart from the sub tasks above it, the box inside it at the foot, everything on one inner left edge (light / dark, desk / phone);
 //  4. the avatar on a card is a button: it opens the picker the card page has (the card does not open), a choice saves,
@@ -105,7 +107,7 @@ const MEASURE = `(() => {
 const COLS = `(() => { const sc = document.querySelector(".tb-scroll"), s = sc.getBoundingClientRect();
   const cols = [...document.querySelectorAll(".tb-col")].map((c) => c.getBoundingClientRect());
   return { viewport: innerWidth, scroll: Math.round(s.width), columns: cols.length, visible: cols.filter((c) => c.left >= s.left - 1 && c.right <= s.right + 1).length, widths: [...new Set(cols.map((c) => Math.round(c.width)))],
-    scrolls: sc.scrollWidth > sc.clientWidth + 1, pageWidth: Math.round(document.querySelector(".tb-board-page").getBoundingClientRect().width), overflowX: document.documentElement.scrollWidth - innerWidth }; })()`;
+    scrolls: sc.scrollWidth > sc.clientWidth + 1, pageWidth: Math.round(document.querySelector(".tb-board-page").getBoundingClientRect().width), left: Math.round(document.querySelector(".tb-board-page").getBoundingClientRect().left), right: Math.round(innerWidth - document.querySelector(".tb-board-page").getBoundingClientRect().right), overflowX: document.documentElement.scrollWidth - innerWidth }; })()`;
 
 // The card page's activity panel: its box, its padding, and where its parts start.
 const PANEL = `(() => {
@@ -119,6 +121,17 @@ const PANEL = `(() => {
     heading: left(document.querySelector(".tp-activity .tl-bar h3")), filterGap: Math.round(r.right - document.querySelector(".tp-activity .tl-filter").getBoundingClientRect().right), filter: left(document.querySelector(".tp-activity .tl-filter")), first: left(first), composer: left(box),
     boxInside: !!box && box.getBoundingClientRect().bottom <= r.bottom - parseFloat(cs.paddingBottom) + 1, composerLast: p.lastElementChild === document.querySelector(".tp-activity .tc-composer"),
     gapAboveSubs: subs ? Math.round(r.top - subs.getBoundingClientRect().bottom) : null, overflowX: document.documentElement.scrollWidth - innerWidth };
+})()`;
+
+// The project's page and its list's columns: where the page is, and how wide each column of the first row is.
+const LISTM = `(() => {
+  const row = document.querySelector(".tb-row"), page = document.querySelector(".tb-board-page").getBoundingClientRect();
+  const w = (sel) => { const e = row && row.querySelector(sel); return e ? Math.round(e.getBoundingClientRect().width * 10) / 10 : null; };
+  const head = (sel) => { const e = document.querySelector(sel); return e ? Math.round(e.getBoundingClientRect().width * 10) / 10 : null; };
+  return { viewport: innerWidth, page: Math.round(page.width), left: Math.round(page.left), right: Math.round(innerWidth - page.right), row: row ? Math.round(row.getBoundingClientRect().width) : null,
+    title: w(".tb-row-text"), code: w(".tb-row-code"), prio: w(".tb-row-prio"), who: w(".tb-row-who"), time: w(".tb-row-time"),
+    headTitle: head(".tb-lh-title"), headPrio: head(".tb-lh-prio"), headWho: head(".tb-lh-who"), headTime: head(".tb-lh-time"),
+    rows: document.querySelectorAll(".tb-row").length, overflowX: document.documentElement.scrollWidth - innerWidth };
 })()`;
 
 const uniq = <T,>(xs: T[]) => [...new Set(xs)];
@@ -189,6 +202,35 @@ for (const c of matrix(process.env.MATRIX ?? "desk-dark-zh-TW,desk-light-en,phon
     if (!phone) {
       await page.locator(".tb-tile.running").first().scrollIntoViewIfNeeded();
       await page.screenshot({ path: shotPath(SMOKE, c, "2-running") });
+    }
+    // 6. the project's list: as wide as the board.
+    {
+      const toggle = page.locator(".tb-view-toggle .tb-seg-btn");
+      await toggle.nth(1).click(); await page.waitForSelector(".tb-row", { timeout: 10000 }); await page.waitForTimeout(300);
+      if (phone) {
+        const list = await page.evaluate(LISTM) as any;
+        r.list = { phone: list };
+        chk.phoneListNoSideScroll = list.overflowX <= 0;
+        chk.phoneListUnchanged = list.page === 358 || list.page === 390 - 2 * list.left;   // the phone's gutters, as before: the page is the window less its margins
+        await page.screenshot({ path: shotPath(SMOKE, c, "7-list") });
+      } else {
+        r.list = {};
+        for (const w of [1366, 1440, 1920]) {
+          await page.setViewportSize({ width: w, height: 760 }); await page.waitForTimeout(300);
+          r.list[w] = await page.evaluate(LISTM);
+          await page.screenshot({ path: shotPath(SMOKE, c, `7-list-${w}`) });
+        }
+        const L = r.list as Record<number, any>, B = r.widths as Record<number, any>;
+        chk.listFillsContent = L[1920].page > 1300 && L[1920].page === B[1920].pageWidth && L[1440].page === B[1440].pageWidth;
+        chk.listMarginsLikeTheBoard = [1366, 1440, 1920].every((w) => L[w].left === B[w].left && L[w].right === B[w].right);
+        chk.listOtherColumnsKeepWidth = ["prio", "who", "time", "code"].every((k) => L[1920][k] === L[1440][k] && L[1440][k] === L[1366][k])
+          && ["headPrio", "headWho", "headTime"].every((k) => L[1920][k] === L[1440][k]);
+        chk.listTitleTakesTheRest = Math.abs((L[1920].title - L[1440].title) - (L[1920].page - L[1440].page)) <= 2 && L[1920].title > L[1440].title && Math.abs(L[1920].headTitle - L[1440].headTitle - (L[1920].page - L[1440].page)) <= 2;
+        chk.listNoSideScroll = [1366, 1440, 1920].every((w) => L[w].overflowX <= 0);
+        await page.setViewportSize({ width: 1470, height: 760 }); await page.waitForTimeout(250);
+      }
+      await toggle.nth(0).click(); await page.waitForSelector(".tb-tile", { state: "attached", timeout: 10000 }); await page.waitForTimeout(300);
+      if (phone) { await page.locator(".tb-status-seg .tb-seg-btn").nth(1).click(); await page.waitForTimeout(200); }
     }
     // 5. the card page: the activity is one panel.
     if (phone) { await page.locator(".tb-status-seg .tb-seg-btn").nth(1).click(); await page.waitForTimeout(200); }

@@ -241,8 +241,10 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   still reads, an unknown one falls back to its default. Needs you is a filter field (`waits:you`, the rule of Waiting for
   you). The list's header sorts by ID, Title, Priority, Assignee or Updated; the same column again reverses it.
 - **The board's cards (AGEND-316, after AGEND-317's layout A).** Layout and style, and one write the page already had: no API,
-  schema or stored value changed. (1) *Wider, as tall as the content.* The board page (not the list) is no longer held to the
-  Fleet page's 1240 px (`.is-board`); a column is `minmax(272px, 360px)` with `grid-auto-flow: column`, so however many statuses
+  schema or stored value changed. (1) *Wider, as tall as the content.* A project's page — its board and its list alike — is no longer held to the
+  Fleet page's 1240 px (Home keeps it): it fills the content area with the same side margins. In the list the title column takes
+  the extra width while number, priority, assignee and time keep theirs. On the board a column is `minmax(272px, 360px)` with
+  `grid-auto-flow: column`, so however many statuses
   there are (they may become the person's own, AGEND-318) a card is never squeezed — more columns than fit scroll sideways
   (at 1440 px with the sidebar four of the five columns show, at 1920 px all five, each 314 px). A tile is as tall as its content;
   what keeps one from running away is a cap on two rows: the title takes two lines, the status one, the rest cut with "…" and the
