@@ -240,6 +240,37 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   (`agend_tasks_collapsed`, per project) and the search (`agend_tasks_query`) are kept on the device; a value an older build stored
   still reads, an unknown one falls back to its default. Needs you is a filter field (`waits:you`, the rule of Waiting for
   you). The list's header sorts by ID, Title, Priority, Assignee or Updated; the same column again reverses it.
+- **The board's cards (AGEND-316, after AGEND-317's layout A).** Layout and style, and one write the page already had: no API,
+  schema or stored value changed. (1) *Wider, as tall as the content.* The board page (not the list) is no longer held to the
+  Fleet page's 1240 px (`.is-board`); a column is `minmax(272px, 360px)` with `grid-auto-flow: column`, so however many statuses
+  there are (they may become the person's own, AGEND-318) a card is never squeezed — more columns than fit scroll sideways
+  (at 1440 px with the sidebar four of the five columns show, at 1920 px all five, each 314 px). A tile is as tall as its content;
+  what keeps one from running away is a cap on two rows: the title takes two lines, the status one, the rest cut with "…" and the
+  whole text in the tooltip (a blocked reason, a long title). (2) *The status line says one thing* (`tileStatus`, pure): why it is
+  stuck (its own reason, else a blocked sub task) → whom it waits for → what is running (the agent's mark and/or the sub task in
+  progress) → what is next → the sub tasks' progress; a card with nothing to say has no row. When it is not the progress, the sub
+  tasks' count (done/total, red once one is blocked) is a small button in the foot that opens the list. A blocked or waiting card
+  says it in its text colour (`--danger`, `--warn`). (3) *No bar on the left edge*, in any status, on the board's tiles (the
+  list's rows never had one; the card page's agent block keeps its own). (4) *A card whose agent is running has a moving light*:
+  the existing "running" inference (`runOf`: in progress, its assignee working, and the assignee's only card in progress — a
+  busy agent runs no card) adds a layer (`.tb-tile-shine`, clipped to the tile's corners so the avatar's card and menus are not)
+  with a soft band crossing it and a breathing edge. Only `transform` and `opacity` move, all in CSS (no style attribute, no timer
+  per card), in the accent token; under `prefers-reduced-motion` the band is gone and the edge is still. It stops with the run.
+  (5) *The assignee's avatar is a button* (`fleet-task-owner.js`, tile and list row): it opens the card page's picker
+  (`assigneeItems`: nobody, each instance, Other…) as the card menu draws it, fixed under the button so the columns' scroll box
+  does not clip it; a choice is one write with the version the tile was drawn at (`assignTo`, shared with the ⋯ menu): a 409 says
+  the card changed while choosing and reads the board again, any other error is the host's words. The card stays shut (the click
+  is the avatar's), the keyboard works (Enter, Esc closes and gives the focus back). It is not a button on a finished card (the page
+  does not offer it either), nor to a viewer whose writes the host refuses (`boardReadOnly`: a guest, or a session over the public
+  link that is not an admin's — an admin session over the link writes as itself, M-3278); the avatar still shows its card.
+  (6) *Pointing at the avatar shows the instance's card* after a short pause (the keyboard's focus at once; Esc, a click, a scroll
+  or leaving hides it; one at a time; none when the focus comes back from the picker it opened): its state (running / needs you /
+  looks stuck / idle / offline), what it is doing (the card in progress, "Working on S-2 …"), how many cards it holds (finished ones
+  and a main task that follows its sub tasks not counted), and two facts the page has: whether it leads the project and who
+  dispatched the card. It is built only from the board the viewer was sent and the instances the dashboard shows them: an instance
+  they do not see has no state line, and a dispatcher that is an instance they do not see is not named — over the link the board has
+  already left out the cards of instances kept out of sight, so counts and the "doing" line cannot name one either. On a main task
+  whose sub tasks are someone else's, the avatar is the main task's owner and the sub tasks' people follow it after a "›".
 - **A phone.** The board shows one status at a time (the switch is hidden on a desk; every column is drawn, a class
   shows the current one), starting at the first of To confirm, In progress, Blocked, To do, Done that has cards.
 - **The comment box's @.** Typing `@` completes with the fleet's instance names (those with the board off are listed,
@@ -252,8 +283,8 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   caret and its replacement are one function for this `@` and the chat's `#` (`src/ui/trigger-complete.js`: `triggerAt` /
   `insertAtTrigger`, a rule per trigger character; `mentionAt` / `insertMention` and `taskRefAt` / `insertTaskRef` are it with
   their trigger), so a rule fixed for one list is fixed for both.
-- **taskhall's looks.** The columns reach the bottom of the page (a card drops anywhere down a column). Tiles are white with a shadow and a bold title; a bar on the
-  left only while a card is under way (in progress, blocked, waiting for you); a size in a box. Who works on a card has
+- **taskhall's looks.** The columns reach the bottom of the page (a card drops anywhere down a column). Tiles are white with a shadow and a bold title; (AGEND-316: no bar on the
+  left edge any more, in any status — the column says the status, a stuck or waiting card says it in the colour of its text); a size in a box. Who works on a card has
   a round initial: an instance's in its identity colour (#1958), a person's grey.
 - **Who works on what (step 3).** `GET /ui/tasks/work` (`?instance=` for one): each instance's `myWork` — what its
   `task mine` reads — for the fleet's instances and anyone else holding a live card, drawn in one `views()` read. Over the
@@ -287,7 +318,7 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   an optional note). Agents read the same in `get` and `mine`.
 - **Who works on a main task now (step 2).** Its owner is not always the one at work (a review step is the
   reviewer's): a main task with sub tasks shows the sub task in progress and its worker, else a blocked one, else the
-  next one that can start; waiting for you, it says so. The owner is in the tooltip (the card's page does not repeat it: AGEND-314, its sub task list says it).
+  next one that can start; waiting for you, it says so. AGEND-316: that is the tile's status line, and the avatar in its foot is the main task's own owner (what the page's Assignee chip changes) — the sub tasks' people, when they are not the owner, follow it after a "›".
 
 ## Agents: the `task` tool on the board
 
