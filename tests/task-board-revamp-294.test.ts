@@ -183,7 +183,7 @@ describe("AGEND-311: a card that waits for a card kept out of sight (the public 
       return base(path, method, body);
     };
   };
-  const clock = (id: string) => [...qa(`[data-tile="${id}"] [title]`), ...qa(`[data-row="${id}"] [title]`)].map((el) => el.getAttribute("title") as string).filter((s) => s.startsWith("Waits for"));
+  const clock = (id: string) => [...qa(`[data-tile="${id}"] .tb-tile-stats [title]`), ...qa(`[data-row="${id}"] [title]`)].map((el) => el.getAttribute("title") as string).filter((s) => s.startsWith("Waits for"));
 
   it("a work line says what it waits for without a number: \"a card that is not public\" (after the numbers, when there are some); with nothing to say there is no suffix", async () => {
     const i18n = await import("/assets/app-i18n.js");

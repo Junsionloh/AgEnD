@@ -391,7 +391,7 @@ describe("a card's page: Agent activity", () => {
   it("a sub task's page has it, with its own assignee's state", async () => {
     fleetIs({ alpha: "idle", beta: "working", gamma: "idle" });
     await mount();
-    fire(q('[data-tile="M-2"] .tb-tile-progress'), "click"); await settle(4);
+    fire(q('[data-tile="M-2"] .tb-tile-progress, [data-tile="M-2"] .tb-tile-subs'), "click"); await settle(4);      // its sub task is running: the status row says so, the foot has the toggle
     fire(qa(".tb-subs button").find((b) => text(b)!.includes("S-2")), "click"); await settle(10);
     expect(text(q(".tr-run .tb-who"))).toBe("beta");
     expect(text(q(".tr-state"))).toBe("Running");
