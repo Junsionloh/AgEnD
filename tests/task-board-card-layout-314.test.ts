@@ -444,6 +444,9 @@ describe("the timeline: what is said and done leads, the history is quiet", () =
     expect(merged.querySelector(".tl-count").textContent).toBe("×3");
     expect(merged.querySelector(".tl-count").getAttribute("title")).toBe("The same, 3 times in a row");
     expect(lines.filter((l) => l.className.includes("by-agent")).map(kind), "only the agent's progress note has the bar").toEqual(["log"]);
+    expect(qa(".tl-filter button").map((b) => text(b)), "the numbers are the lines each filter shows: four history entries, three of them one line").toEqual(["All", "Comments 0", "Progress 1", "History 2"]);
+    fire(qa(".tl-filter button")[3], "click"); await settle(4);
+    expect(qa(".tl-item").length, "History shows as many lines as its button says").toBe(2);
   });
 
   it("a comment has no box: who and when, then its text as Markdown (escaped first)", async () => {
@@ -459,6 +462,39 @@ describe("the timeline: what is said and done leads, the history is quiet", () =
     expect([...body.querySelectorAll("li")].map((li: any) => li.textContent)).toEqual(["a", "b"]);
     expect(body.querySelector("script"), "no tag of the message's own").toBeNull();
     expect(body.textContent).toContain("<script>x</script>");
+  });
+
+  it("a hostile comment makes no link of a script URL and no attribute of its own (the page's last regression net for the chat's renderer)", async () => {
+    const hostile = [
+      "[x](javascript:alert(1))", "[x](JaVaScRiPt:alert(1))", "[x]( javascript:alert(1))", "[x](vbscript:msgbox(1))", "[x](//evil.example/x)",
+      "[x](data:text/html,<script>alert(1)</script>)", '"onmouseover="alert(1)" x', '[x](https://a.example" onmouseover="alert(1))',
+      'https://a.example/x"onmouseover="alert(1)', "<img src=x onerror=alert(1)>", '<a href="javascript:alert(1)" onclick="alert(2)">y</a>', "[x](mailto:a@b.example)",
+    ];
+    detailWith({ comments: [{ id: 1, author: "Mallory", authorKind: "person", kind: "comment", text: hostile.join("\n\n"), at: at(0) }], logs: [], history: [] });
+    await mount(); await openCard("M-1");
+    const body = q(".tl-comment .tl-body");
+    const els = [...body.querySelectorAll("*")] as any[];
+    expect(els.length, "it did render").toBeGreaterThan(hostile.length);
+    // Only the tags the renderer's own Markdown makes: nothing a message could add of its own.
+    expect([...new Set(els.map((e) => e.localName))].sort()).toEqual(["a", "p"]);
+    const allowed = new Set(["href", "target", "rel", "data-trust"]);
+    for (const e of els) {
+      for (const a of e.attributes) {
+        expect(allowed.has(a.name), `${e.localName}: ${a.name}`).toBe(true);
+        expect(a.name.startsWith("on"), `${e.localName}: ${a.name}`).toBe(false);
+      }
+    }
+    // A link is only an http(s) or mailto one, opened in a new tab without the opener.
+    const links = els.filter((e) => e.localName === "a");
+    expect(links.length, "the mailto, and the https one that ends before its quote (a URL with a quote in it stays text)").toBe(2);
+    for (const a of links) {
+      expect(a.getAttribute("href")).toMatch(/^(https?:\/\/|mailto:)/);
+      expect([a.getAttribute("target"), a.getAttribute("rel")]).toEqual(["_blank", "noopener noreferrer"]);
+    }
+    expect(links.map((a) => a.getAttribute("href")).filter((h: string) => /^https?:/.test(h)).every((h: string) => h.startsWith("https://a.example")), "no link to a host the text did not name").toBe(true);
+    // What is not a link stays the text it was, not a link without an address either.
+    for (const t of ["[x](javascript:alert(1))", "[x](JaVaScRiPt:alert(1))", "[x](vbscript:msgbox(1))", "[x](//evil.example/x)", "<img src=x onerror=alert(1)>"]) expect(body.textContent, t).toContain(t);
+    expect(els.filter((e) => e.localName === "a" && !e.hasAttribute("href")).length).toBe(0);
   });
 
   it("a day change is a separator (Today / Yesterday / a date) only when the list spans days", async () => {

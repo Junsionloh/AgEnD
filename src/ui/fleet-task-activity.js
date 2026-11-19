@@ -143,7 +143,8 @@ function Entry({ entry, describe }) {
 export function Timeline({ detail, describe }) {
   const [filter, setFilter] = useState("all");
   const all = timelineOf(detail);
-  const count = (f) => timelineShown(all, f).length;
+  // The number on a filter button is the number of lines the list shows for it: a run of equal history lines is one.
+  const count = (f) => collapseEvents(timelineShown(all, f), describe).length;
   const shown = collapseEvents(timelineShown(all, filter), describe);
   // A day change is a separator — only when the list spans more than one day (one day needs no heading).
   const days = new Set(shown.map((e) => dayKey(e.at)).filter(Boolean));
