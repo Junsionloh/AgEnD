@@ -1,0 +1,32 @@
+health_port: 19480
+preview_port: 19481
+web:
+  log_tab: true
+  log_thinking: true
+  allowed_hosts:
+    - junsionloh3.tail9cd40a.ts.net
+defaults:
+  backend: mock
+instances:
+  lead:
+    backend: mock
+    working_directory: /data/workspaces/lead
+    description: Demo project lead (mock agent) - hears a card's progress
+    tool_progress: verbose
+  dev-a:
+    backend: mock
+    working_directory: /data/workspaces/dev-a
+    description: Demo worker (mock agent)
+    tool_progress: verbose
+  dev-b:
+    backend: mock
+    working_directory: /data/workspaces/dev-b
+    description: Demo worker (mock agent)
+    tool_progress: verbose
+  docs:
+    backend: mock
+    working_directory: /data/workspaces/docs
+    description: Demo watcher (mock agent)
+    tool_progress: verbose
+runtimes:
+  remote_runtime: true
