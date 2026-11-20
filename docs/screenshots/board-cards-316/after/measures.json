@@ -407,7 +407,7 @@
      "left": 280,
      "right": 20,
      "row": 1064,
-     "title": 359.6,
+     "title": 339.7,
      "code": 54,
      "prio": 84,
      "who": 140,
@@ -441,7 +441,7 @@
      "left": 280,
      "right": 20,
      "row": 1138,
-     "title": 433.6,
+     "title": 413.7,
      "code": 54,
      "prio": 84,
      "who": 140,
@@ -475,7 +475,7 @@
      "left": 280,
      "right": 20,
      "row": 1618,
-     "title": 913.6,
+     "title": 893.7,
      "code": 54,
      "prio": 84,
      "who": 140,
@@ -507,13 +507,13 @@
    "stream": {
     "x": 280,
     "page": "rgb(255, 255, 255)",
-    "cardsN": 4,
+    "cardsN": 6,
     "cards": [
      {
       "x": 280,
       "y": 820,
       "w": 846,
-      "h": 90,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -534,14 +534,14 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
      },
      {
       "x": 280,
-      "y": 922,
+      "y": 926,
       "w": 846,
-      "h": 92,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -562,14 +562,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": true,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
      },
      {
       "x": 280,
-      "y": 1026,
+      "y": 1032,
       "w": 846,
-      "h": 92,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -590,14 +590,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": false,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
      },
      {
       "x": 280,
-      "y": 1130,
+      "y": 1138,
       "w": 846,
-      "h": 90,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -618,8 +618,64 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
+     },
+     {
+      "x": 280,
+      "y": 1284,
+      "w": 846,
+      "h": 901,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(244, 244, 244)",
+      "pad": [
+       "16px",
+       "16px",
+       "16px",
+       "16px"
+      ],
+      "fs": 13,
+      "color": "rgb(13, 13, 13)",
+      "barContent": "none",
+      "agent": true,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(229, 229, 229)",
+      "borderTopColor": "rgb(229, 229, 229)",
+      "lbar": false,
+      "hasDot": true,
+      "hasBadge": true,
+      "tag": false,
+      "bodyX": 333,
+      "nameX": 333
+     },
+     {
+      "x": 280,
+      "y": 2237,
+      "w": 846,
+      "h": 379,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(244, 244, 244)",
+      "pad": [
+       "16px",
+       "16px",
+       "16px",
+       "16px"
+      ],
+      "fs": 13,
+      "color": "rgb(13, 13, 13)",
+      "barContent": "none",
+      "agent": false,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(229, 229, 229)",
+      "borderTopColor": "rgb(229, 229, 229)",
+      "lbar": false,
+      "hasDot": false,
+      "hasBadge": false,
+      "tag": false,
+      "bodyX": 333,
+      "nameX": 333
      }
     ],
     "lines": [],
@@ -627,16 +683,26 @@
      {
       "text": "6 activities",
       "open": "false"
+     },
+     {
+      "text": "1 activity",
+      "open": "false"
+     },
+     {
+      "text": "1 activity",
+      "open": "false"
      }
     ],
     "gaps": [
      12,
      12,
-     12
+     12,
+     52,
+     52
     ],
     "composer": {
      "x": 280,
-     "y": 1236,
+     "y": 2632,
      "w": 846,
      "h": 136,
      "border": "1px",
@@ -697,7 +763,613 @@
      "expanded": "false"
     }
    },
-   "info": "Ddev-aRunningNowWorking on S-2 Build the score APICards2 open · 1 in progress · 1 to doRoleProject leadDispatched byoperator",
+   "author": {
+    "seq": [
+     "run:6 activities",
+     "comment",
+     "log",
+     "comment",
+     "comment",
+     "run:1 activity",
+     "comment",
+     "run:1 activity",
+     "comment"
+    ],
+    "heads": [
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 145,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 333,
+       "y": 147,
+       "w": 53.8,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 251,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 316,
+       "y": 270,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 333,
+       "y": 253,
+       "w": 36.2,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 357,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 316,
+       "y": 376,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 333,
+       "y": 359,
+       "w": 36.2,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 463,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 333,
+       "y": 465,
+       "w": 53.8,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 609,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 316,
+       "y": 628,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 333,
+       "y": 611,
+       "w": 36.2,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 1562,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 333,
+       "y": 1564,
+       "w": 53.8,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     }
+    ],
+    "systemMark": null
+   },
+   "markdown": {
+    "h5": true,
+    "list": "disc",
+    "nested": true,
+    "link": {
+     "href": "https://example.com/leaderboard-notes",
+     "underline": "underline",
+     "color": "rgb(10, 98, 194)"
+    },
+    "inlineCode": {
+     "bg": "rgb(236, 236, 236)",
+     "font": "ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\", emoji"
+    },
+    "table": {
+     "cells": 9,
+     "tdBorder": "1px",
+     "thBorder": "1px",
+     "thBg": "rgb(236, 236, 236)",
+     "collapse": "collapse",
+     "wrapperScrolls": "auto"
+    },
+    "codeblock": {
+     "lang": "json",
+     "buttons": [
+      "Wrap",
+      "Copy"
+     ],
+     "mono": true,
+     "whiteSpace": "pre",
+     "tokenColours": 3,
+     "plainColour": "rgb(13, 13, 13)",
+     "jsonText": "{\n  \"week\": \"2026-W46\",\n  \"ranked\": true"
+    },
+    "personBlocks": [
+     "python"
+    ],
+    "progressPlain": true
+   },
+   "parity": {
+    "h5": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p code": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "11.44px",
+       "chat": "13.2px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "a": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "li": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "ul ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      }
+     ]
+    },
+    ".tbl": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "table": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "th": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "backgroundColor",
+       "comment": "rgb(236, 236, 236)",
+       "chat": "rgb(244, 244, 244)"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "td": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".codeblock": {
+     "same": 15,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "marginBottom",
+       "comment": "0px",
+       "chat": "8px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-lang": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head .chip-btn": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre code": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-s": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-k": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-n": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    }
+   },
+   "parityDiffs": {
+    "h5": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p code": [
+     {
+      "prop": "fontSize",
+      "comment": "11.44px",
+      "chat": "13.2px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "a": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "ul": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     }
+    ],
+    "li": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     }
+    ],
+    "ul ul": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     }
+    ],
+    ".tbl": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "table": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "th": [
+     {
+      "prop": "backgroundColor",
+      "comment": "rgb(236, 236, 236)",
+      "chat": "rgb(244, 244, 244)"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "td": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".codeblock": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "marginBottom",
+      "comment": "0px",
+      "chat": "8px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-lang": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head .chip-btn": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre code": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-s": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-k": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-n": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ]
+   },
+   "parityUnexpected": [],
+   "longBlock": {
+    "folded": {
+     "h": 365,
+     "more": "Show all 45 lines"
+    },
+    "unfolded": {
+     "h": 1002,
+     "more": "Show less",
+     "folded": false
+    }
+   },
+   "authorCard": "Ddev-aRunningNowWorking on S-2 Build the score APICards2 open · 1 in progress · 1 to doRoleProject leadOpen Agent page",
+   "personCard": "OoperatorPerson",
+   "afterLink": "/ui/fleet/agent/dev-a",
+   "info": "Ddev-aRunningNowWorking on S-2 Build the score APICards2 open · 1 in progress · 1 to doRoleProject leadDispatched byoperatorOpen Agent page",
    "checks": {
     "noLeftBar": true,
     "tilePaddingEven": true,
@@ -736,6 +1408,34 @@
     "systemRowsOnTheCardsEdge": true,
     "foldRowMarkUnderTheRowsMarks": true,
     "foldRowSameSizeAsRows": true,
+    "everyRunIsFolded": true,
+    "oneLineRunIsFolded": true,
+    "sandwich": true,
+    "authorAvatar28": true,
+    "authorDotScaled": true,
+    "authorNameCentred": true,
+    "authorIsAButton": true,
+    "systemRowMarksStaySmall": true,
+    "mdHeadingListTable": true,
+    "mdLinkAndInlineCode": true,
+    "mdJsonBlockLikeTheChat": true,
+    "mdPersonBlockOtherLanguage": true,
+    "progressNotePlain": true,
+    "parityEveryPartPresent": true,
+    "parityNothingButInheritedDiffers": true,
+    "copyPutsTheBlockOnTheClipboard": true,
+    "wrapWraps": true,
+    "longBlockFoldsAndOpens": true,
+    "authorHoverShowsCard": true,
+    "authorCardHasAgentLink": true,
+    "pointerCanEnterTheCard": true,
+    "leavingClosesTheAuthorCard": true,
+    "personCardIsNameAndPersonOnly": true,
+    "authorFocusShowsCard": true,
+    "tabReachesTheLink": true,
+    "escClosesAuthorCardAndReturnsFocus": true,
+    "linkGoesToTheAgentPage": true,
+    "readOnlyCardHasNoLink": true,
     "avatarIsButton": true,
     "pickerOpens": true,
     "cardStaysClosed": true,
@@ -1159,7 +1859,7 @@
      "left": 280,
      "right": 20,
      "row": 1064,
-     "title": 398.4,
+     "title": 378.5,
      "code": 54,
      "prio": 84,
      "who": 140,
@@ -1193,7 +1893,7 @@
      "left": 280,
      "right": 20,
      "row": 1138,
-     "title": 472.4,
+     "title": 452.5,
      "code": 54,
      "prio": 84,
      "who": 140,
@@ -1227,7 +1927,7 @@
      "left": 280,
      "right": 20,
      "row": 1618,
-     "title": 952.4,
+     "title": 932.5,
      "code": 54,
      "prio": 84,
      "who": 140,
@@ -1259,13 +1959,13 @@
    "stream": {
     "x": 280,
     "page": "rgb(255, 255, 255)",
-    "cardsN": 4,
+    "cardsN": 6,
     "cards": [
      {
       "x": 280,
       "y": 820,
       "w": 846,
-      "h": 90,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -1286,14 +1986,14 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
      },
      {
       "x": 280,
-      "y": 958,
+      "y": 926,
       "w": 846,
-      "h": 92,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -1314,14 +2014,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": true,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
      },
      {
       "x": 280,
-      "y": 1062,
+      "y": 1032,
       "w": 846,
-      "h": 92,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -1342,14 +2042,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": false,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
      },
      {
       "x": 280,
-      "y": 1166,
+      "y": 1138,
       "w": 846,
-      "h": 90,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -1370,44 +2070,91 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 323,
-      "nameX": 323
-     }
-    ],
-    "lines": [
+      "bodyX": 333,
+      "nameX": 333
+     },
      {
       "x": 280,
-      "y": 922,
+      "y": 1284,
       "w": 846,
-      "h": 24,
-      "border": "0px",
-      "radius": "0px",
-      "bg": "rgba(0, 0, 0, 0)",
+      "h": 901,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(244, 244, 244)",
       "pad": [
-       "0px",
        "16px",
-       "0px",
+       "16px",
+       "16px",
        "16px"
       ],
-      "fs": 12,
-      "color": "rgb(77, 77, 77)",
-      "barContent": "none"
+      "fs": 13,
+      "color": "rgb(13, 13, 13)",
+      "barContent": "none",
+      "agent": true,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(229, 229, 229)",
+      "borderTopColor": "rgb(229, 229, 229)",
+      "lbar": false,
+      "hasDot": true,
+      "hasBadge": true,
+      "tag": false,
+      "bodyX": 333,
+      "nameX": 333
+     },
+     {
+      "x": 280,
+      "y": 2237,
+      "w": 846,
+      "h": 379,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(244, 244, 244)",
+      "pad": [
+       "16px",
+       "16px",
+       "16px",
+       "16px"
+      ],
+      "fs": 13,
+      "color": "rgb(13, 13, 13)",
+      "barContent": "none",
+      "agent": false,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(229, 229, 229)",
+      "borderTopColor": "rgb(229, 229, 229)",
+      "lbar": false,
+      "hasDot": false,
+      "hasBadge": false,
+      "tag": false,
+      "bodyX": 333,
+      "nameX": 333
      }
     ],
+    "lines": [],
     "more": [
      {
-      "text": "5 項動態",
+      "text": "6 項動態",
+      "open": "false"
+     },
+     {
+      "text": "1 項動態",
+      "open": "false"
+     },
+     {
+      "text": "1 項動態",
       "open": "false"
      }
     ],
     "gaps": [
-     48,
      12,
-     12
+     12,
+     12,
+     52,
+     52
     ],
     "composer": {
      "x": 280,
-     "y": 1272,
+     "y": 2632,
      "w": 846,
      "h": 136,
      "border": "1px",
@@ -1468,7 +2215,613 @@
      "expanded": "false"
     }
    },
-   "info": "Ddev-a執行中目前執行中 S-2 建立分數 API手上2 張 · 1 進行中 · 1 待辦角色專案 leader派工者operator",
+   "author": {
+    "seq": [
+     "run:6 項動態",
+     "comment",
+     "log",
+     "comment",
+     "comment",
+     "run:1 項動態",
+     "comment",
+     "run:1 項動態",
+     "comment"
+    ],
+    "heads": [
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 145,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 333,
+       "y": 147,
+       "w": 53.8,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 251,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 316,
+       "y": 270,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 333,
+       "y": 253,
+       "w": 36.2,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 357,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 316,
+       "y": 376,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 333,
+       "y": 359,
+       "w": 36.2,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 463,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 333,
+       "y": 465,
+       "w": 53.8,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 609,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 316,
+       "y": 628,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 333,
+       "y": 611,
+       "w": 36.2,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 1562,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 333,
+       "y": 1564,
+       "w": 53.8,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     }
+    ],
+    "systemMark": null
+   },
+   "markdown": {
+    "h5": true,
+    "list": "disc",
+    "nested": true,
+    "link": {
+     "href": "https://example.com/leaderboard-notes",
+     "underline": "underline",
+     "color": "rgb(10, 98, 194)"
+    },
+    "inlineCode": {
+     "bg": "rgb(236, 236, 236)",
+     "font": "ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\", emoji"
+    },
+    "table": {
+     "cells": 9,
+     "tdBorder": "1px",
+     "thBorder": "1px",
+     "thBg": "rgb(236, 236, 236)",
+     "collapse": "collapse",
+     "wrapperScrolls": "auto"
+    },
+    "codeblock": {
+     "lang": "json",
+     "buttons": [
+      "換行",
+      "複製"
+     ],
+     "mono": true,
+     "whiteSpace": "pre",
+     "tokenColours": 3,
+     "plainColour": "rgb(13, 13, 13)",
+     "jsonText": "{\n  \"week\": \"2026-W46\",\n  \"ranked\": true"
+    },
+    "personBlocks": [
+     "python"
+    ],
+    "progressPlain": true
+   },
+   "parity": {
+    "h5": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p code": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "11.44px",
+       "chat": "13.2px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "a": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "li": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "ul ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      }
+     ]
+    },
+    ".tbl": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "table": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "th": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "backgroundColor",
+       "comment": "rgb(236, 236, 236)",
+       "chat": "rgb(244, 244, 244)"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "td": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".codeblock": {
+     "same": 15,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "marginBottom",
+       "comment": "0px",
+       "chat": "8px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-lang": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head .chip-btn": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre code": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-s": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-k": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-n": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    }
+   },
+   "parityDiffs": {
+    "h5": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p code": [
+     {
+      "prop": "fontSize",
+      "comment": "11.44px",
+      "chat": "13.2px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "a": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "ul": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     }
+    ],
+    "li": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     }
+    ],
+    "ul ul": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     }
+    ],
+    ".tbl": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "table": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "th": [
+     {
+      "prop": "backgroundColor",
+      "comment": "rgb(236, 236, 236)",
+      "chat": "rgb(244, 244, 244)"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "td": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".codeblock": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "marginBottom",
+      "comment": "0px",
+      "chat": "8px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-lang": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head .chip-btn": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre code": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-s": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-k": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-n": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ]
+   },
+   "parityUnexpected": [],
+   "longBlock": {
+    "folded": {
+     "h": 365,
+     "more": "展開全部 45 行"
+    },
+    "unfolded": {
+     "h": 1002,
+     "more": "收合",
+     "folded": false
+    }
+   },
+   "authorCard": "Ddev-a執行中目前執行中 S-2 建立分數 API手上2 張 · 1 進行中 · 1 待辦角色專案 leader開啟 Agent 頁面",
+   "personCard": "Ooperator人",
+   "afterLink": "/ui/fleet/agent/dev-a",
+   "info": "Ddev-a執行中目前執行中 S-2 建立分數 API手上2 張 · 1 進行中 · 1 待辦角色專案 leader派工者operator開啟 Agent 頁面",
    "checks": {
     "noLeftBar": true,
     "tilePaddingEven": true,
@@ -1507,6 +2860,34 @@
     "systemRowsOnTheCardsEdge": true,
     "foldRowMarkUnderTheRowsMarks": true,
     "foldRowSameSizeAsRows": true,
+    "everyRunIsFolded": true,
+    "oneLineRunIsFolded": true,
+    "sandwich": true,
+    "authorAvatar28": true,
+    "authorDotScaled": true,
+    "authorNameCentred": true,
+    "authorIsAButton": true,
+    "systemRowMarksStaySmall": true,
+    "mdHeadingListTable": true,
+    "mdLinkAndInlineCode": true,
+    "mdJsonBlockLikeTheChat": true,
+    "mdPersonBlockOtherLanguage": true,
+    "progressNotePlain": true,
+    "parityEveryPartPresent": true,
+    "parityNothingButInheritedDiffers": true,
+    "copyPutsTheBlockOnTheClipboard": true,
+    "wrapWraps": true,
+    "longBlockFoldsAndOpens": true,
+    "authorHoverShowsCard": true,
+    "authorCardHasAgentLink": true,
+    "pointerCanEnterTheCard": true,
+    "leavingClosesTheAuthorCard": true,
+    "personCardIsNameAndPersonOnly": true,
+    "authorFocusShowsCard": true,
+    "tabReachesTheLink": true,
+    "escClosesAuthorCardAndReturnsFocus": true,
+    "linkGoesToTheAgentPage": true,
+    "readOnlyCardHasNoLink": true,
     "avatarIsButton": true,
     "pickerOpens": true,
     "cardStaysClosed": true,
@@ -1930,7 +3311,7 @@
      "left": 280,
      "right": 20,
      "row": 1064,
-     "title": 359.6,
+     "title": 339.7,
      "code": 54,
      "prio": 84,
      "who": 140,
@@ -1964,7 +3345,7 @@
      "left": 280,
      "right": 20,
      "row": 1138,
-     "title": 433.6,
+     "title": 413.7,
      "code": 54,
      "prio": 84,
      "who": 140,
@@ -1998,7 +3379,7 @@
      "left": 280,
      "right": 20,
      "row": 1618,
-     "title": 913.6,
+     "title": 893.7,
      "code": 54,
      "prio": 84,
      "who": 140,
@@ -2030,13 +3411,13 @@
    "stream": {
     "x": 280,
     "page": "rgb(33, 33, 33)",
-    "cardsN": 4,
+    "cardsN": 6,
     "cards": [
      {
       "x": 280,
       "y": 820,
       "w": 846,
-      "h": 90,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -2057,14 +3438,14 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
      },
      {
       "x": 280,
-      "y": 922,
+      "y": 926,
       "w": 846,
-      "h": 92,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -2085,14 +3466,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": false,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
      },
      {
       "x": 280,
-      "y": 1026,
+      "y": 1032,
       "w": 846,
-      "h": 92,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -2113,14 +3494,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": true,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
      },
      {
       "x": 280,
-      "y": 1130,
+      "y": 1138,
       "w": 846,
-      "h": 90,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -2141,8 +3522,64 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
+     },
+     {
+      "x": 280,
+      "y": 1284,
+      "w": 846,
+      "h": 901,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(47, 47, 47)",
+      "pad": [
+       "16px",
+       "16px",
+       "16px",
+       "16px"
+      ],
+      "fs": 13,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "none",
+      "agent": true,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(61, 61, 61)",
+      "borderTopColor": "rgb(61, 61, 61)",
+      "lbar": false,
+      "hasDot": true,
+      "hasBadge": true,
+      "tag": false,
+      "bodyX": 333,
+      "nameX": 333
+     },
+     {
+      "x": 280,
+      "y": 2237,
+      "w": 846,
+      "h": 379,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(47, 47, 47)",
+      "pad": [
+       "16px",
+       "16px",
+       "16px",
+       "16px"
+      ],
+      "fs": 13,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "none",
+      "agent": false,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(61, 61, 61)",
+      "borderTopColor": "rgb(61, 61, 61)",
+      "lbar": false,
+      "hasDot": false,
+      "hasBadge": false,
+      "tag": false,
+      "bodyX": 333,
+      "nameX": 333
      }
     ],
     "lines": [],
@@ -2150,16 +3587,26 @@
      {
       "text": "6 activities",
       "open": "false"
+     },
+     {
+      "text": "1 activity",
+      "open": "false"
+     },
+     {
+      "text": "1 activity",
+      "open": "false"
      }
     ],
     "gaps": [
      12,
      12,
-     12
+     12,
+     52,
+     52
     ],
     "composer": {
      "x": 280,
-     "y": 1236,
+     "y": 2632,
      "w": 846,
      "h": 136,
      "border": "1px",
@@ -2220,7 +3667,613 @@
      "expanded": "false"
     }
    },
-   "info": "Ddev-aRunningNowWorking on S-2 Build the score APICards2 open · 1 in progress · 1 to doRoleProject leadDispatched byoperator",
+   "author": {
+    "seq": [
+     "run:6 activities",
+     "comment",
+     "comment",
+     "log",
+     "comment",
+     "run:1 activity",
+     "comment",
+     "run:1 activity",
+     "comment"
+    ],
+    "heads": [
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 145,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 333,
+       "y": 147,
+       "w": 53.8,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 251,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 316,
+       "y": 270,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 333,
+       "y": 253,
+       "w": 36.2,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 357,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 316,
+       "y": 376,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 333,
+       "y": 359,
+       "w": 36.2,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 463,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 333,
+       "y": 465,
+       "w": 53.8,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 609,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 316,
+       "y": 628,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 333,
+       "y": 611,
+       "w": 36.2,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 1562,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 333,
+       "y": 1564,
+       "w": 53.8,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     }
+    ],
+    "systemMark": null
+   },
+   "markdown": {
+    "h5": true,
+    "list": "disc",
+    "nested": true,
+    "link": {
+     "href": "https://example.com/leaderboard-notes",
+     "underline": "underline",
+     "color": "rgb(122, 183, 255)"
+    },
+    "inlineCode": {
+     "bg": "rgb(56, 56, 56)",
+     "font": "ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\", emoji"
+    },
+    "table": {
+     "cells": 9,
+     "tdBorder": "1px",
+     "thBorder": "1px",
+     "thBg": "rgb(58, 58, 58)",
+     "collapse": "collapse",
+     "wrapperScrolls": "auto"
+    },
+    "codeblock": {
+     "lang": "json",
+     "buttons": [
+      "Wrap",
+      "Copy"
+     ],
+     "mono": true,
+     "whiteSpace": "pre",
+     "tokenColours": 3,
+     "plainColour": "rgb(236, 236, 236)",
+     "jsonText": "{\n  \"week\": \"2026-W46\",\n  \"ranked\": true"
+    },
+    "personBlocks": [
+     "python"
+    ],
+    "progressPlain": true
+   },
+   "parity": {
+    "h5": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p code": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "11.44px",
+       "chat": "13.2px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "a": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "li": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "ul ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      }
+     ]
+    },
+    ".tbl": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "table": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "th": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "backgroundColor",
+       "comment": "rgb(58, 58, 58)",
+       "chat": "rgb(47, 47, 47)"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "td": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".codeblock": {
+     "same": 15,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "marginBottom",
+       "comment": "0px",
+       "chat": "8px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-lang": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head .chip-btn": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre code": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-s": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-k": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-n": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    }
+   },
+   "parityDiffs": {
+    "h5": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p code": [
+     {
+      "prop": "fontSize",
+      "comment": "11.44px",
+      "chat": "13.2px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "a": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "ul": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     }
+    ],
+    "li": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     }
+    ],
+    "ul ul": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     }
+    ],
+    ".tbl": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "table": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "th": [
+     {
+      "prop": "backgroundColor",
+      "comment": "rgb(58, 58, 58)",
+      "chat": "rgb(47, 47, 47)"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "td": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".codeblock": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "marginBottom",
+      "comment": "0px",
+      "chat": "8px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-lang": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head .chip-btn": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre code": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-s": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-k": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-n": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ]
+   },
+   "parityUnexpected": [],
+   "longBlock": {
+    "folded": {
+     "h": 365,
+     "more": "Show all 45 lines"
+    },
+    "unfolded": {
+     "h": 1002,
+     "more": "Show less",
+     "folded": false
+    }
+   },
+   "authorCard": "Ddev-aRunningNowWorking on S-2 Build the score APICards2 open · 1 in progress · 1 to doRoleProject leadOpen Agent page",
+   "personCard": "OoperatorPerson",
+   "afterLink": "/ui/fleet/agent/dev-a",
+   "info": "Ddev-aRunningNowWorking on S-2 Build the score APICards2 open · 1 in progress · 1 to doRoleProject leadDispatched byoperatorOpen Agent page",
    "checks": {
     "noLeftBar": true,
     "tilePaddingEven": true,
@@ -2259,6 +4312,34 @@
     "systemRowsOnTheCardsEdge": true,
     "foldRowMarkUnderTheRowsMarks": true,
     "foldRowSameSizeAsRows": true,
+    "everyRunIsFolded": true,
+    "oneLineRunIsFolded": true,
+    "sandwich": true,
+    "authorAvatar28": true,
+    "authorDotScaled": true,
+    "authorNameCentred": true,
+    "authorIsAButton": true,
+    "systemRowMarksStaySmall": true,
+    "mdHeadingListTable": true,
+    "mdLinkAndInlineCode": true,
+    "mdJsonBlockLikeTheChat": true,
+    "mdPersonBlockOtherLanguage": true,
+    "progressNotePlain": true,
+    "parityEveryPartPresent": true,
+    "parityNothingButInheritedDiffers": true,
+    "copyPutsTheBlockOnTheClipboard": true,
+    "wrapWraps": true,
+    "longBlockFoldsAndOpens": true,
+    "authorHoverShowsCard": true,
+    "authorCardHasAgentLink": true,
+    "pointerCanEnterTheCard": true,
+    "leavingClosesTheAuthorCard": true,
+    "personCardIsNameAndPersonOnly": true,
+    "authorFocusShowsCard": true,
+    "tabReachesTheLink": true,
+    "escClosesAuthorCardAndReturnsFocus": true,
+    "linkGoesToTheAgentPage": true,
+    "readOnlyCardHasNoLink": true,
     "avatarIsButton": true,
     "pickerOpens": true,
     "cardStaysClosed": true,
@@ -2682,7 +4763,7 @@
      "left": 280,
      "right": 20,
      "row": 1064,
-     "title": 398.4,
+     "title": 378.5,
      "code": 54,
      "prio": 84,
      "who": 140,
@@ -2716,7 +4797,7 @@
      "left": 280,
      "right": 20,
      "row": 1138,
-     "title": 472.4,
+     "title": 452.5,
      "code": 54,
      "prio": 84,
      "who": 140,
@@ -2750,7 +4831,7 @@
      "left": 280,
      "right": 20,
      "row": 1618,
-     "title": 952.4,
+     "title": 932.5,
      "code": 54,
      "prio": 84,
      "who": 140,
@@ -2782,13 +4863,69 @@
    "stream": {
     "x": 280,
     "page": "rgb(33, 33, 33)",
-    "cardsN": 4,
+    "cardsN": 6,
     "cards": [
      {
       "x": 280,
       "y": 820,
       "w": 846,
-      "h": 92,
+      "h": 94,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(47, 47, 47)",
+      "pad": [
+       "16px",
+       "16px",
+       "16px",
+       "16px"
+      ],
+      "fs": 13,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "none",
+      "agent": false,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(61, 61, 61)",
+      "borderTopColor": "rgb(61, 61, 61)",
+      "lbar": false,
+      "hasDot": false,
+      "hasBadge": false,
+      "tag": false,
+      "bodyX": 333,
+      "nameX": 333
+     },
+     {
+      "x": 280,
+      "y": 926,
+      "w": 846,
+      "h": 94,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(47, 47, 47)",
+      "pad": [
+       "16px",
+       "16px",
+       "16px",
+       "16px"
+      ],
+      "fs": 13,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "none",
+      "agent": true,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(61, 61, 61)",
+      "borderTopColor": "rgb(61, 61, 61)",
+      "lbar": false,
+      "hasDot": true,
+      "hasBadge": true,
+      "tag": false,
+      "bodyX": 333,
+      "nameX": 333
+     },
+     {
+      "x": 280,
+      "y": 1032,
+      "w": 846,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -2809,14 +4946,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": true,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
      },
      {
       "x": 280,
-      "y": 924,
+      "y": 1138,
       "w": 846,
-      "h": 90,
+      "h": 94,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -2837,14 +4974,14 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
      },
      {
       "x": 280,
-      "y": 1026,
+      "y": 1284,
       "w": 846,
-      "h": 92,
+      "h": 901,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -2865,14 +5002,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": false,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
      },
      {
       "x": 280,
-      "y": 1130,
+      "y": 2237,
       "w": 846,
-      "h": 90,
+      "h": 379,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -2893,8 +5030,8 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 323,
-      "nameX": 323
+      "bodyX": 333,
+      "nameX": 333
      }
     ],
     "lines": [],
@@ -2902,16 +5039,26 @@
      {
       "text": "6 項動態",
       "open": "false"
+     },
+     {
+      "text": "1 項動態",
+      "open": "false"
+     },
+     {
+      "text": "1 項動態",
+      "open": "false"
      }
     ],
     "gaps": [
      12,
      12,
-     12
+     12,
+     52,
+     52
     ],
     "composer": {
      "x": 280,
-     "y": 1236,
+     "y": 2632,
      "w": 846,
      "h": 136,
      "border": "1px",
@@ -2972,7 +5119,613 @@
      "expanded": "false"
     }
    },
-   "info": "Ddev-a執行中目前執行中 S-2 建立分數 API手上2 張 · 1 進行中 · 1 待辦角色專案 leader派工者operator",
+   "author": {
+    "seq": [
+     "run:6 項動態",
+     "comment",
+     "comment",
+     "log",
+     "comment",
+     "run:1 項動態",
+     "comment",
+     "run:1 項動態",
+     "comment"
+    ],
+    "heads": [
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 145,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 333,
+       "y": 147,
+       "w": 53.8,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 251,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 316,
+       "y": 270,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 333,
+       "y": 253,
+       "w": 36.2,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 357,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 316,
+       "y": 376,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 333,
+       "y": 359,
+       "w": 36.2,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 463,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 333,
+       "y": 465,
+       "w": 53.8,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 609,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 316,
+       "y": 628,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 333,
+       "y": 611,
+       "w": 36.2,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 297,
+       "y": 1562,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 333,
+       "y": 1564,
+       "w": 53.8,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     }
+    ],
+    "systemMark": null
+   },
+   "markdown": {
+    "h5": true,
+    "list": "disc",
+    "nested": true,
+    "link": {
+     "href": "https://example.com/leaderboard-notes",
+     "underline": "underline",
+     "color": "rgb(122, 183, 255)"
+    },
+    "inlineCode": {
+     "bg": "rgb(56, 56, 56)",
+     "font": "ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\", emoji"
+    },
+    "table": {
+     "cells": 9,
+     "tdBorder": "1px",
+     "thBorder": "1px",
+     "thBg": "rgb(58, 58, 58)",
+     "collapse": "collapse",
+     "wrapperScrolls": "auto"
+    },
+    "codeblock": {
+     "lang": "json",
+     "buttons": [
+      "換行",
+      "複製"
+     ],
+     "mono": true,
+     "whiteSpace": "pre",
+     "tokenColours": 3,
+     "plainColour": "rgb(236, 236, 236)",
+     "jsonText": "{\n  \"week\": \"2026-W46\",\n  \"ranked\": true"
+    },
+    "personBlocks": [
+     "python"
+    ],
+    "progressPlain": true
+   },
+   "parity": {
+    "h5": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p code": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "11.44px",
+       "chat": "13.2px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "a": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "li": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "ul ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      }
+     ]
+    },
+    ".tbl": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "table": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "th": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "backgroundColor",
+       "comment": "rgb(58, 58, 58)",
+       "chat": "rgb(47, 47, 47)"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "td": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".codeblock": {
+     "same": 15,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "13px",
+       "chat": "15px"
+      },
+      {
+       "prop": "marginBottom",
+       "comment": "0px",
+       "chat": "8px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-lang": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head .chip-btn": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre code": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-s": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-k": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-n": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    }
+   },
+   "parityDiffs": {
+    "h5": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p code": [
+     {
+      "prop": "fontSize",
+      "comment": "11.44px",
+      "chat": "13.2px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "a": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "ul": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     }
+    ],
+    "li": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     }
+    ],
+    "ul ul": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     }
+    ],
+    ".tbl": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "table": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "th": [
+     {
+      "prop": "backgroundColor",
+      "comment": "rgb(58, 58, 58)",
+      "chat": "rgb(47, 47, 47)"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "td": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".codeblock": [
+     {
+      "prop": "fontSize",
+      "comment": "13px",
+      "chat": "15px"
+     },
+     {
+      "prop": "marginBottom",
+      "comment": "0px",
+      "chat": "8px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-lang": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head .chip-btn": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre code": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-s": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-k": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-n": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ]
+   },
+   "parityUnexpected": [],
+   "longBlock": {
+    "folded": {
+     "h": 365,
+     "more": "展開全部 45 行"
+    },
+    "unfolded": {
+     "h": 1002,
+     "more": "收合",
+     "folded": false
+    }
+   },
+   "authorCard": "Ddev-a執行中目前執行中 S-2 建立分數 API手上2 張 · 1 進行中 · 1 待辦角色專案 leader開啟 Agent 頁面",
+   "personCard": "Ooperator人",
+   "afterLink": "/ui/fleet/agent/dev-a",
+   "info": "Ddev-a執行中目前執行中 S-2 建立分數 API手上2 張 · 1 進行中 · 1 待辦角色專案 leader派工者operator開啟 Agent 頁面",
    "checks": {
     "noLeftBar": true,
     "tilePaddingEven": true,
@@ -3011,6 +5764,34 @@
     "systemRowsOnTheCardsEdge": true,
     "foldRowMarkUnderTheRowsMarks": true,
     "foldRowSameSizeAsRows": true,
+    "everyRunIsFolded": true,
+    "oneLineRunIsFolded": true,
+    "sandwich": true,
+    "authorAvatar28": true,
+    "authorDotScaled": true,
+    "authorNameCentred": true,
+    "authorIsAButton": true,
+    "systemRowMarksStaySmall": true,
+    "mdHeadingListTable": true,
+    "mdLinkAndInlineCode": true,
+    "mdJsonBlockLikeTheChat": true,
+    "mdPersonBlockOtherLanguage": true,
+    "progressNotePlain": true,
+    "parityEveryPartPresent": true,
+    "parityNothingButInheritedDiffers": true,
+    "copyPutsTheBlockOnTheClipboard": true,
+    "wrapWraps": true,
+    "longBlockFoldsAndOpens": true,
+    "authorHoverShowsCard": true,
+    "authorCardHasAgentLink": true,
+    "pointerCanEnterTheCard": true,
+    "leavingClosesTheAuthorCard": true,
+    "personCardIsNameAndPersonOnly": true,
+    "authorFocusShowsCard": true,
+    "tabReachesTheLink": true,
+    "escClosesAuthorCardAndReturnsFocus": true,
+    "linkGoesToTheAgentPage": true,
+    "readOnlyCardHasNoLink": true,
     "avatarIsButton": true,
     "pickerOpens": true,
     "cardStaysClosed": true,
@@ -3422,13 +6203,13 @@
    "stream": {
     "x": 16,
     "page": "rgb(255, 255, 255)",
-    "cardsN": 4,
+    "cardsN": 6,
     "cards": [
      {
       "x": 16,
       "y": 2129,
       "w": 358,
-      "h": 82,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -3449,14 +6230,14 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
      },
      {
       "x": 16,
-      "y": 2223,
+      "y": 2227,
       "w": 358,
-      "h": 84,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -3477,14 +6258,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": true,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
      },
      {
       "x": 16,
-      "y": 2319,
+      "y": 2325,
       "w": 358,
-      "h": 84,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -3505,14 +6286,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": false,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
      },
      {
       "x": 16,
-      "y": 2415,
+      "y": 2423,
       "w": 358,
-      "h": 82,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -3533,8 +6314,64 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
+     },
+     {
+      "x": 16,
+      "y": 2561,
+      "w": 358,
+      "h": 949,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(244, 244, 244)",
+      "pad": [
+       "12px",
+       "12px",
+       "12px",
+       "12px"
+      ],
+      "fs": 14,
+      "color": "rgb(13, 13, 13)",
+      "barContent": "none",
+      "agent": true,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(229, 229, 229)",
+      "borderTopColor": "rgb(229, 229, 229)",
+      "lbar": false,
+      "hasDot": true,
+      "hasBadge": true,
+      "tag": false,
+      "bodyX": 65,
+      "nameX": 65
+     },
+     {
+      "x": 16,
+      "y": 3562,
+      "w": 358,
+      "h": 539,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(244, 244, 244)",
+      "pad": [
+       "12px",
+       "12px",
+       "12px",
+       "12px"
+      ],
+      "fs": 14,
+      "color": "rgb(13, 13, 13)",
+      "barContent": "none",
+      "agent": false,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(229, 229, 229)",
+      "borderTopColor": "rgb(229, 229, 229)",
+      "lbar": false,
+      "hasDot": false,
+      "hasBadge": false,
+      "tag": false,
+      "bodyX": 65,
+      "nameX": 65
      }
     ],
     "lines": [],
@@ -3542,16 +6379,26 @@
      {
       "text": "6 activities",
       "open": "false"
+     },
+     {
+      "text": "1 activity",
+      "open": "false"
+     },
+     {
+      "text": "1 activity",
+      "open": "false"
      }
     ],
     "gaps": [
      12,
      12,
-     12
+     12,
+     52,
+     52
     ],
     "composer": {
      "x": 16,
-     "y": 2513,
+     "y": 4118,
      "w": 358,
      "h": 150,
      "border": "1px",
@@ -3612,6 +6459,609 @@
      "expanded": "false"
     }
    },
+   "author": {
+    "seq": [
+     "run:6 activities",
+     "comment",
+     "log",
+     "comment",
+     "comment",
+     "run:1 activity",
+     "comment",
+     "run:1 activity",
+     "comment"
+    ],
+    "heads": [
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 157,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 65,
+       "y": 159,
+       "w": 57.9,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 255,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 48,
+       "y": 274,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 65,
+       "y": 257,
+       "w": 39,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 353,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 48,
+       "y": 372,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 65,
+       "y": 355,
+       "w": 39,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 451,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 65,
+       "y": 453,
+       "w": 57.9,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 589,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 48,
+       "y": 608,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 65,
+       "y": 591,
+       "w": 39,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 1590.4,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 65,
+       "y": 1592.4,
+       "w": 57.9,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     }
+    ],
+    "systemMark": null
+   },
+   "markdown": {
+    "h5": true,
+    "list": "disc",
+    "nested": true,
+    "link": {
+     "href": "https://example.com/leaderboard-notes",
+     "underline": "underline",
+     "color": "rgb(10, 98, 194)"
+    },
+    "inlineCode": {
+     "bg": "rgb(236, 236, 236)",
+     "font": "ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\", emoji"
+    },
+    "table": {
+     "cells": 9,
+     "tdBorder": "1px",
+     "thBorder": "1px",
+     "thBg": "rgb(236, 236, 236)",
+     "collapse": "collapse",
+     "wrapperScrolls": "auto"
+    },
+    "codeblock": {
+     "lang": "json",
+     "buttons": [
+      "Wrap",
+      "Copy"
+     ],
+     "mono": true,
+     "whiteSpace": "pre-wrap",
+     "tokenColours": 3,
+     "plainColour": "rgb(13, 13, 13)",
+     "jsonText": "{\n  \"week\": \"2026-W46\",\n  \"ranked\": true"
+    },
+    "personBlocks": [
+     "python"
+    ],
+    "progressPlain": true
+   },
+   "parity": {
+    "h5": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p code": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "12.32px",
+       "chat": "13.2px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "a": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "li": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "ul ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      }
+     ]
+    },
+    ".tbl": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "table": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "th": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "backgroundColor",
+       "comment": "rgb(236, 236, 236)",
+       "chat": "rgb(244, 244, 244)"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "td": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".codeblock": {
+     "same": 15,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "marginBottom",
+       "comment": "0px",
+       "chat": "8px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-lang": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head .chip-btn": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre code": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-s": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-k": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-n": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    }
+   },
+   "parityDiffs": {
+    "h5": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p code": [
+     {
+      "prop": "fontSize",
+      "comment": "12.32px",
+      "chat": "13.2px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "a": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "ul": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     }
+    ],
+    "li": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     }
+    ],
+    "ul ul": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     }
+    ],
+    ".tbl": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "table": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "th": [
+     {
+      "prop": "backgroundColor",
+      "comment": "rgb(236, 236, 236)",
+      "chat": "rgb(244, 244, 244)"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "td": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".codeblock": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "marginBottom",
+      "comment": "0px",
+      "chat": "8px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-lang": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head .chip-btn": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre code": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-s": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-k": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-n": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ]
+   },
+   "parityUnexpected": [],
+   "longBlock": {
+    "folded": {
+     "h": 387,
+     "more": "Show all 45 lines"
+    },
+    "unfolded": {
+     "h": 1788,
+     "more": "Show less",
+     "folded": false
+    }
+   },
    "checks": {
     "noLeftBar": true,
     "tilePaddingEven": true,
@@ -3645,6 +7095,29 @@
     "systemRowsOnTheCardsEdge": true,
     "foldRowMarkUnderTheRowsMarks": true,
     "foldRowSameSizeAsRows": true,
+    "everyRunIsFolded": true,
+    "oneLineRunIsFolded": true,
+    "sandwich": true,
+    "authorAvatar28": true,
+    "authorDotScaled": true,
+    "authorNameCentred": true,
+    "authorIsAButton": true,
+    "systemRowMarksStaySmall": true,
+    "mdHeadingListTable": true,
+    "mdLinkAndInlineCode": true,
+    "mdJsonBlockLikeTheChat": true,
+    "mdPersonBlockOtherLanguage": true,
+    "progressNotePlain": true,
+    "parityEveryPartPresent": true,
+    "parityNothingButInheritedDiffers": true,
+    "copyPutsTheBlockOnTheClipboard": true,
+    "wrapWraps": true,
+    "longBlockFoldsAndOpens": true,
+    "tapOpensTheCard": true,
+    "phoneCardInsideTheScreen": true,
+    "tapOutsideClosesTheCard": true,
+    "phonePersonCardNoLink": true,
+    "readOnlyCardHasNoLink": true,
     "avatarIsButton": true,
     "pickerOpens": true,
     "cardStaysClosed": true,
@@ -4049,13 +7522,13 @@
    "stream": {
     "x": 16,
     "page": "rgb(255, 255, 255)",
-    "cardsN": 4,
+    "cardsN": 6,
     "cards": [
      {
       "x": 16,
       "y": 2015,
       "w": 358,
-      "h": 84,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -4076,14 +7549,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": true,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
      },
      {
       "x": 16,
-      "y": 2111,
+      "y": 2113,
       "w": 358,
-      "h": 82,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -4104,14 +7577,14 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
      },
      {
       "x": 16,
-      "y": 2205,
+      "y": 2211,
       "w": 358,
-      "h": 84,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -4132,14 +7605,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": false,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
      },
      {
       "x": 16,
-      "y": 2301,
+      "y": 2309,
       "w": 358,
-      "h": 82,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(244, 244, 244)",
@@ -4160,8 +7633,64 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
+     },
+     {
+      "x": 16,
+      "y": 2447,
+      "w": 358,
+      "h": 949,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(244, 244, 244)",
+      "pad": [
+       "12px",
+       "12px",
+       "12px",
+       "12px"
+      ],
+      "fs": 14,
+      "color": "rgb(13, 13, 13)",
+      "barContent": "none",
+      "agent": true,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(229, 229, 229)",
+      "borderTopColor": "rgb(229, 229, 229)",
+      "lbar": false,
+      "hasDot": true,
+      "hasBadge": true,
+      "tag": false,
+      "bodyX": 65,
+      "nameX": 65
+     },
+     {
+      "x": 16,
+      "y": 3448,
+      "w": 358,
+      "h": 539,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(244, 244, 244)",
+      "pad": [
+       "12px",
+       "12px",
+       "12px",
+       "12px"
+      ],
+      "fs": 14,
+      "color": "rgb(13, 13, 13)",
+      "barContent": "none",
+      "agent": false,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(229, 229, 229)",
+      "borderTopColor": "rgb(229, 229, 229)",
+      "lbar": false,
+      "hasDot": false,
+      "hasBadge": false,
+      "tag": false,
+      "bodyX": 65,
+      "nameX": 65
      }
     ],
     "lines": [],
@@ -4169,16 +7698,26 @@
      {
       "text": "6 項動態",
       "open": "false"
+     },
+     {
+      "text": "1 項動態",
+      "open": "false"
+     },
+     {
+      "text": "1 項動態",
+      "open": "false"
      }
     ],
     "gaps": [
      12,
      12,
-     12
+     12,
+     52,
+     52
     ],
     "composer": {
      "x": 16,
-     "y": 2399,
+     "y": 4004,
      "w": 358,
      "h": 150,
      "border": "1px",
@@ -4239,6 +7778,609 @@
      "expanded": "false"
     }
    },
+   "author": {
+    "seq": [
+     "run:6 項動態",
+     "log",
+     "comment",
+     "comment",
+     "comment",
+     "run:1 項動態",
+     "comment",
+     "run:1 項動態",
+     "comment"
+    ],
+    "heads": [
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 157,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 48,
+       "y": 176,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 65,
+       "y": 159,
+       "w": 39,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 255,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 65,
+       "y": 257,
+       "w": 57.9,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 353,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 48,
+       "y": 372,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 65,
+       "y": 355,
+       "w": 39,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 451,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 65,
+       "y": 453,
+       "w": 57.9,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 589,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 48,
+       "y": 608,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 65,
+       "y": 591,
+       "w": 39,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 1590.4,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 65,
+       "y": 1592.4,
+       "w": 57.9,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     }
+    ],
+    "systemMark": null
+   },
+   "markdown": {
+    "h5": true,
+    "list": "disc",
+    "nested": true,
+    "link": {
+     "href": "https://example.com/leaderboard-notes",
+     "underline": "underline",
+     "color": "rgb(10, 98, 194)"
+    },
+    "inlineCode": {
+     "bg": "rgb(236, 236, 236)",
+     "font": "ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\", emoji"
+    },
+    "table": {
+     "cells": 9,
+     "tdBorder": "1px",
+     "thBorder": "1px",
+     "thBg": "rgb(236, 236, 236)",
+     "collapse": "collapse",
+     "wrapperScrolls": "auto"
+    },
+    "codeblock": {
+     "lang": "json",
+     "buttons": [
+      "換行",
+      "複製"
+     ],
+     "mono": true,
+     "whiteSpace": "pre-wrap",
+     "tokenColours": 3,
+     "plainColour": "rgb(13, 13, 13)",
+     "jsonText": "{\n  \"week\": \"2026-W46\",\n  \"ranked\": true"
+    },
+    "personBlocks": [
+     "python"
+    ],
+    "progressPlain": true
+   },
+   "parity": {
+    "h5": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p code": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "12.32px",
+       "chat": "13.2px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "a": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "li": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "ul ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      }
+     ]
+    },
+    ".tbl": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "table": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "th": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "backgroundColor",
+       "comment": "rgb(236, 236, 236)",
+       "chat": "rgb(244, 244, 244)"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "td": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".codeblock": {
+     "same": 15,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "marginBottom",
+       "comment": "0px",
+       "chat": "8px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-lang": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head .chip-btn": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre code": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-s": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-k": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-n": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    }
+   },
+   "parityDiffs": {
+    "h5": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p code": [
+     {
+      "prop": "fontSize",
+      "comment": "12.32px",
+      "chat": "13.2px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "a": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "ul": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     }
+    ],
+    "li": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     }
+    ],
+    "ul ul": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     }
+    ],
+    ".tbl": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "table": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "th": [
+     {
+      "prop": "backgroundColor",
+      "comment": "rgb(236, 236, 236)",
+      "chat": "rgb(244, 244, 244)"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "td": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".codeblock": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "marginBottom",
+      "comment": "0px",
+      "chat": "8px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-lang": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head .chip-btn": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre code": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-s": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-k": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-n": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ]
+   },
+   "parityUnexpected": [],
+   "longBlock": {
+    "folded": {
+     "h": 387,
+     "more": "展開全部 45 行"
+    },
+    "unfolded": {
+     "h": 1788,
+     "more": "收合",
+     "folded": false
+    }
+   },
    "checks": {
     "noLeftBar": true,
     "tilePaddingEven": true,
@@ -4272,6 +8414,29 @@
     "systemRowsOnTheCardsEdge": true,
     "foldRowMarkUnderTheRowsMarks": true,
     "foldRowSameSizeAsRows": true,
+    "everyRunIsFolded": true,
+    "oneLineRunIsFolded": true,
+    "sandwich": true,
+    "authorAvatar28": true,
+    "authorDotScaled": true,
+    "authorNameCentred": true,
+    "authorIsAButton": true,
+    "systemRowMarksStaySmall": true,
+    "mdHeadingListTable": true,
+    "mdLinkAndInlineCode": true,
+    "mdJsonBlockLikeTheChat": true,
+    "mdPersonBlockOtherLanguage": true,
+    "progressNotePlain": true,
+    "parityEveryPartPresent": true,
+    "parityNothingButInheritedDiffers": true,
+    "copyPutsTheBlockOnTheClipboard": true,
+    "wrapWraps": true,
+    "longBlockFoldsAndOpens": true,
+    "tapOpensTheCard": true,
+    "phoneCardInsideTheScreen": true,
+    "tapOutsideClosesTheCard": true,
+    "phonePersonCardNoLink": true,
+    "readOnlyCardHasNoLink": true,
     "avatarIsButton": true,
     "pickerOpens": true,
     "cardStaysClosed": true,
@@ -4676,13 +8841,41 @@
    "stream": {
     "x": 16,
     "page": "rgb(33, 33, 33)",
-    "cardsN": 4,
+    "cardsN": 6,
     "cards": [
      {
       "x": 16,
       "y": 2129,
       "w": 358,
-      "h": 84,
+      "h": 86,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(47, 47, 47)",
+      "pad": [
+       "12px",
+       "12px",
+       "12px",
+       "12px"
+      ],
+      "fs": 14,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "none",
+      "agent": false,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(61, 61, 61)",
+      "borderTopColor": "rgb(61, 61, 61)",
+      "lbar": false,
+      "hasDot": false,
+      "hasBadge": false,
+      "tag": false,
+      "bodyX": 65,
+      "nameX": 65
+     },
+     {
+      "x": 16,
+      "y": 2227,
+      "w": 358,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -4703,42 +8896,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": true,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
      },
      {
       "x": 16,
-      "y": 2225,
+      "y": 2325,
       "w": 358,
-      "h": 82,
-      "border": "1px",
-      "radius": "12px",
-      "bg": "rgb(47, 47, 47)",
-      "pad": [
-       "12px",
-       "12px",
-       "12px",
-       "12px"
-      ],
-      "fs": 14,
-      "color": "rgb(236, 236, 236)",
-      "barContent": "none",
-      "agent": false,
-      "borderLeft": "1px",
-      "borderLeftColor": "rgb(61, 61, 61)",
-      "borderTopColor": "rgb(61, 61, 61)",
-      "lbar": false,
-      "hasDot": false,
-      "hasBadge": false,
-      "tag": false,
-      "bodyX": 55,
-      "nameX": 55
-     },
-     {
-      "x": 16,
-      "y": 2319,
-      "w": 358,
-      "h": 84,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -4759,14 +8924,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": false,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
      },
      {
       "x": 16,
-      "y": 2415,
+      "y": 2423,
       "w": 358,
-      "h": 82,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -4787,8 +8952,64 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
+     },
+     {
+      "x": 16,
+      "y": 2561,
+      "w": 358,
+      "h": 949,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(47, 47, 47)",
+      "pad": [
+       "12px",
+       "12px",
+       "12px",
+       "12px"
+      ],
+      "fs": 14,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "none",
+      "agent": true,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(61, 61, 61)",
+      "borderTopColor": "rgb(61, 61, 61)",
+      "lbar": false,
+      "hasDot": true,
+      "hasBadge": true,
+      "tag": false,
+      "bodyX": 65,
+      "nameX": 65
+     },
+     {
+      "x": 16,
+      "y": 3562,
+      "w": 358,
+      "h": 539,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(47, 47, 47)",
+      "pad": [
+       "12px",
+       "12px",
+       "12px",
+       "12px"
+      ],
+      "fs": 14,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "none",
+      "agent": false,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(61, 61, 61)",
+      "borderTopColor": "rgb(61, 61, 61)",
+      "lbar": false,
+      "hasDot": false,
+      "hasBadge": false,
+      "tag": false,
+      "bodyX": 65,
+      "nameX": 65
      }
     ],
     "lines": [],
@@ -4796,16 +9017,26 @@
      {
       "text": "6 activities",
       "open": "false"
+     },
+     {
+      "text": "1 activity",
+      "open": "false"
+     },
+     {
+      "text": "1 activity",
+      "open": "false"
      }
     ],
     "gaps": [
      12,
      12,
-     12
+     12,
+     52,
+     52
     ],
     "composer": {
      "x": 16,
-     "y": 2513,
+     "y": 4118,
      "w": 358,
      "h": 150,
      "border": "1px",
@@ -4866,6 +9097,609 @@
      "expanded": "false"
     }
    },
+   "author": {
+    "seq": [
+     "run:6 activities",
+     "comment",
+     "log",
+     "comment",
+     "comment",
+     "run:1 activity",
+     "comment",
+     "run:1 activity",
+     "comment"
+    ],
+    "heads": [
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 157,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 65,
+       "y": 159,
+       "w": 57.9,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 255,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 48,
+       "y": 274,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 65,
+       "y": 257,
+       "w": 39,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 353,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 48,
+       "y": 372,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 65,
+       "y": 355,
+       "w": 39,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 451,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 65,
+       "y": 453,
+       "w": 57.9,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 589,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 48,
+       "y": 608,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 65,
+       "y": 591,
+       "w": 39,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 1590.4,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 65,
+       "y": 1592.4,
+       "w": 57.9,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     }
+    ],
+    "systemMark": null
+   },
+   "markdown": {
+    "h5": true,
+    "list": "disc",
+    "nested": true,
+    "link": {
+     "href": "https://example.com/leaderboard-notes",
+     "underline": "underline",
+     "color": "rgb(122, 183, 255)"
+    },
+    "inlineCode": {
+     "bg": "rgb(56, 56, 56)",
+     "font": "ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\", emoji"
+    },
+    "table": {
+     "cells": 9,
+     "tdBorder": "1px",
+     "thBorder": "1px",
+     "thBg": "rgb(58, 58, 58)",
+     "collapse": "collapse",
+     "wrapperScrolls": "auto"
+    },
+    "codeblock": {
+     "lang": "json",
+     "buttons": [
+      "Wrap",
+      "Copy"
+     ],
+     "mono": true,
+     "whiteSpace": "pre-wrap",
+     "tokenColours": 3,
+     "plainColour": "rgb(236, 236, 236)",
+     "jsonText": "{\n  \"week\": \"2026-W46\",\n  \"ranked\": true"
+    },
+    "personBlocks": [
+     "python"
+    ],
+    "progressPlain": true
+   },
+   "parity": {
+    "h5": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p code": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "12.32px",
+       "chat": "13.2px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "a": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "li": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "ul ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      }
+     ]
+    },
+    ".tbl": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "table": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "th": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "backgroundColor",
+       "comment": "rgb(58, 58, 58)",
+       "chat": "rgb(47, 47, 47)"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "td": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".codeblock": {
+     "same": 15,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "marginBottom",
+       "comment": "0px",
+       "chat": "8px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-lang": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head .chip-btn": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre code": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-s": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-k": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-n": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    }
+   },
+   "parityDiffs": {
+    "h5": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p code": [
+     {
+      "prop": "fontSize",
+      "comment": "12.32px",
+      "chat": "13.2px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "a": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "ul": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     }
+    ],
+    "li": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     }
+    ],
+    "ul ul": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     }
+    ],
+    ".tbl": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "table": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "th": [
+     {
+      "prop": "backgroundColor",
+      "comment": "rgb(58, 58, 58)",
+      "chat": "rgb(47, 47, 47)"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "td": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".codeblock": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "marginBottom",
+      "comment": "0px",
+      "chat": "8px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-lang": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head .chip-btn": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre code": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-s": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-k": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-n": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ]
+   },
+   "parityUnexpected": [],
+   "longBlock": {
+    "folded": {
+     "h": 387,
+     "more": "Show all 45 lines"
+    },
+    "unfolded": {
+     "h": 1788,
+     "more": "Show less",
+     "folded": false
+    }
+   },
    "checks": {
     "noLeftBar": true,
     "tilePaddingEven": true,
@@ -4899,6 +9733,29 @@
     "systemRowsOnTheCardsEdge": true,
     "foldRowMarkUnderTheRowsMarks": true,
     "foldRowSameSizeAsRows": true,
+    "everyRunIsFolded": true,
+    "oneLineRunIsFolded": true,
+    "sandwich": true,
+    "authorAvatar28": true,
+    "authorDotScaled": true,
+    "authorNameCentred": true,
+    "authorIsAButton": true,
+    "systemRowMarksStaySmall": true,
+    "mdHeadingListTable": true,
+    "mdLinkAndInlineCode": true,
+    "mdJsonBlockLikeTheChat": true,
+    "mdPersonBlockOtherLanguage": true,
+    "progressNotePlain": true,
+    "parityEveryPartPresent": true,
+    "parityNothingButInheritedDiffers": true,
+    "copyPutsTheBlockOnTheClipboard": true,
+    "wrapWraps": true,
+    "longBlockFoldsAndOpens": true,
+    "tapOpensTheCard": true,
+    "phoneCardInsideTheScreen": true,
+    "tapOutsideClosesTheCard": true,
+    "phonePersonCardNoLink": true,
+    "readOnlyCardHasNoLink": true,
     "avatarIsButton": true,
     "pickerOpens": true,
     "cardStaysClosed": true,
@@ -5303,13 +10160,41 @@
    "stream": {
     "x": 16,
     "page": "rgb(33, 33, 33)",
-    "cardsN": 4,
+    "cardsN": 6,
     "cards": [
      {
       "x": 16,
       "y": 2015,
       "w": 358,
-      "h": 84,
+      "h": 86,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(47, 47, 47)",
+      "pad": [
+       "12px",
+       "12px",
+       "12px",
+       "12px"
+      ],
+      "fs": 14,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "none",
+      "agent": false,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(61, 61, 61)",
+      "borderTopColor": "rgb(61, 61, 61)",
+      "lbar": false,
+      "hasDot": false,
+      "hasBadge": false,
+      "tag": false,
+      "bodyX": 65,
+      "nameX": 65
+     },
+     {
+      "x": 16,
+      "y": 2113,
+      "w": 358,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -5330,42 +10215,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": true,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
      },
      {
       "x": 16,
-      "y": 2111,
+      "y": 2211,
       "w": 358,
-      "h": 82,
-      "border": "1px",
-      "radius": "12px",
-      "bg": "rgb(47, 47, 47)",
-      "pad": [
-       "12px",
-       "12px",
-       "12px",
-       "12px"
-      ],
-      "fs": 14,
-      "color": "rgb(236, 236, 236)",
-      "barContent": "none",
-      "agent": false,
-      "borderLeft": "1px",
-      "borderLeftColor": "rgb(61, 61, 61)",
-      "borderTopColor": "rgb(61, 61, 61)",
-      "lbar": false,
-      "hasDot": false,
-      "hasBadge": false,
-      "tag": false,
-      "bodyX": 55,
-      "nameX": 55
-     },
-     {
-      "x": 16,
-      "y": 2205,
-      "w": 358,
-      "h": 84,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -5386,14 +10243,14 @@
       "hasDot": true,
       "hasBadge": true,
       "tag": false,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
      },
      {
       "x": 16,
-      "y": 2301,
+      "y": 2309,
       "w": 358,
-      "h": 82,
+      "h": 86,
       "border": "1px",
       "radius": "12px",
       "bg": "rgb(47, 47, 47)",
@@ -5414,8 +10271,64 @@
       "hasDot": false,
       "hasBadge": false,
       "tag": false,
-      "bodyX": 55,
-      "nameX": 55
+      "bodyX": 65,
+      "nameX": 65
+     },
+     {
+      "x": 16,
+      "y": 2447,
+      "w": 358,
+      "h": 949,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(47, 47, 47)",
+      "pad": [
+       "12px",
+       "12px",
+       "12px",
+       "12px"
+      ],
+      "fs": 14,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "none",
+      "agent": true,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(61, 61, 61)",
+      "borderTopColor": "rgb(61, 61, 61)",
+      "lbar": false,
+      "hasDot": true,
+      "hasBadge": true,
+      "tag": false,
+      "bodyX": 65,
+      "nameX": 65
+     },
+     {
+      "x": 16,
+      "y": 3448,
+      "w": 358,
+      "h": 539,
+      "border": "1px",
+      "radius": "12px",
+      "bg": "rgb(47, 47, 47)",
+      "pad": [
+       "12px",
+       "12px",
+       "12px",
+       "12px"
+      ],
+      "fs": 14,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "none",
+      "agent": false,
+      "borderLeft": "1px",
+      "borderLeftColor": "rgb(61, 61, 61)",
+      "borderTopColor": "rgb(61, 61, 61)",
+      "lbar": false,
+      "hasDot": false,
+      "hasBadge": false,
+      "tag": false,
+      "bodyX": 65,
+      "nameX": 65
      }
     ],
     "lines": [],
@@ -5423,16 +10336,26 @@
      {
       "text": "6 項動態",
       "open": "false"
+     },
+     {
+      "text": "1 項動態",
+      "open": "false"
+     },
+     {
+      "text": "1 項動態",
+      "open": "false"
      }
     ],
     "gaps": [
      12,
      12,
-     12
+     12,
+     52,
+     52
     ],
     "composer": {
      "x": 16,
-     "y": 2399,
+     "y": 4004,
      "w": 358,
      "h": 150,
      "border": "1px",
@@ -5493,6 +10416,609 @@
      "expanded": "false"
     }
    },
+   "author": {
+    "seq": [
+     "run:6 項動態",
+     "comment",
+     "log",
+     "comment",
+     "comment",
+     "run:1 項動態",
+     "comment",
+     "run:1 項動態",
+     "comment"
+    ],
+    "heads": [
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 157,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 65,
+       "y": 159,
+       "w": 57.9,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 255,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 48,
+       "y": 274,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 65,
+       "y": 257,
+       "w": 39,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 353,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 48,
+       "y": 372,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 65,
+       "y": 355,
+       "w": 39,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 451,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 65,
+       "y": 453,
+       "w": 57.9,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 589,
+       "w": 28,
+       "h": 28
+      },
+      "dot": {
+       "x": 48,
+       "y": 608,
+       "w": 11,
+       "h": 11
+      },
+      "name": {
+       "x": 65,
+       "y": 591,
+       "w": 39,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "dev-a"
+     },
+     {
+      "btn": true,
+      "avatar": {
+       "x": 29,
+       "y": 1590.4,
+       "w": 28,
+       "h": 28
+      },
+      "dot": null,
+      "name": {
+       "x": 65,
+       "y": 1592.4,
+       "w": 57.9,
+       "h": 24
+      },
+      "centreOff": 0,
+      "who": "operator"
+     }
+    ],
+    "systemMark": null
+   },
+   "markdown": {
+    "h5": true,
+    "list": "disc",
+    "nested": true,
+    "link": {
+     "href": "https://example.com/leaderboard-notes",
+     "underline": "underline",
+     "color": "rgb(122, 183, 255)"
+    },
+    "inlineCode": {
+     "bg": "rgb(56, 56, 56)",
+     "font": "ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\", emoji"
+    },
+    "table": {
+     "cells": 9,
+     "tdBorder": "1px",
+     "thBorder": "1px",
+     "thBg": "rgb(58, 58, 58)",
+     "collapse": "collapse",
+     "wrapperScrolls": "auto"
+    },
+    "codeblock": {
+     "lang": "json",
+     "buttons": [
+      "換行",
+      "複製"
+     ],
+     "mono": true,
+     "whiteSpace": "pre-wrap",
+     "tokenColours": 3,
+     "plainColour": "rgb(236, 236, 236)",
+     "jsonText": "{\n  \"week\": \"2026-W46\",\n  \"ranked\": true"
+    },
+    "personBlocks": [
+     "python"
+    ],
+    "progressPlain": true
+   },
+   "parity": {
+    "h5": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "p code": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "12.32px",
+       "chat": "13.2px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "a": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "li": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      }
+     ]
+    },
+    "ul ul": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      }
+     ]
+    },
+    ".tbl": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "table": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "th": {
+     "same": 16,
+     "diff": [
+      {
+       "prop": "backgroundColor",
+       "comment": "rgb(58, 58, 58)",
+       "chat": "rgb(47, 47, 47)"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "td": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".codeblock": {
+     "same": 15,
+     "diff": [
+      {
+       "prop": "fontSize",
+       "comment": "14px",
+       "chat": "15px"
+      },
+      {
+       "prop": "marginBottom",
+       "comment": "0px",
+       "chat": "8px"
+      },
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-lang": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".cb-head .chip-btn": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    "pre code": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-s": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-k": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    },
+    ".tk-n": {
+     "same": 17,
+     "diff": [
+      {
+       "prop": "listStyleType",
+       "comment": "none",
+       "chat": "disc"
+      }
+     ]
+    }
+   },
+   "parityDiffs": {
+    "h5": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "p code": [
+     {
+      "prop": "fontSize",
+      "comment": "12.32px",
+      "chat": "13.2px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "a": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "ul": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     }
+    ],
+    "li": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     }
+    ],
+    "ul ul": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     }
+    ],
+    ".tbl": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "table": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "th": [
+     {
+      "prop": "backgroundColor",
+      "comment": "rgb(58, 58, 58)",
+      "chat": "rgb(47, 47, 47)"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "td": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".codeblock": [
+     {
+      "prop": "fontSize",
+      "comment": "14px",
+      "chat": "15px"
+     },
+     {
+      "prop": "marginBottom",
+      "comment": "0px",
+      "chat": "8px"
+     },
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-lang": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".cb-head .chip-btn": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    "pre code": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-s": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-k": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ],
+    ".tk-n": [
+     {
+      "prop": "listStyleType",
+      "comment": "none",
+      "chat": "disc"
+     }
+    ]
+   },
+   "parityUnexpected": [],
+   "longBlock": {
+    "folded": {
+     "h": 387,
+     "more": "展開全部 45 行"
+    },
+    "unfolded": {
+     "h": 1788,
+     "more": "收合",
+     "folded": false
+    }
+   },
    "checks": {
     "noLeftBar": true,
     "tilePaddingEven": true,
@@ -5526,6 +11052,29 @@
     "systemRowsOnTheCardsEdge": true,
     "foldRowMarkUnderTheRowsMarks": true,
     "foldRowSameSizeAsRows": true,
+    "everyRunIsFolded": true,
+    "oneLineRunIsFolded": true,
+    "sandwich": true,
+    "authorAvatar28": true,
+    "authorDotScaled": true,
+    "authorNameCentred": true,
+    "authorIsAButton": true,
+    "systemRowMarksStaySmall": true,
+    "mdHeadingListTable": true,
+    "mdLinkAndInlineCode": true,
+    "mdJsonBlockLikeTheChat": true,
+    "mdPersonBlockOtherLanguage": true,
+    "progressNotePlain": true,
+    "parityEveryPartPresent": true,
+    "parityNothingButInheritedDiffers": true,
+    "copyPutsTheBlockOnTheClipboard": true,
+    "wrapWraps": true,
+    "longBlockFoldsAndOpens": true,
+    "tapOpensTheCard": true,
+    "phoneCardInsideTheScreen": true,
+    "tapOutsideClosesTheCard": true,
+    "phonePersonCardNoLink": true,
+    "readOnlyCardHasNoLink": true,
     "avatarIsButton": true,
     "pickerOpens": true,
     "cardStaysClosed": true,
