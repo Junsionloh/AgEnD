@@ -119,42 +119,95 @@ const commentHtml = (text) => {
   return r && typeof r.renderMarkdown === "function" ? { __html: r.renderMarkdown(text) } : null;
 };
 
+/** More system lines than this in a row between two cards are folded into one "› N activities" line, closed (AGEND-316). */
+export const RUN_OPEN_MAX = 3;
+
+/**
+ * The stream's items (pure: tests import it): what people and agents SAY — a comment, a progress note — is a card each; the
+ * system's lines (history) between two cards are a run. `entries` are what the filter shows (a run of equal history lines
+ * already one line: `collapseEvents`); `group: false` (the History filter, which asks to see them) keeps every line on its own.
+ * Each item: { kind: "card", entry } | { kind: "run", key, entries, long } — `long`: more than RUN_OPEN_MAX, so folded at first.
+ */
+export function streamOf(entries, group = true) {
+  const out = [];
+  for (const entry of entries) {
+    if (entry.type !== "event") { out.push({ kind: "card", entry }); continue; }
+    const last = out[out.length - 1];
+    if (last && last.kind === "run") last.entries.push(entry);
+    else out.push({ kind: "run", key: `run-${entry.key}`, entries: [entry] });
+  }
+  for (const item of out) if (item.kind === "run") item.long = group && item.entries.length > RUN_OPEN_MAX;
+  return out;
+}
+
+const timeOf = (entry) => html`<time class="muted tl-time" dateTime=${entry.at} title=${fullTime(entry.at)}>${relTime(entry.at)}</time>`;
+
+/**
+ * One entry. A comment and a progress note are each a card (the same: a head with the avatar — an instance's with its state
+ * dot —, the name, an "Agent" badge, a tag for what it is, and the time; the text under the name); a history line is a thin row
+ * with an icon (a status change's is the status's), the sentence and the time, no box.
+ */
 function Entry({ entry, describe }) {
-  const time = html`<time class="muted tl-time" dateTime=${entry.at} title=${fullTime(entry.at)}>${relTime(entry.at)}</time>`;
+  const time = timeOf(entry);
   const agent = entry.by === "instance";
-  // The shared straight bar (app.css `.lbar`) marks what an agent said or noted; its history lines stay quiet, without it.
-  const mark = agent && entry.type !== "event" ? " by-agent lbar" : "";
+  const mark = agent ? " by-agent" : "";
   if (entry.type === "comment") {
     const body = commentHtml(entry.text);
-    return html`<li class=${`tl-item tl-comment${entry.authorKind === "person" ? " person" : ""}${mark}`}>
-      <div class="tl-head"><${Who} name=${entry.who} />${agent ? html`<${AgentTag} />` : null}
+    return html`<li class=${`tl-item tl-card tl-comment${entry.authorKind === "person" ? " person" : ""}${mark}`}>
+      <div class="tl-head"><${Who} name=${entry.who} presence=${agent} />${agent ? html`<${AgentTag} />` : null}
         ${entry.kind === "reject" ? html`<span class="tb-tag st-blocked">${t("taskcard.rejectTag")}</span>` : null}
         ${entry.kind === "approve" ? html`<span class="tb-tag st-done">${t("taskcard.approveTag")}</span>` : null}
         ${time}</div>
       ${body ? html`<div class="tl-body md" dangerouslySetInnerHTML=${body}></div>` : html`<div class="tl-body">${entry.text}</div>`}</li>`;
   }
   if (entry.type === "log") {
-    return html`<li class=${`tl-item tl-line tl-log${mark}`}><${Icon} name="check" size=${14} /><span class="tl-who"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null}</span><span class="tl-text">${entry.text}</span>${time}</li>`;
+    return html`<li class=${`tl-item tl-card tl-log${mark}`}>
+      <div class="tl-head"><${Who} name=${entry.who} presence=${agent} />${agent ? html`<${AgentTag} />` : null}<span class="tb-tag tl-kind">${t("taskcard.show.log")}</span>${time}</div>
+      <div class="tl-body">${entry.text}</div></li>`;
   }
-  return html`<li class=${`tl-item tl-line tl-event${mark}`}><span class="tb-dot" aria-hidden="true"></span><span class="tl-who"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null}</span><span class="tl-text">${describe(entry.ev)}${entry.count > 1 ? html` <span class="tl-count" title=${t("taskcard.repeated", entry.count)}>×${entry.count}</span>` : null}</span>${time}</li>`;
+  const to = entry.ev && entry.ev.type === "moved" && entry.ev.data ? entry.ev.data.to : null;
+  return html`<li class="tl-item tl-line tl-event"><span class="tl-mark" aria-hidden="true"><span class=${`tb-dot${to ? ` st-${to}` : ""}`}></span></span>
+    <span class="tl-sentence"><span class="tl-who"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null}</span> <span class="tl-text">${describe(entry.ev)}${entry.count > 1 ? html` <span class="tl-count" title=${t("taskcard.repeated", entry.count)}>×${entry.count}</span>` : null}</span></span>${time}</li>`;
 }
 
-/** The merged timeline with its filter (all, comments, progress log, history). `describe(ev)` words a history event. */
+/** A run of system lines: the lines, or — more than RUN_OPEN_MAX of them — one "› N activities" button that opens and closes them. */
+function Run({ run, describe, open, onToggle }) {
+  const n = run.entries.length;
+  return html`<li class="tl-run">
+    ${run.long ? html`<button type="button" class="tl-more" aria-expanded=${open ? "true" : "false"} onClick=${onToggle}>
+      <span class="tl-mark" aria-hidden="true"><${Icon} name="chevron" size=${14} cls=${open ? "tb-chev open" : "tb-chev"} /></span><span>${t("taskcard.activities", n)}</span></button>` : null}
+    ${open ? html`<ul class="tl-lines">${run.entries.map((e) => html`<${Entry} key=${e.key} entry=${e} describe=${describe} />`)}</ul>` : null}
+  </li>`;
+}
+
+/** The activity stream with its filter (all, comments, progress log, history). `describe(ev)` words a history event. */
 export function Timeline({ detail, describe }) {
   const [filter, setFilter] = useState("all");
+  const [toggled, setToggled] = useState({});
   const all = timelineOf(detail);
   // The number on a filter button is the number of lines the list shows for it: a run of equal history lines is one.
   const count = (f) => collapseEvents(timelineShown(all, f), describe).length;
   const shown = collapseEvents(timelineShown(all, filter), describe);
-  // A day change is a separator — only when the list spans more than one day (one day needs no heading).
+  // A day change is a separator — only when the stream spans more than one day (one day needs no heading); a run never crosses it.
   const days = new Set(shown.map((e) => dayKey(e.at)).filter(Boolean));
-  const rows = [];
+  const parts = [];
   let day = "";
   for (const e of shown) {
     const k = dayKey(e.at);
-    if (days.size > 1 && k && k !== day) rows.push(html`<li key=${`d${k}`} class="tl-day" role="presentation"><span>${dayLabel(e.at)}</span></li>`);
+    if (!parts.length || (days.size > 1 && k && k !== day)) parts.push({ day: days.size > 1 && k ? e.at : "", entries: [] });
     if (k) day = k;
-    rows.push(html`<${Entry} key=${e.key} entry=${e} describe=${describe} />`);
+    parts[parts.length - 1].entries.push(e);
+  }
+  const rows = [];
+  for (const part of parts) {
+    if (part.day) rows.push(html`<li key=${`d${dayKey(part.day)}`} class="tl-day" role="presentation"><span>${dayLabel(part.day)}</span></li>`);
+    for (const item of streamOf(part.entries, filter === "all")) {
+      if (item.kind === "card") rows.push(html`<${Entry} key=${item.entry.key} entry=${item.entry} describe=${describe} />`);
+      else {
+        const open = item.long ? toggled[item.key] === true : true;
+        rows.push(html`<${Run} key=${item.key} run=${item} describe=${describe} open=${open} onToggle=${() => setToggled((cur) => ({ ...cur, [item.key]: !open }))} />`);
+      }
+    }
   }
   return html`<section class="tl" aria-label=${t("taskcard.activity")}>
     <div class="tl-bar"><h3>${t("taskcard.activity")}</h3>

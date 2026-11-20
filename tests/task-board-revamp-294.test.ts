@@ -388,7 +388,7 @@ describe("a card is a page of its own", () => {
     expect(hist().entries.length, "one history entry for it").toBe(entries + 1);
     expect(hist().state).toEqual({ tbCard: 1 });
     expect(doc().activeElement.className).toBe("tc-head");
-    expect(qa(".tp-grid > *").map((el) => el.className), "a phone's single column is this order; the properties and the activity are the app's plain .card").toEqual(["tp-head", "tp-body", "card tp-side", "card tp-activity"]);
+    expect(qa(".tp-grid > *").map((el) => el.className), "a phone's single column is this order; the properties are the app's plain .card; the activity is a stream, not a box (AGEND-316)").toEqual(["tp-head", "tp-body", "card tp-side", "tp-activity"]);
   });
 
   it("Back (its button, or the browser's) returns to the board with the card's tile; the entry it added is gone", async () => {
@@ -683,7 +683,7 @@ describe("the timeline and the comment box on the page", () => {
     await mount();
     await openCard("M-1");
     expect(qa(".tl-item").length).toBe(7);
-    expect(qa(".tl-item").map((li) => li.className.split(" ").slice(1, 3).join(" "))).toEqual(["tl-line tl-event", "tl-line tl-event", "tl-comment person", "tl-line tl-log", "tl-comment by-agent", "tl-line tl-event", "tl-comment person"]);
+    expect(qa(".tl-item").map((li) => li.className.split(" ").slice(1, 3).join(" "))).toEqual(["tl-line tl-event", "tl-line tl-event", "tl-card tl-comment", "tl-card tl-log", "tl-card tl-comment", "tl-line tl-event", "tl-card tl-comment"]);
     expect(text(qa(".tl-comment")[2].querySelector(".tb-tag"))).toBe("Sent back");
     const filters = qa(".tl-filter button");
     expect(filters.map((b) => text(b))).toEqual(["All", "Comments 3", "Progress 1", "History 3"]);

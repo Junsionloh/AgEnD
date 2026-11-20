@@ -5,6 +5,7 @@ import { html, useEffect, useState } from "/assets/app-html.js";
 import { t, register, lang } from "/assets/app-i18n.js";
 import { appStore, createStore, useStore } from "/assets/app-store.js";
 import { identityOf, paintIdentity, useIdentityColors } from "/assets/identity-color.js";
+import { dotState } from "/assets/instance-nav.js";
 import { Dialog } from "/assets/ui-dialog.js";
 import { toast } from "/assets/ui-toast.js";
 
@@ -543,15 +544,17 @@ export function StatusPill({ status, card = null }) {
  * Who a card is with, as taskhall shows it: a round initial, then the name. An instance's initial takes its identity
  * colour (#1958, the sidebar's), painted through the CSSOM; a person's, or anyone not in the fleet, stays grey.
  */
-export function Who({ name, title, empty = "—", plain = false }) {
-  const { instances } = useStore(appStore);
+export function Who({ name, title, empty = "—", plain = false, presence = false }) {
+  const { instances, exec, awaiting } = useStore(appStore);
   useIdentityColors();
   if (!name) return html`<span class="tb-person none"><span class="tb-who">${empty}</span></span>`;
   const it = (instances || []).find((i) => i.name === name);
   const id = it ? identityOf(it) : null;
-  // `plain`: no tooltip of its own (the avatar's info card says more).
+  // `plain`: no tooltip of its own (the avatar's info card says more). `presence`: an instance the viewer sees has its state's dot
+  // on the avatar (the dashboard's own `dotState`); one they do not see has none — nothing is said of it.
+  const state = presence && it ? dotState(it, (exec || {})[name], (awaiting || {})[name]) : null;
   return html`<span class="tb-person" title=${plain ? undefined : title || name}>
-    <span class="tb-av idc" aria-hidden="true" ref=${(el) => paintIdentity(el, id)}>${initialOf(name)}</span><span class="tb-who">${name}</span></span>`;
+    <span class="tb-av idc" aria-hidden="true" ref=${(el) => paintIdentity(el, id)}>${initialOf(name)}${state ? html`<span class=${`tb-av-dot st-${state}`}></span>` : null}</span><span class="tb-who">${name}</span></span>`;
 }
 const initialOf = (name) => (Array.from(name.trim())[0] || "?").toLocaleUpperCase();
 

@@ -3226,8 +3226,14 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 .tb-person { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .tb-person > .tb-who { min-width: 0; }
 .tb-person.none > .tb-who { color: var(--text-3); }
-.tb-av { display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; border-radius: 50%; font-size: var(--fs-2xs); font-weight: var(--fw-bold); line-height: 1;
+.tb-av { position: relative; display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; border-radius: 50%; font-size: var(--fs-2xs); font-weight: var(--fw-bold); line-height: 1;
   background: color-mix(in srgb, var(--id, var(--text-3)) 16%, var(--bg)); color: var(--id-name, var(--text-2)); }
+/* An instance's state on its avatar (the dashboard's dotState; where the activity names who spoke): a small dot with a ring in the card's colour. */
+.tb-av-dot { position: absolute; right: -2px; bottom: -2px; width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); box-shadow: 0 0 0 2px var(--surface); }
+.tb-av-dot.st-working, .tb-av-dot.st-starting { background: var(--accent); }
+.tb-av-dot.st-idle { background: var(--ok); }
+.tb-av-dot.st-needs, .tb-av-dot.st-stuck { background: var(--warn); }
+.tb-av-dot.st-crashed { background: var(--danger); }
 .tb-tile-stats { display: inline-flex; flex: none; gap: var(--s-2); font-size: var(--fs-xs); color: var(--text-3); }
 .tb-tile-stats > span, .tb-tile-subs { display: inline-flex; align-items: center; gap: 2px; }
 /* The sub tasks' count in the foot, when the status row says something else: done/total, red once one is blocked; it opens the list. */

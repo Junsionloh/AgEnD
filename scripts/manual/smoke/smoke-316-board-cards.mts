@@ -7,8 +7,9 @@
 //  7. in the list a running card's "Running" mark is before its title (after the number), not among the tags at the right;
 //  6. the project's list fills the content area like the board (same side margins; at 1440 and 1920 px), the title column takes
 //     the extra width and number / priority / assignee / time keep theirs; a phone's list is unchanged;
-//  5. the card page's activity (heading, filter, timeline) and the comment box are one panel: its own surface, radius and padding,
-//     apart from the sub tasks above it, the box inside it at the foot, everything on one inner left edge (light / dark, desk / phone);
+//  5. the card page's activity is a stream (after Multica's): each comment and progress note is a card (1px, radius, surface, padding;
+//     no bar at an agent's), what the system did is a thin row (no box), many in a row fold into "› N activities", the comment box is
+//     the last card; the stream starts on the page's left edge, as the sub tasks above it do (light / dark, desk / phone);
 //  4. the avatar on a card is a button: it opens the picker the card page has (the card does not open), a choice saves,
 //     Esc closes it and the focus returns; pointing at it shows an info card (state, what it does, cards in hand);
 //     the list's rows have the same avatar; over a read-only link it is not a button and a choice cannot be made.
@@ -57,8 +58,10 @@ function seed(c: MatrixCase) {
   sub(m1, L("Write the tests", "撰寫測試"), { assignee: "dev-b" });
   move(agent("dev-a"), s1, "claimed"); move(agent("dev-a"), s1, "done", { result: "ok" });
   move(agent("dev-a"), s2, "claimed");
+  for (const patch of [{ goal: L("Players see their weekly rank", "玩家看得到本週名次") }, { scope: L("In: ranks. Out: prizes", "做：名次。不做：獎勵") }, { context: L("See M-4", "見 M-4") }, { priority: "high" }]) board.updateCard(ANN, m1, patch);
   board.updateCard(ANN, m1, { check: [1], comment: L("Please keep the page size at 50.", "每頁請維持 50 筆。") });
   board.updateCard(agent("dev-a"), m1, { comment: L("Will do.", "好的。") });
+  board.updateCard(agent("dev-a"), m1, { log: L("Endpoint skeleton done, paging next", "端點骨架完成，接著做分頁") });
   board.updateCard(ANN, m1, { comment: L("Thanks!", "謝謝！") });
   // M-2: two sub tasks, none started: "Next".
   sub(m2, L("Price list", "價目表"), { assignee: "dev-b" });
@@ -110,18 +113,21 @@ const COLS = `(() => { const sc = document.querySelector(".tb-scroll"), s = sc.g
   return { viewport: innerWidth, scroll: Math.round(s.width), columns: cols.length, visible: cols.filter((c) => c.left >= s.left - 1 && c.right <= s.right + 1).length, widths: [...new Set(cols.map((c) => Math.round(c.width)))],
     scrolls: sc.scrollWidth > sc.clientWidth + 1, pageWidth: Math.round(document.querySelector(".tb-board-page").getBoundingClientRect().width), left: Math.round(document.querySelector(".tb-board-page").getBoundingClientRect().left), right: Math.round(innerWidth - document.querySelector(".tb-board-page").getBoundingClientRect().right), overflowX: document.documentElement.scrollWidth - innerWidth }; })()`;
 
-// The card page's activity panel: its box, its padding, and where its parts start.
-const PANEL = `(() => {
+// The card page's activity stream: its cards and rows, their boxes and where they start.
+const STREAM = `(() => {
   const p = document.querySelector(".tp-activity");
   if (!p) return null;
-  const cs = getComputedStyle(p), r = p.getBoundingClientRect(), subs = document.querySelector(".tp-subs"), box = document.querySelector(".tp-activity .tc-compose-box textarea");
-  const left = (el) => (el ? Math.round((el.getBoundingClientRect().left - r.left) * 10) / 10 : null);
-  const first = document.querySelector(".tp-activity .tl-list > li .tl-who, .tp-activity .tl-list > li .tl-head, .tp-activity .tl-list > li > .tb-dot, .tp-activity .tl-list > li > .icon");
+  const pr = p.getBoundingClientRect(), cs = getComputedStyle(p), subs = document.querySelector(".tp-subs"), head = document.querySelector(".tp-head");
   const bg = (el) => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (c !== "rgba(0, 0, 0, 0)" && c !== "transparent") return c; } return "none"; };
-  return { x: Math.round(r.left), width: Math.round(r.width), bg: cs.backgroundColor, pageBg: bg(p.parentElement), radius: cs.borderTopLeftRadius, padding: [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft], border: cs.borderTopWidth, edgeL: parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft), edgeR: parseFloat(cs.borderRightWidth) + parseFloat(cs.paddingRight),
-    heading: left(document.querySelector(".tp-activity .tl-bar h3")), filterGap: Math.round(r.right - document.querySelector(".tp-activity .tl-filter").getBoundingClientRect().right), filter: left(document.querySelector(".tp-activity .tl-filter")), first: left(first), composer: left(box),
-    boxInside: !!box && box.getBoundingClientRect().bottom <= r.bottom - parseFloat(cs.paddingBottom) - parseFloat(cs.borderBottomWidth) + 1, composerLast: p.lastElementChild === document.querySelector(".tp-activity .tc-composer"),
-    gapAboveSubs: subs ? Math.round(r.top - subs.getBoundingClientRect().bottom) : null, overflowX: document.documentElement.scrollWidth - innerWidth };
+  const box = (el) => { const c = getComputedStyle(el), r = el.getBoundingClientRect(); return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), border: c.borderTopWidth, radius: c.borderTopLeftRadius, bg: c.backgroundColor, pad: [c.paddingTop, c.paddingRight, c.paddingBottom, c.paddingLeft], fs: parseFloat(c.fontSize), color: c.color, barContent: getComputedStyle(el, "::before").content }; };
+  const cards = [...p.querySelectorAll(".tl-card")].map((c) => ({ ...box(c), agent: c.classList.contains("by-agent"), borderLeft: getComputedStyle(c).borderLeftWidth, borderLeftColor: getComputedStyle(c).borderLeftColor, borderTopColor: getComputedStyle(c).borderTopColor, lbar: c.classList.contains("lbar"), hasDot: !!c.querySelector(".tb-av-dot"), hasBadge: !!c.querySelector(".tr-by"), tag: !!c.querySelector(".tl-kind"), bodyX: c.querySelector(".tl-body") ? Math.round(c.querySelector(".tl-body").getBoundingClientRect().left + parseFloat(getComputedStyle(c.querySelector(".tl-body")).paddingLeft)) : null, nameX: Math.round(c.querySelector(".tb-who").getBoundingClientRect().left) }));
+  const lines = [...p.querySelectorAll(".tl-line")].map(box);
+  const composer = p.querySelector(".tc-composer");
+  return { x: Math.round(pr.left), page: bg(p.parentElement), cardsN: cards.length, cards, lines, more: [...p.querySelectorAll(".tl-more")].map((m) => ({ text: m.textContent.trim(), open: m.getAttribute("aria-expanded") })),
+    gaps: cards.slice(1).map((c, i) => c.y - (cards[i].y + cards[i].h)),
+    composer: composer ? { ...box(composer), last: p.lastElementChild === composer, inside: !!composer.querySelector("textarea") && !!composer.querySelector(".btn-primary") } : null,
+    edges: { stream: Math.round(pr.left), head: head ? Math.round(head.getBoundingClientRect().left) : null, subs: subs ? Math.round(subs.getBoundingClientRect().left) : null },
+    panel: p.className, overflowX: document.documentElement.scrollWidth - innerWidth };
 })()`;
 
 // The project's page and its list's columns: where the page is, and how wide each column of the first row is.
@@ -246,29 +252,37 @@ for (const c of matrix(process.env.MATRIX ?? "desk-dark-zh-TW,desk-light-en,phon
       await toggle.nth(0).click(); await page.waitForSelector(".tb-tile", { state: "attached", timeout: 10000 }); await page.waitForTimeout(300);
       if (phone) { await page.locator(".tb-status-seg .tb-seg-btn").nth(1).click(); await page.waitForTimeout(200); }
     }
-    // 5. the card page: the activity is one panel.
+    // 5. the card page: the activity is a stream.
     if (phone) { await page.locator(".tb-status-seg .tb-seg-btn").nth(1).click(); await page.waitForTimeout(200); }
     await page.locator('[data-tile="' + ids.m1 + '"] .tb-tile-title').click();
     await page.waitForSelector(".tp-activity", { timeout: 10000 });
     await page.waitForTimeout(500);
-    const panel = await page.evaluate(PANEL) as any;
-    r.panel = panel;
-    const pad = (panel?.padding ?? []) as string[];
-    chk.panelHasItsOwnSurface = !!panel && panel.bg !== panel.pageBg && panel.bg !== "rgba(0, 0, 0, 0)";
-    chk.panelRounded = !!panel && parseFloat(panel.radius) >= 8;
-    chk.panelPaddedAlike = pad.length === 4 && uniq(pad).length === 1 && parseFloat(pad[0]!) >= 12;
-    // heading and box on the left padding edge; the filter ends on the right one (beside the heading), or, wrapped under it on a
-    // narrow phone, starts on the left one
-    chk.panelOneLeftEdge = !!panel && [panel.heading, panel.composer].every((x: number | null) => x === panel.edgeL)
-      && (panel.filterGap === panel.edgeR || panel.filter === panel.edgeL);
-    chk.panelHasItsBorder = !!panel && parseFloat(panel.border) >= 1;
-    chk.panelTimelineOnItsEdge = !!panel && panel.first !== null && Math.abs(panel.first - panel.edgeL) <= 10;
-    chk.panelHoldsTheBox = !!panel && panel.boxInside && panel.composerLast;
-    chk.panelApartFromSubs = !!panel && (panel.gapAboveSubs === null || panel.gapAboveSubs >= 8);
-    chk.panelNoSideScroll = !!panel && panel.overflowX <= 0;
+    const st = await page.evaluate(STREAM) as any;
+    r.stream = st;
+    const cards = (st?.cards ?? []) as any[], lines = (st?.lines ?? []) as any[];
+    chk.streamNotAPanel = !!st && st.panel === "tp-activity";
+    chk.commentsAreCards = cards.length >= 3 && cards.every((k) => parseFloat(k.border) >= 1 && parseFloat(k.radius) >= 8 && k.bg !== st.page && uniq(k.pad).length === 1 && parseFloat(k.pad[0]) >= 12);
+    // 12px between two cards; more where a system row (a day's separator, a run) sits between them
+    chk.cardsApart = st?.gaps?.length > 0 && st.gaps.every((g: number) => g >= 12) && st.gaps.some((g: number) => g === 12);
+    chk.noBarAtAnAgent = cards.filter((k) => k.agent).length >= 1 && cards.every((k) => !k.lbar && (k.barContent === "none" || k.barContent === "normal") && k.borderLeft === k.border && k.borderLeftColor === k.borderTopColor);
+    chk.agentHeadHasDotAndBadge = cards.filter((k) => k.agent).every((k) => k.hasBadge && k.hasDot) && cards.filter((k) => !k.agent).every((k) => !k.hasBadge && !k.hasDot);
+    chk.bodyUnderTheName = cards.every((k) => k.bodyX === null || Math.abs(k.bodyX - k.nameX) <= 1);
+    chk.progressNoteIsACard = cards.some((k) => k.tag);
+    chk.systemRowsFoldAndOpen = (st?.more ?? []).length >= 1 && st.more.every((m: any) => /\d/.test(m.text) && m.open === "false");
+    chk.streamOnThePageEdge = !!st && st.edges.stream === st.edges.head && (st.edges.subs === null || st.edges.subs === st.edges.stream);
+    chk.commentBoxIsTheLastCard = !!st?.composer && st.composer.last && st.composer.inside && parseFloat(st.composer.border) >= 1 && parseFloat(st.composer.radius) >= 8 && st.composer.bg !== st.page;
+    chk.streamNoSideScroll = !!st && st.overflowX <= 0;
     await page.locator(".tp-activity").scrollIntoViewIfNeeded();
     await page.screenshot({ path: shotPath(SMOKE, c, "6-card-activity") });
-    await page.locator(".tp-activity").screenshot({ path: shotPath(SMOKE, c, "6-card-activity-panel") });
+    // Open the folded run: its lines come in.
+    await page.locator(".tp-activity .tl-more").first().click(); await page.waitForTimeout(250);
+    const opened = await page.evaluate(`document.querySelectorAll(".tp-activity .tl-event").length`) as number;
+    chk.foldOpens = opened >= 4 && (await page.locator(".tp-activity .tl-more").first().getAttribute("aria-expanded")) === "true";
+    const open2 = await page.evaluate(STREAM) as any;
+    chk.systemRowsAreThin = open2.lines.length >= 4 && open2.lines.every((l: any) => l.border === "0px" && (l.bg === "rgba(0, 0, 0, 0)" || l.bg === "transparent") && l.fs < cards[0].fs);
+    chk.systemRowsOnTheCardsEdge = open2.lines.every((l: any) => l.x === open2.cards[0].x);
+    await page.screenshot({ path: shotPath(SMOKE, c, "6-card-activity-open") });
+    await page.locator(".tp-activity").screenshot({ path: shotPath(SMOKE, c, "6-card-activity-stream") });
     await page.locator(".tp-back").first().click();
     await page.waitForSelector(".tb-tile", { state: "attached", timeout: 10000 });
     await page.waitForTimeout(300);

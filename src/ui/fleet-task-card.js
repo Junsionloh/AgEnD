@@ -45,6 +45,7 @@ register("taskcard", {
     noActivity: "Nothing yet — a comment, a progress note or a change shows here", nothingHere: "Nothing of this kind yet",
     rejectTag: "Sent back", approveTag: "Confirmed", commentTo: "Comment to {0} — @ names an instance (Ctrl+Enter sends)", commentHint: "Comment — @ names an instance (Ctrl+Enter sends)", send: "Send",
     mentionList: "Instances to mention", boardOffShort: "task board off",
+    rowMoved: "changed status from {0} to {1}", rowAssigned: "changed assignee from {0} to {1}", activities: "{0} activities",
     evCreated: "opened it", evMoved: "{0} → {1}", evAuto: " (automatic)", evAssigned: "assignee {0} → {1}", evUpdated: "changed {0}", evCommented: "commented", evLogged: "log: {0}", evWatchers: "changed watchers: {0}",
     fTitle: "title", fGoal: "goal", fScope: "scope", fContext: "context", fState: "state", fResult: "result", fBlockedReason: "blocked reason", fSize: "size",
     fPriority: "priority", fNeedsReview: "needs review", fDependsOn: "dependencies", fAcceptance: "acceptance", fProjectId: "project",
@@ -78,6 +79,7 @@ register("taskcard", {
     noActivity: "還沒有動態 — 留言、進度紀錄與變更都會出現在這裡", nothingHere: "這類還沒有內容",
     rejectTag: "退回", approveTag: "確認", commentTo: "留言給 {0} — 輸入 @ 可選 Agent（Ctrl+Enter 送出）", commentHint: "留言 — 輸入 @ 可選 Agent（Ctrl+Enter 送出）", send: "送出",
     mentionList: "可提及的 Agent", boardOffShort: "任務板已關閉",
+    rowMoved: "把狀態從 {0} 改成 {1}", rowAssigned: "把負責人從 {0} 改成 {1}", activities: "{0} 項動態",
     evCreated: "開卡", evMoved: "{0}→{1}", evAuto: "（自動）", evAssigned: "負責人 {0}→{1}", evUpdated: "修改{0}", evCommented: "留言", evLogged: "紀錄：{0}", evWatchers: "修改關注者：{0}",
     fTitle: "標題", fGoal: "目標", fScope: "範圍", fContext: "背景", fState: "目前狀態", fResult: "產出", fBlockedReason: "卡住原因", fSize: "大小",
     fPriority: "優先度", fNeedsReview: "需要確認", fDependsOn: "相依", fAcceptance: "驗收條件", fProjectId: "專案",
@@ -106,6 +108,16 @@ export function describeEvent(ev) {
     case "logged": return d.watchers ? t("taskcard.evWatchers", watcherChange(d)) : t("taskcard.evLogged", d.text || "");
     default: return ev.type;
   }
+}
+/**
+ * A history line as the activity stream's thin row says it, without who and when (AGEND-316): a sentence the name leads —
+ * "dev-a changed status from To do to In progress" — for a move and a change of assignee; every other line as `describeEvent`.
+ */
+export function describeRow(ev) {
+  const d = ev.data || {};
+  if (ev.type === "moved") return `${t("taskcard.rowMoved", t(`tasks.${d.from}`), t(`tasks.${d.to}`))}${d.auto ? t("taskcard.evAuto") : ""}${d.reason ? `: ${d.reason}` : ""}`;
+  if (ev.type === "assigned") return t("taskcard.rowAssigned", d.from || "—", d.to || "—");
+  return describeEvent(ev);
 }
 /**
  * A watcher change as the board wrote it (`data.watchers`: { added, removed }): "+ops, −dev-b" — the true minus sign, not a hyphen,
@@ -408,8 +420,8 @@ export function CardPage({ id, tick, projects, boardOff = [], doing = new Map(),
         <p class="muted tp-opened">${t("taskcard.opened", card.createdBy, relTime(card.createdAt), relTime(card.updatedAt))} · ${t("taskcard.version", card.version)}</p>
       </aside>
 
-      <div class="card tp-activity">
-        <${Timeline} detail=${detail} describe=${describeEvent} />
+      <div class="tp-activity">
+        <${Timeline} detail=${detail} describe=${describeRow} />
         ${can ? html`<${Composer} names=${mentionNames} placeholder=${card.assignee ? t("taskcard.commentTo", card.assignee) : t("taskcard.commentHint")}
           onSend=${(text) => run(() => boardApi.update(card.id, { comment: text }))} />` : null}
       </div>

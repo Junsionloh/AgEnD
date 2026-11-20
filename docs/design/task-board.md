@@ -270,19 +270,26 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   they do not see has no state line, and a dispatcher that is an instance they do not see is not named — over the link the board has
   already left out the cards of instances kept out of sight, so counts and the "doing" line cannot name one either. On a main task
   whose sub tasks are someone else's, the avatar is the main task's owner and the sub tasks' people follow it after a "›".
-  (6) *On the card's page the activity is one panel.* Its heading and filter, the timeline and the comment box are in one
-  `.tp-activity.card` — the app's plain `.card` (surface, `--r-md`, no colour of its own), padded `--s-4` on every side, set apart
-  from the sub tasks above it — with the comment box at its foot under a thin line; without a box (a read-only page) it holds the
-  timeline alone. Everything in it is on the panel's one inner left edge; the timeline's first column gives back the padding
-  (`--tp-panel-pad`), so its words still start on the page's value column, as the spec's values do. The filter, the history's ×N and
-  the Markdown are unchanged.
+  (6) *On the card's page the activity is a stream* (after Multica's activity). The heading and the filter stay on top; under them
+  two kinds of thing, by what they are: **what is said** — each comment and each progress note (the same card, a "Progress" tag on
+  the note) — is a card of its own (1px, `--r-md`, `--surface`, 16px inside, 12px apart; a head with the avatar — an instance's with
+  its state dot, the dashboard's `dotState`, and none for an instance the viewer does not see —, the name, an "Agent" badge for an
+  agent, the time with its whole time on hover; the text under the name, the chat's Markdown; no coloured bar at an agent's card);
+  **what the system did** is a thin row (no box, `--fs-xs`, secondary colour: a mark — a status change's is the status's —, a
+  sentence the name leads, "dev-a changed status from To do to In progress", the time), and more than three of them in a row between
+  two cards are one "› N activities" button, closed at first (a run of equal lines is still one line ×N; the History filter, which
+  asks for them, never folds). The comment box is the stream's last card (its text area without a box of its own, Send inside at the
+  bottom right); without a box (a read-only page) the stream is alone. Nothing here names what the viewer does not see: the stream is
+  built from the entries the host sent (over the link it has already left out a hidden instance's), and a state dot is drawn only for
+  an instance the dashboard shows. A reply to a particular comment is not offered: a comment has no "replies to" field, and no API or
+  stored data changed. The stream starts on the page's left edge, like the sub tasks and the spec above it.
   (7) *Dressed as Settings is.* Tasks reused no part of Settings' look and read as a second product; its shared pieces are now
   Settings' own, by the same classes and tokens (no colour of its own): a page head is `.s-page-head` — a 24px title with its
   badge (`.s-scope` for Archived), the project's description as the muted lead (`.s-page-lead`), the actions at the right — on
   Home and on a project; the search field is `.s-search`'s (surface fill, `--r-sm`, no border, the focus ring); the list is the
   Agent page's list — one rounded bordered container on `--surface`, its header row and each group's heading on `--surface-2`,
-  rows between thin lines, 16px inside; a project's tile and the card page's two boxes (properties, activity) are Settings' card
-  (1px border, `--r-md`, 20px inside, no shadow; the activity's heading is sentence-case at `--fs-lg`). What Settings has no
+  rows between thin lines, 16px inside; a project's tile and the card page's properties box are Settings' card
+  (1px border, `--r-md`, 20px inside, no shadow; the activity's heading is sentence-case at `--fs-lg`; the activity itself is the stream of (6)). What Settings has no
   counterpart for stays: the board's columns and white tiles (the Kanban convention taskhall's looks keep), the segmented
   Board / List switch (as the Fleet tabs are), the pills.
 - **A phone.** The board shows one status at a time (the switch is hidden on a desk; every column is drawn, a class

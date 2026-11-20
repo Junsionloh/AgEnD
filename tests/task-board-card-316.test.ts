@@ -10,8 +10,9 @@
  *    the card was drawn at, a conflict says so; Esc closes it, the focus returns; an info card on hover and on the
  *    keyboard's focus; the list's rows have it too; over a read-only link, and on a finished card, it is not a button;
  *  - the info card names nothing the viewer does not see;
- *  - the card page's activity (heading, filter, timeline) and its comment box are ONE panel — the app's plain .card, set apart
- *    from the sub tasks, the box at its foot; without a box (a read-only page) the panel holds the timeline alone.
+ *  - the card page's activity is a stream (after Multica's): a card for each comment and progress note (an agent's without a coloured
+ *    bar), a thin row for each thing the system did (more than three in a row folded into "› N activities"), the comment box the
+ *    last card; without a box (a read-only page) the stream is alone.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -125,6 +126,8 @@ const enter = (el: any) => { fire(el, "mouseenter"); fire(el, "MouseEnter"); };
 const leave = (el: any) => { fire(el, "mouseleave"); fire(el, "MouseLeave"); };
 const UI = join(process.cwd(), "src", "ui");
 const CSS = readFileSync(join(UI, "shared", "app.css"), "utf8") + "\n" + readFileSync(join(UI, "shared", "task-board.css"), "utf8");
+/** Every rule for a selector, joined (a selector can have a rule in app.css and another in task-board.css). */
+const rules = (sel: string) => { const out: string[] = []; for (let i = CSS.indexOf(`\n${sel} {`); i >= 0; i = CSS.indexOf(`\n${sel} {`, i + 1)) out.push(CSS.slice(i + 1, CSS.indexOf("}", i) + 1)); return out.join("\n"); };
 const rule = (sel: string) => { const i = CSS.indexOf(`\n${sel} {`); return i < 0 ? null : CSS.slice(i + 1, CSS.indexOf("}", i) + 1); };
 
 describe("the status line says one thing, by priority", () => {
@@ -574,109 +577,178 @@ describe("the info card", () => {
 });
 
 
-describe("the card page's activity is one panel", () => {
-  const AT = "2026-11-02T10:00:00.000Z";
-  const withActivity = () => {
+describe("the card page's activity is a stream: a card for what is said, a thin row for what the system did", () => {
+  const AT = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+  const ev = (id: number, actor: string, min: number, type = "updated", data: any = { changes: { goal: ["a", "b"] } }, actorKind = "person") => ({ id, type, actor, actorKind, at: AT(min), data });
+  const withActivity = (over: Record<string, unknown> = {}) => {
     handler = (path, method) => {
       if (path.startsWith("/ui/tasks/board")) return { rev: 1, projects: [PROJECT], cards: CARDS, boardOff: [] };
       const m = /^\/ui\/tasks\/cards\/([^/]+)$/.exec(path);
       if (m && method === "GET") {
         const c = CARDS.find((x: any) => x.id === decodeURIComponent(m[1]!)) ?? CARDS[0];
-        return { card: c, parent: null, children: CARDS.filter((x: any) => x.parentId === c.id), comments: [{ id: 1, author: "Ann", authorKind: "person", text: "Please **check** this", at: AT }],
-          logs: [{ id: 2, author: "alpha", authorKind: "instance", text: "Endpoint done", at: AT }],
-          history: [{ id: 3, type: "created", actor: "Ann", actorKind: "person", at: AT, data: {} }, { id: 4, type: "updated", actor: "Ann", actorKind: "person", at: AT, data: { changes: ["goal"] } }, { id: 5, type: "updated", actor: "Ann", actorKind: "person", at: AT, data: { changes: ["goal"] } }],
-          watchers: [], inheritedWatchers: [], leader: null, followsProgress: true };
+        return { card: c, parent: null, children: CARDS.filter((x: any) => x.parentId === c.id), watchers: [], inheritedWatchers: [], leader: null, followsProgress: true,
+          comments: [{ id: 1, author: "Ann", authorKind: "person", text: "Please **check** this", at: AT(50) }, { id: 2, author: "alpha", authorKind: "instance", text: "Will do.", at: AT(30) }],
+          logs: [{ id: 3, author: "alpha", authorKind: "instance", text: "Endpoint done", at: AT(20) }],
+          history: [ev(10, "Ann", 90, "created", {}), ev(11, "alpha", 80, "moved", { from: "open", to: "claimed", auto: true }, "instance"), ev(12, "Ann", 70, "updated", { changes: { acceptance: [] } })], ...over };
       }
       return { card: CARDS[0], notes: [] };
     };
   };
   const open = async (id: string) => { fire(tile(id).querySelector(".tb-tile-title"), "click"); await settle(12); };
-  it("heading, filter, timeline and the comment box are in one .card that is not inside the sub tasks; the box is last", async () => {
+  const kids = (el: any) => [...el.childNodes].filter((n: any) => n.nodeType === 1);
+  const listClasses = () => kids(q(".tp-activity .tl-list")).map((li: any) => li.className.split(" ").slice(0, 2).join(" "));
+  it("the stream is the page's own flow — no panel, no .card — the heading and filter on top, the comment box last", async () => {
     withActivity();
     await mount(); await open("M-1");
-    const panel = q(".tp-activity");
-    expect(panel.className).toBe("card tp-activity");
-    expect(qa(".tp-grid > *").map((el) => el.className).at(-1)).toBe("card tp-activity");
-    expect([...panel.childNodes].filter((n: any) => n.nodeType === 1).map((n: any) => n.className.split(" ")[0]), "the timeline, then the box").toEqual(["tl", "tc-composer"]);
-    expect(text(panel.querySelector(".tl-bar h3"))).toBe("Activity");
-    expect(qa(".tp-activity .tl-filter button").map((b) => text(b))).toEqual(["All", "Comments 1", "Progress 1", "History 2"]);
-    expect(panel.querySelector(".tc-composer textarea")).toBeTruthy();
+    const stream = q(".tp-activity");
+    expect(stream.className, "not a box").toBe("tp-activity");
+    expect(qa(".tp-grid > *").map((el) => el.className).at(-1)).toBe("tp-activity");
+    expect(kids(stream).map((n: any) => n.className.split(" ")[0]), "the stream, then the comment box").toEqual(["tl", "tc-composer"]);
+    expect(text(q(".tp-activity .tl-bar h3"))).toBe("Activity");
+    expect(qa(".tp-activity .tl-filter button").map((b) => text(b))).toEqual(["All", "Comments 2", "Progress 1", "History 3"]);
     expect(q(".tp-body").querySelector(".tp-activity"), "apart from the sub tasks and the spec").toBeNull();
-    expect(q(".tp-subs") === null || !panel.contains(q(".tp-subs"))).toBe(true);
   });
-  it("what it wraps behaves as before: the filter, equal history lines as ×N, Markdown in a comment", async () => {
+  it("every comment and every progress note is a card of its own; the system's lines are not cards", async () => {
     withActivity();
     await mount(); await open("M-1");
-    expect(qa(".tp-activity .tl-list > li").length, "all: created, a change ×2 as one, the log, the comment").toBe(4);
-    expect(text(q(".tp-activity .tl-list"))).toMatch(/× ?2/);
-    expect(q(".tp-activity .tl-comment .tl-body.md strong"), "Markdown").toBeTruthy();
-    fire(qa(".tp-activity .tl-filter button").find((b) => text(b).startsWith("Comments")), "click"); await settle(4);
-    expect(qa(".tp-activity .tl-list > li").length).toBe(1);
-    expect(q(".tp-activity .tl-comment")).toBeTruthy();
-    expect(q(".tp-activity .tc-composer"), "the box stays under the filter's choice").toBeTruthy();
+    // The run of history lines at the start (opened, moved, changed: three) is open; then a card each, in time order.
+    expect(listClasses()).toEqual(["tl-run", "tl-item tl-card", "tl-item tl-card", "tl-item tl-card"]);
+    expect(qa(".tl-card").map((c) => c.className.split(" ").filter((x: string) => ["tl-comment", "tl-log", "person", "by-agent"].includes(x)).join(" "))).toEqual(["tl-comment person", "tl-comment by-agent", "tl-log by-agent"]);
+    for (const line of qa(".tl-event")) {
+      expect(line.className, "a system line").toBe("tl-item tl-line tl-event");
+      expect(line.className).not.toContain("tl-card");
+    }
+    expect(qa(".tl-event").length).toBe(3);
   });
-  it("without a comment box (a read-only page) the panel holds the timeline alone", async () => {
+  it("a card's head: the avatar (an instance's with its state), the name, the Agent badge for an agent, the time (its whole time on hover); the text under the name, Markdown as before", async () => {
+    withActivity();
+    await mount(); await open("M-1");
+    const [ann, alpha, note] = qa(".tl-card");
+    expect(text(ann.querySelector(".tl-head")).startsWith("A Ann ")).toBe(true);
+    expect(ann.querySelector(".tl-head .tb-av-dot"), "a person has no state dot").toBeNull();
+    expect(ann.querySelector(".tl-head .tr-by"), "nor an Agent badge").toBeNull();
+    expect(alpha.querySelector(".tl-head .tr-by"), "an agent's badge").toBeTruthy();
+    expect(alpha.querySelector(".tl-head .tb-av-dot").className, "alpha is working: the dashboard's state, on the avatar").toContain("st-working");
+    expect(alpha.querySelector(".tl-head time").getAttribute("title"), "the whole time on hover").toMatch(/\d/);
+    expect(ann.querySelector(".tl-body.md strong"), "Markdown").toBeTruthy();
+    expect(text(note.querySelector(".tl-head .tl-kind")), "a progress note says what it is").toBe("Progress");
+    expect(text(note.querySelector(".tl-body"))).toBe("Endpoint done");
+    expect(q(".tl-comment.person .tl-kind"), "a comment has no such tag").toBeNull();
+  });
+  it("no coloured bar at an agent's card (nor any `lbar`): the badge says who it is", async () => {
+    withActivity();
+    await mount(); await open("M-1");
+    expect(qa(".tp-activity .lbar").length).toBe(0);
+    expect(qa(".tl-card.by-agent").length).toBe(2);
+    expect(CSS).not.toMatch(/\.tl-(comment|line|card|log)[^{]*by-agent[^{]*\{[^}]*lbar/);
+    expect(CSS, "no bar colour set for an entry").not.toMatch(/\.tl-[a-z.-]*\s*\{[^}]*--lbar/);
+  });
+  it("a status change's row has the status's mark and a sentence the name leads", async () => {
+    withActivity();
+    await mount(); await open("M-1");
+    const moved = qa(".tl-event")[1];
+    expect(moved.querySelector(".tl-mark .tb-dot").className).toContain("st-claimed");
+    expect(text(moved.querySelector(".tl-sentence"))).toBe("alpha Agent changed status from To do to In progress (automatic)");
+    expect(text(qa(".tl-event")[0].querySelector(".tl-sentence"))).toBe("Ann opened it");
+    const act = await import("/ui/js/fleet-task-card.js") as any;
+    expect(act.describeRow({ type: "assigned", data: { from: "alpha", to: "beta" } })).toBe("changed assignee from alpha to beta");
+    expect(act.describeRow({ type: "created", data: {} }), "the others as before").toBe(act.describeEvent({ type: "created", data: {} }));
+  });
+  it("more than three system lines between cards are one \"› N activities\" row, folded; three or fewer are open; it opens and closes", async () => {
+    const many = [ev(10, "Ann", 100, "created", {})].concat([1, 2, 3, 4, 5].map((i) => ev(10 + i, i % 2 ? "alpha" : "Ann", 95 - i, "updated", { changes: { [["goal", "scope", "context", "title", "priority"][i - 1]!]: ["a", "b"] } }, i % 2 ? "instance" : "person")));
+    withActivity({ history: many });
+    await mount(); await open("M-1");
+    const more = q(".tl-more");
+    expect(more, "a run of six folds").toBeTruthy();
+    expect(text(more)).toBe("6 activities");
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    expect(qa(".tl-event").length, "closed: no lines").toBe(0);
+    fire(more, "click"); await settle(4);
+    expect(q(".tl-more").getAttribute("aria-expanded")).toBe("true");
+    expect(qa(".tl-event").length, "open: every line").toBe(6);
+    fire(q(".tl-more"), "click"); await settle(4);
+    expect(qa(".tl-event").length, "closed again").toBe(0);
+    // The History filter asks for them: no fold.
+    fire(qa(".tp-activity .tl-filter button").find((b) => text(b).startsWith("History")), "click"); await settle(4);
+    expect(q(".tl-more")).toBeNull();
+    expect(qa(".tl-event").length).toBe(6);
+  });
+  it("the fold counts what the stream shows: equal lines already one (×N); exactly three stay open; runs between cards are folded each by itself", async () => {
+    const same = [1, 2, 3, 4].map((i) => ev(20 + i, "Ann", 100 - i));        // four equal lines: one line ×4
+    withActivity({ history: same });
+    await mount(); await open("M-1");
+    expect(q(".tl-more"), "four equal lines are one: nothing to fold").toBeNull();
+    expect(q(".tl-count").textContent).toBe("×4");
+    const act = await import("/ui/js/fleet-task-activity.js") as any;
+    const e = (key: string, type = "event") => ({ key, type, at: "2026-11-01T10:00:00Z" });
+    const s = act.streamOf([e("a"), e("b"), e("c"), e("d", "comment"), e("f"), e("g"), e("h"), e("i"), e("j", "log"), e("k")]);
+    expect(s.map((i: any) => i.kind + (i.entries ? `:${i.entries.length}${i.long ? "L" : ""}` : ""))).toEqual(["run:3", "card", "run:4L", "card", "run:1"]);
+    expect(act.RUN_OPEN_MAX).toBe(3);
+    expect(act.streamOf([e("a"), e("b"), e("c"), e("d"), e("f")], false).map((i: any) => i.long)).toEqual([false]);
+  });
+  it("without a comment box (a read-only page) the stream is alone; the card is still a card", async () => {
     withActivity();
     await p.unmount();
     const card = await import("/ui/js/fleet-task-card.js") as any;
     await p.mount(h(card.CardPage, { id: "M-1", tick: 0, projects: [PROJECT], writable: false, back: "Back to the board", onBack() {}, onOpen() {}, onStep() {}, reloadBoard() {} }));
     await settle(12);
-    const panel = q(".tp-activity");
-    expect(panel.className).toBe("card tp-activity");
-    expect([...panel.childNodes].filter((n: any) => n.nodeType === 1).map((n: any) => n.className.split(" ")[0])).toEqual(["tl"]);
+    expect(kids(q(".tp-activity")).map((n: any) => n.className.split(" ")[0])).toEqual(["tl"]);
     expect(q(".tc-composer")).toBeNull();
+    expect(qa(".tl-card").length).toBe(3);
   });
-  it("its look is Settings' card: the app's .card with a thin border, --r-md, padding alike on every side, no shadow, a sentence-case heading, a thin line above the box, tokens only", () => {
-    const panel = rule(".tp-activity.card")!;
-    expect(panel).toMatch(/--tp-panel-pad: var\(--s-5\)/);
-    expect(panel).toMatch(/padding: var\(--tp-panel-pad\)/);
-    expect(panel).toMatch(/margin: 0/);
-    expect(rule(".tp-side.card, .tp-activity.card")).toMatch(/border: 1px solid var\(--border\)/);
-    expect(rule(".tp-side.card, .tp-activity.card")).toMatch(/border-radius: var\(--r-md\)/);
-    expect(rule(".tp-side.card, .tp-activity.card")).toMatch(/box-shadow: none/);
-    expect(rule(".tl-bar > h3")).toMatch(/font-size: var\(--fs-lg\)/);
-    expect(rule(".tl-bar > h3")).toMatch(/text-transform: none/);
-    expect(rule(".tp-activity .tc-composer")).toMatch(/border-top: 1px solid var\(--border\)/);
-    expect(rule(".tp-activity .tc-composer")).toMatch(/padding-top: var\(--s-3\)/);
-    expect(rule(".tp-activity .tl-day > span")).toMatch(/background: var\(--surface\)/);
-    for (const sel of [".tp-activity.card", ".tp-side.card, .tp-activity.card", ".tp-activity .tc-composer", ".tp-activity .tl-day > span", ".tl-bar > h3"]) expect(rule(sel), sel).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i);
-    // The card is the .card of app.css (surface, radius, gap): the page does not draw its own.
-    expect(rule(".card")).toMatch(/background: var\(--surface\)/);
-    expect(rule(".card")).toMatch(/border-radius: var\(--r-md\)/);
+  it("the comment box is the last card: the card's look, Send inside it; what it does is as before", async () => {
+    withActivity();
+    await mount(); await open("M-1");
+    const box = q(".tp-activity > .tc-composer");
+    expect(kids(q(".tp-activity")).at(-1)).toBe(box);
+    expect(box.querySelector("textarea")).toBeTruthy();
+    expect(box.querySelector(".btn-primary"), "Send is in the box").toBeTruthy();
+    expect(box.querySelector("textarea").getAttribute("placeholder")).toBe("Comment to alpha — @ names an instance (Ctrl+Enter sends)");
+    const ta = box.querySelector("textarea"); ta.value = "hello"; fire(ta, "input"); await settle(3);
+    fire(ta, "keydown", { key: "Enter", ctrlKey: true, cancelable: true }); await settle(10);
+    expect(posts().map((c) => c.body)).toEqual([{ comment: "hello" }]);
   });
-  it("the timeline's words still start on the page's value column: the first column gives back the padding; a phone's lines are unchanged", () => {
-    expect(rule(".tl-line")).toMatch(/grid-template-columns: 1rem calc\(var\(--tp-label\) \+ var\(--tp-gap\) - 1rem - 2 \* var\(--s-2\) - var\(--tp-panel-pad, 0px\)\) minmax\(0, 1fr\) auto/);
-    expect(CSS, "no override of a line from inside the panel (it would beat the phone's)").not.toMatch(/\.tp-activity[^{]*\.tl-line[^{]*\{/);
-    expect(CSS).toMatch(/\n  \.tl-line \{ grid-template-columns: 1rem minmax\(0, 1fr\) auto; \}/);
+  it("it names nothing the viewer does not see: an instance not shown has no state dot and no title but the entry's own", async () => {
+    withActivity({ comments: [{ id: 1, author: "ghost", authorKind: "instance", text: "From an instance this viewer does not see", at: AT(50) }, { id: 2, author: "alpha", authorKind: "instance", text: "Seen", at: AT(40) }], logs: [], history: [ev(10, "ghost", 60, "updated", { changes: { goal: ["a", "b"] } }, "instance")] });
+    await mount(); await open("M-1");
+    const [ghost, alpha] = qa(".tl-card");
+    expect(ghost.querySelector(".tb-av-dot"), "an unseen instance: no state claimed").toBeNull();
+    expect(alpha.querySelector(".tb-av-dot"), "a seen one: its state").toBeTruthy();
+    for (const el of qa(".tp-activity [title]")) expect(el.getAttribute("title"), "no title that names a state or another instance").not.toMatch(/Running|Idle|Offline|hidden-bot/);
+    // What a link's board has left out (an instance kept out of sight) is not in the payload, so nothing here can name it.
+    withActivity({ comments: [{ id: 1, author: "Ann", authorKind: "person", text: "Only what the host sent", at: AT(50) }], logs: [], history: [] });
+    await mount(); await open("M-1");
+    expect(text(q(".tp-activity .tl-list"))).not.toContain("hidden-bot");
+    expect(qa(".tl-card").length).toBe(1);
+  });
+  it("its look: a card is 1px, --r-md, --surface, 16px; a system row is none of that, small and in the secondary colour; tokens only", () => {
+    const card = rule(".tl-card")!;
+    expect(card).toMatch(/padding: var\(--s-4\)/);
+    expect(card).toMatch(/border: 1px solid var\(--border\)/);
+    expect(card).toMatch(/border-radius: var\(--r-md\)/);
+    expect(card).toMatch(/background: var\(--surface\)/);
+    expect(rule(".tl-list")).toMatch(/gap: var\(--s-3\)/);
+    const row = rule(".tl-line, .tl-more")!;
+    expect(row).toMatch(/font-size: var\(--fs-xs\)/);
+    expect(row).toMatch(/color: var\(--text-2\)/);
+    expect(row, "a thin row: no box").not.toMatch(/border: 1px|background: var\(--surface\)/);
+    expect(rule(".tl-more:hover")).toBeTruthy();
+    // The comment box is the card's look.
+    const box = rules(".tc-composer");
+    expect(box).toMatch(/border: 1px solid var\(--border\)/);
+    expect(box).toMatch(/border-radius: var\(--r-md\)/);
+    expect(box).toMatch(/background: var\(--surface\)/);
+    expect(rules(".tc-composer > .btn")).toMatch(/align-self: flex-end/);
+    for (const sel of [".tl-card", ".tl-list", ".tl-line, .tl-more", ".tl-more:hover", ".tc-composer", ".tl-kind", ".tl-mark"]) expect(rule(sel), sel).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i);
+    expect(rule(".tb-av-dot")).toMatch(/box-shadow: 0 0 0 2px var\(--surface\)/);
+  });
+  it("a phone keeps the two forms with less inside; the panel and its padding variable are gone", () => {
+    const phone = CSS.slice(CSS.indexOf("A phone: the cards and the rows keep their forms"));
+    expect(phone).toMatch(/\.tl-card \{ padding: var\(--s-3\); \}/);
+    expect(phone).toMatch(/\.tl-line, \.tl-more \{ padding: 0 var\(--s-3\); \}/);
+    expect(CSS).not.toMatch(/--tp-panel-pad|tp-activity\.card/);
   });
 });
-
-describe("in the list, the Running mark leads the title", () => {
-  const LIST = { view: "list", group: "status", order: "manual", dir: "asc", done: "recent", subs: false };
-  it("a running row has the mark first in its title cell, before the title button; it is no longer among the row's tags", async () => {
-    await mount(LIST);
-    const cell = q('[data-row="M-1"] .tb-row-text');
-    const kids = [...cell.childNodes].filter((n: any) => n.nodeType === 1);
-    expect(kids[0].className).toContain("tr-mark");
-    expect(text(kids[0])).toBe("Running");
-    expect(kids[1].className, "then the title").toContain("tb-row-title");
-    expect(q('[data-row="M-1"] .tb-row-tags .tr-mark'), "not among the tags any more").toBeNull();
-    expect(qa('[data-row="M-1"] .tr-mark').length, "once").toBe(1);
-    expect(q('[data-row="M-2"] .tr-mark'), "a row that does not run has none").toBeNull();
-    expect([...q('[data-row="M-2"] .tb-row-text').childNodes].filter((n: any) => n.nodeType === 1)[0].className).toContain("tb-row-title");
-  });
-  it("it follows the run: the agent idle → no mark; a sub task row of a running main task is the one that runs", async () => {
-    await mount({ ...LIST, subs: true });
-    expect(q('[data-row="S-1"] .tb-row-text .tr-mark'), "the sub task in progress").toBeTruthy();
-    app.applyStatus({ uptime: 2, instances: STORE("idle") }); await settle(6);
-    expect(qa(".tb-row .tr-mark").length).toBe(0);
-  });
-  it("the mark does not take the title's cell off its column: it is a flex item that does not shrink", () => {
-    expect(rule(".tb-row-text")).toMatch(/flex: 1;/);
-    expect(CSS).toMatch(/\.tb-row-text > \.tr-mark \{ flex: none;/);
-  });
-});
-
 
 describe("Tasks is dressed as Settings is (one product)", () => {
   const LIST = { view: "list", group: "status", order: "manual", dir: "asc", done: "recent", subs: false };
