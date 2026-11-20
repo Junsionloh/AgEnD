@@ -347,7 +347,7 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tl-event > .tl-mark .tb-dot { opacity: 0.8; }
 .tl-event .tr-by { background: none; color: var(--text-3); }
 /* In a thin row an agent's badge is its robot mark on a desk (the word is its tooltip and its text for a screen reader); a phone has room for the word. */
-@media (min-width: 900px) { .tl-line .tr-by { font-size: 0; padding-inline: var(--s-1); } }
+@media (min-width: 900px) and (pointer: fine), (min-width: 900px) and (pointer: none), (min-width: 900px) and (min-height: 501px), (min-width: 1024px) { .tl-line .tr-by { font-size: 0; padding-inline: var(--s-1); } }
 .tl-event .tl-time { color: var(--text-3); }
 .tl-count { font-variant-numeric: tabular-nums; }
 .tl-who { display: inline-flex; align-items: baseline; gap: var(--s-1); min-width: 0; max-width: 100%; }
