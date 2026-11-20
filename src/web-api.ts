@@ -66,7 +66,8 @@ import { CreateInstanceArgs, CreateScheduleArgs, UpdateScheduleArgs, validateArg
 import { scheduleView } from "./web-schedules.js";
 import { DEFAULT_SCHEDULER_CONFIG } from "./scheduler/index.js";
 import type { Schedule, ScheduleRetry } from "./scheduler/types.js";
-import { CARD_PRIORITIES, CARD_SIZES, CARD_STATUSES, TaskBoardError, type Actor as BoardActor, type TaskBoard } from "./scheduler/task-board.js";
+import { CARD_PRIORITIES, CARD_SIZES, CARD_STATUSES, TaskBoardError, cardCode, type Actor as BoardActor, type TaskBoard } from "./scheduler/task-board.js";
+import { TASK_REF_SEPARATOR, cardsForRefs, taskRefBlock, taskRefCodes, taskRefView } from "./chat-task-refs.js";
 import { readStatuslineModel, resolveInstanceContext } from "./topic-commands.js";
 import { z } from "zod";
 import { ONBOARDING_BACKENDS } from "./backend-signin-pending.js";
@@ -106,7 +107,7 @@ import { claudeDocumentedModels } from "./model-catalog-defaults.js";
 import { shapeDocumentedClaudeModels, shapeWebModelCatalog } from "./web-model-groups.js";
 import { handleRuntimeRequest } from "./runtime-api.js";
 import type { RuntimeCoordinator } from "./runtime-coordinator.js";
-import { taskBoardOffNames } from "./dashboard-permissions.js";
+import { taskBoardOffIn, taskBoardOffNames } from "./dashboard-permissions.js";
 import { topicFields, type TopicDeleteOutcome } from "./instance-topic-delete.js";
 
 // ── Strict public-facing schemas ────────────────────────────────────────────
@@ -185,6 +186,12 @@ const CardMoveSchema = z.object({
   result: z.string().max(BOARD_TEXT).optional(),
   comment: z.string().max(MAX_TEXT).optional(),
   version: z.number().int().optional(),
+}).strict();
+
+/** Following a card (docs/design/task-board.md): instances to start and to stop watching it, in one write. */
+const CardWatchersSchema = z.object({
+  add: z.array(z.string().min(1).max(256)).max(10).optional(),
+  remove: z.array(z.string().min(1).max(256)).max(10).optional(),
 }).strict();
 
 const CardReorderSchema = z.object({ after: CardRef.nullable().optional(), before: CardRef.nullable().optional() }).strict();
@@ -3939,7 +3946,7 @@ export function handleWebRequest(
   // ── Task board (scheduler/task-board.ts) ──────────────
   // Reads are the session's; every write is the signed-in person's, through the same rules an instance's tools use.
 
-  if (path === "/ui/tasks/board" || path === "/ui/tasks/search" || path === "/ui/tasks/work" || path.startsWith("/ui/tasks/cards") || path.startsWith("/ui/tasks/projects")) {
+  if (path === "/ui/tasks/board" || path === "/ui/tasks/search" || path === "/ui/tasks/refs" || path === "/ui/tasks/work" || path.startsWith("/ui/tasks/cards") || path.startsWith("/ui/tasks/projects")) {
     const board = ctx.scheduler?.db.board;
     if (!board) { json(res, 503, { error: "The task board is not available", code: "unavailable", key: "unavailable" }); return true; }
     // M-3278 (decision 7933bf90): an admin session changes the board over the public link too, as itself (boardActor), and
@@ -3955,15 +3962,62 @@ export function handleWebRequest(
     const scope = { leaveOutAuthors: gateway ? Object.keys(ctx.fleetConfig?.instances ?? {}).filter(hiddenName) : [] };
     const hiddenRef = (ref: string | null) => { const c = ref ? board.findCard(ref) : undefined; return !!c && hidden(c); };
     const mentionsHidden = (v: unknown): boolean => (typeof v === "string" ? hiddenName(v) : !!v && typeof v === "object" && Object.values(v).some(mentionsHidden));
+    // AGEND-309: a main task kept out of sight is not numbered by its sub tasks either — a card's `parentId`, and the `parent`
+    // of its "created" event, read as none over the link (the card number alone says a main task is there).
+    // AGEND-311: nor is a card kept out of sight numbered anywhere else a card number is read: a card's `dependsOn` and
+    // `unmetDeps` (a number kept out of the list), the `dependsOn` of an "updated" event's `changes` (kept out of both its
+    // lists; a change that is then the same on both sides is not shown, nor an event with no change left), and the
+    // `cascade` / `restored` of a sub task's "moved" event (the main task it was taken down with). Each number is looked up
+    // once per request, whatever the number of cards that name it.
+    const hiddenCodes = new Map<string, boolean>();
+    const hiddenCode = (code: string): boolean => { let h = hiddenCodes.get(code); if (h === undefined) { h = hiddenRef(code); hiddenCodes.set(code, h); } return h; };
+    // …`hiddenUnmet` (over the link only) says how many of the unfinished dependencies were left out, so a card that waits for
+    // a card kept out of sight still reads as waiting (a clock, not "ready"): how many, never which.
+    const unnumbered = <T extends { parentId: string | null; dependsOn: string[]; unmetDeps: string[] }>(v: T): T & { hiddenUnmet?: number } => {
+      if (!gateway) return v;
+      const parentId = v.parentId && hiddenCode(v.parentId) ? null : v.parentId;
+      const dependsOn = v.dependsOn.filter((c) => !hiddenCode(c));
+      const unmetDeps = v.unmetDeps.filter((c) => !hiddenCode(c));
+      return { ...v, parentId, dependsOn, unmetDeps, hiddenUnmet: v.unmetDeps.length - unmetDeps.length };
+    };
+    const numbered = (v: unknown): unknown => (Array.isArray(v) ? v.filter((c) => typeof c !== "string" || !hiddenCode(c)) : v);
+    /** An event as the link may read it; null when nothing of it is left to show. */
+    const unnumberedEvent = <E extends { type: string; data: Record<string, unknown> }>(e: E): E | null => {
+      const data = e.data;
+      if (!data || typeof data !== "object") return e;
+      if (e.type === "created") return typeof data.parent === "string" && hiddenCode(data.parent) ? { ...e, data: { ...data, parent: null } } : e;
+      if (e.type === "moved") {
+        const gone = (["cascade", "restored"] as const).filter((k) => typeof data[k] === "string" && hiddenCode(data[k] as string));
+        if (!gone.length) return e;
+        const rest = { ...data };
+        for (const k of gone) delete rest[k];
+        return { ...e, data: rest };
+      }
+      if (e.type === "updated" && data.changes && typeof data.changes === "object") {
+        const { dependsOn, ...others } = data.changes as Record<string, unknown>;
+        const dep = dependsOn && typeof dependsOn === "object" ? dependsOn as { from?: unknown; to?: unknown } : null;
+        if (!dep) return e;
+        const from = numbered(dep.from), to = numbered(dep.to);
+        if (JSON.stringify(from) === JSON.stringify(dep.from) && JSON.stringify(to) === JSON.stringify(dep.to)) return e;
+        const changes = JSON.stringify(from) === JSON.stringify(to) ? others : { ...others, dependsOn: { ...dep, from, to } };
+        return Object.keys(changes).length ? { ...e, data: { ...data, changes } } : null;
+      }
+      return e;
+    };
     const shown = (d: ReturnType<typeof board.detail>): typeof d => !gateway ? d : {
       ...d,
+      card: unnumbered(d.card),
       parent: d.card.parentId && hiddenRef(d.card.parentId) ? null : d.parent,
-      children: d.children.filter((c) => !hidden(c)),
+      children: d.children.filter((c) => !hidden(c)).map(unnumbered),
+      watchers: d.watchers.filter((n) => !hiddenName(n)),
+      // A main task kept out of sight is not named here either: its watchers go with it (the `parent` above reads as none).
+      inheritedWatchers: d.card.parentId && hiddenRef(d.card.parentId) ? [] : d.inheritedWatchers.filter((n) => !hiddenName(n)),
+      leader: d.leader && hiddenName(d.leader.name) ? null : d.leader,       // as a project's hidden lead: read as none
       comments: d.comments.filter((e) => !hiddenName(e.author)),
       logs: d.logs.filter((e) => !hiddenName(e.author)),
-      history: d.history.filter((e) => !hiddenName(e.actor) && !mentionsHidden(e.data)),
+      history: d.history.filter((e) => !hiddenName(e.actor) && !mentionsHidden(e.data)).flatMap((e) => unnumberedEvent(e) ?? []),
     };
-    const card = /^\/ui\/tasks\/cards\/([^/]+)(?:\/(move|reorder))?$/.exec(path);
+    const card = /^\/ui\/tasks\/cards\/([^/]+)(?:\/(move|reorder|watchers))?$/.exec(path);
     const project = /^\/ui\/tasks\/projects\/(\d+)$/.exec(path);
     try {
       const ref = card ? decodeURIComponent(card[1]!) : "";
@@ -3988,7 +4042,7 @@ export function handleWebRequest(
         // #2355 review: the names a project's lead may be — the fleet's instances (a Classic-only room is not one); over the
         // public link, not a hidden one.
         const leads = Object.keys(ctx.fleetConfig?.instances ?? {}).filter((n) => !hiddenName(n)).sort();
-        const body = JSON.stringify({ rev, cards: board.views(cards, scope, ctx.dispatcherGone), projects, leads, boardOff, stats: board.projectStats(ctx.dispatcherGone) });
+        const body = JSON.stringify({ rev, cards: board.views(cards, scope, ctx.dispatcherGone).map(unnumbered), projects, leads, boardOff, stats: board.projectStats(ctx.dispatcherGone) });
         if (key) boardBodies.set(board, { key, body });
         jsonText(res, 200, body);
         return true;
@@ -4009,7 +4063,7 @@ export function handleWebRequest(
         const works = names.map((name) => ({ name, w: byName.get(name)! }));
         const all = new Map<string, Parameters<typeof board.views>[0][number]>();
         for (const { w } of works) for (const c of [...w.doing, ...w.blocked, ...w.review, ...w.ready, ...w.waiting.map((x) => x.card), ...w.mains.map((x) => x.card)]) if (!hidden(c)) all.set(c.uuid, c);
-        const viewOf = new Map(board.views([...all.values()], scope, ctx.dispatcherGone).map((v) => [v.uuid, v]));
+        const viewOf = new Map(board.views([...all.values()], scope, ctx.dispatcherGone).map((v) => [v.uuid, unnumbered(v)]));
         const drawn = (cards: Array<{ uuid: string }>) => cards.flatMap((c) => (viewOf.has(c.uuid) ? [viewOf.get(c.uuid)!] : []));
         const codes = (cards: Array<{ card: { uuid: string; code: string } }>) => cards.filter((x) => all.has(x.card.uuid)).map((x) => x.card.code);
         const body = JSON.stringify({ instances: works.map(({ name, w }) => ({
@@ -4025,7 +4079,7 @@ export function handleWebRequest(
       if (method === "GET" && path === "/ui/tasks/search") {
         const names = new Map(board.listProjects(true).map((p) => [p.id, p.name]));
         const hits = board.search(url.searchParams.get("q") ?? "", Number(url.searchParams.get("limit")) || 20, scope).filter((h) => !hidden(h.card));
-        const views = board.views(hits.map((h) => h.card), scope, ctx.dispatcherGone);
+        const views = board.views(hits.map((h) => h.card), scope, ctx.dispatcherGone).map(unnumbered);
         const results = hits.map(({ card: c, match }, i) => ({
           card: views[i],
           match,
@@ -4033,6 +4087,20 @@ export function handleWebRequest(
           parentTitle: c.parent && !hiddenRef(c.parent) ? board.findCard(c.parent)?.title ?? null : null,
         }));
         json(res, 200, { results });
+        return true;
+      }
+      if (method === "GET" && path === "/ui/tasks/refs") {
+        // AGEND-298: a card as a chat shows it — number, title, status, who has it — and the cards offered while `#` is typed.
+        // `?codes=M-3,S-4` answers those that are cards (the others are left out, not an error); `?q=` (what follows the `#`,
+        // empty for the latest changes) offers cards. Over the public link, not a card that names a hidden instance.
+        const wanted = url.searchParams.get("codes");
+        if (wanted !== null) {
+          const codes = [...new Set(wanted.split(",").map((c) => cardCode(c.trim().replace(/^#/, ""))).filter((c): c is string => !!c))].slice(0, 50);
+          json(res, 200, { refs: cardsForRefs(board, codes, hidden).map(taskRefView) });
+          return true;
+        }
+        const limit = Number(url.searchParams.get("limit")) || 8;
+        json(res, 200, { refs: board.suggest((url.searchParams.get("q") ?? "").slice(0, 100), limit, (c) => !hidden(c)).map(taskRefView) });
         return true;
       }
       if (method === "GET" && card && !card[2]) {
@@ -4053,6 +4121,11 @@ export function handleWebRequest(
           boardWrite(req, res, url, ctx, board, CardMoveSchema, ({ to, ...move }, person) => {
             const { card: moved, said } = board.moveCard(person, ref, to, move);
             return { card: board.view(moved, {}, ctx.dispatcherGone), notes: said };
+          });
+        } else if (card[2] === "watchers") {
+          boardWrite(req, res, url, ctx, board, CardWatchersSchema, (change, person) => {
+            const { card: watched, watchers, said } = board.setWatchers(person, ref, change);
+            return { card: board.view(watched, {}, ctx.dispatcherGone), watchers: watchers.filter((n) => !hiddenName(n)), notes: said };
           });
         } else if (card[2] === "reorder") {
           boardWrite(req, res, url, ctx, board, CardReorderSchema, ({ after, before }, person) => ({ card: board.view(board.reorder(person, ref, after ?? null, before ?? null), {}, ctx.dispatcherGone) }));
@@ -4594,6 +4667,17 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
       }
       // The same tags and meta a Telegram photo/document produces, so the agent needs nothing new.
       const delivery = attachmentDelivery(typed, files);
+      // AGEND-298: the task cards the person's words name (`#M-3`, typed or chosen from the list), read from the board now, go to
+      // the agent as a short block under them, so it need not guess. Nothing is added for a number that is no card (never was,
+      // or deleted since), for a guest (a guest has no board), for an instance whose task board is switched off (it is told
+      // nothing of the board: only the person's words go), for a line that starts with "/" (a command for the CLI, or /raw's
+      // exact paste), or for a card that names an instance hidden on the public link. The chat's copy, the channel's echo and
+      // the receipt's "what was typed" stay the person's words.
+      const taskBoard = guest || taskBoardOffIn(ctx.fleetConfig, instance) || /^\s*\//.test(typed) ? undefined : ctx.scheduler?.db.board;
+      const { hidden: hiddenCard } = boardHiding(ctx, linkRestricted(req, new URL(req.url ?? "/", "http://localhost"), ctx));
+      const refCards = taskBoard ? cardsForRefs(taskBoard, taskRefCodes(typed), hiddenCard) : [];
+      const refBlock = taskBoard && refCards.length ? taskRefBlock(taskBoard, refCards, { hint: !native, hidden: hiddenCard }) : "";
+      const deliveredText = delivery.text + refBlock;
       // #1269: `/raw ` is pasted into the CLI with no [user:] envelope (the daemon's own check, on this exact text).
       // M-3278 (decision 7933bf90): the public link's admin session may do that too, as a local one may; anyone else
       // over the link (a guest) still may not.
@@ -4628,7 +4712,7 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
       if(nativeRequestId && ctx.nativeInstanceRuntime){
         const previous=ctx.nativeInstanceRuntime().get(instance)?.turns.find(turn=>turn.id===nativeRequestId);
         if(previous){
-          if(previous.prompt!==delivery.text){json(res,409,{error:"clientId belongs to a different message"});return;}
+          if(previous.prompt!==delivery.text&&!previous.prompt.startsWith(delivery.text+TASK_REF_SEPARATOR)){json(res,409,{error:"clientId belongs to a different message"});return;}   // the card block under it is read afresh on a retry
           acceptedId=messageId;json(res,200,{sent:true,messageId,repeated:true});return;
         }
       }
@@ -4680,7 +4764,7 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
           : ctx.deliverToInstance(name, payload, { stillCurrent, ...(native ? { authorityCurrent } : {}) });
         delivered = await deliver(instance, {
           type: "fleet_inbound",
-          content: delivery.text,
+          content: deliveredText,
           ...(nativeRequestId ? {requestId:nativeRequestId} : {}),
           targetSession: instance,
           meta: {

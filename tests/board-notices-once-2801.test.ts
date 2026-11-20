@@ -1,7 +1,7 @@
 /**
  * #2801 (subtraction ③): one card sent 6–10 notices (163 on the host in 7 days). Now a card notifies only when its
- * status or assignee changes, and only to the one instance that acts next. A comment notifies nobody; neither does a
- * confirmation (the work is finished). An auto-review with gaps is one notice, to the dispatcher. News whose maker
+ * status or assignee changes, and only to the one instance that acts next. A confirmation notifies nobody (the work is
+ * finished); a comment did not either, until comments and @mentions woke (tests/task-board-comment-wakes.test.ts). An auto-review with gaps is one notice, to the dispatcher. News whose maker
  * messaged the recipient about the card within 2 minutes is not repeated (#2785 (c), widened). A notice still waiting
  * is withdrawn once every card on it has changed again.
  *
@@ -83,7 +83,9 @@ describe("#2801: one card's life — who is told what (the issue's table)", () =
     board.updateCard(REV, card.code, { comment: "mind the cache" });
     board.updateCard(LEAD, card.code, { comment: "see #12" });
     board.updateCard(ANN, card.code, { comment: "weekly, not daily" });
-    expect(settle()).toEqual([]);                                     // comments: nobody
+    // Comments wake since (tests/task-board-comment-wakes.test.ts; #2801's "a comment notifies nobody" no longer stands): the
+    // assignee is told once for the three in the window — the last one quoted, the two before it counted — and reads them on the card.
+    expect(settle()).toEqual([["dev-a", has('new comment from Ann: "weekly, not daily" (+2 earlier comments: task get')]]);
     board.moveCard(DEV, card.code, "blocked", { reason: "which API?" });
     expect(settle()).toEqual([["lead", has('you handed it out and it is blocked (@dev-a): "which API?"')]]);
     board.moveCard(LEAD, card.code, "claimed", { comment: "the v2 one" });

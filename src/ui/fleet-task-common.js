@@ -28,7 +28,7 @@ register("tasks", {
     emptyBoard: "No main tasks here yet", emptyFiltered: "No main tasks match the filter",
     emptyBoardHint: "A main task is an outcome you want. Assign it to an instance: it does a small one directly and splits a big one into sub tasks.",
     subProgress: "Sub tasks {0}/{1}", showSubs: "Show sub tasks", hideSubs: "Hide sub tasks", olderSubs: "{0} more finished earlier",
-    acceptance: "Acceptance", definition: "Definition of done", waitsFor: "Waits for {0}", comments: "Comments", agentReplied: "An instance replied",
+    acceptance: "Acceptance", definition: "Definition of done", waitsFor: "Waits for {0}", hiddenWait: "a card that is not public", hiddenWaitN: "{0} cards that are not public", comments: "Comments", agentReplied: "An instance replied",
     needsReview: "Needs review", needsReviewTitle: "Stops at review for your confirmation", urgentTag: "Urgent", highTag: "High",
     waitingTitle: "Waiting for you", waitingEmpty: "Nothing is waiting for you.", confirm: "Confirm", sendBack: "Send back", answer: "Answer",
     confirmed: "{0} confirmed", sentBack: "{0} sent back", answered: "Answered {0}",
@@ -73,6 +73,9 @@ register("tasks", {
     "err.dep_cycle": "These dependencies would wait on each other forever: {0}", "err.conflict": "{0} was changed meanwhile (last by {1})",
     "err.signed_in_only": "The task board takes changes from a signed-in dashboard", "err.unavailable": "The task board is not available right now", "err.not_over_public_link": "The public link can only read the board",
     "err.assignee_board_off": "{0} has the task board switched off: it cannot read or move cards. Switch it on for {0} (Settings → the agent → Dashboard access), or hand it the work in the chat",
+    // AGEND-301: the watchers a card's page sets (fleet-task-follow.js)
+    "err.watcher_unknown": "“{0}” is not one of the fleet's instances", "err.watcher_board_off": "{0} has the task board switched off: it cannot read or move cards, so a notice would reach nothing it can act on",
+    "err.watchers_max": "{0} can have at most {1} watchers", "err.watch_not_board": "{0} is not a card on the board: only cards can be watched",
     "note.review_waiting": "{0} “{1}”: every sub task is done — it waits for your confirmation",
     "note.back_to": "{0} has unfinished sub tasks again: it is back to {1}", "note.deps_done": "{0}'s dependencies are all done: it can start",
     "note.deps_unmet": "Note: {0} not done yet",
@@ -83,6 +86,8 @@ register("tasks", {
     workWaitsFor: "waits for {0}", workNone: "Nothing on the board", workNewComments: "Comments it has not read yet",
     workOutside: "Not in the fleet", workFailed: "Could not read who works on what: {0}", workJoin: ", ",
     detailsBoard: "Task board",
+    // The quick create (fleet-task-create.js)
+    quickHint: "A title is enough — fill in the rest on the card.", moreOptions: "More options", createMore: "Project, assignee and priority",
   },
   "zh-TW": {
     open: "待辦", claimed: "進行中", blocked: "卡住", review: "待確認", done: "完成", cancelled: "取消",
@@ -103,7 +108,7 @@ register("tasks", {
     emptyBoard: "這個專案還沒有主任務", emptyFiltered: "沒有符合篩選的主任務",
     emptyBoardHint: "主任務是你要的成果，可大可小。指派給 Agent，它會自己決定直接做，或先拆成子任務。",
     subProgress: "子任務 {0}/{1}", showSubs: "展開子任務", hideSubs: "收起子任務", olderSubs: "另有 {0} 張比較早完成",
-    acceptance: "驗收條件", definition: "完成定義", waitsFor: "等 {0} 完成", comments: "留言", agentReplied: "Agent 有新回覆",
+    acceptance: "驗收條件", definition: "完成定義", waitsFor: "等 {0} 完成", hiddenWait: "一張不公開的卡", hiddenWaitN: "{0} 張不公開的卡", comments: "留言", agentReplied: "Agent 有新回覆",
     needsReview: "需確認", needsReviewTitle: "做完要停在待確認，等你確認", urgentTag: "緊急", highTag: "優先",
     waitingTitle: "待你處理", waitingEmpty: "沒有等你處理的事。", confirm: "確認", sendBack: "退回", answer: "回覆",
     confirmed: "已確認 {0}", sentBack: "已退回 {0}", answered: "已回覆 {0}",
@@ -148,6 +153,8 @@ register("tasks", {
     "err.dep_cycle": "相依會形成循環，大家會互相等待：{0}", "err.conflict": "{0} 已經被改過（最後由 {1} 修改）",
     "err.signed_in_only": "看板只接受已登入網頁的修改", "err.unavailable": "看板目前無法使用", "err.not_over_public_link": "公開連結只能看看板，不能修改",
     "err.assignee_board_off": "{0} 關閉了任務看板，讀不到也動不了卡片。請先替 {0} 開啟（Settings → 該 agent → Dashboard access），或改在聊天中交辦",
+    "err.watcher_unknown": "「{0}」不是 fleet 裡的 Agent", "err.watcher_board_off": "{0} 關閉了任務看板，讀不到也動不了卡片，通知送過去它也沒辦法處理",
+    "err.watchers_max": "{0} 最多只能有 {1} 個關注者", "err.watch_not_board": "{0} 不是任務板上的卡片，只有任務板上的卡片可以關注",
     "note.review_waiting": "{0}「{1}」的子任務都完成了，等你確認",
     "note.back_to": "{0} 又有沒完成的子任務，已回到{1}", "note.deps_done": "{0} 的相依都完成了，可以開始",
     "note.deps_unmet": "提醒：{0} 還沒完成",
@@ -158,6 +165,8 @@ register("tasks", {
     workWaitsFor: "等 {0}", workNone: "看板上沒有它的卡", workNewComments: "有它還沒看過的留言",
     workOutside: "不在 fleet 裡", workFailed: "讀不到工作清單：{0}", workJoin: "、",
     detailsBoard: "任務看板",
+    // 快速建立（fleet-task-create.js）
+    quickHint: "只要標題就能建立，其他欄位建立後在卡片上補。", moreOptions: "更多選項", createMore: "專案、負責人與優先度",
   },
 });
 
@@ -282,6 +291,16 @@ export function wrapUpText(card) {
 }
 
 /**
+ * AGEND-311: what a card waits for. Over the public link a card kept out of sight is not numbered: `unmetDeps` leaves it
+ * out and `hiddenUnmet` counts those left out (absent on the dashboard and for an admin session). `waitsOn` is true while
+ * any dependency is unfinished — numbered or not — `hiddenWaits` words those left out ("a card that is not public": no
+ * number, ever; "" when none) and `waitsList` words them all: the numbers, then that.
+ */
+export const waitsOn = (card) => (card.unmetDeps || []).length > 0 || card.hiddenUnmet > 0;
+export const hiddenWaits = (card) => (card.hiddenUnmet > 0 ? t(card.hiddenUnmet === 1 ? "tasks.hiddenWait" : "tasks.hiddenWaitN", card.hiddenUnmet) : "");
+export const waitsList = (card, join) => [...(card.unmetDeps || []), hiddenWaits(card)].filter(Boolean).join(join);
+
+/**
  * Who works on a main task right now: its sub tasks in progress, else the blocked ones, else those that can start
  * (dependencies done). Null when there are none, or when the main task waits for you or is finished. Its owner is not
  * always the one at work: a review step belongs to the reviewer.
@@ -293,7 +312,7 @@ export function currentWork(main, subs) {
     const cards = live.filter((s) => s.status === status);
     if (cards.length) return { label, tone, cards };
   }
-  const ready = live.filter((s) => s.status === "open" && !(s.unmetDeps || []).length);
+  const ready = live.filter((s) => s.status === "open" && !waitsOn(s));
   return ready.length ? { label: "tasks.nowNext", tone: "open", cards: ready } : null;
 }
 
@@ -348,6 +367,8 @@ export const boardApi = {
   create: (spec) => boardCall("POST", "/ui/tasks/cards", spec),
   update: (id, patch) => boardCall("POST", `/ui/tasks/cards/${enc(id)}`, patch),
   move: (id, to, input = {}) => boardCall("POST", `/ui/tasks/cards/${enc(id)}/move`, { to, ...input }),
+  /** AGEND-301: starts and stops instances watching a card (`add`, `remove`: names); a watch is not an edit, so it carries no version. */
+  watchers: (id, change) => boardCall("POST", `/ui/tasks/cards/${enc(id)}/watchers`, change),
   reorder: (id, after, before) => boardCall("POST", `/ui/tasks/cards/${enc(id)}/reorder`, { after, before }),
   search: (q) => boardCall("GET", `/ui/tasks/search?q=${enc(q)}`),
   /** #2246 step 3: each instance's work (its `task mine`), or one instance's. */
@@ -505,6 +526,14 @@ export function Who({ name, title, empty = "—" }) {
     <span class="tb-av idc" aria-hidden="true" ref=${(el) => paintIdentity(el, id)}>${initialOf(name)}</span><span class="tb-who">${name}</span></span>`;
 }
 const initialOf = (name) => (Array.from(name.trim())[0] || "?").toLocaleUpperCase();
+
+/**
+ * The element the task board's page scrolls in (the panel's body): a card's page starts at its top, and the board comes
+ * back to the place it was left. `from`: any element of the board (default: the board's root).
+ */
+export function scrollBox(from = typeof document !== "undefined" ? document.querySelector(".tb") : null) {
+  try { return (from && typeof from.closest === "function" && from.closest(".panel-body")) || null; } catch { return null; }
+}
 
 /** A per-device preference (localStorage may be unavailable: then nothing is remembered). */
 export function readStored(key, fallback) {
