@@ -464,31 +464,170 @@
      "overflowX": 0
     }
    },
-   "panel": {
+   "stream": {
     "x": 280,
-    "width": 846,
-    "bg": "rgba(0, 0, 0, 0)",
-    "pageBg": "rgb(255, 255, 255)",
-    "radius": "0px",
-    "padding": [
-     "0px",
-     "0px",
-     "0px",
-     "0px"
+    "page": "rgb(255, 255, 255)",
+    "cardsN": 0,
+    "cards": [],
+    "lines": [
+     {
+      "x": 280,
+      "y": 780,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 808,
+      "w": 846,
+      "h": 27,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 839,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 867,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 895,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 995,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 1097,
+      "w": 846,
+      "h": 27,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(13, 13, 13)",
+      "barContent": "\"\""
+     }
     ],
-    "border": "0px",
-    "edgeL": 0,
-    "edgeR": 0,
-    "heading": 0,
-    "filterGap": 0,
-    "filter": 576.1,
-    "first": 4,
-    "composer": 0,
-    "boxInside": true,
-    "composerLast": true,
-    "gapAboveSubs": 16,
+    "more": [],
+    "gaps": [],
+    "composer": {
+     "x": 280,
+     "y": 1212,
+     "w": 846,
+     "h": 90,
+     "border": "0px",
+     "radius": "0px",
+     "bg": "rgba(0, 0, 0, 0)",
+     "pad": [
+      "0px",
+      "0px",
+      "0px",
+      "0px"
+     ],
+     "fs": 15,
+     "color": "rgb(13, 13, 13)",
+     "barContent": "none",
+     "last": true,
+     "inside": true
+    },
+    "edges": {
+     "stream": 280,
+     "head": 280,
+     "subs": 280
+    },
+    "panel": "tp-activity",
     "overflowX": 0
    },
+   "error": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('.tp-activity .tl-more').first()\n",
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -508,15 +647,18 @@
     "listTitleTakesTheRest": true,
     "listNoSideScroll": true,
     "listMarkBeforeTitle": false,
-    "panelHasItsOwnSurface": false,
-    "panelRounded": false,
-    "panelPaddedAlike": false,
-    "panelOneLeftEdge": true,
-    "panelHasItsBorder": false,
-    "panelTimelineOnItsEdge": true,
-    "panelHoldsTheBox": true,
-    "panelApartFromSubs": true,
-    "panelNoSideScroll": true
+    "streamNotAPanel": true,
+    "commentsAreCards": false,
+    "cardsApart": false,
+    "noBarAtAnAgent": false,
+    "agentHeadHasDotAndBadge": true,
+    "bodyUnderTheName": true,
+    "progressNoteIsACard": false,
+    "systemRowsFoldAndOpen": false,
+    "streamOnThePageEdge": true,
+    "commentBoxIsTheLastCard": false,
+    "streamNoSideScroll": true,
+    "ranToTheEnd": false
    },
    "errors": []
   },
@@ -983,31 +1125,170 @@
      "overflowX": 0
     }
    },
-   "panel": {
+   "stream": {
     "x": 280,
-    "width": 846,
-    "bg": "rgba(0, 0, 0, 0)",
-    "pageBg": "rgb(255, 255, 255)",
-    "radius": "0px",
-    "padding": [
-     "0px",
-     "0px",
-     "0px",
-     "0px"
+    "page": "rgb(255, 255, 255)",
+    "cardsN": 0,
+    "cards": [],
+    "lines": [
+     {
+      "x": 280,
+      "y": 780,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 808,
+      "w": 846,
+      "h": 27,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 839,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 867,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 895,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 923,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 1097,
+      "w": 846,
+      "h": 27,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(13, 13, 13)",
+      "barContent": "\"\""
+     }
     ],
-    "border": "0px",
-    "edgeL": 0,
-    "edgeR": 0,
-    "heading": 0,
-    "filterGap": 0,
-    "filter": 647.5,
-    "first": 4,
-    "composer": 0,
-    "boxInside": true,
-    "composerLast": true,
-    "gapAboveSubs": 16,
+    "more": [],
+    "gaps": [],
+    "composer": {
+     "x": 280,
+     "y": 1212,
+     "w": 846,
+     "h": 90,
+     "border": "0px",
+     "radius": "0px",
+     "bg": "rgba(0, 0, 0, 0)",
+     "pad": [
+      "0px",
+      "0px",
+      "0px",
+      "0px"
+     ],
+     "fs": 15,
+     "color": "rgb(13, 13, 13)",
+     "barContent": "none",
+     "last": true,
+     "inside": true
+    },
+    "edges": {
+     "stream": 280,
+     "head": 280,
+     "subs": 280
+    },
+    "panel": "tp-activity",
     "overflowX": 0
    },
+   "error": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('.tp-activity .tl-more').first()\n",
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -1027,15 +1308,18 @@
     "listTitleTakesTheRest": true,
     "listNoSideScroll": true,
     "listMarkBeforeTitle": false,
-    "panelHasItsOwnSurface": false,
-    "panelRounded": false,
-    "panelPaddedAlike": false,
-    "panelOneLeftEdge": true,
-    "panelHasItsBorder": false,
-    "panelTimelineOnItsEdge": true,
-    "panelHoldsTheBox": true,
-    "panelApartFromSubs": true,
-    "panelNoSideScroll": true
+    "streamNotAPanel": true,
+    "commentsAreCards": false,
+    "cardsApart": false,
+    "noBarAtAnAgent": false,
+    "agentHeadHasDotAndBadge": true,
+    "bodyUnderTheName": true,
+    "progressNoteIsACard": false,
+    "systemRowsFoldAndOpen": false,
+    "streamOnThePageEdge": true,
+    "commentBoxIsTheLastCard": false,
+    "streamNoSideScroll": true,
+    "ranToTheEnd": false
    },
    "errors": []
   },
@@ -1502,31 +1786,170 @@
      "overflowX": 0
     }
    },
-   "panel": {
+   "stream": {
     "x": 280,
-    "width": 846,
-    "bg": "rgba(0, 0, 0, 0)",
-    "pageBg": "rgb(33, 33, 33)",
-    "radius": "0px",
-    "padding": [
-     "0px",
-     "0px",
-     "0px",
-     "0px"
+    "page": "rgb(33, 33, 33)",
+    "cardsN": 0,
+    "cards": [],
+    "lines": [
+     {
+      "x": 280,
+      "y": 780,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 808,
+      "w": 846,
+      "h": 27,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 839,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 867,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 895,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 995,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 1023,
+      "w": 846,
+      "h": 27,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "\"\""
+     }
     ],
-    "border": "0px",
-    "edgeL": 0,
-    "edgeR": 0,
-    "heading": 0,
-    "filterGap": 0,
-    "filter": 576.1,
-    "first": 4,
-    "composer": 0,
-    "boxInside": true,
-    "composerLast": true,
-    "gapAboveSubs": 16,
+    "more": [],
+    "gaps": [],
+    "composer": {
+     "x": 280,
+     "y": 1212,
+     "w": 846,
+     "h": 90,
+     "border": "0px",
+     "radius": "0px",
+     "bg": "rgba(0, 0, 0, 0)",
+     "pad": [
+      "0px",
+      "0px",
+      "0px",
+      "0px"
+     ],
+     "fs": 15,
+     "color": "rgb(236, 236, 236)",
+     "barContent": "none",
+     "last": true,
+     "inside": true
+    },
+    "edges": {
+     "stream": 280,
+     "head": 280,
+     "subs": 280
+    },
+    "panel": "tp-activity",
     "overflowX": 0
    },
+   "error": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('.tp-activity .tl-more').first()\n",
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -1546,15 +1969,18 @@
     "listTitleTakesTheRest": true,
     "listNoSideScroll": true,
     "listMarkBeforeTitle": false,
-    "panelHasItsOwnSurface": false,
-    "panelRounded": false,
-    "panelPaddedAlike": false,
-    "panelOneLeftEdge": true,
-    "panelHasItsBorder": false,
-    "panelTimelineOnItsEdge": true,
-    "panelHoldsTheBox": true,
-    "panelApartFromSubs": true,
-    "panelNoSideScroll": true
+    "streamNotAPanel": true,
+    "commentsAreCards": false,
+    "cardsApart": false,
+    "noBarAtAnAgent": false,
+    "agentHeadHasDotAndBadge": true,
+    "bodyUnderTheName": true,
+    "progressNoteIsACard": false,
+    "systemRowsFoldAndOpen": false,
+    "streamOnThePageEdge": true,
+    "commentBoxIsTheLastCard": false,
+    "streamNoSideScroll": true,
+    "ranToTheEnd": false
    },
    "errors": []
   },
@@ -2021,31 +2447,170 @@
      "overflowX": 0
     }
    },
-   "panel": {
+   "stream": {
     "x": 280,
-    "width": 846,
-    "bg": "rgba(0, 0, 0, 0)",
-    "pageBg": "rgb(33, 33, 33)",
-    "radius": "0px",
-    "padding": [
-     "0px",
-     "0px",
-     "0px",
-     "0px"
+    "page": "rgb(33, 33, 33)",
+    "cardsN": 0,
+    "cards": [],
+    "lines": [
+     {
+      "x": 280,
+      "y": 780,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 808,
+      "w": 846,
+      "h": 27,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 839,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 867,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 895,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 995,
+      "w": 846,
+      "h": 24,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 12,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 280,
+      "y": 1097,
+      "w": 846,
+      "h": 27,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "\"\""
+     }
     ],
-    "border": "0px",
-    "edgeL": 0,
-    "edgeR": 0,
-    "heading": 0,
-    "filterGap": 0,
-    "filter": 647.5,
-    "first": 4,
-    "composer": 0,
-    "boxInside": true,
-    "composerLast": true,
-    "gapAboveSubs": 16,
+    "more": [],
+    "gaps": [],
+    "composer": {
+     "x": 280,
+     "y": 1212,
+     "w": 846,
+     "h": 90,
+     "border": "0px",
+     "radius": "0px",
+     "bg": "rgba(0, 0, 0, 0)",
+     "pad": [
+      "0px",
+      "0px",
+      "0px",
+      "0px"
+     ],
+     "fs": 15,
+     "color": "rgb(236, 236, 236)",
+     "barContent": "none",
+     "last": true,
+     "inside": true
+    },
+    "edges": {
+     "stream": 280,
+     "head": 280,
+     "subs": 280
+    },
+    "panel": "tp-activity",
     "overflowX": 0
    },
+   "error": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('.tp-activity .tl-more').first()\n",
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -2065,15 +2630,18 @@
     "listTitleTakesTheRest": true,
     "listNoSideScroll": true,
     "listMarkBeforeTitle": false,
-    "panelHasItsOwnSurface": false,
-    "panelRounded": false,
-    "panelPaddedAlike": false,
-    "panelOneLeftEdge": true,
-    "panelHasItsBorder": false,
-    "panelTimelineOnItsEdge": true,
-    "panelHoldsTheBox": true,
-    "panelApartFromSubs": true,
-    "panelNoSideScroll": true
+    "streamNotAPanel": true,
+    "commentsAreCards": false,
+    "cardsApart": false,
+    "noBarAtAnAgent": false,
+    "agentHeadHasDotAndBadge": true,
+    "bodyUnderTheName": true,
+    "progressNoteIsACard": false,
+    "systemRowsFoldAndOpen": false,
+    "streamOnThePageEdge": true,
+    "commentBoxIsTheLastCard": false,
+    "streamNoSideScroll": true,
+    "ranToTheEnd": false
    },
    "errors": []
   },
@@ -2428,31 +2996,170 @@
      "overflowX": 0
     }
    },
-   "panel": {
+   "stream": {
     "x": 16,
-    "width": 358,
-    "bg": "rgba(0, 0, 0, 0)",
-    "pageBg": "rgb(255, 255, 255)",
-    "radius": "0px",
-    "padding": [
-     "0px",
-     "0px",
-     "0px",
-     "0px"
+    "page": "rgb(255, 255, 255)",
+    "cardsN": 0,
+    "cards": [],
+    "lines": [
+     {
+      "x": 16,
+      "y": 2047,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2099,
+      "w": 358,
+      "h": 50,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2153,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2205,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2257,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2381,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2433,
+      "w": 358,
+      "h": 50,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 14,
+      "color": "rgb(13, 13, 13)",
+      "barContent": "\"\""
+     }
     ],
-    "border": "0px",
-    "edgeL": 0,
-    "edgeR": 0,
-    "heading": 0,
-    "filterGap": 71,
-    "filter": 0,
-    "first": 4,
-    "composer": 0,
-    "boxInside": true,
-    "composerLast": true,
-    "gapAboveSubs": 835,
+    "more": [],
+    "gaps": [],
+    "composer": {
+     "x": 16,
+     "y": 2645,
+     "w": 358,
+     "h": 142,
+     "border": "0px",
+     "radius": "0px",
+     "bg": "rgba(0, 0, 0, 0)",
+     "pad": [
+      "0px",
+      "0px",
+      "0px",
+      "0px"
+     ],
+     "fs": 15,
+     "color": "rgb(13, 13, 13)",
+     "barContent": "none",
+     "last": true,
+     "inside": true
+    },
+    "edges": {
+     "stream": 16,
+     "head": 16,
+     "subs": 16
+    },
+    "panel": "tp-activity",
     "overflowX": 0
    },
+   "error": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('.tp-activity .tl-more').first()\n",
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -2467,15 +3174,18 @@
     "phoneListNoSideScroll": true,
     "phoneListMarkBeforeTitle": false,
     "phoneListUnchanged": true,
-    "panelHasItsOwnSurface": false,
-    "panelRounded": false,
-    "panelPaddedAlike": false,
-    "panelOneLeftEdge": true,
-    "panelHasItsBorder": false,
-    "panelTimelineOnItsEdge": true,
-    "panelHoldsTheBox": true,
-    "panelApartFromSubs": true,
-    "panelNoSideScroll": true
+    "streamNotAPanel": true,
+    "commentsAreCards": false,
+    "cardsApart": false,
+    "noBarAtAnAgent": false,
+    "agentHeadHasDotAndBadge": true,
+    "bodyUnderTheName": true,
+    "progressNoteIsACard": false,
+    "systemRowsFoldAndOpen": false,
+    "streamOnThePageEdge": true,
+    "commentBoxIsTheLastCard": false,
+    "streamNoSideScroll": true,
+    "ranToTheEnd": false
    },
    "errors": []
   },
@@ -2830,31 +3540,170 @@
      "overflowX": 0
     }
    },
-   "panel": {
+   "stream": {
     "x": 16,
-    "width": 358,
-    "bg": "rgba(0, 0, 0, 0)",
-    "pageBg": "rgb(255, 255, 255)",
-    "radius": "0px",
-    "padding": [
-     "0px",
-     "0px",
-     "0px",
-     "0px"
+    "page": "rgb(255, 255, 255)",
+    "cardsN": 0,
+    "cards": [],
+    "lines": [
+     {
+      "x": 16,
+      "y": 1957,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2009,
+      "w": 358,
+      "h": 50,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2063,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2115,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2167,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2219,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(93, 93, 93)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2417,
+      "w": 358,
+      "h": 50,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 14,
+      "color": "rgb(13, 13, 13)",
+      "barContent": "\"\""
+     }
     ],
-    "border": "0px",
-    "edgeL": 0,
-    "edgeR": 0,
-    "heading": 0,
-    "filterGap": 0,
-    "filter": 148.8,
-    "first": 4,
-    "composer": 0,
-    "boxInside": true,
-    "composerLast": true,
-    "gapAboveSubs": 827,
+    "more": [],
+    "gaps": [],
+    "composer": {
+     "x": 16,
+     "y": 2555,
+     "w": 358,
+     "h": 142,
+     "border": "0px",
+     "radius": "0px",
+     "bg": "rgba(0, 0, 0, 0)",
+     "pad": [
+      "0px",
+      "0px",
+      "0px",
+      "0px"
+     ],
+     "fs": 15,
+     "color": "rgb(13, 13, 13)",
+     "barContent": "none",
+     "last": true,
+     "inside": true
+    },
+    "edges": {
+     "stream": 16,
+     "head": 16,
+     "subs": 16
+    },
+    "panel": "tp-activity",
     "overflowX": 0
    },
+   "error": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('.tp-activity .tl-more').first()\n",
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -2869,15 +3718,18 @@
     "phoneListNoSideScroll": true,
     "phoneListMarkBeforeTitle": false,
     "phoneListUnchanged": true,
-    "panelHasItsOwnSurface": false,
-    "panelRounded": false,
-    "panelPaddedAlike": false,
-    "panelOneLeftEdge": true,
-    "panelHasItsBorder": false,
-    "panelTimelineOnItsEdge": true,
-    "panelHoldsTheBox": true,
-    "panelApartFromSubs": true,
-    "panelNoSideScroll": true
+    "streamNotAPanel": true,
+    "commentsAreCards": false,
+    "cardsApart": false,
+    "noBarAtAnAgent": false,
+    "agentHeadHasDotAndBadge": true,
+    "bodyUnderTheName": true,
+    "progressNoteIsACard": false,
+    "systemRowsFoldAndOpen": false,
+    "streamOnThePageEdge": true,
+    "commentBoxIsTheLastCard": false,
+    "streamNoSideScroll": true,
+    "ranToTheEnd": false
    },
    "errors": []
   },
@@ -3232,31 +4084,170 @@
      "overflowX": 0
     }
    },
-   "panel": {
+   "stream": {
     "x": 16,
-    "width": 358,
-    "bg": "rgba(0, 0, 0, 0)",
-    "pageBg": "rgb(33, 33, 33)",
-    "radius": "0px",
-    "padding": [
-     "0px",
-     "0px",
-     "0px",
-     "0px"
+    "page": "rgb(33, 33, 33)",
+    "cardsN": 0,
+    "cards": [],
+    "lines": [
+     {
+      "x": 16,
+      "y": 2047,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2099,
+      "w": 358,
+      "h": 50,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2153,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2205,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2257,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2309,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2507,
+      "w": 358,
+      "h": 50,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 14,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "\"\""
+     }
     ],
-    "border": "0px",
-    "edgeL": 0,
-    "edgeR": 0,
-    "heading": 0,
-    "filterGap": 71,
-    "filter": 0,
-    "first": 4,
-    "composer": 0,
-    "boxInside": true,
-    "composerLast": true,
-    "gapAboveSubs": 835,
+    "more": [],
+    "gaps": [],
+    "composer": {
+     "x": 16,
+     "y": 2645,
+     "w": 358,
+     "h": 142,
+     "border": "0px",
+     "radius": "0px",
+     "bg": "rgba(0, 0, 0, 0)",
+     "pad": [
+      "0px",
+      "0px",
+      "0px",
+      "0px"
+     ],
+     "fs": 15,
+     "color": "rgb(236, 236, 236)",
+     "barContent": "none",
+     "last": true,
+     "inside": true
+    },
+    "edges": {
+     "stream": 16,
+     "head": 16,
+     "subs": 16
+    },
+    "panel": "tp-activity",
     "overflowX": 0
    },
+   "error": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('.tp-activity .tl-more').first()\n",
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -3271,15 +4262,18 @@
     "phoneListNoSideScroll": true,
     "phoneListMarkBeforeTitle": false,
     "phoneListUnchanged": true,
-    "panelHasItsOwnSurface": false,
-    "panelRounded": false,
-    "panelPaddedAlike": false,
-    "panelOneLeftEdge": true,
-    "panelHasItsBorder": false,
-    "panelTimelineOnItsEdge": true,
-    "panelHoldsTheBox": true,
-    "panelApartFromSubs": true,
-    "panelNoSideScroll": true
+    "streamNotAPanel": true,
+    "commentsAreCards": false,
+    "cardsApart": false,
+    "noBarAtAnAgent": false,
+    "agentHeadHasDotAndBadge": true,
+    "bodyUnderTheName": true,
+    "progressNoteIsACard": false,
+    "systemRowsFoldAndOpen": false,
+    "streamOnThePageEdge": true,
+    "commentBoxIsTheLastCard": false,
+    "streamNoSideScroll": true,
+    "ranToTheEnd": false
    },
    "errors": []
   },
@@ -3634,31 +4628,170 @@
      "overflowX": 0
     }
    },
-   "panel": {
+   "stream": {
     "x": 16,
-    "width": 358,
-    "bg": "rgba(0, 0, 0, 0)",
-    "pageBg": "rgb(33, 33, 33)",
-    "radius": "0px",
-    "padding": [
-     "0px",
-     "0px",
-     "0px",
-     "0px"
+    "page": "rgb(33, 33, 33)",
+    "cardsN": 0,
+    "cards": [],
+    "lines": [
+     {
+      "x": 16,
+      "y": 1957,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2009,
+      "w": 358,
+      "h": 50,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2063,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2115,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2167,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2291,
+      "w": 358,
+      "h": 48,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 13,
+      "color": "rgb(187, 187, 187)",
+      "barContent": "none"
+     },
+     {
+      "x": 16,
+      "y": 2343,
+      "w": 358,
+      "h": 50,
+      "border": "0px",
+      "radius": "0px",
+      "bg": "rgba(0, 0, 0, 0)",
+      "pad": [
+       "0px",
+       "0px",
+       "0px",
+       "0px"
+      ],
+      "fs": 14,
+      "color": "rgb(236, 236, 236)",
+      "barContent": "\"\""
+     }
     ],
-    "border": "0px",
-    "edgeL": 0,
-    "edgeR": 0,
-    "heading": 0,
-    "filterGap": 0,
-    "filter": 148.8,
-    "first": 4,
-    "composer": 0,
-    "boxInside": true,
-    "composerLast": true,
-    "gapAboveSubs": 827,
+    "more": [],
+    "gaps": [],
+    "composer": {
+     "x": 16,
+     "y": 2555,
+     "w": 358,
+     "h": 142,
+     "border": "0px",
+     "radius": "0px",
+     "bg": "rgba(0, 0, 0, 0)",
+     "pad": [
+      "0px",
+      "0px",
+      "0px",
+      "0px"
+     ],
+     "fs": 15,
+     "color": "rgb(236, 236, 236)",
+     "barContent": "none",
+     "last": true,
+     "inside": true
+    },
+    "edges": {
+     "stream": 16,
+     "head": 16,
+     "subs": 16
+    },
+    "panel": "tp-activity",
     "overflowX": 0
    },
+   "error": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('.tp-activity .tl-more').first()\n",
    "checks": {
     "noLeftBar": false,
     "tilePaddingEven": false,
@@ -3673,15 +4806,18 @@
     "phoneListNoSideScroll": true,
     "phoneListMarkBeforeTitle": false,
     "phoneListUnchanged": true,
-    "panelHasItsOwnSurface": false,
-    "panelRounded": false,
-    "panelPaddedAlike": false,
-    "panelOneLeftEdge": true,
-    "panelHasItsBorder": false,
-    "panelTimelineOnItsEdge": true,
-    "panelHoldsTheBox": true,
-    "panelApartFromSubs": true,
-    "panelNoSideScroll": true
+    "streamNotAPanel": true,
+    "commentsAreCards": false,
+    "cardsApart": false,
+    "noBarAtAnAgent": false,
+    "agentHeadHasDotAndBadge": true,
+    "bodyUnderTheName": true,
+    "progressNoteIsACard": false,
+    "systemRowsFoldAndOpen": false,
+    "streamOnThePageEdge": true,
+    "commentBoxIsTheLastCard": false,
+    "streamNoSideScroll": true,
+    "ranToTheEnd": false
    },
    "errors": []
   }
