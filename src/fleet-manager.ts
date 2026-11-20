@@ -7129,6 +7129,9 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
         // M-3399: a session made over the fixed link carries its identity, to outlive a restart or an update.
         linkKeyOf: id => this.publicWebLink?.keyOf?.(id) ?? null,
       });
+      // AGEND-324: a restart keeps the browsers' sign-ins (web-sessions.json). Say how many came back, so "everyone had to
+      // sign in again" can be told apart from a data directory that was replaced (none to restore). Counts only — no ids.
+      if (this.webSessions.size) this.logger.info({ restored: this.webSessions.size }, "Web sessions restored from the last run");
       this.enforceGuestSwitch();                     // #1920: guests off while the fleet was down
     }
     if (!this.returningDevices) {
