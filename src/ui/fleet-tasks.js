@@ -286,7 +286,7 @@ export function TaskBoardTab({ lease }) {
 
   return html`<div class="tb" onContextMenu=${onMenu}>
     ${writable ? null : html`<p class="tb-readonly" role="note"><${Icon} name="eye" size=${16} />${t("tasks.readOnly")}</p>`}
-    ${openId ? html`<${CardPage} key=${openId} id=${openId} tick=${tick} projects=${projects} boardOff=${boardOff} doing=${inProgressBy(cards)} writable=${writable} place=${writable ? placeOf(cards, openId, reload) : null}
+    ${openId ? html`<${CardPage} key=${openId} id=${openId} tick=${tick} projects=${projects} cards=${cards} boardOff=${boardOff} doing=${inProgressBy(cards)} writable=${writable} place=${writable ? placeOf(cards, openId, reload) : null}
       steps=${stepsOf(trail, openId, cards)} where=${where} back=${t(display.view === "list" ? "taskcard.backList" : "taskcard.backBoard")}
       onBack=${closeCard} onOpen=${openCard} onStep=${stepToCard} reloadBoard=${reload} />` : body}
     ${menuCard ? html`<${CardMenu} at=${{ x: menu.x, y: menu.y }} label=${t("taskmenu.label", menuCard.id)} onClose=${closeMenu}
@@ -648,7 +648,7 @@ function Tile({ card, dragging, flash, subs = [], runs, expanded, writable, card
   // The tile is a group, not a button: its title is the control (keyboard, screen readers); a click anywhere opens it.
   return html`<div class=${`tb-tile st-${card.status}${dragging ? " dragging" : ""}${flash ? " flash" : ""}${running ? " running" : ""}`} data-tile=${card.id}
     draggable=${writable} onDragStart=${writable ? onDragStart : undefined} onDragEnd=${writable ? onDragEnd : undefined}
-    onClick=${() => onOpen(card.id)}>
+    onClick=${(e) => { if (e.target && e.target.closest && e.target.closest(".tb-owner-pop")) return; onOpen(card.id); }}>
     <div class="tb-tile-top">
       <span class="tb-code">${card.id}</span>
       ${card.priority === "urgent" || card.priority === "high" ? html`<span class=${`tb-tag p-${card.priority}`}>${t(card.priority === "urgent" ? "tasks.urgentTag" : "tasks.highTag")}</span>` : null}

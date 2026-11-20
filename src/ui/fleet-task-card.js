@@ -45,7 +45,8 @@ register("taskcard", {
     noActivity: "Nothing yet — a comment, a progress note or a change shows here", nothingHere: "Nothing of this kind yet",
     rejectTag: "Sent back", approveTag: "Confirmed", commentTo: "Comment to {0} — @ names an instance (Ctrl+Enter sends)", commentHint: "Comment — @ names an instance (Ctrl+Enter sends)", send: "Send",
     mentionList: "Instances to mention", boardOffShort: "task board off",
-    rowMoved: "changed status from {0} to {1}", rowAssigned: "changed assignee from {0} to {1}", activities: "{0} activities",
+    rowMoved: "changed status from {0} to {1}", rowAssigned: "changed assignee from {0} to {1}", activities: "{0} activities", activity1: "1 activity",
+    logTip: "A one-line work note an agent or member wrote down — not a comment",
     evCreated: "opened it", evMoved: "{0} → {1}", evAuto: " (automatic)", evAssigned: "assignee {0} → {1}", evUpdated: "changed {0}", evCommented: "commented", evLogged: "log: {0}", evWatchers: "changed watchers: {0}",
     fTitle: "title", fGoal: "goal", fScope: "scope", fContext: "context", fState: "state", fResult: "result", fBlockedReason: "blocked reason", fSize: "size",
     fPriority: "priority", fNeedsReview: "needs review", fDependsOn: "dependencies", fAcceptance: "acceptance", fProjectId: "project",
@@ -79,7 +80,8 @@ register("taskcard", {
     noActivity: "還沒有動態 — 留言、進度紀錄與變更都會出現在這裡", nothingHere: "這類還沒有內容",
     rejectTag: "退回", approveTag: "確認", commentTo: "留言給 {0} — 輸入 @ 可選 Agent（Ctrl+Enter 送出）", commentHint: "留言 — 輸入 @ 可選 Agent（Ctrl+Enter 送出）", send: "送出",
     mentionList: "可提及的 Agent", boardOffShort: "任務板已關閉",
-    rowMoved: "把狀態從 {0} 改成 {1}", rowAssigned: "把負責人從 {0} 改成 {1}", activities: "{0} 項動態",
+    rowMoved: "把狀態從 {0} 改成 {1}", rowAssigned: "把負責人從 {0} 改成 {1}", activities: "{0} 項動態", activity1: "1 項動態",
+    logTip: "agent 或成員記下的一行工作紀錄，不是留言",
     evCreated: "開卡", evMoved: "{0}→{1}", evAuto: "（自動）", evAssigned: "負責人 {0}→{1}", evUpdated: "修改{0}", evCommented: "留言", evLogged: "紀錄：{0}", evWatchers: "修改關注者：{0}",
     fTitle: "標題", fGoal: "目標", fScope: "範圍", fContext: "背景", fState: "目前狀態", fResult: "產出", fBlockedReason: "卡住原因", fSize: "大小",
     fPriority: "優先度", fNeedsReview: "需要確認", fDependsOn: "相依", fAcceptance: "驗收條件", fProjectId: "專案",
@@ -183,7 +185,7 @@ const radioItems = (list, current, label, act) => list.map((v) => ({ key: String
  * one is among them (null: nowhere to step). `where`: the project's name for the breadcrumb (null: none). `back`: what
  * Back says. `onBack` returns to the board or list. `doing`: how many cards each instance has in progress (fleet-task-run.js).
  */
-export function CardPage({ id, tick, projects, boardOff = [], doing = new Map(), writable = true, place = null, steps = null, where = null, back, onBack, onOpen, onStep, reloadBoard }) {
+export function CardPage({ id, tick, projects, cards = [], boardOff = [], doing = new Map(), writable = true, place = null, steps = null, where = null, back, onBack, onOpen, onStep, reloadBoard }) {
   const { instances } = useStore(appStore);
   const [detail, setDetail] = useState(null);
   const [missing, setMissing] = useState(false);
@@ -421,7 +423,7 @@ export function CardPage({ id, tick, projects, boardOff = [], doing = new Map(),
       </aside>
 
       <div class="tp-activity">
-        <${Timeline} detail=${detail} describe=${describeRow} />
+        <${Timeline} detail=${detail} describe=${describeRow} cards=${cards} lead=${((projects || []).find((x) => x.id === card.projectId) || {}).leadInstance || null} />
         ${can ? html`<${Composer} names=${mentionNames} placeholder=${card.assignee ? t("taskcard.commentTo", card.assignee) : t("taskcard.commentHint")}
           onSend=${(text) => run(() => boardApi.update(card.id, { comment: text }))} />` : null}
       </div>

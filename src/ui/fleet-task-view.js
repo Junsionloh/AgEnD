@@ -422,7 +422,7 @@ function Row({ card, subs, main, flash, now, runs, subsAsRows, who, expanded, on
   // AGEND-296: its assignee (or, for a main task, a sub task's) is working on it now.
   const run = runOf(card, runs, subs);
   const bar = hasSubs ? html`<${ProgressBar} progress=${progress} /><span>${t("tasks.subProgress", progress.done, progress.total)}</span>` : null;
-  return html`<li class=${`tb-row st-${card.status}${card.kind === "sub" ? " is-sub" : ""}${flash ? " flash" : ""}${run && run.state === "working" && !run.shared ? " running" : ""}`} data-row=${card.id} onClick=${() => onOpen(card.id)}>
+  return html`<li class=${`tb-row st-${card.status}${card.kind === "sub" ? " is-sub" : ""}${flash ? " flash" : ""}${run && run.state === "working" && !run.shared ? " running" : ""}`} data-row=${card.id} onClick=${(e) => { if (e.target && e.target.closest && e.target.closest(".tb-owner-pop")) return; onOpen(card.id); }}>
     <div class="tb-row-line">
       <span class=${`tb-dot st-${card.status}`} role="img" aria-label=${t(`tasks.${card.status}`)} title=${t(`tasks.${card.status}`)}></span>
       <span class="tb-code tb-row-code">${card.id}</span>

@@ -274,10 +274,21 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   two kinds of thing, by what they are: **what is said** — each comment and each progress note (the same card, a "Progress" tag on
   the note) — is a card of its own (1px, `--r-md`, `--surface`, 16px inside, 12px apart; a head with the avatar — an instance's with
   its state dot, the dashboard's `dotState`, and none for an instance the viewer does not see —, the name, an "Agent" badge for an
-  agent, the time with its whole time on hover; the text under the name, the chat's Markdown; no coloured bar at an agent's card);
+  agent, the time with its whole time on hover; the text under the name, the chat's Markdown; no coloured bar at an agent's card).
+  The avatar is 28px and, with the name, one button that shows **the board's own info card** (`OwnerCard`, one component for
+  both): pointing at it after a short pause, the keyboard's focus at once, a tap on a phone; the pointer may go from the avatar into
+  the card (a short grace), Tab reaches its "Open Agent page" link, a tap outside, Esc, a scroll or a resize closes it and Esc gives the
+  focus back. An instance's card is the state, what it is doing, how many cards it holds and whether it leads the project, with the
+  link to its Agent page (`detailsPath`); a person's is the name and "Person", no link. Over a read-only link (a public link, a guest) the
+  card still reads but has no link (the Agent page needs a sign-in), and an instance the viewer does not see has no button and
+  no card — its name is the entry's own, nothing more. The comment's text is formatted as the instance chat's window formats
+  a message — the same renderer (headings, lists, links, inline code, tables with borders, a JSON or any other code block coloured
+  by the chat's own tokens) and the same code frame: the language, Wrap and Copy in its header, a block of more than 30 lines folded
+  until "Show all N lines", the Wrap choice kept under the chat's key; a progress note stays one plain line, its "Progress" tag and
+  filter explain themselves on hover ("a one-line work note an agent or member wrote down — not a comment");
   **what the system did** is a thin row (no box, `--fs-xs`, secondary colour: a mark — a status change's is the status's —, a
-  sentence the name leads, "dev-a changed status from To do to In progress", the time), and more than three of them in a row between
-  two cards are one "› N activities" button — an arrow and a word, no fill, border or rounding like the rows under it; pointing at it only turns the text to the primary colour, the keyboard's focus keeps its ring —, closed at first (a run of equal lines is still one line ×N; the History filter, which
+  sentence the name leads, "dev-a changed status from To do to In progress", the time), and every run of them between two cards, of
+  any length — one line too, and the first run — is one "› N activities" button ("1 activity" for one) — an arrow and a word, no fill, border or rounding like the rows under it; pointing at it only turns the text to the primary colour, the keyboard's focus keeps its ring —, closed at first (a run of equal lines is still one line ×N; the History filter, which
   asks for them, never folds). The comment box is the stream's last card (its text area without a box of its own, Send inside at the
   bottom right); without a box (a read-only page) the stream is alone. Nothing here names what the viewer does not see: the stream is
   built from the entries the host sent (over the link it has already left out a hidden instance's), and a state dot is drawn only for

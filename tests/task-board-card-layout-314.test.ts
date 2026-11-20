@@ -401,6 +401,8 @@ describe("one invisible grid: label column, value column", () => {
       return r;
     };
     await mount(); await openCard("M-1");
+    for (const b of qa(".tl-more")) fire(b, "click");
+    await settle(4);
     // AGEND-316: a history line is a thin row — a mark, the sentence (who, then what), the time; a progress note is a card.
     const lines = qa(".tl-line");
     expect(lines.length, "the history line only: the progress note is a card").toBe(1);
@@ -441,6 +443,10 @@ describe("the timeline: what is said and done leads, the history is quiet", () =
     detailWith({ comments: [], logs: [{ id: 1, author: "alpha", authorKind: "instance", text: "Endpoint done", at: ago(10) }],
       history: [ev(1, "web-user", ago(4)), ev(2, "web-user", ago(3)), ev(3, "web-user", ago(2)), ev(4, "alpha", ago(1), "moved", { from: "open", to: "claimed", auto: true }, "instance")] });
     await mount(); await openCard("M-1");
+    expect(qa(".tl-line").length, "AGEND-316: the history is folded at first").toBe(0);
+    expect(qa(".tl-more").map((b) => text(b)), "the three equal lines are one line, so the run is two lines").toEqual(["2 activities"]);
+    for (const b of qa(".tl-more")) fire(b, "click");
+    await settle(4);
     const lines = qa(".tl-line");
     expect(lines.length, "four history lines: the three equal ones are one").toBe(2);
     expect(qa(".tl-card.tl-log").length, "and the progress note is a card").toBe(1);

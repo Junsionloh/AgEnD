@@ -679,9 +679,14 @@ describe("text edits where it is read", () => {
 });
 
 describe("the timeline and the comment box on the page", () => {
+  // AGEND-316: the system's lines between cards are folded at first ("› N activities"); these tests read them, so they open every fold.
+  const unfold = async () => { for (const b of qa(".tl-more")) fire(b, "click"); await settle(4); };
   it("one list, comments with their writers, the log and the history between them; each filter shows one kind", async () => {
     await mount();
     await openCard("M-1");
+    expect(qa(".tl-item").length, "the history is folded: the cards only").toBe(4);
+    expect(qa(".tl-more").map((b) => text(b)), "a day change cuts a run: three runs of one line").toEqual(["1 activity", "1 activity", "1 activity"]);
+    await unfold();
     expect(qa(".tl-item").length).toBe(7);
     expect(qa(".tl-item").map((li) => li.className.split(" ").slice(1, 3).join(" "))).toEqual(["tl-line tl-event", "tl-line tl-event", "tl-card tl-comment", "tl-card tl-log", "tl-card tl-comment", "tl-line tl-event", "tl-card tl-comment"]);
     expect(text(qa(".tl-comment")[2].querySelector(".tb-tag"))).toBe("Sent back");
@@ -692,13 +697,14 @@ describe("the timeline and the comment box on the page", () => {
     fire(filters[2], "click"); await settle(4);
     expect(text(q(".tl-item"))).toContain("Endpoint skeleton done");
     fire(filters[0], "click"); await settle(4);
-    expect(qa(".tl-item").length).toBe(7);
+    expect(qa(".tl-item").length, "a fold opened stays open when the filter comes back").toBe(7);
   });
   it("AGEND-309: a watcher change is a history line on the card's page (not a log entry), in the existing line style and under the History filter", async () => {
     const watched = { id: 36, actor: "Ann", actorKind: "person", type: "logged", data: { text: "watchers: +beta", watchers: { added: ["beta"], removed: [] } }, at: "2026-11-04T08:00:00.000Z" };
     handler = (path, method) => (path.startsWith("/ui/tasks/board") ? { rev: 1, projects: [PROJECT], cards: CARDS } : method === "GET" ? detailOf("M-1", { history: [...ENTRIES.history, watched] }) : {});
     await mount();
     await openCard("M-1");
+    await unfold();
     expect(qa(".tl-item").length).toBe(8);
     const last = qa(".tl-item")[7];
     expect(last.className).toContain("tl-line tl-event");

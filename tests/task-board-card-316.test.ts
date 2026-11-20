@@ -11,8 +11,12 @@
  *    keyboard's focus; the list's rows have it too; over a read-only link, and on a finished card, it is not a button;
  *  - the info card names nothing the viewer does not see;
  *  - the card page's activity is a stream (after Multica's): a card for each comment and progress note (an agent's without a coloured
- *    bar), a thin row for each thing the system did (more than three in a row folded into "› N activities"), the comment box the
- *    last card; without a box (a read-only page) the stream is alone.
+ *    bar), a thin row for each thing the system did (every run between two cards folded into "› N activities", even one line),
+ *    the comment box the last card; without a box (a read-only page) the stream is alone;
+ *  - round 7: an author's avatar (28px) in the stream shows the board's own info card — pointing, the keyboard's focus, a tap —
+ *    with a link to the instance's Agent page (none over a read-only link, none for a person, no card at all for an instance the
+ *    viewer does not see); a comment is formatted as the instance chat's window formats a message (Markdown, tables, a code block
+ *    with the language, Wrap and Copy, a long one folded); the "Progress" tag and filter say on hover what a progress note is.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -124,6 +128,9 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // The harness's elements name `on<event>` props they know; Preact falls back to the prop's own casing for the others.
 const enter = (el: any) => { fire(el, "mouseenter"); fire(el, "MouseEnter"); };
 const leave = (el: any) => { fire(el, "mouseleave"); fire(el, "MouseLeave"); };
+// The keyboard's focus reaching an element, and leaving it (Preact binds `onFocusIn` under the name its DOM has; mini-dom has none).
+const focusIn = (el: any) => { fire(el, "focusin"); fire(el, "FocusIn"); };
+const focusOut = (el: any, to: any = null) => { fire(el, "focusout", { relatedTarget: to }); fire(el, "FocusOut", { relatedTarget: to }); };
 const UI = join(process.cwd(), "src", "ui");
 const CSS = readFileSync(join(UI, "shared", "app.css"), "utf8") + "\n" + readFileSync(join(UI, "shared", "task-board.css"), "utf8");
 /** Every rule for a selector, joined (a selector can have a rule in app.css and another in task-board.css). */
@@ -487,7 +494,7 @@ describe("the info card", () => {
     expect(text(q(".toc-head"))).toContain("alpha");
     expect(text(q(".toc-head .tr-mark"))).toBe("Running");
     expect(rows()).toEqual({ Now: "Working on S-1 Build the score API", Cards: "1 open · 1 in progress", Role: "Project lead", "Dispatched by": "Ann" });
-    expect(card().getAttribute("role")).toBe("tooltip");
+    expect(card().getAttribute("role"), "a card with a link in it is a dialog, not a tooltip").toBe("dialog");
     expect(chip("M-1").getAttribute("aria-describedby")).toBe(card().getAttribute("id"));
     expect(q(".tb-owner-pop").getAttribute("style") ?? "", "placed through the CSSOM, never an attribute in the markup").toMatch(/^(left: [\d.]+px; top: [\d.]+px;)?$/);
   });
@@ -497,8 +504,8 @@ describe("the info card", () => {
     expect(card(), "a quick pass").toBeNull();
     enter(chip("M-1")); await wait(300); await settle(2);
     expect(card()).toBeTruthy();
-    leave(chip("M-1")); await settle(2);
-    expect(card(), "leaving").toBeNull();
+    leave(chip("M-1")); await wait(260); await settle(2);
+    expect(card(), "leaving (after the short grace that lets the pointer reach the card)").toBeNull();
     enter(chip("M-1")); await wait(300); await settle(2);
     fire(chip("M-1"), "keydown", { key: "Escape" }); await settle(2);
     expect(card(), "Esc").toBeNull();
@@ -509,22 +516,22 @@ describe("the info card", () => {
   });
   it("the keyboard's focus shows it at once; blur hides it; one card at a time", async () => {
     await mount();
-    fire(chip("M-1"), "focus"); await settle(2);
+    focusIn(chip("M-1")); await settle(2);
     expect(card(), "at once").toBeTruthy();
     enter(chip("M-3")); await wait(300); await settle(2);
     expect(qa(".tb-owner-card").length, "pointing at a second one hides the first").toBe(1);
     expect(text(q(".toc-head"))).toContain("beta");
-    fire(chip("M-1"), "blur"); leave(chip("M-3")); await settle(2);
+    focusOut(chip("M-1")); leave(chip("M-3")); await wait(260); await settle(2);
     expect(qa(".tb-owner-card").length).toBe(0);
   });
   it("the focus coming back from the picker it opened does not show it", async () => {
     await mount();
     fire(chip("M-2"), "click"); await settle(4);
     fire(q(".tb-card-menu"), "keydown", { key: "Escape", cancelable: true }); await settle(4);
-    fire(chip("M-2"), "focus"); await settle(2);
+    focusIn(chip("M-2")); await settle(2);
     expect(card()).toBeNull();
     await wait(600);
-    fire(chip("M-2"), "blur"); fire(chip("M-2"), "focus"); await settle(2);
+    focusOut(chip("M-2")); focusIn(chip("M-2")); await settle(2);
     expect(card(), "a keyboard's focus later does").toBeTruthy();
   });
   it("what it says is from the board the viewer was sent and the instances they see", async () => {
@@ -596,6 +603,7 @@ describe("the card page's activity is a stream: a card for what is said, a thin 
   };
   const open = async (id: string) => { fire(tile(id).querySelector(".tb-tile-title"), "click"); await settle(12); };
   const kids = (el: any) => [...el.childNodes].filter((n: any) => n.nodeType === 1);
+  const unfold = async () => { for (const b of qa(".tl-more")) fire(b, "click"); await settle(4); };
   const listClasses = () => kids(q(".tp-activity .tl-list")).map((li: any) => li.className.split(" ").slice(0, 2).join(" "));
   it("the stream is the page's own flow — no panel, no .card — the heading and filter on top, the comment box last", async () => {
     withActivity();
@@ -611,8 +619,10 @@ describe("the card page's activity is a stream: a card for what is said, a thin 
   it("every comment and every progress note is a card of its own; the system's lines are not cards", async () => {
     withActivity();
     await mount(); await open("M-1");
-    // The run of history lines at the start (opened, moved, changed: three) is open; then a card each, in time order.
+    // The run of history lines at the start (opened, moved, changed: three) is one folded row; then a card each, in time order.
     expect(listClasses()).toEqual(["tl-run", "tl-item tl-card", "tl-item tl-card", "tl-item tl-card"]);
+    expect(qa(".tl-event").length, "folded: no line yet").toBe(0);
+    await unfold();
     expect(qa(".tl-card").map((c) => c.className.split(" ").filter((x: string) => ["tl-comment", "tl-log", "person", "by-agent"].includes(x)).join(" "))).toEqual(["tl-comment person", "tl-comment by-agent", "tl-log by-agent"]);
     for (const line of qa(".tl-event")) {
       expect(line.className, "a system line").toBe("tl-item tl-line tl-event");
@@ -646,6 +656,7 @@ describe("the card page's activity is a stream: a card for what is said, a thin 
   it("a status change's row has the status's mark and a sentence the name leads", async () => {
     withActivity();
     await mount(); await open("M-1");
+    await unfold();
     const moved = qa(".tl-event")[1];
     expect(moved.querySelector(".tl-mark .tb-dot").className).toContain("st-claimed");
     expect(text(moved.querySelector(".tl-sentence"))).toBe("alpha Agent changed status from To do to In progress (automatic)");
@@ -654,7 +665,7 @@ describe("the card page's activity is a stream: a card for what is said, a thin 
     expect(act.describeRow({ type: "assigned", data: { from: "alpha", to: "beta" } })).toBe("changed assignee from alpha to beta");
     expect(act.describeRow({ type: "created", data: {} }), "the others as before").toBe(act.describeEvent({ type: "created", data: {} }));
   });
-  it("more than three system lines between cards are one \"› N activities\" row, folded; three or fewer are open; it opens and closes", async () => {
+  it("every run of system lines between cards is one \"› N activities\" row, folded — one line, three or six, the first run too; it opens and closes", async () => {
     const many = [ev(10, "Ann", 100, "created", {})].concat([1, 2, 3, 4, 5].map((i) => ev(10 + i, i % 2 ? "alpha" : "Ann", 95 - i, "updated", { changes: { [["goal", "scope", "context", "title", "priority"][i - 1]!]: ["a", "b"] } }, i % 2 ? "instance" : "person")));
     withActivity({ history: many });
     await mount(); await open("M-1");
@@ -673,6 +684,18 @@ describe("the card page's activity is a stream: a card for what is said, a thin 
     expect(q(".tl-more")).toBeNull();
     expect(qa(".tl-event").length).toBe(6);
   });
+  it("a run of one line is folded too (\"1 activity\"); three lines the same; the sandwich — a comment, › N activities, a comment — is how a card with a quiet middle reads", async () => {
+    const mid = (n: number) => Array.from({ length: n }, (_, i) => ev(30 + i, i % 2 ? "alpha" : "Ann", 45 - i, "updated", { changes: { [["goal", "scope", "context"][i]!]: ["a", "b"] } }, i % 2 ? "instance" : "person"));
+    for (const [n, label] of [[1, "1 activity"], [2, "2 activities"], [3, "3 activities"]] as Array<[number, string]>) {
+      withActivity({ history: mid(n) });                                  // between the two comments (50 and 30 minutes ago)
+      await p.unmount(); await mount(); await open("M-1");
+      expect(listClasses(), `${n}: the card, the fold, the card, the log`).toEqual(["tl-item tl-card", "tl-run", "tl-item tl-card", "tl-item tl-card"]);
+      expect(text(q(".tl-more")), String(n)).toBe(label);
+      expect(qa(".tl-event").length, `${n}: closed`).toBe(0);
+      fire(q(".tl-more"), "click"); await settle(4);
+      expect(qa(".tl-event").length, `${n}: open`).toBe(n);
+    }
+  });
   it("the \"› N activities\" row has no box: no fill, no border, no rounding, the system rows' size and colour; pointing changes the text colour only; the keyboard's ring stays", () => {
     const more = rules(".tl-more");
     expect(more).toMatch(/background: none/);
@@ -688,18 +711,22 @@ describe("the card page's activity is a stream: a card for what is said, a thin 
     // The same on a phone: no rule gives it a box there.
     expect(CSS.slice(CSS.indexOf("A phone: the cards and the rows keep their forms"))).not.toMatch(/\.tl-more[^{]*\{[^}]*(background|border:)/);
   });
-  it("the fold counts what the stream shows: equal lines already one (×N); exactly three stay open; runs between cards are folded each by itself", async () => {
+  it("the fold counts what the stream shows: equal lines already one (×N); every run folded by itself, whatever its length; History never folds", async () => {
     const same = [1, 2, 3, 4].map((i) => ev(20 + i, "Ann", 100 - i));        // four equal lines: one line ×4
     withActivity({ history: same });
     await mount(); await open("M-1");
-    expect(q(".tl-more"), "four equal lines are one: nothing to fold").toBeNull();
+    expect(text(q(".tl-more")), "four equal lines are one line: \"1 activity\"").toBe("1 activity");
+    expect(q(".tl-count"), "folded: the count is inside").toBeNull();
+    await unfold();
     expect(q(".tl-count").textContent).toBe("×4");
     const act = await import("/ui/js/fleet-task-activity.js") as any;
     const e = (key: string, type = "event") => ({ key, type, at: "2026-11-01T10:00:00Z" });
-    const s = act.streamOf([e("a"), e("b"), e("c"), e("d", "comment"), e("f"), e("g"), e("h"), e("i"), e("j", "log"), e("k")]);
-    expect(s.map((i: any) => i.kind + (i.entries ? `:${i.entries.length}${i.long ? "L" : ""}` : ""))).toEqual(["run:3", "card", "run:4L", "card", "run:1"]);
-    expect(act.RUN_OPEN_MAX).toBe(3);
-    expect(act.streamOf([e("a"), e("b"), e("c"), e("d"), e("f")], false).map((i: any) => i.long)).toEqual([false]);
+    const seq = [e("a"), e("b"), e("c"), e("d", "comment"), e("f"), e("g"), e("h"), e("i"), e("j", "log"), e("k")];
+    const s = act.streamOf(seq);
+    expect(s.map((i: any) => i.kind + (i.entries ? `:${i.entries.length}${i.fold ? "F" : ""}` : ""))).toEqual(["run:3F", "card", "run:4F", "card", "run:1F"]);
+    expect(act.RUN_OPEN_MAX, "no length keeps a run open any more").toBeUndefined();
+    expect(act.streamOf([e("a")]).map((i: any) => i.fold), "one line folds").toEqual([true]);
+    expect(act.streamOf(seq, false).filter((i: any) => i.kind === "run").map((i: any) => i.fold), "the History filter shows them all, open").toEqual([false, false, false]);
   });
   it("without a comment box (a read-only page) the stream is alone; the card is still a card", async () => {
     withActivity();
@@ -762,6 +789,422 @@ describe("the card page's activity is a stream: a card for what is said, a thin 
     expect(phone).toMatch(/\.tl-card \{ padding: var\(--s-3\); \}/);
     expect(phone).toMatch(/\.tl-line, \.tl-more \{ padding: 0 var\(--s-3\); \}/);
     expect(CSS).not.toMatch(/--tp-panel-pad|tp-activity\.card/);
+  });
+});
+
+describe("round 7: an author's avatar in the stream is the board's info card, with a way to the Agent page", () => {
+  const AT = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+  const comments = (list: any[]) => {
+    handler = (path, method) => {
+      if (path.startsWith("/ui/tasks/board")) return { rev: 1, projects: [PROJECT], cards: CARDS, boardOff: [] };
+      const m = /^\/ui\/tasks\/cards\/([^/]+)$/.exec(path);
+      if (m && method === "GET") {
+        const c = CARDS.find((x: any) => x.id === decodeURIComponent(m[1]!)) ?? CARDS[0];
+        return { card: c, parent: null, children: [], watchers: [], inheritedWatchers: [], leader: null, followsProgress: true, comments: list, logs: [], history: [] };
+      }
+      return { card: CARDS[0], notes: [] };
+    };
+  };
+  const THREE = [
+    { id: 1, author: "Ann", authorKind: "person", text: "A person's comment", at: AT(50) },
+    { id: 2, author: "alpha", authorKind: "instance", text: "An agent's comment", at: AT(40) },
+    { id: 3, author: "ghost", authorKind: "instance", text: "An instance the viewer does not see", at: AT(30) },
+  ];
+  const open = async (id = "M-1") => { fire(tile(id).querySelector(".tb-tile-title"), "click"); await settle(12); };
+  const authorBtn = (who: string) => qa(".tl-who-btn").find((b) => text(b).includes(who));
+  const wrapOf = (btn: any) => btn.parentNode;
+  const pop = () => q(".tb-owner-card");
+  const rows = () => {
+    const kids = (q(".toc-rows")?.childNodes ?? []).filter((n: any) => n.nodeType === 1);
+    return Object.fromEntries(kids.filter((n: any) => n.tagName === "DT").map((dt: any) => [text(dt), text(kids[kids.indexOf(dt) + 1])]));
+  };
+  const links = () => qa('.tp-activity a[href*="/fleet/agent/"], .tb-owner-pop a');
+
+  it("the same component as the board's: one OwnerCard, drawn for both; the same card for the same instance", async () => {
+    const act = readFileSync(join(UI, "fleet-task-activity.js"), "utf8");
+    expect(act, "the stream imports the card; it has no card of its own").toMatch(/import \{[^}]*WhoCard[^}]*\} from "\.\/fleet-task-owner\.js"/);
+    expect(act).not.toMatch(/tb-owner-card|toc-head|toc-rows/);
+    const src = readFileSync(join(UI, "fleet-task-owner.js"), "utf8");
+    expect([...src.matchAll(/<\$\{OwnerCard\}/g)].length, "the board's chip and the stream's head both draw it").toBe(2);
+    await mount();
+    enter(tile("M-1").querySelector(".tb-owner-btn")); await wait(300); await settle(2);
+    const board = { cls: pop().className, head: text(q(".toc-head")), rows: rows(), link: q(".toc-open") && q(".toc-open").getAttribute("href"), role: pop().getAttribute("role") };
+    leave(tile("M-1").querySelector(".tb-owner-btn")); await wait(260); await settle(2);
+    comments(THREE);
+    await mount(); await open();
+    enter(authorBtn("alpha")); await wait(300); await settle(2);
+    expect(pop(), "the stream's card").toBeTruthy();
+    expect(pop().className).toBe(board.cls);
+    expect(pop().getAttribute("role")).toBe(board.role);
+    expect(text(q(".toc-head"))).toBe(board.head);
+    expect(rows(), "the board's facts; the stream's has no dispatcher (the comment is not a card)").toEqual({ Now: "Working on S-1 Build the score API", Cards: "1 open · 1 in progress", Role: "Project lead" });
+    expect(q(".toc-open").getAttribute("href"), "the same way to the Agent page").toBe(board.link);
+  });
+  it("an author's avatar and name are one button: ~28px, with the name; its card shows on pointing, with the Agent page link", async () => {
+    comments(THREE);
+    await mount(); await open();
+    const alpha = authorBtn("alpha")!;
+    expect(alpha.tagName).toBe("BUTTON");
+    expect(alpha.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(alpha.getAttribute("aria-expanded")).toBe("false");
+    expect(alpha.querySelector(".tb-av"), "the avatar").toBeTruthy();
+    expect(alpha.querySelector(".tb-who").textContent, "and the name").toBe("alpha");
+    enter(alpha); await settle(2);
+    expect(pop(), "not at once").toBeNull();
+    await wait(300); await settle(2);
+    expect(pop()).toBeTruthy();
+    expect(pop().getAttribute("role")).toBe("dialog");
+    expect(pop().getAttribute("aria-label")).toBe("alpha");
+    expect(text(q(".toc-head .tr-mark")), "its state, as on the board").toBe("Running");
+    const a = q(".toc-open");
+    expect(a.tagName).toBe("A");
+    expect(a.getAttribute("href"), "the instance's Agent page").toBe((await import("/assets/app-route.js") as any).detailsPath("alpha"));
+    expect(a.getAttribute("href")).toBe("/ui/fleet/agent/alpha");
+    expect(text(a)).toBe("Open Agent page");
+    expect(alpha.getAttribute("aria-expanded")).toBe("true");
+    expect(alpha.getAttribute("aria-describedby")).toBe(pop().getAttribute("id"));
+    expect(q(".tb-owner-pop").getAttribute("style") ?? "", "placed through the CSSOM, never an attribute in the markup").toMatch(/^(left: [\d.]+px; top: [\d.]+px;)?$/);
+  });
+  it("the pointer can move from the avatar into the card (a short grace); going away closes it", async () => {
+    comments(THREE);
+    await mount(); await open();
+    const alpha = authorBtn("alpha")!, box = wrapOf(alpha);
+    enter(alpha); await wait(300); await settle(2);
+    leave(box); await wait(60); enter(box); await wait(260); await settle(2);
+    expect(pop(), "back inside within the grace: still open (the link can be clicked)").toBeTruthy();
+    leave(box); await wait(260); await settle(2);
+    expect(pop(), "left for good").toBeNull();
+    enter(alpha); leave(box); await wait(300); await settle(2);
+    expect(pop(), "a quick pass shows nothing").toBeNull();
+  });
+  it("the keyboard's focus opens it at once; Tab into the link keeps it open, Tab out closes; Esc closes and gives the focus back", async () => {
+    comments(THREE);
+    await mount(); await open();
+    const alpha = authorBtn("alpha")!;
+    focusIn(alpha); await settle(2);
+    expect(pop(), "at once").toBeTruthy();
+    const link = q(".toc-open");
+    expect(link.getAttribute("tabindex"), "the link is in the Tab order").not.toBe("-1");
+    expect([...wrapOf(alpha).childNodes].filter((n: any) => n.nodeType === 1).map((n: any) => n.tagName + "." + n.className.split(" ")[0]), "the card follows the button: Tab goes there next").toEqual(["BUTTON.tl-who-btn", "DIV.tb-owner-pop"]);
+    focusOut(alpha, link); await settle(2);
+    expect(pop(), "the focus went into the card").toBeTruthy();
+    focusOut(link, doc().body); await wait(10); await settle(2);
+    expect(pop(), "the focus left it").toBeNull();
+    focusIn(alpha); await settle(2);
+    expect(pop()).toBeTruthy();
+    doc().body.focus();
+    fire(alpha, "keydown", { key: "Escape" }); await settle(2);
+    expect(pop(), "Esc").toBeNull();
+    expect(doc().activeElement, "the focus is back on the avatar").toBe(alpha);
+    expect(alpha.getAttribute("aria-expanded")).toBe("false");
+  });
+  it("a tap opens it (a phone has no hover), a second tap closes it, a tap outside closes it; a tap inside does not", async () => {
+    comments(THREE);
+    await mount(); await open();
+    const alpha = authorBtn("alpha")!;
+    fire(alpha, "click"); await settle(3);
+    expect(pop(), "a tap").toBeTruthy();
+    fire(q(".toc-head"), "pointerdown"); await settle(2);
+    expect(pop(), "a tap inside the card").toBeTruthy();
+    fire(doc().body, "pointerdown"); await settle(2);
+    expect(pop(), "a tap outside").toBeNull();
+    fire(alpha, "click"); await settle(3);
+    expect(pop()).toBeTruthy();
+    fire(alpha, "click"); await settle(3);
+    expect(pop(), "a second tap").toBeNull();
+    fire(alpha, "click"); await settle(3);
+    fire(alpha, "keydown", { key: "Escape" }); await settle(2);
+    expect(pop(), "Esc").toBeNull();
+  });
+  it("only one card at a time: the board's and the stream's, one author's and another's", async () => {
+    comments(THREE);
+    await mount(); await open();
+    fire(authorBtn("alpha"), "click"); await settle(3);
+    fire(authorBtn("Ann"), "click"); await settle(3);
+    expect(qa(".tb-owner-card").length).toBe(1);
+    expect(text(q(".toc-head"))).toContain("Ann");
+  });
+  it("a person: the name and that it is a person, nothing else — no state, no rows, no link", async () => {
+    comments(THREE);
+    await mount(); await open();
+    fire(authorBtn("Ann"), "click"); await settle(3);
+    expect(pop()).toBeTruthy();
+    expect(text(q(".toc-head"))).toBe("A Ann Person");
+    expect(q(".toc-person").textContent).toBe("Person");
+    expect(q(".toc-rows")).toBeNull();
+    expect(q(".toc-open")).toBeNull();
+    expect(pop().querySelector("a")).toBeNull();
+    i18n.setLang("zh-TW", { store: false });
+    await mount(); await open();
+    fire(authorBtn("Ann"), "click"); await settle(3);
+    expect(q(".toc-person").textContent, "in zh-TW").toBe("人");
+    i18n.setLang("en", { store: false });
+  });
+  it("an instance the viewer does not see has no card, no link and no button: its name is the entry's own, plain", async () => {
+    comments(THREE);
+    await mount(); await open();
+    expect(authorBtn("ghost"), "no button").toBeUndefined();
+    const ghost = qa(".tl-card")[2];
+    expect(ghost.querySelector(".tb-who").textContent).toBe("ghost");
+    enter(ghost.querySelector(".tl-head")); fire(ghost.querySelector(".tb-who"), "click"); await wait(300); await settle(3);
+    expect(pop()).toBeNull();
+    expect(links().filter((a) => a.getAttribute("href").endsWith("/ghost")), "no link to its page").toEqual([]);
+  });
+  it("over a public link: a seen instance has a card and no link, a person a card, an unseen instance nothing; no link to a page that needs a sign-in; the hidden name appears nowhere new", async () => {
+    comments(THREE);
+    for (const set of [{ publicLink: "1" }, { tier: "guest" }]) {
+      for (const k of ["publicLink", "linkMedia", "tier"]) delete body().dataset[k];
+      for (const [k, v] of Object.entries(set)) body().dataset[k] = v;
+      await mount(); await open();
+      fire(authorBtn("alpha"), "click"); await settle(3);
+      expect(pop(), `${JSON.stringify(set)}: it still reads`).toBeTruthy();
+      expect(text(q(".toc-head .tr-mark"))).toBe("Running");
+      expect(q(".toc-open"), "no link to the Agent page (a sign-in page)").toBeNull();
+      fire(authorBtn("Ann"), "click"); await settle(3);
+      expect(text(q(".toc-head"))).toContain("Person");
+      expect(q(".toc-open")).toBeNull();
+      expect(authorBtn("ghost")).toBeUndefined();
+      expect(links(), "not one link to an Agent page in the stream or in a card").toEqual([]);
+      expect(qa(".tp-activity a, .tb-owner-pop a").filter((a) => /\/fleet\/agent\//.test(a.getAttribute("href") ?? "")), "nor by another way").toEqual([]);
+      expect(text(q(".tp-activity")), "nothing about the unseen instance but what the entry says").not.toMatch(/hidden-bot/);
+    }
+    for (const k of ["publicLink", "linkMedia", "tier"]) delete body().dataset[k];
+  });
+  it("what gets a card, and a link: the one place that says it", () => {
+    const store = { instances: [{ name: "alpha" }] };
+    const at = (name: string, kind: string, readOnly: boolean) => owner.infoFor(name, { kind, store, readOnly });
+    expect(at("alpha", "instance", false)).toEqual({ card: true, link: "/ui/fleet/agent/alpha" });
+    expect(at("alpha", "instance", true), "read-only: the card, not the link").toEqual({ card: true, link: "" });
+    expect(at("Ann", "person", false)).toEqual({ card: true, link: "" });
+    expect(at("Ann", "person", true)).toEqual({ card: true, link: "" });
+    expect(at("ghost", "instance", false), "an instance not shown").toEqual({ card: false, link: "" });
+    expect(at("ghost", "instance", true)).toEqual({ card: false, link: "" });
+    expect(at("ghost", "", true), "an older entry of unknown kind, read-only: nothing").toEqual({ card: false, link: "" });
+    expect(at("", "instance", false)).toEqual({ card: false, link: "" });
+    expect(at("old", "none", false)).toEqual({ card: false, link: "" });
+  });
+  it("the card's words are in both languages; Open Agent page and Person in zh-TW", () => {
+    const strip = (src: string) => src.replace(/^import .*$/gm, "").replace(/^export /gm, "");
+    const ctx = vm.createContext({ navigator: { language: "en" } });
+    vm.runInContext(strip(readFileSync(join(UI, "shared", "app-i18n.js"), "utf8")), ctx);
+    const src = readFileSync(join(UI, "fleet-task-owner.js"), "utf8");
+    vm.runInContext(`(${/register\("taskowner", (\{[\s\S]*?\n\})\);/.exec(src)![0].replace(/;$/, "")})`, ctx);
+    const tables = vm.runInContext("tables", ctx) as Record<"en" | "zh-TW", Record<string, string>>;
+    expect(tables.en["taskowner.openAgent"]).toBe("Open Agent page");
+    expect(tables["zh-TW"]["taskowner.openAgent"]).toBe("開啟 Agent 頁面");
+    expect(tables.en["taskowner.person"]).toBe("Person");
+    expect(tables["zh-TW"]["taskowner.person"]).toBe("人");
+  });
+  it("its look: the author 28px (the dot scaled, the name centred with it); the text under the name; system rows keep their small marks; the link is an accent link; the card is interactive", () => {
+    expect(rule(".tl-head .tb-av")).toMatch(/width: 28px; height: 28px/);
+    expect(rule(".tl-head .tb-av-dot")).toMatch(/width: 11px; height: 11px/);
+    expect(rule(".tl-head")).toMatch(/align-items: center/);
+    expect(rule(".tl-head .tb-person")).toMatch(/align-items: center/);
+    expect(rule(".tl-who-btn")).toMatch(/align-items: center/);
+    expect(rule(".tl-body")).toMatch(/padding-left: 36px/);
+    expect(rule(".tl-mark"), "a system row's mark is as small as before").not.toMatch(/28px/);
+    expect(CSS).not.toMatch(/\.tl-(line|more|event)[^{]*\.tb-av/);
+    expect(rule(".toc-open")).toMatch(/color: var\(--accent\)/);
+    expect(rule(".toc-open:focus-visible")).toMatch(/outline: 2px solid var\(--focus\)/);
+    expect(rule(".tb-owner-pop"), "interactive: no pointer-events: none").not.toMatch(/pointer-events: none/);
+    expect(rule(".tb-owner-pop")).toMatch(/position: fixed/);
+  });
+});
+
+describe("round 7: a comment is formatted as the instance chat's window formats a message", () => {
+  const AT = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+  const AGENT_MD = [
+    "### Result", "", "Rebuilt the board with `npm run build`; see [the notes](https://example.com/notes).", "",
+    "- ties share a rank", "- late rows kept", "  - region merges too", "",
+    "| Step | Status |", "| --- | :---: |", "| build | ok |", "| test | **12 failed** |", "",
+    "```json", '{"ok": true, "scores": [1, 2, 3], "meta": {"season": "2026", "note": null}}', "```",
+  ].join("\n");
+  const PERSON_MD = ["Try this:", "", "```python", "def rank(rows):", "    return sorted(rows, key=lambda r: -r.score)", "```"].join("\n");
+  const long = Array.from({ length: 45 }, (_, i) => `line ${i + 1}`).join("\n");
+  const seed = (list: any[], logs: any[] = []) => {
+    handler = (path, method) => {
+      if (path.startsWith("/ui/tasks/board")) return { rev: 1, projects: [PROJECT], cards: CARDS, boardOff: [] };
+      const m = /^\/ui\/tasks\/cards\/([^/]+)$/.exec(path);
+      if (m && method === "GET") {
+        const c = CARDS.find((x: any) => x.id === decodeURIComponent(m[1]!)) ?? CARDS[0];
+        return { card: c, parent: null, children: [], watchers: [], inheritedWatchers: [], leader: null, followsProgress: true, comments: list, logs, history: [] };
+      }
+      return { card: CARDS[0], notes: [] };
+    };
+  };
+  const open = async () => { fire(tile("M-1").querySelector(".tb-tile-title"), "click"); await settle(12); };
+  const agentBody = () => qa(".tl-comment")[0].querySelector(".tl-body");
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let mdSeen: string[] = [];
+
+  it("an agent's comment: heading, list (nested), table, a JSON block, inline code and a link, as the chat draws them", async () => {
+    seed([{ id: 1, author: "alpha", authorKind: "instance", text: AGENT_MD, at: AT(30) }]);
+    await mount(); await open();
+    const b = agentBody();
+    expect(b.className).toContain("md");
+    expect(b.querySelector("h5").textContent, "### is the chat's h5 (it keeps the page's own headings above)").toBe("Result");
+    expect(b.querySelector("p code").textContent, "inline code").toBe("npm run build");
+    expect(b.querySelector("a").getAttribute("href")).toBe("https://example.com/notes");
+    expect([...b.querySelectorAll("li")].slice(0, 2).map((li: any) => li.childNodes[0].textContent.trim())).toEqual(["ties share a rank", "late rows kept"]);
+    expect(b.querySelector("li ul li").textContent.trim(), "a nested list").toBe("region merges too");
+    expect(b.querySelector(".tbl table"), "a table in its scrolling wrapper").toBeTruthy();
+    expect([...b.querySelectorAll("th")].map((c: any) => c.textContent)).toEqual(["Step", "Status"]);
+    expect([...b.querySelectorAll("td")].map((c: any) => c.textContent)).toEqual(["build", "ok", "test", "12 failed"]);
+    expect(b.querySelector("td strong").textContent, "inline formatting in a cell").toBe("12 failed");
+    const code = b.querySelector(".codeblock");
+    expect(code, "the JSON block is a code block").toBeTruthy();
+    expect(code.querySelector(".cb-lang").textContent).toBe("json");
+    expect(code.querySelector("pre code").textContent).toBe('{"ok": true, "scores": [1, 2, 3], "meta": {"season": "2026", "note": null}}');
+    expect(code.querySelector("pre code [class^='tk-'], pre code .tk-s, pre code .tk-k, pre code .tk-n"), "highlighted as the chat does").toBeTruthy();
+    expect(b.querySelector("p code").closest(".codeblock"), "the inline code is not in a block").toBeNull();
+  });
+  it("a code block has the chat's header: the language, Wrap and Copy; the buttons are buttons", async () => {
+    seed([{ id: 1, author: "alpha", authorKind: "instance", text: AGENT_MD, at: AT(30) }, { id: 2, author: "Ann", authorKind: "person", text: PERSON_MD, at: AT(20) }]);
+    await mount(); await open();
+    const [a, b] = qa(".codeblock");
+    expect([...a.querySelector(".cb-head").childNodes].map((n: any) => n.tagName + ":" + n.textContent)).toEqual(["SPAN:json", "BUTTON:Wrap", "BUTTON:Copy"]);
+    expect(b.querySelector(".cb-lang").textContent, "a person's block, another language").toBe("python");
+    expect(b.querySelector("pre code").textContent).toContain("def rank(rows):");
+    expect(b.querySelector("pre code").textContent).toContain("    return sorted");
+    expect([...b.querySelectorAll(".cb-head button")].map((x: any) => [x.className, x.getAttribute("type"), x.dataset.act])).toEqual([["chip-btn", "button", "toggleWrap"], ["chip-btn", "button", "copyCode"]]);
+    expect(qa(".tl-comment")[1].className, "the person's card").toContain("person");
+    i18n.setLang("zh-TW", { store: false });
+    await mount(); await open();
+    expect([...qa(".codeblock")[0].querySelectorAll(".cb-head button")].map((x: any) => x.textContent), "in zh-TW").toEqual(["換行", "複製"]);
+    i18n.setLang("en", { store: false });
+  });
+  it("Copy puts the block's text on the clipboard and says so (then says Copy again); a failure says so", async () => {
+    seed([{ id: 1, author: "Ann", authorKind: "person", text: PERSON_MD, at: AT(20) }]);
+    await mount(); await open();
+    const nav = (globalThis as any).navigator, was = { c: nav.clipboard, s: (globalThis as any).isSecureContext };
+    const writes: string[] = [];
+    nav.clipboard = { writeText: async (x: string) => { writes.push(x); } };
+    (globalThis as any).isSecureContext = true;
+    try {
+      const btn = qa(".codeblock .cb-head button")[1];
+      fire(btn, "click"); await settle(6);
+      expect(writes).toEqual([q(".codeblock pre").textContent]);
+      expect(btn.textContent).toBe("Copied");
+      await wait(1300); await settle(2);
+      expect(btn.textContent).toBe("Copy");
+      nav.clipboard = { writeText: async () => { throw new Error("no"); } };
+      doc().execCommand = () => false;
+      fire(btn, "click"); await settle(6);
+      expect(btn.textContent).toBe("Copy failed");
+    } finally { nav.clipboard = was.c; (globalThis as any).isSecureContext = was.s; delete doc().execCommand; }
+  });
+  it("a block of more than 30 lines is folded until opened (Show all N lines / Show less); a short one is not", async () => {
+    seed([{ id: 1, author: "alpha", authorKind: "instance", text: "```text\n" + long + "\n```", at: AT(30) }, { id: 2, author: "Ann", authorKind: "person", text: PERSON_MD, at: AT(20) }]);
+    await mount(); await open();
+    const [big, small] = qa(".codeblock");
+    expect(big.className).toContain("folded");
+    expect(small.className).not.toContain("folded");
+    expect(small.querySelector(".cb-more")).toBeNull();
+    const more = big.querySelector(".cb-more");
+    expect(more.textContent).toBe("Show all 45 lines");
+    fire(more, "click"); await settle(3);
+    expect(big.className).not.toContain("folded");
+    expect(more.textContent).toBe("Show less");
+    fire(more, "click"); await settle(3);
+    expect(big.className).toContain("folded");
+    expect(more.textContent).toBe("Show all 45 lines");
+    const R = (globalThis as any).AgendChatRender;
+    expect(R.CODE_FOLD_LINES, "the chat's own limit").toBe(30);
+  });
+  it("Wrap turns on wrapping for the stream's code and the choice is kept (the chat's storage key); again turns it off", async () => {
+    seed([{ id: 1, author: "Ann", authorKind: "person", text: PERSON_MD, at: AT(20) }]);
+    const ls = (globalThis as any).localStorage;
+    ls.removeItem("agend_code_wrap");
+    await mount(); await open();
+    expect(q(".tl").className).not.toContain("wrap-code");
+    fire(qa(".codeblock .cb-head button")[0], "click"); await settle(3);
+    expect(q(".tl").className).toContain("wrap-code");
+    expect(ls.getItem("agend_code_wrap")).toBe("1");
+    await mount(); await open();
+    expect(q(".tl").className, "kept").toContain("wrap-code");
+    fire(qa(".codeblock .cb-head button")[0], "click"); await settle(3);
+    expect(q(".tl").className).not.toContain("wrap-code");
+    expect(ls.getItem("agend_code_wrap")).toBe("0");
+    ls.removeItem("agend_code_wrap");
+  });
+  it("it stays one code block when the card draws again (a status change, a new comment): no second header", async () => {
+    seed([{ id: 1, author: "Ann", authorKind: "person", text: PERSON_MD, at: AT(20) }]);
+    await mount(); await open();
+    fire(q(".tl-filter button"), "click"); await settle(4);
+    fire(qa(".tl-filter button")[1], "click"); await settle(4);
+    fire(qa(".tl-filter button")[0], "click"); await settle(4);
+    expect(qa(".codeblock").length).toBe(1);
+    expect(qa(".codeblock .cb-head").length).toBe(1);
+  });
+  it("a progress note stays one plain line: no Markdown, no code block, no card for its author but the head's", async () => {
+    seed([{ id: 1, author: "Ann", authorKind: "person", text: "x", at: AT(20) }], [{ id: 5, author: "alpha", authorKind: "instance", text: "Ran **tests** and `lint`\n```js\nlet a\n```", at: AT(10) }]);
+    await mount(); await open();
+    const note = q(".tl-log .tl-body");
+    expect(note.className).toBe("tl-body");
+    expect(note.querySelector("strong, code, pre, .codeblock, table, h3"), "no formatting at all").toBeNull();
+    expect(note.textContent).toBe("Ran **tests** and `lint`\n```js\nlet a\n```");
+    expect(rule(".tl-body")).toMatch(/white-space: pre-wrap/);
+  });
+  it("what the comment says is escaped first: a tag is text, a link to javascript: is not a link", async () => {
+    seed([{ id: 1, author: "alpha", authorKind: "instance", text: "<img src=x onerror=alert(1)> and [x](javascript:alert(1))", at: AT(20) }]);
+    await mount(); await open();
+    const b = agentBody();
+    expect(b.querySelector("img")).toBeNull();
+    expect(b.textContent).toContain("<img src=x onerror=alert(1)>");
+    expect([...b.querySelectorAll("a")].filter((a: any) => /^javascript:/i.test(a.getAttribute("href") ?? ""))).toEqual([]);
+  });
+  it("the same renderer and the same code-block frame as the chat: one Markdown, the chat's classes and actions, the chat's strings", () => {
+    const act = readFileSync(join(UI, "fleet-task-activity.js"), "utf8");
+    const chat = readFileSync(join(UI, "shared", "chat-thread.js"), "utf8");
+    expect(act, "the shared renderer, not a copy").toMatch(/AgendChatRender/);
+    expect(act).not.toMatch(/function renderMarkdown|escapeHtml\(/);
+    const sig = (src: string, from: string, to: string) => {
+      const part = src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
+      return { classes: [...part.matchAll(/className = "([\w -]+)"/g)].map((m) => m[1]).sort(), acts: [...part.matchAll(/dataset\.act = "(\w+)"/g)].map((m) => m[1]).sort(), strings: [...new Set([...part.matchAll(/\bt[rf]{0,2}\("(chat\.\w+)"/g)].map((m) => m[1]))].sort() };
+    };
+    const mine = sig(act, "export function decorateCode", "/** A click on one");
+    const theirs = sig(chat, "function decorateCode(root)", "// HTML cards (#1306)");
+    expect(mine.classes, "the same elements").toEqual(theirs.classes);
+    expect(mine.acts, "the same actions").toEqual(theirs.acts);
+    expect(mine.strings, "the same words").toEqual(theirs.strings);
+    expect(mine.classes).toEqual(["cb-head", "cb-lang", "cb-more", "chip-btn", "chip-btn", "codeblock"]);
+  });
+  it("the sheet: a comment's Markdown takes the chat's values, rule for rule (the table's header row alone sits on the card's surface)", () => {
+    const decls = (sel: string) => { const r = rule(sel); return r ? r.slice(r.indexOf("{") + 1, r.lastIndexOf("}")).trim().replace(/\s+/g, " ") : null; };
+    const pairs: Array<[string, string]> = [
+      [".msg .md p", ".tl-body.md p"], [".msg .md code", ".tl-body.md code"], [".msg .md a", ".tl-body.md a"], [".msg .md blockquote", ".tl-body.md blockquote"],
+      [".msg .md li > ul, .msg .md li > ol", ".tl-body.md li > ul, .tl-body.md li > ol"], [".msg .md hr", ".tl-body.md hr"],
+      [".msg .md .tbl", ".tl-body.md .tbl"], [".msg .md table", ".tl-body.md table"], [".msg .md .codeblock pre code", ".tl-body.md .codeblock pre code"],
+    ];
+    for (const [chat, mine] of pairs) expect(decls(mine), `${mine} = ${chat}`).toBe(decls(chat));
+    expect(decls(".tl-body.md ul, .tl-body.md ol")).toBe(decls(".msg .md ul, .msg .md ol"));
+    expect(decls(".tl-body.md th, .tl-body.md td"), "cell borders, padding, whole words, 5em").toBe("border: 1px solid var(--border); padding: 5px 9px; text-align: left; vertical-align: top; overflow-wrap: break-word; word-break: normal; min-width: 5em;");
+    expect(decls(".tl-body.md th")).toMatch(/background: var\(--surface-2\); font-weight: var\(--fw-semibold\)/);
+    expect(decls(".tl-body.md h3, .tl-body.md h4, .tl-body.md h5, .tl-body.md h6")).toBe(decls(".msg .md h3, .msg .md h4, .msg .md h5, .msg .md h6"));
+    // The frame itself (header, Wrap/Copy, fold, long lines) is the one `.codeblock` rule set, not scoped to the chat: nothing here overrides it.
+    const over = [...CSS.matchAll(/\n([^\n{}]*\.tl-[^\n{}]*\.codeblock[^\n{}]*) \{/g)].map((m) => m[1]);
+    expect(over, "the only rule on a code block inside a comment is the chat's `pre code` reset").toEqual([".tl-body.md .codeblock pre code"]);
+    expect(rule(".wrap-code .codeblock pre")).toMatch(/pre-wrap/);
+    expect(CSS, "the colours of the highlight, from the same tokens").toMatch(/\.tl-body\.md \.tk-k \{ color: var\(--tk-k\); \}/);
+  });
+  it("the progress filter and the tag say what a progress note is, on hover, in both languages; the label is unchanged", async () => {
+    seed([{ id: 1, author: "Ann", authorKind: "person", text: "x", at: AT(20) }], [{ id: 5, author: "alpha", authorKind: "instance", text: "Did a thing", at: AT(10) }]);
+    await mount(); await open();
+    const tip = "A one-line work note an agent or member wrote down — not a comment";
+    const btn = qa(".tl-filter button").find((b) => text(b).startsWith("Progress"))!;
+    expect(btn.getAttribute("title")).toBe(tip);
+    expect(text(btn)).toBe("Progress 1");
+    expect(qa(".tl-filter button").filter((b) => b !== btn).map((b) => b.getAttribute("title")), "the other filters have none").toEqual([null, null, null]);
+    const tag = q(".tl-log .tl-kind");
+    expect(tag.getAttribute("title")).toBe(tip);
+    expect(text(tag)).toBe("Progress");
+    i18n.setLang("zh-TW", { store: false });
+    await mount(); await open();
+    const zh = "agent 或成員記下的一行工作紀錄，不是留言";
+    expect(qa(".tl-filter button").find((b) => text(b).startsWith("進度"))!.getAttribute("title")).toBe(zh);
+    expect(q(".tl-log .tl-kind").getAttribute("title")).toBe(zh);
+    expect(text(q(".tl-log .tl-kind")), "the label is as it was").toBe("進度");
+    i18n.setLang("en", { store: false });
   });
 });
 

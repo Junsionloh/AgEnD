@@ -507,9 +507,12 @@ describe("the steps are an admin session's: no read, no block, for any other vie
 });
 
 describe("a card's page: the timeline marks the agent's actions", () => {
+  // AGEND-316: the system's lines are folded at first; these tests read them, so they open every fold.
+  const unfold = async () => { for (const b of qa(".tl-more")) fire(b, "click"); await settle(4); };
   it("an instance's claim, move, log line and comment carry an Agent tag and a bar; a person's do not", async () => {
     await mount();
     await openCard("M-1");
+    await unfold();
     const items = qa(".tl-item");
     expect(items.length).toBe(6);
     // AGEND-314: an agent's history line keeps its tag (a robot mark) but not the bar — the history is the quietest thing on the page.
@@ -523,6 +526,7 @@ describe("a card's page: the timeline marks the agent's actions", () => {
         history: [{ id: 3, actor: "alpha", type: "moved", data: { from: "open", to: "claimed" }, at: ago(2) }] }));
     await mount();
     await openCard("M-1");
+    await unfold();
     expect(qa(".tl-item").length).toBe(3);
     expect(qa(".tr-by")).toEqual([]);
     expect(qa(".tl-item").some((li) => li.className.includes("by-agent"))).toBe(false);
