@@ -391,6 +391,26 @@ for (const c of matrix(process.env.MATRIX ?? "desk-dark-zh-TW,desk-light-en,phon
     await page.locator(".tp-activity .tl-more").first().click(); await page.waitForTimeout(150);
     chk.systemRowMarksStaySmall = ((await page.evaluate(AUTHOR) as any).systemMark?.w ?? 99) <= 20;
     await page.locator(".tp-activity .tl-more").first().click(); await page.waitForTimeout(150);
+    // The run between two comments, closed and open: a picture of the comment above, the row, and the top of the comment below.
+    {
+      const vpS = page.viewportSize()!;
+      await page.setViewportSize({ width: vpS.width, height: phone ? 1400 : 1100 }); await page.waitForTimeout(250);
+      const at = await page.evaluate(`(() => { const lis = [...document.querySelectorAll(".tp-activity .tl-list > li")]; for (let i = 1; i < lis.length - 1; i++) if (lis[i].classList.contains("tl-run") && lis[i - 1].classList.contains("tl-comment") && lis[i + 1].classList.contains("tl-comment")) return i; return -1; })()`) as number;
+      chk.aRunSitsBetweenTwoComments = at > 0;
+      if (at > 0) {
+        const li = (k: number) => page.locator(".tp-activity .tl-list > li").nth(at + k);
+        await li(0).evaluate((e: HTMLElement) => e.scrollIntoView({ block: "center" })); await page.waitForTimeout(200);
+        const clipOf = async (below: number) => { const a = (await li(-1).boundingBox())!, r = (await li(0).boundingBox())!; return { x: Math.max(0, a.x - 8), y: Math.max(0, a.y - 8), width: Math.min(vpS.width - Math.max(0, a.x - 8), a.width + 16), height: Math.min(r.y + r.height + below - (a.y - 8), page.viewportSize()!.height - Math.max(0, a.y - 8)) }; };
+        await page.screenshot({ path: shotPath(SMOKE, c, "6-between-closed"), clip: await clipOf(180) });
+        await li(0).locator(".tl-more").click(); await page.waitForTimeout(250);
+        const rows = await li(0).locator(".tl-line").count();
+        chk.runBetweenCommentsOpens = rows >= 1 && (await li(0).locator(".tl-more").getAttribute("aria-expanded")) === "true";
+        await page.screenshot({ path: shotPath(SMOKE, c, "6-between-open"), clip: await clipOf(180) });
+        await li(0).locator(".tl-more").click(); await page.waitForTimeout(150);
+        chk.runBetweenCommentsCloses = (await li(0).locator(".tl-line").count()) === 0;
+      }
+      await page.setViewportSize(vpS); await page.waitForTimeout(250);
+    }
     // The Markdown of the comments, and the chat probe.
     const md = await page.evaluate(MDMEASURE) as any;
     r.markdown = md;
