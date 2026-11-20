@@ -14,5 +14,7 @@ const made = b.createCards(PERSON, { project: "排行榜", cards: [
   { title: "Rework the nightly leaderboard rebuild so that ties, late submissions and region merges are all handled".slice(0, 100), assignee: "lead", size: "M" },
 ] }).cards.map((c) => c.code);
 run("block", () => { b.moveCard(inst("docs"), made[1], "claimed"); b.moveCard(inst("docs"), made[1], "blocked", { reason: "等遊戲團隊提供賽季日曆 — 這邊沒有人知道新賽季從哪一週開始，舊設計文件與商店頁面的日期也對不起來。" }); });
+// A run of system lines on M-1 (after its comments), long enough to fold into "› N activities" on the card's page.
+for (const patch of [{ goal: "玩家打完一場後一秒內看到本週名次" }, { scope: "做：排名規則、分數 API、頁面。不做：賽季排名" }, { context: "分數格式見 M-4；頁面沿用設定頁的樣式" }, { size: "L" }, { priority: "urgent" }, { size: "M" }]) run("m1 update", () => b.updateCard(PERSON, "M-1", patch));
 console.log("seed-316 cards", made.join(", "));
 sched.db.close();
