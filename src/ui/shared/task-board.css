@@ -324,8 +324,10 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tl-line, .tl-more { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: baseline; column-gap: var(--s-2); padding: 0 var(--s-4); color: var(--text-2); font-size: var(--fs-xs); }
 .tl-mark { display: inline-flex; align-items: center; justify-content: center; align-self: center; width: 20px; color: var(--text-3); }
 .tl-sentence { min-width: 0; }
-.tl-more { width: 100%; min-height: 28px; border: 0; border-radius: var(--r-sm); background: none; font: inherit; font-size: var(--fs-xs); text-align: left; cursor: pointer; }
-.tl-more:hover { background: var(--surface); color: var(--text); }
+/* "› N activities" is an arrow and a word like the rows under it: no fill, no border, no rounding — pointing at it only turns the
+   text to the primary colour; the keyboard's focus still draws a ring. */
+.tl-more { width: 100%; min-height: 28px; border: 0; border-radius: 0; background: none; box-shadow: none; font: inherit; font-size: var(--fs-xs); text-align: left; cursor: pointer; }
+.tl-more:hover, .tl-more:active { background: none; color: var(--text); }
 .tl-more:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .tl-more > span:last-child { grid-column: 2 / 4; }
 .tl-event .tl-who > b { font-weight: var(--fw-regular); }

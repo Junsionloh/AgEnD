@@ -673,6 +673,21 @@ describe("the card page's activity is a stream: a card for what is said, a thin 
     expect(q(".tl-more")).toBeNull();
     expect(qa(".tl-event").length).toBe(6);
   });
+  it("the \"› N activities\" row has no box: no fill, no border, no rounding, the system rows' size and colour; pointing changes the text colour only; the keyboard's ring stays", () => {
+    const more = rules(".tl-more");
+    expect(more).toMatch(/background: none/);
+    expect(more).toMatch(/border: 0/);
+    expect(more).toMatch(/border-radius: 0/);
+    expect(more).toMatch(/box-shadow: none/);
+    expect(more, "no fill by any other word").not.toMatch(/background(-color)?: (var|#|rgb|color-mix)/);
+    expect(rule(".tl-line, .tl-more")).toMatch(/color: var\(--text-2\)/);          // the rows' colour, shared
+    expect(rule(".tl-line, .tl-more")).toMatch(/font-size: var\(--fs-xs\)/);       // …and size
+    expect(rules(".tl-more:hover, .tl-more:active")).not.toMatch(/background: (var|#|rgb)/);
+    expect(rules(".tl-more:hover, .tl-more:active")).toMatch(/color: var\(--text\)/);
+    expect(rule(".tl-more:focus-visible")).toMatch(/outline: 2px solid var\(--focus\)/);
+    // The same on a phone: no rule gives it a box there.
+    expect(CSS.slice(CSS.indexOf("A phone: the cards and the rows keep their forms"))).not.toMatch(/\.tl-more[^{]*\{[^}]*(background|border:)/);
+  });
   it("the fold counts what the stream shows: equal lines already one (×N); exactly three stay open; runs between cards are folded each by itself", async () => {
     const same = [1, 2, 3, 4].map((i) => ev(20 + i, "Ann", 100 - i));        // four equal lines: one line ×4
     withActivity({ history: same });
@@ -732,14 +747,14 @@ describe("the card page's activity is a stream: a card for what is said, a thin 
     expect(row).toMatch(/font-size: var\(--fs-xs\)/);
     expect(row).toMatch(/color: var\(--text-2\)/);
     expect(row, "a thin row: no box").not.toMatch(/border: 1px|background: var\(--surface\)/);
-    expect(rule(".tl-more:hover")).toBeTruthy();
+    expect(rule(".tl-more:hover, .tl-more:active"), "pointing at the fold changes its colour only").toMatch(/background: none; color: var\(--text\)/);
     // The comment box is the card's look.
     const box = rules(".tc-composer");
     expect(box).toMatch(/border: 1px solid var\(--border\)/);
     expect(box).toMatch(/border-radius: var\(--r-md\)/);
     expect(box).toMatch(/background: var\(--surface\)/);
     expect(rules(".tc-composer > .btn")).toMatch(/align-self: flex-end/);
-    for (const sel of [".tl-card", ".tl-list", ".tl-line, .tl-more", ".tl-more:hover", ".tc-composer", ".tl-kind", ".tl-mark"]) expect(rule(sel), sel).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i);
+    for (const sel of [".tl-card", ".tl-list", ".tl-line, .tl-more", ".tl-more:hover, .tl-more:active", ".tc-composer", ".tl-kind", ".tl-mark"]) expect(rules(sel), sel).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i);
     expect(rule(".tb-av-dot")).toMatch(/box-shadow: 0 0 0 2px var\(--surface\)/);
   });
   it("a phone keeps the two forms with less inside; the panel and its padding variable are gone", () => {

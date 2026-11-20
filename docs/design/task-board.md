@@ -277,7 +277,7 @@ shows the newer card with the draft still open, and saving again overwrites. `?c
   agent, the time with its whole time on hover; the text under the name, the chat's Markdown; no coloured bar at an agent's card);
   **what the system did** is a thin row (no box, `--fs-xs`, secondary colour: a mark — a status change's is the status's —, a
   sentence the name leads, "dev-a changed status from To do to In progress", the time), and more than three of them in a row between
-  two cards are one "› N activities" button, closed at first (a run of equal lines is still one line ×N; the History filter, which
+  two cards are one "› N activities" button — an arrow and a word, no fill, border or rounding like the rows under it; pointing at it only turns the text to the primary colour, the keyboard's focus keeps its ring —, closed at first (a run of equal lines is still one line ×N; the History filter, which
   asks for them, never folds). The comment box is the stream's last card (its text area without a box of its own, Send inside at the
   bottom right); without a box (a read-only page) the stream is alone. Nothing here names what the viewer does not see: the stream is
   built from the entries the host sent (over the link it has already left out a hidden instance's), and a state dot is drawn only for

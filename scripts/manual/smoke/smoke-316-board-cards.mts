@@ -143,6 +143,10 @@ const LISTM = `(() => {
     rows: document.querySelectorAll(".tb-row").length, overflowX: document.documentElement.scrollWidth - innerWidth };
 })()`;
 
+// The folded row's own look: no fill, no border, no rounding; where its mark is.
+const FOLD = `(() => { const m = document.querySelector(".tp-activity .tl-more"), c = getComputedStyle(m);
+  return { bg: c.backgroundColor, border: c.borderTopWidth, radius: c.borderTopLeftRadius, shadow: c.boxShadow, color: c.color, fs: parseFloat(c.fontSize), outline: c.outlineStyle + " " + c.outlineWidth, markX: Math.round(m.querySelector(".tl-mark").getBoundingClientRect().left), expanded: m.getAttribute("aria-expanded") }; })()`;
+
 const uniq = <T,>(xs: T[]) => [...new Set(xs)];
 const results: any = { browser: fx.browser.version(), cases: {} };
 let failed = 0;
@@ -274,13 +278,31 @@ for (const c of matrix(process.env.MATRIX ?? "desk-dark-zh-TW,desk-light-en,phon
     chk.streamNoSideScroll = !!st && st.overflowX <= 0;
     await page.locator(".tp-activity").scrollIntoViewIfNeeded();
     await page.screenshot({ path: shotPath(SMOKE, c, "6-card-activity") });
+    // The folded row has no box: at rest, pointed at (the text turns primary, nothing is filled), and with the keyboard's ring.
+    const fold = page.locator(".tp-activity .tl-more").first();
+    await page.mouse.move(2, 2); await page.waitForTimeout(150);
+    const rest = await page.evaluate(FOLD) as any;
+    await fold.hover(); await page.waitForTimeout(150);
+    const hover = await page.evaluate(FOLD) as any;
+    await page.mouse.move(2, 2);
+    await page.keyboard.press("Shift"); await fold.focus(); await page.waitForTimeout(100);
+    const focus = await page.evaluate(FOLD) as any;
+    r.fold = { rest, hover, focus };
+    const noBox = (f: any) => (f.bg === "rgba(0, 0, 0, 0)" || f.bg === "transparent") && f.border === "0px" && f.radius === "0px" && f.shadow === "none";
+    chk.foldRowHasNoBox = noBox(rest) && noBox(hover);
+    chk.foldRowHoverOnlyRecolours = hover.color !== rest.color && noBox(hover);
+    chk.foldRowKeepsItsRing = !/^none/.test(focus.outline) && !(focus.outline.startsWith("0px"));
+    await page.locator(".tp-activity").evaluate((el: HTMLElement) => (document.activeElement as HTMLElement | null)?.blur());
     // Open the folded run: its lines come in.
-    await page.locator(".tp-activity .tl-more").first().click(); await page.waitForTimeout(250);
+    await fold.click(); await page.waitForTimeout(250);
     const opened = await page.evaluate(`document.querySelectorAll(".tp-activity .tl-event").length`) as number;
     chk.foldOpens = opened >= 4 && (await page.locator(".tp-activity .tl-more").first().getAttribute("aria-expanded")) === "true";
     const open2 = await page.evaluate(STREAM) as any;
     chk.systemRowsAreThin = open2.lines.length >= 4 && open2.lines.every((l: any) => l.border === "0px" && (l.bg === "rgba(0, 0, 0, 0)" || l.bg === "transparent") && l.fs < cards[0].fs);
     chk.systemRowsOnTheCardsEdge = open2.lines.every((l: any) => l.x === open2.cards[0].x);
+    const openFold = await page.evaluate(FOLD) as any;
+    chk.foldRowMarkUnderTheRowsMarks = openFold.markX === await page.locator(".tp-activity .tl-line .tl-mark").first().evaluate((e: HTMLElement) => Math.round(e.getBoundingClientRect().left));
+    chk.foldRowSameSizeAsRows = openFold.fs === open2.lines[0].fs && openFold.expanded === "true" && noBox(openFold);
     await page.screenshot({ path: shotPath(SMOKE, c, "6-card-activity-open") });
     await page.locator(".tp-activity").screenshot({ path: shotPath(SMOKE, c, "6-card-activity-stream") });
     await page.locator(".tp-back").first().click();
