@@ -10,6 +10,7 @@ import { t, register, lang } from "/assets/app-i18n.js";
 import { Icon } from "/assets/ui-icons.js";
 import { Menu } from "/assets/ui-menu.js";
 import { RunMark, runOf } from "./fleet-task-run.js";
+import { OwnerChip } from "./fleet-task-owner.js";
 import { COLUMNS, ProgressBar, UNASSIGNED, Who, readStored, recentlyDone, relTime, reviewLabel, waitsForYou, waitsList, waitsOn, wrapUpText, writeStored } from "./fleet-task-common.js";
 
 /** The task board's stylesheet, linked once (a tab opened before an upgrade has an app.css without these rules). */
@@ -386,7 +387,7 @@ function ListHead({ display, onDisplay, who }) {
  * count (a click folds it away). A row shows its number, title, priority, assignee and last change; it opens its card; a
  * main task's sub-task progress opens up its sub tasks under it (unless they are rows already); its ⋯ opens the card's menu.
  */
-export function ListView({ rows, display, subsOf, byId, flashed, now, runs, expanded, onToggleSubs, onOpen, onMore, onDisplay, scope = "" }) {
+export function ListView({ rows, display, subsOf, byId, flashed, now, runs, expanded, onToggleSubs, onOpen, onMore, onOwner, cards = [], lead = null, writable = false, onDisplay, scope = "" }) {
   const [folded, setFolded] = useState(readCollapsed);
   const toggle = (id) => setFolded((cur) => { const next = new Set(cur); if (next.has(id)) next.delete(id); else next.add(id); writeCollapsed(next); return next; });
   const groups = groupRows(orderRows(rows, display.order, byId, display.dir), display.group);
@@ -404,14 +405,15 @@ export function ListView({ rows, display, subsOf, byId, flashed, now, runs, expa
           const subs = subsOf.get(c.id) || [];
           const lit = Math.max(flashed.get(c.id) || 0, ...(display.subs ? [] : subs.map((s) => flashed.get(s.id) || 0)));
           return html`<${Row} key=${c.id} card=${c} subs=${subs} main=${c.kind === "sub" ? byId.get(c.parentId) : null} flash=${now - lit < 4000} now=${now} runs=${runs}
-            subsAsRows=${display.subs} who=${who} expanded=${!!expanded[c.id]} onToggleSubs=${() => onToggleSubs(c.id)} onOpen=${onOpen} onMore=${onMore} />`;
+            subsAsRows=${display.subs} who=${who} expanded=${!!expanded[c.id]} onToggleSubs=${() => onToggleSubs(c.id)} onOpen=${onOpen} onMore=${onMore}
+            onOwner=${onOwner} cards=${cards} lead=${lead} writable=${writable} />`;
         })}</ul>`}
       </section>`;
     })}</div>`;
 }
 
 /** One card's row; its assignee is left out under an assignee's own heading. */
-function Row({ card, subs, main, flash, now, runs, subsAsRows, who, expanded, onToggleSubs, onOpen, onMore }) {
+function Row({ card, subs, main, flash, now, runs, subsAsRows, who, expanded, onToggleSubs, onOpen, onMore, onOwner, cards, lead, writable }) {
   const progress = card.progress;
   const hasSubs = card.kind === "main" && !!progress && progress.total > 0;
   const accepted = card.acceptance.filter((a) => a.done).length;
@@ -420,17 +422,17 @@ function Row({ card, subs, main, flash, now, runs, subsAsRows, who, expanded, on
   // AGEND-296: its assignee (or, for a main task, a sub task's) is working on it now.
   const run = runOf(card, runs, subs);
   const bar = hasSubs ? html`<${ProgressBar} progress=${progress} /><span>${t("tasks.subProgress", progress.done, progress.total)}</span>` : null;
-  return html`<li class=${`tb-row st-${card.status}${card.kind === "sub" ? " is-sub" : ""}${flash ? " flash" : ""}${run && run.state === "working" && !run.shared ? " running" : ""}`} data-row=${card.id} onClick=${() => onOpen(card.id)}>
+  return html`<li class=${`tb-row st-${card.status}${card.kind === "sub" ? " is-sub" : ""}${flash ? " flash" : ""}${run && run.state === "working" && !run.shared ? " running" : ""}`} data-row=${card.id} onClick=${(e) => { if (e.target && e.target.closest && e.target.closest(".tb-owner-pop")) return; onOpen(card.id); }}>
     <div class="tb-row-line">
       <span class=${`tb-dot st-${card.status}`} role="img" aria-label=${t(`tasks.${card.status}`)} title=${t(`tasks.${card.status}`)}></span>
       <span class="tb-code tb-row-code">${card.id}</span>
       ${main ? html`<span class="tb-row-main" title=${t("taskview.inMain", main.id, main.title)}>${main.id} ›</span>` : null}
       <span class="tb-row-text">
+        <${RunMark} run=${run} />
         <button type="button" class="tb-row-title" onClick=${(e) => { e.stopPropagation(); onOpen(card.id); }}>${card.title}</button>
         ${card.status === "blocked" && card.blockedReason ? html`<span class="tb-row-note">${card.blockedReason}</span>` : null}
       </span>
       <span class="tb-row-tags">
-        <${RunMark} run=${run} />
         ${card.status === "review" ? html`<span class=${`tb-tag st-review${waitsForYou(card) ? " you" : ""}`}>${reviewLabel(card)}</span>` : null}
         ${gap ? html`<span class="tb-tag wrapup" title=${t("tasks.wrapLine", gap)}>${t("tasks.wrapTag")}</span>` : null}
         ${card.size ? html`<span class="tb-size" title=${t("tasks.size")}>${t(`tasks.size${card.size}`)}</span>` : null}
@@ -444,7 +446,7 @@ function Row({ card, subs, main, flash, now, runs, subsAsRows, who, expanded, on
         ${card.commentCount ? html`<span class=${replied ? "reply" : ""} title=${replied ? t("tasks.agentReplied") : t("tasks.comments")}><${Icon} name="chat" size=${13} />${card.commentCount}</span>` : null}
       </span>
       <span class=${`tb-row-prio p-${card.priority}`}>${t(`tasks.${card.priority}`)}</span>
-      ${who ? html`<span class="tb-row-who"><${Who} name=${card.assignee} empty=${t("tasks.nobody")} /></span>` : null}
+      ${who ? html`<span class="tb-row-who"><${OwnerChip} card=${card} cards=${cards} lead=${lead} canAssign=${writable && card.status !== "done" && card.status !== "cancelled"} onPick=${onOwner} /></span>` : null}
       <span class="tb-row-time muted" title=${t("taskview.changed", longTime(card.updatedAt))}>${relTime(card.updatedAt, now)}</span>
       ${onMore ? html`<button type="button" class="icon-btn tb-more" aria-label=${t("taskview.more")} title=${t("taskview.more")}
         onClick=${(e) => { e.stopPropagation(); onMore(card, e.currentTarget); }}><${Icon} name="more" size=${16} /></button>` : null}

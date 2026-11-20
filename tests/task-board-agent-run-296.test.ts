@@ -391,7 +391,7 @@ describe("a card's page: Agent activity", () => {
   it("a sub task's page has it, with its own assignee's state", async () => {
     fleetIs({ alpha: "idle", beta: "working", gamma: "idle" });
     await mount();
-    fire(q('[data-tile="M-2"] .tb-tile-progress'), "click"); await settle(4);
+    fire(q('[data-tile="M-2"] .tb-tile-progress, [data-tile="M-2"] .tb-tile-subs'), "click"); await settle(4);      // its sub task is running: the status row says so, the foot has the toggle
     fire(qa(".tb-subs button").find((b) => text(b)!.includes("S-2")), "click"); await settle(10);
     expect(text(q(".tr-run .tb-who"))).toBe("beta");
     expect(text(q(".tr-state"))).toBe("Running");
@@ -507,9 +507,12 @@ describe("the steps are an admin session's: no read, no block, for any other vie
 });
 
 describe("a card's page: the timeline marks the agent's actions", () => {
+  // AGEND-316: the system's lines are folded at first; these tests read them, so they open every fold.
+  const unfold = async () => { for (const b of qa(".tl-more")) fire(b, "click"); await settle(4); };
   it("an instance's claim, move, log line and comment carry an Agent tag and a bar; a person's do not", async () => {
     await mount();
     await openCard("M-1");
+    await unfold();
     const items = qa(".tl-item");
     expect(items.length).toBe(6);
     // AGEND-314: an agent's history line keeps its tag (a robot mark) but not the bar — the history is the quietest thing on the page.
@@ -523,6 +526,7 @@ describe("a card's page: the timeline marks the agent's actions", () => {
         history: [{ id: 3, actor: "alpha", type: "moved", data: { from: "open", to: "claimed" }, at: ago(2) }] }));
     await mount();
     await openCard("M-1");
+    await unfold();
     expect(qa(".tl-item").length).toBe(3);
     expect(qa(".tr-by")).toEqual([]);
     expect(qa(".tl-item").some((li) => li.className.includes("by-agent"))).toBe(false);
