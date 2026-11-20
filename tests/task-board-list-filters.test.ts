@@ -229,7 +229,7 @@ describe("on the board", () => {
     await board();
     await pick(".tb-view-menu", "Hidden");
     expect(tiles().map(([s]) => s)).toEqual(["To do", "In progress", "Blocked", "To confirm"]);
-    expect(q(".tb-columns").className).toContain("no-done");
+    expect(qa(".tb-col").length, "four columns: no Done").toBe(4);
     expect(q(".tb-view-menu > button").className).toContain("active");
     await pick(".tb-view-menu", "All");
     expect(calls.some((c) => c === "/ui/tasks/board?done=all")).toBe(true);
