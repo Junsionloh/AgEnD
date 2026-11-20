@@ -897,6 +897,16 @@ describe("round 7: an author's avatar in the stream is the board's info card, wi
     expect(pop(), "Esc").toBeNull();
     expect(doc().activeElement, "the focus is back on the avatar").toBe(alpha);
     expect(alpha.getAttribute("aria-expanded")).toBe("false");
+    // From the link: Esc gives the focus back to the avatar, and the avatar's own focus event does not open the card again.
+    await wait(450);
+    focusOut(alpha); focusIn(alpha); await settle(2);
+    focusOut(alpha, q(".toc-open")); await settle(2);
+    expect(pop()).toBeTruthy();
+    fire(q(".toc-open"), "keydown", { key: "Escape" }); focusOut(q(".toc-open") ?? alpha, alpha); focusIn(alpha); await settle(2);
+    expect(pop(), "Esc on the link: closed, and not reopened by the focus coming back").toBeNull();
+    await wait(450);
+    focusOut(alpha); focusIn(alpha); await settle(2);
+    expect(pop(), "a later keyboard focus opens it").toBeTruthy();
   });
   it("a tap opens it (a phone has no hover), a second tap closes it, a tap outside closes it; a tap inside does not", async () => {
     comments(THREE);
@@ -915,6 +925,24 @@ describe("round 7: an author's avatar in the stream is the board's info card, wi
     fire(alpha, "click"); await settle(3);
     fire(alpha, "keydown", { key: "Escape" }); await settle(2);
     expect(pop(), "Esc").toBeNull();
+  });
+  it("a finger has no hover: the mouse events a browser makes up after a tap neither open the card nor close it", async () => {
+    comments(THREE);
+    await mount(); await open();
+    const alpha = authorBtn("alpha")!, box = wrapOf(alpha);
+    const touch = (el: any) => { fire(el, "pointerenter", { pointerType: "touch" }); fire(el, "PointerEnter", { pointerType: "touch" }); fire(el, "pointerdown", { pointerType: "touch" }); fire(el, "PointerDown", { pointerType: "touch" }); };
+    touch(alpha); enter(box); fire(alpha, "click"); await wait(300); await settle(3);
+    expect(pop(), "the tap opened it; the made-up mouseenter did not close or double it").toBeTruthy();
+    leave(box); await wait(300); await settle(2);
+    expect(pop(), "the made-up mouseleave (the mouse \"moves away\") does not close it").toBeTruthy();
+    fire(doc().body, "pointerdown", { pointerType: "touch" }); await settle(2);
+    expect(pop(), "a tap outside does").toBeNull();
+    enter(box); await wait(300); await settle(2);
+    expect(pop(), "a made-up mouseenter alone opens nothing").toBeNull();
+    // A real mouse over the same avatar afterwards is a hover again.
+    fire(box, "pointerenter", { pointerType: "mouse" }); fire(box, "PointerEnter", { pointerType: "mouse" });
+    enter(alpha); await wait(300); await settle(2);
+    expect(pop(), "a mouse hovers as before").toBeTruthy();
   });
   it("only one card at a time: the board's and the stream's, one author's and another's", async () => {
     comments(THREE);

@@ -98,7 +98,7 @@ export function OwnerCard({ name, kind = "instance", card, facts, state, dispatc
       ${facts.lead ? html`<dt>${t("taskowner.lead")}</dt><dd>${t("taskowner.leadValue")}</dd>` : null}
       ${dispatcher ? html`<dt>${t("taskowner.dispatcher")}</dt><dd>${dispatcher}</dd>` : null}
     </dl>`}
-    ${link ? html`<a class="toc-open" href=${link}>${t("taskowner.openAgent")}<${Icon} name="chevron" size=${14} /></a>` : null}
+    ${link ? html`<a class="toc-open" href=${link}>${t("taskowner.openAgent")}<${Icon} name="forward" size=${14} /></a>` : null}
   </div>`;
 }
 
@@ -117,7 +117,7 @@ const CLOSE_GRACE_MS = 180;
  */
 function useInfoCard(enabled, { toggleOnClick = false, delay = 220 } = {}) {
   const [shown, setShown] = useState(false);
-  const timer = useRef(0), grace = useRef(0), quiet = useRef(false), box = useRef(null), anchor = useRef(null);
+  const timer = useRef(0), grace = useRef(0), quiet = useRef(false), hush = useRef(0), touch = useRef(false), box = useRef(null), anchor = useRef(null);
   const clear = () => { if (timer.current) clearTimeout(timer.current); timer.current = 0; if (grace.current) clearTimeout(grace.current); grace.current = 0; };
   const hide = () => { clear(); setShown(false); if (current === hide) current = null; };
   const hideRef = useRef(hide);
@@ -133,23 +133,30 @@ function useInfoCard(enabled, { toggleOnClick = false, delay = 220 } = {}) {
     globalThis.document?.addEventListener?.("pointerdown", outside, true);
     return () => { globalThis.removeEventListener?.("scroll", away, true); globalThis.removeEventListener?.("resize", away); globalThis.document?.removeEventListener?.("pointerdown", outside, true); };
   }, [shown]);
+  // A finger has no hover: the mouse events a browser makes up after a tap (it "moves" the mouse to the tap, then away to something
+  // else) must neither open the card nor close it — the tap does, and a tap outside.
+  const pointer = (e) => { touch.current = e.pointerType === "touch" || e.pointerType === "pen"; };
   const bind = {
-    onMouseEnter: () => { if (grace.current) { clearTimeout(grace.current); grace.current = 0; } if (!enabled || quiet.current || shown) return; if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => { timer.current = 0; show(); }, delay); },
+    onPointerEnter: pointer,
+    onPointerDown: pointer,
+    onMouseEnter: () => { if (touch.current) return; if (grace.current) { clearTimeout(grace.current); grace.current = 0; } if (!enabled || quiet.current || shown) return; if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => { timer.current = 0; show(); }, delay); },
     onMouseLeave: () => {
+      if (touch.current) return;
       quiet.current = false;
       if (timer.current) { clearTimeout(timer.current); timer.current = 0; }
       if (shown) grace.current = setTimeout(() => { grace.current = 0; hide(); }, CLOSE_GRACE_MS);
     },
     // Only the keyboard's focus shows it: a tap focuses the button too (a tap then toggles it, or opens the picker).
     onFocusIn: (e) => {
-      if (!enabled || quiet.current || Date.now() < quietUntil) return;
+      if (!enabled || quiet.current || Date.now() < quietUntil || Date.now() < hush.current) return;
       let key = true;
       try { if (globalThis.CSS?.supports?.("selector(:focus-visible)")) key = e.target.matches(":focus-visible"); } catch { key = true; }
       if (key) show();
     },
     // Focus moving from the avatar into the card (its link) keeps it open; anywhere else closes it.
     onFocusOut: (e) => { quiet.current = false; const to = e.relatedTarget; if (to && box.current && box.current.contains && box.current.contains(to)) return; hide(); },
-    onKeyDown: (e) => { if (e.key === "Escape" && shown) { e.stopPropagation(); hide(); anchor.current && anchor.current.focus && anchor.current.focus(); } },
+    // Esc closes it and the focus goes back to the avatar — which is not a reason to open it again (the focus comes from the card's link).
+    onKeyDown: (e) => { if (e.key === "Escape" && shown) { e.stopPropagation(); hush.current = Date.now() + 400; hide(); anchor.current && anchor.current.focus && anchor.current.focus(); } },
   };
   const onAnchorClick = () => {
     if (!toggleOnClick) { quiet.current = true; hide(); return; }

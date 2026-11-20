@@ -13,6 +13,12 @@
 //  4. the avatar on a card is a button: it opens the picker the card page has (the card does not open), a choice saves,
 //     Esc closes it and the focus returns; pointing at it shows an info card (state, what it does, cards in hand);
 //     the list's rows have the same avatar; over a read-only link it is not a button and a choice cannot be made.
+//  8. (round 7) every run of system lines between two cards is one "› N activities" row, even a run of one: the stream reads
+//     comment → › N activities → comment; an author's avatar is 28px with its name centred on it and shows the board's info card
+//     (pointing, the keyboard's focus, a tap) with a link to the Agent page — the pointer can go into the card, Tab reaches the link,
+//     Esc closes it; a person's card has no link; over a read-only link there is no link; a comment is formatted as the chat's
+//     window formats a message — the computed look of every Markdown part is compared with an injected `.msg .md` probe built from
+//     the same HTML (the comparison table is written to the results), Copy puts the block on the clipboard, a long block folds.
 // Run on the base commit (REPO=<checkout of it>) the same shots are the "before"; the checks that name new things fail there.
 //   PW_DIR=<dir with playwright-core> CHROME=<chrome> REPO=<checkout> OUT=<dir> MATRIX=desk-dark-zh-TW,desk-light-en \
 //   npx --prefix <checkout> tsx scripts/manual/smoke/smoke-316-uniform-tiles.mts
@@ -32,6 +38,19 @@ const { Scheduler, DEFAULT_SCHEDULER_CONFIG } = await import(REPO + "/src/schedu
 
 const ANN = { kind: "person", name: "operator" } as const;
 const agent = (name: string) => ({ kind: "instance", name }) as const;
+
+const AGENT_MD = [
+  "### Weekly leaderboard API", "",
+  "Rebuilt with `npm run build`; notes in [the design doc](https://example.com/leaderboard-notes).", "",
+  "- ties share a rank (verified)", "- late rows are kept for the next round", "  - region merges get their own card", "",
+  "| Step | Result | Time |", "| --- | :---: | ---: |", "| build | passed | 12 s |", "| tests | **2 failed** | 41 s |", "| preview deploy | passed | 8 s |", "",
+  "The response looks like this:", "",
+  "```json",
+  JSON.stringify({ week: "2026-W46", ranked: true, top: [{ rank: 1, player: "ann", score: 9120 }, { rank: 1, player: "bo", score: 9120 }], paging: { next: "cursor-2", limit: 50 }, note: null }, null, 2),
+  "```",
+].join("\n");
+const PERSON_MD = ["Got it — here is how I would rank them:", "", "```python", "def rank(rows):", "    # ties share a rank, the next rank skips", "    rows = sorted(rows, key=lambda r: -r[\"score\"])", "    out, last, place = [], None, 0", "    for i, r in enumerate(rows, 1):", "        if r[\"score\"] != last:", "            place, last = i, r[\"score\"]", "        out.append({**r, \"rank\": place})", "    return out", "```", "", "No need to copy it: **the logic matching** is enough."].join("\n");
+const LONG_LOG = ["$ npm test -- --run leaderboard", ...Array.from({ length: 42 }, (_, i) => `  ✓ leaderboard › case ${String(i + 1).padStart(2, "0")} (${5 + ((i * 7) % 23)} ms)`), "Test Files  1 passed (1)", "     Tests  42 passed (42)"].join("\n");
 
 /** The same cards in each language; the first six are the screenshot the person sent. */
 function seed(c: MatrixCase) {
@@ -63,9 +82,17 @@ function seed(c: MatrixCase) {
   board.updateCard(agent("dev-a"), m1, { comment: L("Will do.", "好的。") });
   board.updateCard(agent("dev-a"), m1, { log: L("Endpoint skeleton done, paging next", "端點骨架完成，接著做分頁") });
   board.updateCard(ANN, m1, { comment: L("Thanks!", "謝謝！") });
+  // Round 7: comment → › 2 activities → an agent's Markdown comment → › 1 activity → a person's comment with a Python block.
+  // (the board stamps in milliseconds and an event sorts before a comment of the same instant: a tick keeps the order written)
+  const tick = () => { const t = Date.now(); while (Date.now() - t < 3); };
+  tick(); board.updateCard(ANN, m1, { size: "L" }); tick(); board.updateCard(ANN, m1, { size: "M" }); tick();
+  board.updateCard(agent("dev-a"), m1, { comment: AGENT_MD }); tick();
+  board.updateCard(ANN, m1, { priority: "urgent" }); tick();
+  board.updateCard(ANN, m1, { comment: PERSON_MD });
   // M-2: two sub tasks, none started: "Next".
   sub(m2, L("Price list", "價目表"), { assignee: "dev-b" });
   sub(m2, L("Checkout", "結帳"), { assignee: "dev-b" });
+  board.updateCard(agent("dev-b"), m2, { comment: "Test output:\n\n```text\n" + LONG_LOG + "\n```" });
   // M-3: waits for the person; M-4: done; M-5: blocked with a reason; M-6: in progress (running).
   move(agent("dev-b"), m3, "claimed"); board.updateCard(agent("dev-b"), m3, { check: [1] }); move(agent("dev-b"), m3, "review", { result: "Badges chosen" });
   move(agent("docs"), m4, "claimed"); move(agent("docs"), m4, "review", { result: "ok" }); move(ANN, m4, "done");
@@ -128,6 +155,49 @@ const STREAM = `(() => {
     composer: composer ? { ...box(composer), last: p.lastElementChild === composer, inside: !!composer.querySelector("textarea") && !!composer.querySelector(".btn-primary") } : null,
     edges: { stream: Math.round(pr.left), head: head ? Math.round(head.getBoundingClientRect().left) : null, subs: subs ? Math.round(subs.getBoundingClientRect().left) : null },
     panel: p.className, overflowX: document.documentElement.scrollWidth - innerWidth };
+})()`;
+
+// Round 7: the author's avatar and name, the sandwich, the info card, and the Markdown of the comments; plus the chat parity probe.
+const AUTHOR = `(() => {
+  const r = (e) => { const b = e.getBoundingClientRect(); return { x: Math.round(b.left * 10) / 10, y: Math.round(b.top * 10) / 10, w: Math.round(b.width * 10) / 10, h: Math.round(b.height * 10) / 10 }; };
+  const list = document.querySelector(".tp-activity .tl-list");
+  const seq = [...list.children].map((li) => li.classList.contains("tl-run") ? "run:" + (li.querySelector(".tl-more") ? li.querySelector(".tl-more").textContent.trim() : "open") : li.classList.contains("tl-day") ? "day" : li.classList.contains("tl-comment") ? "comment" : li.classList.contains("tl-log") ? "log" : "other");
+  const heads = [...document.querySelectorAll(".tp-activity .tl-card .tl-head")].map((h) => {
+    const btn = h.querySelector(".tl-who-btn"), av = h.querySelector(".tb-av"), name = h.querySelector(".tb-who"), dot = h.querySelector(".tb-av-dot");
+    if (!av || !name) return null;
+    const a = r(av), n = r(name);
+    return { btn: !!btn, avatar: a, dot: dot ? r(dot) : null, name: n, centreOff: Math.abs((a.y + a.h / 2) - (n.y + n.h / 2)), who: name.textContent };
+  });
+  const mark = document.querySelector(".tp-activity .tl-line .tl-mark");
+  return { seq, heads, systemMark: mark ? r(mark) : null };
+})()`;
+const MD_PROPS = ["fontSize", "fontWeight", "lineHeight", "color", "backgroundColor", "marginTop", "marginBottom", "paddingTop", "paddingLeft", "borderTopWidth", "borderTopColor", "borderTopLeftRadius", "fontFamily", "listStyleType", "textDecorationLine", "overflowX", "whiteSpace", "minWidth"];
+const MD_SELS = ["h5", "p", "p code", "a", "ul", "li", "ul ul", ".tbl", "table", "th", "td", ".codeblock", ".cb-head", ".cb-lang", ".cb-head .chip-btn", "pre", "pre code", ".tk-s", ".tk-k", ".tk-n"];
+// The same HTML drawn once in a comment and once in the chat's own container (.msg > .md): where they differ, the table says so.
+const PARITY = `((props, sels) => {
+  const src = [...document.querySelectorAll(".tp-activity .tl-comment.by-agent .tl-body.md")].find((b) => b.querySelector(".tbl"));
+  const probe = document.createElement("div"), msg = document.createElement("div"), md = document.createElement("div");
+  probe.id = "chat-probe"; msg.className = "msg agent"; md.className = "md"; md.innerHTML = src.innerHTML; msg.appendChild(md); probe.appendChild(msg); document.body.appendChild(probe);
+  const read = (root, sel) => { const e = root.querySelector(sel); if (!e) return null; const c = getComputedStyle(e); return Object.fromEntries(props.map((k) => [k, c[k]])); };
+  const out = {};
+  for (const sel of sels) { const a = read(src, sel), b = read(md, sel); out[sel] = a && b ? { same: props.filter((k) => a[k] === b[k]).length, diff: props.filter((k) => a[k] !== b[k]).map((k) => ({ prop: k, comment: a[k], chat: b[k] })) } : { missing: !a ? "comment" : "chat" }; }
+  probe.remove();
+  return out;
+})(${JSON.stringify(MD_PROPS)}, ${JSON.stringify(MD_SELS)})`;
+const MDMEASURE = `(() => {
+  const cs = (e) => getComputedStyle(e);
+  const body = [...document.querySelectorAll(".tp-activity .tl-comment.by-agent .tl-body.md")].find((b) => b.querySelector(".tbl"));
+  const q = (sel) => body.querySelector(sel);
+  const toks = [...body.querySelectorAll("pre .tk-s, pre .tk-k, pre .tk-n")].map((e) => cs(e).color);
+  const pre = q("pre"), head = q(".cb-head");
+  return {
+    h5: !!q("h5"), list: q("ul") ? cs(q("ul")).listStyleType : null, nested: !!q("li ul li"), link: q("a") ? { href: q("a").getAttribute("href"), underline: cs(q("a")).textDecorationLine, color: cs(q("a")).color } : null,
+    inlineCode: q("p code") ? { bg: cs(q("p code")).backgroundColor, font: cs(q("p code")).fontFamily } : null,
+    table: q("table") ? { cells: body.querySelectorAll("td").length, tdBorder: cs(q("td")).borderTopWidth, thBorder: cs(q("th")).borderTopWidth, thBg: cs(q("th")).backgroundColor, collapse: cs(q("table")).borderCollapse, wrapperScrolls: cs(q(".tbl")).overflowX } : null,
+    codeblock: pre ? { lang: q(".cb-lang").textContent, buttons: [...head.querySelectorAll("button")].map((b) => b.textContent.trim()), mono: /mono|Mono|Consolas|Courier/.test(cs(pre).fontFamily), whiteSpace: cs(pre).whiteSpace, tokenColours: [...new Set(toks)].length, plainColour: cs(q("pre code")).color, jsonText: q("pre code").textContent.slice(0, 40) } : null,
+    personBlocks: [...document.querySelectorAll(".tp-activity .tl-comment.person .codeblock .cb-lang")].map((e) => e.textContent),
+    progressPlain: [...document.querySelectorAll(".tp-activity .tl-log .tl-body")].every((b) => !b.querySelector("pre, table, strong, code, h5")),
+  };
 })()`;
 
 // The project's page and its list's columns: where the page is, and how wide each column of the first row is.
@@ -305,6 +375,144 @@ for (const c of matrix(process.env.MATRIX ?? "desk-dark-zh-TW,desk-light-en,phon
     chk.foldRowSameSizeAsRows = openFold.fs === open2.lines[0].fs && openFold.expanded === "true" && noBox(openFold);
     await page.screenshot({ path: shotPath(SMOKE, c, "6-card-activity-open") });
     await page.locator(".tp-activity").screenshot({ path: shotPath(SMOKE, c, "6-card-activity-stream") });
+    // 8. round 7. Close the fold again; the sandwich; the avatar; the Markdown.
+    await page.locator(".tp-activity .tl-more").first().click(); await page.waitForTimeout(150);
+    const au = await page.evaluate(AUTHOR) as any;
+    r.author = au;
+    const seqs = au.seq as string[];
+    chk.everyRunIsFolded = seqs.some((x) => x.startsWith("run:")) && seqs.filter((x) => x.startsWith("run:")).every((x) => /activit|項動態/.test(x));
+    chk.oneLineRunIsFolded = seqs.some((x) => /^run:1 (activity|項動態)/.test(x));
+    chk.sandwich = seqs.some((x, i) => x === "comment" && /^run:\d+ /.test(seqs[i + 1] ?? "") && seqs[i + 2] === "comment");
+    const heads = (au.heads as any[]).filter(Boolean);
+    chk.authorAvatar28 = heads.length >= 3 && heads.every((h) => h.avatar.w === 28 && h.avatar.h === 28);
+    chk.authorDotScaled = heads.filter((h) => h.dot).length >= 1 && heads.filter((h) => h.dot).every((h) => h.dot.w >= 10 && h.dot.w <= 12);
+    chk.authorNameCentred = heads.every((h) => h.centreOff <= 1.5);
+    chk.authorIsAButton = heads.every((h) => h.btn);
+    await page.locator(".tp-activity .tl-more").first().click(); await page.waitForTimeout(150);
+    chk.systemRowMarksStaySmall = ((await page.evaluate(AUTHOR) as any).systemMark?.w ?? 99) <= 20;
+    await page.locator(".tp-activity .tl-more").first().click(); await page.waitForTimeout(150);
+    // The Markdown of the comments, and the chat probe.
+    const md = await page.evaluate(MDMEASURE) as any;
+    r.markdown = md;
+    chk.mdHeadingListTable = md.h5 && md.list === "disc" && md.nested && !!md.table && md.table.cells === 9 && md.table.tdBorder === "1px" && md.table.thBorder === "1px" && md.table.collapse === "collapse";
+    chk.mdLinkAndInlineCode = !!md.link && md.link.underline.includes("underline") && !!md.inlineCode && md.inlineCode.bg !== "rgba(0, 0, 0, 0)" && /mono|Mono|Consolas|Courier/.test(md.inlineCode.font);
+    chk.mdJsonBlockLikeTheChat = !!md.codeblock && md.codeblock.lang === "json" && md.codeblock.buttons.join(",") === labelOf(c, { en: "Wrap,Copy", zh: "換行,複製" }) && md.codeblock.mono && md.codeblock.whiteSpace === (phone ? "pre-wrap" : "pre") && md.codeblock.tokenColours >= 2;
+    chk.mdPersonBlockOtherLanguage = md.personBlocks.includes("python");
+    chk.progressNotePlain = md.progressPlain;
+    const par = await page.evaluate(PARITY) as any;
+    r.parity = par;
+    const missing = Object.entries(par).filter(([, v]: any) => v.missing).map(([k]) => k);
+    chk.parityEveryPartPresent = missing.length === 0;
+    // Where the comment and the chat differ at all: only the text's own size/colour inherited from the bubble are expected to; record them.
+    r.parityDiffs = Object.fromEntries(Object.entries(par).filter(([, v]: any) => v.diff && v.diff.length).map(([k, v]: any) => [k, v.diff]));
+    // Expected: the text's size follows the card (13px, the board's body text; the chat's is 15px) and what is em-based follows it; the
+    // table's header row is on the card's surface; a code block that ends a comment has no margin under it (the card's padding is).
+    const allowed = (sel: string, d: any) => ["fontSize", "lineHeight", "color"].includes(d.prop) || (sel === "th" && d.prop === "backgroundColor") || (sel === ".codeblock" && d.prop === "marginBottom") || (d.prop === "listStyleType" && !["ul", "li", "ul ul"].includes(sel));
+    chk.parityNothingButInheritedDiffers = Object.entries(r.parityDiffs).every(([sel, diffs]: any) => diffs.every((d: any) => allowed(sel, d)));
+    r.parityUnexpected = Object.entries(r.parityDiffs).flatMap(([sel, diffs]: any) => diffs.filter((d: any) => !allowed(sel, d)).map((d: any) => ({ sel, ...d })));
+    await page.locator(".tp-activity .tl-comment.by-agent").nth(1).scrollIntoViewIfNeeded().catch(() => {});
+    await page.locator(".tp-activity .tl-comment.by-agent .tl-body.md").first().evaluate((el: HTMLElement) => el.scrollIntoView({ block: "start" }));
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: shotPath(SMOKE, c, "8-markdown") });
+    // The two comments whole: a window tall enough for them (an element's picture is cut at the window's edge).
+    const vp0 = page.viewportSize()!;
+    await page.setViewportSize({ width: vp0.width, height: phone ? 2300 : 1500 }); await page.waitForTimeout(250);
+    await page.locator(".tp-activity .tl-comment.by-agent").filter({ has: page.locator(".tl-body.md .tbl") }).first().screenshot({ path: shotPath(SMOKE, c, "8-markdown-agent") });
+    await page.locator(".tp-activity .tl-comment.person").filter({ has: page.locator(".codeblock") }).first().screenshot({ path: shotPath(SMOKE, c, "8-markdown-person") });
+    await page.setViewportSize(vp0); await page.waitForTimeout(250);
+    // Copy: the block's text is on the clipboard.
+    await ctx.grantPermissions(["clipboard-read", "clipboard-write"]).catch(() => {});
+    const copyBtn = page.locator(".tp-activity .tl-comment.by-agent .codeblock .cb-head button").nth(1);
+    await copyBtn.click(); await page.waitForTimeout(300);
+    const clip = await page.evaluate(`navigator.clipboard.readText().catch(() => "?")`) as string;
+    const jsonText = await page.locator(".tp-activity .tl-comment.by-agent .codeblock pre").first().textContent();
+    chk.copyPutsTheBlockOnTheClipboard = clip === jsonText && clip.includes('"ranked": true') && (await copyBtn.textContent())?.trim() === labelOf(c, { en: "Copied", zh: "已複製" });
+    // Wrap turns on wrapping.
+    await page.locator(".tp-activity .tl-comment.by-agent .codeblock .cb-head button").first().click(); await page.waitForTimeout(150);
+    chk.wrapWraps = (await page.evaluate(`getComputedStyle(document.querySelector(".tp-activity .codeblock pre")).whiteSpace`)) === "pre-wrap";
+    await page.locator(".tp-activity .tl-comment.by-agent .codeblock .cb-head button").first().click(); await page.waitForTimeout(100);
+    // M-2's long block is folded until opened.
+    await page.locator(".tp-back").first().click(); await page.waitForSelector(".tb-tile", { state: "attached", timeout: 10000 });
+    if (phone) { await page.locator(".tb-status-seg .tb-seg-btn").nth(0).click(); await page.waitForTimeout(200); }
+    await page.locator('[data-tile="' + ids.m2 + '"] .tb-tile-title').click(); await page.waitForSelector(".tp-activity", { timeout: 10000 }); await page.waitForTimeout(400);
+    const longBlock = page.locator(".tp-activity .codeblock").filter({ has: page.locator(".cb-more") }).first();   // not by `.folded`: opening it takes the class away
+    const folded = await longBlock.evaluate((el: HTMLElement) => ({ h: Math.round(el.getBoundingClientRect().height), more: el.querySelector(".cb-more")?.textContent?.trim() }));
+    await longBlock.locator(".cb-more").click(); await page.waitForTimeout(200);
+    const unfolded = await longBlock.evaluate((el: HTMLElement) => ({ h: Math.round(el.getBoundingClientRect().height), more: el.querySelector(".cb-more")?.textContent?.trim(), folded: el.classList.contains("folded") }));
+    r.longBlock = { folded, unfolded };
+    chk.longBlockFoldsAndOpens = folded.h < unfolded.h && !unfolded.folded && folded.more === labelOf(c, { en: "Show all 45 lines", zh: "展開全部 45 行" }) && unfolded.more === labelOf(c, { en: "Show less", zh: "收合" });
+    await longBlock.locator(".cb-more").click(); await page.waitForTimeout(150);
+    await longBlock.scrollIntoViewIfNeeded(); await page.screenshot({ path: shotPath(SMOKE, c, "8-markdown-long") });
+    await page.locator(".tp-back").first().click(); await page.waitForSelector(".tb-tile", { state: "attached", timeout: 10000 });
+    if (phone) { await page.locator(".tb-status-seg .tb-seg-btn").nth(1).click(); await page.waitForTimeout(200); }
+    await page.locator('[data-tile="' + ids.m1 + '"] .tb-tile-title').click(); await page.waitForSelector(".tp-activity", { timeout: 10000 }); await page.waitForTimeout(400);
+    // The info card on an author: pointing, into the card, the link, the keyboard, a person, a tap.
+    const agentAuthor = page.locator(".tp-activity .tl-comment.by-agent .tl-who-btn").first();
+    const personAuthor = page.locator(".tp-activity .tl-comment.person .tl-who-btn").first();
+    const cardsN = () => page.locator(".tb-owner-card").count();
+    await page.mouse.move(2, 2); await page.waitForTimeout(150);
+    if (!phone) {
+      await agentAuthor.scrollIntoViewIfNeeded(); await agentAuthor.hover(); await page.waitForTimeout(450);
+      chk.authorHoverShowsCard = (await cardsN()) === 1 && (await page.locator(".tb-owner-card").getAttribute("role")) === "dialog";
+      r.authorCard = ((await page.locator(".tb-owner-card").first().textContent().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+      chk.authorCardHasAgentLink = (await page.locator(".tb-owner-card a.toc-open").count()) === 1 && (await page.locator(".tb-owner-card a.toc-open").getAttribute("href")) === "/ui/fleet/agent/dev-a" && /dev-a/.test(r.authorCard);
+      await page.screenshot({ path: shotPath(SMOKE, c, "9-author-info") });
+      await page.locator(".tb-owner-card").first().screenshot({ path: shotPath(SMOKE, c, "9-author-info-card") });
+      await page.locator(".tb-owner-card a.toc-open").hover(); await page.waitForTimeout(350);
+      chk.pointerCanEnterTheCard = (await cardsN()) === 1;
+      await page.mouse.move(2, 2); await page.waitForTimeout(350);
+      chk.leavingClosesTheAuthorCard = (await cardsN()) === 0;
+      await personAuthor.hover(); await page.waitForTimeout(450);
+      const ptxt = ((await page.locator(".tb-owner-card").first().textContent().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+      r.personCard = ptxt;
+      chk.personCardIsNameAndPersonOnly = (await cardsN()) === 1 && ptxt.includes(labelOf(c, { en: "Person", zh: "人" })) && (await page.locator(".tb-owner-card a, .tb-owner-card dl").count()) === 0;
+      await page.screenshot({ path: shotPath(SMOKE, c, "9-person-info") });
+      await page.mouse.move(2, 2); await page.waitForTimeout(350);
+      // Keyboard: focus → card; Tab → the link (the card stays); Esc → closed, the focus back on the avatar.
+      await page.keyboard.press("Shift"); await agentAuthor.focus(); await page.waitForTimeout(250);
+      chk.authorFocusShowsCard = (await cardsN()) === 1;
+      await page.keyboard.press("Tab"); await page.waitForTimeout(150);
+      chk.tabReachesTheLink = (await cardsN()) === 1 && await page.evaluate(`document.activeElement?.classList.contains("toc-open")`) as boolean;
+      await page.keyboard.press("Escape"); await page.waitForTimeout(150);
+      chk.escClosesAuthorCardAndReturnsFocus = (await cardsN()) === 0 && await page.evaluate(`document.activeElement?.classList.contains("tl-who-btn")`) as boolean;
+      // The link takes the page to the instance's Agent page.
+      await agentAuthor.hover(); await page.waitForTimeout(450);
+      await page.locator(".tb-owner-card a.toc-open").click(); await page.waitForTimeout(900);
+      r.afterLink = await page.evaluate(`location.pathname`);
+      chk.linkGoesToTheAgentPage = r.afterLink === "/ui/fleet/agent/dev-a";
+      await page.screenshot({ path: shotPath(SMOKE, c, "9-agent-page") });
+      await page.goBack(); await page.waitForTimeout(900);
+      if ((await page.locator(".tp-activity").count()) === 0) {
+        if ((await page.locator(".tb-tile").count()) === 0) await page.waitForSelector(".tb-tile", { state: "attached", timeout: 10000 });
+        await page.locator('[data-tile="' + ids.m1 + '"] .tb-tile-title').click(); await page.waitForSelector(".tp-activity", { timeout: 10000 }); await page.waitForTimeout(400);
+      }
+    } else {
+      // A phone: a tap opens it (a tap is not a hover), a tap outside closes it.
+      await agentAuthor.scrollIntoViewIfNeeded();
+      await agentAuthor.tap(); await page.waitForTimeout(350);
+      chk.tapOpensTheCard = (await cardsN()) === 1 && (await page.locator(".tb-owner-card a.toc-open").count()) === 1;
+      const box = await page.locator(".tb-owner-card").first().boundingBox();
+      const vw = page.viewportSize()!;
+      chk.phoneCardInsideTheScreen = !!box && box.x >= 0 && box.x + box.width <= vw.width + 0.5 && box.y >= 0 && box.y + box.height <= vw.height + 0.5;
+      await page.screenshot({ path: shotPath(SMOKE, c, "9-author-info") });
+      await page.touchscreen.tap(vw.width - 5, Math.round(vw.height / 2)); await page.waitForTimeout(300);   // the page's right gutter: outside the card, nothing to press
+      chk.tapOutsideClosesTheCard = (await cardsN()) === 0;
+      await personAuthor.tap(); await page.waitForTimeout(300);
+      chk.phonePersonCardNoLink = (await cardsN()) === 1 && (await page.locator(".tb-owner-card a").count()) === 0;
+      await page.touchscreen.tap(vw.width - 5, Math.round(vw.height / 2)); await page.waitForTimeout(300);
+    }
+    // Over a read-only link the card has no link (the Agent page needs a sign-in) and nothing else links there.
+    await page.evaluate(`document.body.dataset.publicLink = "1"`);
+    await page.locator(".tp-back").first().click(); await page.waitForSelector(".tb-tile", { state: "attached", timeout: 10000 });
+    if (phone) { await page.locator(".tb-status-seg .tb-seg-btn").nth(1).click(); await page.waitForTimeout(200); }
+    await page.locator('[data-tile="' + ids.m1 + '"] .tb-tile-title').click(); await page.waitForSelector(".tp-activity", { timeout: 10000 }); await page.waitForTimeout(400);
+    const roAuthor = page.locator(".tp-activity .tl-comment.by-agent .tl-who-btn").first();
+    await roAuthor.scrollIntoViewIfNeeded();
+    if (phone) await roAuthor.tap(); else await roAuthor.hover();
+    await page.waitForTimeout(450);
+    chk.readOnlyCardHasNoLink = (await cardsN()) === 1 && (await page.locator(".tb-owner-card a").count()) === 0 && (await page.locator('.tp-activity a[href*="/fleet/agent/"]').count()) === 0;
+    await page.evaluate(`delete document.body.dataset.publicLink`);
+    await page.mouse.move(2, 2); await page.waitForTimeout(250);
     await page.locator(".tp-back").first().click();
     await page.waitForSelector(".tb-tile", { state: "attached", timeout: 10000 });
     await page.waitForTimeout(300);
