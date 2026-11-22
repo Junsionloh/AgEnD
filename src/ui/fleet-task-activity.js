@@ -15,7 +15,7 @@ import { lang, t } from "/assets/app-i18n.js";
 import "/assets/chat-render.js";
 import "/assets/chat-strings.js";
 import { Icon } from "/assets/ui-icons.js";
-import { relTime } from "./fleet-task-common.js";
+import { BoardOffNote, boardOffTargets, relTime } from "./fleet-task-common.js";
 import { AgentTag } from "./fleet-task-run.js";
 import { WhoCard } from "./fleet-task-owner.js";
 import { insertAtTrigger, triggerAt, withoutCode } from "./trigger-complete.js";
@@ -300,10 +300,11 @@ export function Timeline({ detail, describe, cards = [], lead = null }) {
 
 /**
  * The comment box: Ctrl+Enter or Send posts it; typing `@` offers the instance names (arrows and Enter or Tab choose, Esc
- * closes the list, not the box). `names`: [{ name, off }] — an instance with the task board off is listed, not choosable.
+ * closes the list, not the box). `names`: [{ name, off }] — an instance with the task board off is listed, not choosable; one the
+ * comment would reach (the card's `assignee`, an @name in the text) with the board off is named under the box, with where to turn it on.
  * `onSend(text)` resolves "ok" for the text to clear.
  */
-export function Composer({ placeholder, names, onSend }) {
+export function Composer({ placeholder, names, assignee, onSend }) {
   const [text, setText] = useState("");
   const [caret, setCaret] = useState(0);
   const [hidden, setHidden] = useState(false);
@@ -344,7 +345,8 @@ export function Composer({ placeholder, names, onSend }) {
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); if (open) setHidden(true); else e.currentTarget.blur(); return; }
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send(); }
   }
-  return html`<div class="tc-composer">
+  return html`<${BoardOffNote} names=${boardOffTargets(names, assignee, text)} textKey="tasks.boardOffCommentNote" />
+  <div class="tc-composer">
     <div class="tc-compose-box">
       ${open ? html`<ul class="tc-mentions" role="listbox" aria-label=${t("taskcard.mentionList")}>${found.map((n, i) => html`<li key=${n.name} role="option" aria-selected=${i === active ? "true" : "false"} class=${i === active ? "active" : ""}>
         <button type="button" tabindex="-1" disabled=${!!n.off} title=${n.off ? t("tasks.boardOffHint") : undefined}

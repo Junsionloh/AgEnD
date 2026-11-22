@@ -4728,6 +4728,7 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
     let claim: Extract<WebSendClaim, { kind: "new" }> | undefined;
     let acceptedId: string | null = null;
     let tellPasted: (() => void) | undefined;   // #4145: the pasted-token line, after this message's own (whatever the send's end)
+    let tellBoardOff: (() => void) | undefined;   // AGEND-333 D5: cards named for an instance with the task board off, said once the message went
     try {
       const raw = JSON.parse(body);
       const parsed = SendMessageSchema.safeParse(raw);
@@ -4813,6 +4814,12 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
       const { hidden: hiddenCard } = boardHiding(ctx, linkRestricted(req, new URL(req.url ?? "/", "http://localhost"), ctx));
       const refCards = taskBoard ? cardsForRefs(taskBoard, taskRefCodes(typed), hiddenCard) : [];
       const refBlock = taskBoard && refCards.length ? taskRefBlock(taskBoard, refCards, { read: taskReadWay(ctx.fleetConfig?.instances[instance], instance), hidden: hiddenCard }) : "";
+      // AGEND-333 D5: cards named for an instance whose task board is off are not handed over (it has no task tool): the person is
+      // told which instance it is and where to turn it on, as a line in the chat after the message — not left to wonder why it did nothing.
+      if (!guest && !/^\s*\//.test(typed) && taskBoardOffIn(ctx.fleetConfig, instance) && ctx.scheduler?.db.board) {
+        const named = cardsForRefs(ctx.scheduler.db.board, taskRefCodes(typed), hiddenCard).map((c) => c.code);
+        if (named.length) tellBoardOff = () => ctx.emitSseEvent("message", { instance, role: "status", sender: "AgEnD", text: t("web.task_board_off_refs", instance, named.join(", ")), ts: new Date().toISOString(), messageId: newWebMessageId() });
+      }
       const deliveredText = delivery.text + refBlock;
       // #1269: `/raw ` is pasted into the CLI with no [user:] envelope (the daemon's own check, on this exact text).
       // M-3278 (decision 7933bf90): the public link's admin session may do that too, as a local one may; anyone else
@@ -4963,6 +4970,7 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
     } finally {
       claim?.settle(acceptedId);
       tellPasted?.();
+      if (acceptedId) tellBoardOff?.();
     }
   });
 }

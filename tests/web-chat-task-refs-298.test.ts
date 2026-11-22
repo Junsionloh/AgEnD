@@ -303,6 +303,42 @@ describe("POST /ui/send: the cards a message names go to the agent", () => {
     await send("please read #M-1");
     expect(on.delivered.at(-1).content).toContain("M-1 [in progress] Build the login API");
   });
+  it("AGEND-333 D5: a card named for an instance with the board off is not handed over, and the chat says which instance and where to turn it on", async () => {
+    const events: any[] = [];
+    vi.spyOn(fm, "emitSseEvent").mockImplementation(((event: string, data: any) => { events.push({ event, data }); }) as never);
+    const { delivered } = delivering("b");
+    const r = await send("please read #M-1 and #S-1", { instance: "b" });
+    expect(r.status).toBe(200);
+    expect(delivered.map((d) => d.content)).toEqual(["please read #M-1 and #S-1"]);          // only the words went, as before
+    const said = events.filter((e) => e.event === "message" && e.data.role === "status" && e.data.instance === "b").map((e) => e.data.text);
+    expect(said).toEqual(["b has the task board switched off, so it was not given M-1, S-1: only your words went. Turn it on in Settings → Shared agent settings → Dashboard access (every agent), or in the agent's own Settings → Advanced."]);
+    // The line follows the message, not before it.
+    const order = events.filter((e) => e.event === "message").map((e) => e.data.role);
+    expect(order.indexOf("user")).toBeLessThan(order.indexOf("status"));
+  });
+  it("…and only then: a number that is no card, an instance with the board on, a command line, or a guest add no such line", async () => {
+    const events: any[] = [];
+    vi.spyOn(fm, "emitSseEvent").mockImplementation(((event: string, data: any) => { events.push({ event, data }); }) as never);
+    const statuses = () => events.filter((e) => e.event === "message" && e.data.role === "status").length;
+    delivering("b"); delivering("a");
+    await send("read #M-99", { instance: "b" });                       // no such card
+    await send("read #M-1", { instance: "a" });                        // the board is on there
+    await send("/raw read #M-1", { instance: "b" });                   // a command for the CLI
+    await send("no number here", { instance: "b" });
+    expect(statuses()).toBe(0);
+    vi.spyOn(fm, "guestScope").mockReturnValue(new Set(["b"]));
+    await send("read #M-1", { instance: "b" }, session("guest", ALICE));
+    expect(statuses()).toBe(0);
+  });
+  it("the line is in the dashboard's language: 繁體中文 says it as well", async () => {
+    const { setLocale } = await import("../src/locale.js");
+    const events: any[] = [];
+    vi.spyOn(fm, "emitSseEvent").mockImplementation(((event: string, data: any) => { events.push({ event, data }); }) as never);
+    delivering("b");
+    setLocale("zh-TW");
+    try { await send("看 #M-1", { instance: "b" }); } finally { setLocale("en"); }
+    expect(events.filter((e) => e.data.role === "status").map((e) => e.data.text)).toEqual(["b 的任務板是關閉的，所以沒有把 M-1 交給它：它只收到你寫的字。要打開：設定 → Agent 共用設定 → 網頁儀表板權限（所有 Agent），或這個 Agent 自己的設定 → 進階。"]);
+  });
   it("the channel's echo is the person's words (no card text goes to a topic)", async () => {
     delivering();
     const sent: string[] = [];

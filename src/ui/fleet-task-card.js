@@ -424,7 +424,7 @@ export function CardPage({ id, tick, projects, cards = [], boardOff = [], doing 
 
       <div class="tp-activity">
         <${Timeline} detail=${detail} describe=${describeRow} cards=${cards} lead=${((projects || []).find((x) => x.id === card.projectId) || {}).leadInstance || null} />
-        ${can ? html`<${Composer} names=${mentionNames} placeholder=${card.assignee ? t("taskcard.commentTo", card.assignee) : t("taskcard.commentHint")}
+        ${can ? html`<${Composer} names=${mentionNames} assignee=${card.assignee} placeholder=${card.assignee ? t("taskcard.commentTo", card.assignee) : t("taskcard.commentHint")}
           onSend=${(text) => run(() => boardApi.update(card.id, { comment: text }))} />` : null}
       </div>
     </div>

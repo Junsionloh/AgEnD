@@ -8,6 +8,8 @@ import { identityOf, paintIdentity, useIdentityColors } from "/assets/identity-c
 import { dotState } from "/assets/instance-nav.js";
 import { Dialog } from "/assets/ui-dialog.js";
 import { toast } from "/assets/ui-toast.js";
+import { Icon } from "/assets/ui-icons.js";
+import { sectionPath } from "/assets/app-route.js";
 
 register("tasks", {
   en: {
@@ -43,6 +45,9 @@ register("tasks", {
     definitionHint: "One per line: conditions anyone can check", acceptanceHint: "One per line",
     context: "Context", contextHint: "Paths, related cards, decisions already made (pointers only)",
     assignee: "Assignee", assigneeHint: "Which instance", project: "Project", size: "Size", priority: "Priority",
+    boardOffNote: "The task board is switched off for {0}: cards cannot be handed to them, comments and @mentions do not wake them, and they get no [Task board] notices.",
+    boardOffCommentNote: "The task board is switched off for {0}, so this comment will not wake them.",
+    boardOffWhere: "Turn it on in {0} (every agent), or in the agent's own Settings → Advanced → Dashboard access.", boardOffWhereLink: "Settings → Shared agent settings",
     boardOff: "{0} (task board off)", boardOffHint: "Instances with the task board switched off cannot be handed cards: they have no task tool to read them with.",
     reviewBox: "Stop at review for my confirmation", created: "Opened {0}", titleRequired: "A title is required",
     search: "Search cards", searchHint: "Search titles, fields, checklists and comments", searchEmpty: "No cards match", inField: "in {0}",
@@ -123,6 +128,9 @@ register("tasks", {
     definitionHint: "一行一項：能客觀判斷是否達成的條件", acceptanceHint: "一行一項",
     context: "背景", contextHint: "檔案路徑、相關卡號、已經做的決定（只放指引）",
     assignee: "負責人", assigneeHint: "交給哪個 Agent", project: "專案", size: "大小", priority: "優先度",
+    boardOffNote: "{0} 的任務板是關閉的：不能指派卡片給它，留言和 @ 也叫不醒它，它也收不到 [Task board] 通知。",
+    boardOffCommentNote: "{0} 的任務板是關閉的，這則留言不會叫醒它。",
+    boardOffWhere: "要打開：{0}（所有 Agent），或這個 Agent 自己的設定 → 進階 → 網頁儀表板權限。", boardOffWhereLink: "設定 → Agent 共用設定",
     boardOff: "{0}（看板已關閉）", boardOffHint: "關閉任務看板的 Agent 不能被派卡：它沒有 task 工具，讀不到卡片。",
     reviewBox: "做完要停在待確認，等我確認", created: "已開 {0}", titleRequired: "標題必填",
     search: "搜尋卡片", searchHint: "搜尋標題、各欄位、驗收條件和留言", searchEmpty: "沒有符合的卡片", inField: "在{0}",
@@ -368,6 +376,28 @@ function word(key, arg, i) {
 export function AssigneeOption({ name, boardOff = [] }) {
   const off = boardOff.includes(name);
   return html`<option value=${name} disabled=${off} title=${off ? t("tasks.boardOffHint") : undefined}>${off ? t("tasks.boardOff", name) : name}</option>`;
+}
+
+/** The names a hint lists: the first few, then how many more. */
+export const boardOffList = (names) => (names.length > 5 ? `${names.slice(0, 5).join(", ")} +${names.length - 5}` : names.join(", "));
+/**
+ * AGEND-333 D5: which of the instances this comment would reach have the task board switched off — the card's assignee (a
+ * comment on it wakes it) and any `@name` in the text (code spans and blocks are never read as a mention, as on the server).
+ * `names`: [{ name, off }]. Pure: tests import it.
+ */
+export function boardOffTargets(names, assignee, text) {
+  const prose = String(text || "").replace(/```[\s\S]*?(```|$)/g, " ").replace(/`[^`\n]*`/g, " ");
+  const escaped = (n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return (names || []).filter((n) => n.off && (n.name === assignee || new RegExp(`(^|[^\\w@./-])@${escaped(n.name)}(?![\\w-])`, "i").test(prose))).map((n) => n.name);
+}
+/**
+ * AGEND-333 D5: a quiet note, in the page's own style (`.tb-readonly`): which instances have the task board switched off, what
+ * that means for the thing the person is doing, and where to turn it on. Nothing when none does.
+ */
+export function BoardOffNote({ names, textKey = "tasks.boardOffNote" }) {
+  if (!names || !names.length) return null;
+  const [before, after] = t("tasks.boardOffWhere", "\u0000").split("\u0000");
+  return html`<p class="tb-readonly tb-boardoff" role="note"><${Icon} name="alert" size=${16} /><span>${t(textKey, boardOffList(names))} ${before}<a href=${sectionPath("agent-defaults")}>${t("tasks.boardOffWhereLink")}</a>${after}</span></p>`;
 }
 
 /** A refusal in the page's language when the board named it (tasks.err.<key>), else the board's own sentence. */

@@ -42,6 +42,10 @@ As with 2.1.12, its task prune knows no projects (below), and a normalized confi
 
 Returning can't rebuild a layout that an older version's save dropped. Keep a copy of `web-offices.json` before rolling back if the layouts matter.
 
+## A new fleet's task board (AGEND-333)
+
+A new `fleet.yaml` (`agend init`, `agend quickstart`, the setup page) used to carry `defaults.dashboard.task_board: false`, and now carries nothing about the task board, which is on. Nothing here needs a rollback step: a file without the key is read as "allowed" by every version that has `dashboard` (and by those that predate it, where the board is always on), and an existing file is never rewritten, so a `false` somebody chose stays. The change is a smaller file, not a new key.
+
 ## The setup page's default directory (2.3.1 and 2.2.6)
 
 From #2726 the setup page may leave an agent's working directory empty. The agent then gets its own workspace, and fleet.yaml is written with that path spelled out: `working_directory: <AGEND_HOME>/workspaces/<name>`. Every release writes that same shape for an agent created without a directory. `scripts/check-setup-workdir-downgrade.mjs` (in `data-downgrade.yml`) writes it the way the setup page does, for Web only and with a bot. It then checks that the published **2.3.1** and **2.2.6** validators accept the file and that their loaders read the same folder.
