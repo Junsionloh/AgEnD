@@ -352,7 +352,15 @@ finishing it from review with done.
   never moves alone. A project's lead, renaming and archiving stay a person's,
   and a person may do all of it. Before this, creating projects and moving a
   main task between them were a person's only.
-- Code: the `task` tool (`src/channel/mcp-tools.ts:79-80`).
+- In CLI mode (`agent_mode: cli`, no MCP server) the same actions and fields
+  are `agend-agent task …` commands (AGEND-333): create, list, get, claim, done,
+  update, move, comment, mine, projects, create-project, move-project, watch,
+  unwatch; every field of the tool is a flag (`--project`, `--parent`,
+  `--acceptance`, `--check`, `--version`, …). The fleet judges them by the same
+  rules as a tool call (who may edit a card, a stale `version`, one card at a
+  time, the tool profile), so a CLI agent can do exactly what an MCP one can.
+- Code: the `task` tool (`src/channel/mcp-tools.ts:79-80`); the command line
+  (`taskArgs` in `src/agent-cli.ts`).
 - Refs: —
 
 ## decision

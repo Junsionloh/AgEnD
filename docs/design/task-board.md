@@ -361,6 +361,16 @@ a `status` is one write: a refused move leaves the fields as they were); `get` o
 an agent reads a card in a dozen short lines, not a JSON record. The tool's own tasks are answered as before; list rows
 carry `code`.
 
+**The command line has every action and field the tool has** (AGEND-333 D2; `taskArgs` in `src/agent-cli.ts`): `agend-agent task`
+`create | list | get | claim | done | update | move | comment | mine | projects | create-project | move-project | watch | unwatch`.
+Each field of the tool's `ACTION_FIELDS` is a flag (`--project`, `--parent`, `--scope`, `--acceptance` (repeat), `--context`,
+`--needs-review` / `--no-needs-review`, `--size`, `--dispatcher`, `--depends-on`, `--state`, `--log`, `--comment`, `--check`,
+`--uncheck`, `--version`, `--stale`, `--detail`, `--limit`, `--cursor`, …); the words that always had a place keep it. The client only
+builds the same arguments: the fleet answers them by the one set of rules — the agent token and the tool profile, the dashboard
+switch, who may edit a card, a `version` that is not the card's now (refused, nothing written), one card in progress, a field an action
+does not take (refused by name) — so a CLI-mode agent is no more and no less able than an MCP one. `tests/agent-cli-task-board-333.test.ts`
+runs the real client against the real `/agent` endpoint, and fails when a field is added to the tool and not to the command line.
+
 A field an action does not take is refused by name and nothing is written (#3195). Projects (#3195, the user's decision
 9af8d799): `create_project` (name, description) creates one; `update` with `project` (the project's id, or null /
 `"none"`) moves a main task into, between or out of projects when the agent may edit that card (unassigned, its own,
