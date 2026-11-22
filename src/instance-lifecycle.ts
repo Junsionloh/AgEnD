@@ -335,6 +335,8 @@ export interface LifecycleContext {
   resolveParkedNotice?(name: string): void;
   /** Called after a replacement Daemon object is live, for generation fencing and post-resume notices. */
   onDaemonReady?(name: string, daemonBootId: string): void;
+  configureClassicRestriction?(name: string, daemon: Daemon): void;
+  inheritContactOrigin?(source: string, target: string): void;
   /** Test/integration seam for the non-LLM Codex quota second opinion. */
   verifyCodexQuota?(): Promise<CodexQuotaVerdict>;
   /** Test/integration seam for the non-LLM Claude quota second opinion. */
@@ -407,6 +409,7 @@ export function peerWorkingDirectories(fleetConfig: FleetConfig | null, name: st
 
 /** What attachIncidentHandlers needs from a Daemon — the real one satisfies it. */
 export interface IncidentEventSource {
+  staleAuthIssue?(): { since: number } | null;
   usesNativePane?(): boolean;
   confirmAuthFailure?(): void;
   on(event: string, handler: (...args: any[]) => void): unknown;
@@ -995,9 +998,9 @@ export class InstanceLifecycle {
       if (this.ctx.finishDeliveryStatus) this.ctx.finishDeliveryStatus(name, data.chatId, data.messageId, "delivered", data.threadId);
       else this.ctx.reactMessageStatus(name, data.chatId, data.messageId, "delivered", data.threadId);
     });
-    daemon.on("message_failed", safeHandler((data: { chatId: string; messageId: string; threadId?: string }) => {
-      this.ctx.eventLog?.insert(name, "message_failed", { messageId: data.messageId });
-      this.ctx.logger.warn({ name, messageId: data.messageId }, "Message delivery failed (window gone, retries exhausted)");
+    daemon.on("message_failed", safeHandler((data: { chatId: string; messageId: string; threadId?: string; phase?: string; proof?: string }) => {
+      this.ctx.eventLog?.insert(name, "message_failed", { messageId: data.messageId, phase: data.phase, proof: data.proof });
+      this.ctx.logger.warn({ name, messageId: data.messageId, phase: data.phase, proof: data.proof }, "Message delivery failed");
       if (this.ctx.finishDeliveryStatus) this.ctx.finishDeliveryStatus(name, data.chatId, data.messageId, "failed", data.threadId);
       else this.ctx.reactMessageStatus(name, data.chatId, data.messageId, "failed", data.threadId);
     }, this.ctx.logger, `daemon.message_failed[${name}]`));
@@ -1260,6 +1263,7 @@ export class InstanceLifecycle {
     }, this.ctx.logger, `daemon.muse_relay_exhausted[${name}]`));
 
     daemon.on("mcp_died", safeHandler(async (data: { name: string; pid: number; autoRestart?: boolean; authSuspected?: boolean; neverConnected?: boolean }) => {
+      if (daemon.staleAuthIssue?.()) return; // The instance-specific restart notice already covers this symptom.
       const stormAtDetection = this.ctx.stormWindow?.isActive() === true;
       const incident = this.mcpIncident(name);
       const generation = ++incident.gen;
@@ -1275,7 +1279,7 @@ export class InstanceLifecycle {
       // ask the cached token-free probe. Only a CONFIRMED invalid swaps the
       // message — valid or uncertain keeps the accurate MCP report below.
       const verdict = data.authSuspected ? "invalid" : await this.verifyAuthError(name);
-      if (incident.gen !== generation) {
+      if (incident.gen !== generation || daemon.staleAuthIssue?.()) {
         // The server recovered (or a newer death superseded this one) while the
         // probe ran. Anything we would say now is stale — say nothing.
         this.ctx.logger.info({ name, pid: data.pid }, "MCP death report superseded during the auth probe — nothing sent");
@@ -1526,6 +1530,7 @@ export class InstanceLifecycle {
       inProgress?: boolean;
       pattern?: RegExp;
     }) => {
+      if (data.type === "stale_auth" && this.daemons.get(name) !== daemon) return;
       this.ctx.eventLog?.insert(name, "pty_error", { type: data.type, action: data.action });
       this.ctx.logger.warn({ name, errorType: data.type, action: data.action }, `PTY error: ${data.message}`);
 
@@ -1535,7 +1540,7 @@ export class InstanceLifecycle {
         this.notifyIncident(name, data.type, data.notice ?? data.message);
         if (data.action === "pause") {
           if (data.type === "auth_error") { daemon.confirmAuthFailure?.(); daemon.requestPauseWhenIdle({ reconfirmAuth: true, reason: "auth" }); }
-          else daemon.requestPauseWhenIdle({ reason: data.type === "quota" ? "quota" : "error" });
+          else daemon.requestPauseWhenIdle({ reason: data.type === "stale_auth" ? "stale_auth" : data.type === "quota" ? "quota" : "error" });
         }
         return;
       }
@@ -1782,7 +1787,7 @@ export class InstanceLifecycle {
         } else {
           // The marker must say auth (2b never auto-wakes a login failure); any
           // other pause-action error is an error pause, not an operator one.
-          const reason: PauseReason = data.type === "auth_error" ? "auth" : data.type === "quota" ? "quota" : "error";
+          const reason: PauseReason = data.type === "stale_auth" ? "stale_auth" : data.type === "auth_error" ? "auth" : data.type === "quota" ? "quota" : "error";
           void this.pause(name, reason)
             .catch(err => this.ctx.logger.warn({ err, name }, "auth-error pause failed"))
             .finally(() => { if (!this.isPaused(name)) daemon.requestPauseWhenIdle({ reason }); });
@@ -2076,6 +2081,7 @@ export class InstanceLifecycle {
       this.ctx.backendOutage,
     );
     launched = daemon;
+    this.ctx.configureClassicRestriction?.(name, daemon);
     if (native) { daemon.setNativePaneLifecycle(native); native.bindDaemon?.(daemon); }
     // Register before start: a pre-launch refusal has no published daemon or later incident handlers.
     daemon.on("kiro_compatibility_hold", (message: string | null) => {
@@ -2682,6 +2688,7 @@ export class InstanceLifecycle {
     adapterId?: string,
     execution?: SettingsExecution,
     toolSetCaller?: string,
+    originCaller?: string,
   ): Promise<void> {
     const check = (): void => execution?.assert(); check();
     if (args.runtime !== undefined && args.runtime !== "wsl" && args.runtime !== "windows") { respond(null,"Unknown instance runtime"); return; }
@@ -2993,6 +3000,7 @@ export class InstanceLifecycle {
         finally { createUndo = settingsUndo((this.ctx.getSettingsConfigPath?.() ?? join(this.ctx.dataDir, "fleet.yaml")), beforeCreate, this.ctx.fleetConfig, [["instances", newInstanceName!]]); }
       };
       if (execution) execution.mutate(persist); else persist();
+      if (originCaller) this.ctx.inheritContactOrigin?.(originCaller, newInstanceName);
       if (execution) await this.start(newInstanceName, instanceConfig, true, undefined, undefined, execution);
       else await this.start(newInstanceName, instanceConfig, true);
       createdDaemon = this.daemons.get(newInstanceName); check();

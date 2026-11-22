@@ -1,3 +1,5 @@
+import {parseHostAlertSettings,type HostAlertSettings} from './host-monitoring-alert-settings.js';
+import { monitoringConfig, parseMonitoringSettings } from "./host-monitoring-config.js";
 import { parseHubPageSharing } from "./hub-page-sharing-settings.js";
 import { officeInputPatch } from "./dashboard-permissions.js";
 import { addsSecondGeneral, generalNames, isWebOnlyFleetConfig } from "./web-only-fleet.js";
@@ -48,6 +50,9 @@ export interface SettingsSecretProof {
 }
 export interface SettingsEffectContext {
   config: FleetConfig | null; classic: Record<string, any>;
+  hostMonitoringAvailable?(): boolean;
+  hostMonitoringDrive?(): string | undefined;
+  hostAlertSettings?():HostAlertSettings;
   proof?(kind: "provider" | "secret" | "binding", target: string, verification: string, binding?: string, key?: string): SettingsSecretProof | null;
   generalLocation?(input: unknown): { summary: string[]; summary_i18n?: SettingsSummaryPresentation; connections: string[] };
   /** S3c (S-55): a Hub exposure publish's summary (absent: no Hub member here). Throws on a refused input. */
@@ -84,7 +89,7 @@ export function isSettingsMutation(method: string, path: string): boolean {
   // AGEND-148: and on a paired Windows computer (Install, and the Runtime's Update which is that install over an older copy). The computer's owner's own switch is asked there, separately.
   if (method === "POST" && isRuntimeCliInstallPath(path)) return true;
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return false;
-  return /^\/api\/settings\/(?:fleet\/(?:defaults|channels|web|appearance|runtimes|instances(?:\/[^/]+)?)|classic\/(?:defaults|channels\/[^/]+)|(?:provider-secrets|secrets)\/[^/]+\/apply|connections\/[^/]+\/(?:secret|binding)\/apply|quickstart\/commit)$/.test(path)
+  return /^\/api\/settings\/(?:fleet\/(?:defaults|channels|web|appearance|runtimes|monitoring|host-alerts|instances(?:\/[^/]+)?)|classic\/(?:defaults|channels\/[^/]+)|(?:provider-secrets|secrets)\/[^/]+\/apply|connections\/[^/]+\/(?:secret|binding)\/apply|quickstart\/commit)$/.test(path)
     || path === "/ui/config" || path === "/ui/instances" || /^\/ui\/instances\/[^/]+\/delete$/.test(path);
 }
 function record(body: unknown): Record<string, any> {
@@ -109,6 +114,15 @@ export function prepareSettingsEffect(method: string, path: string, body: unknow
 } {
   const cfg = context.config, before: any = { fleet: structuredClone(cfg), classic: structuredClone(context.classic) }, after = structuredClone(before);
   const operation = `${method} ${path}`;
+  if(path==='/api/settings/fleet/host-alerts'){
+    if(method!=='PUT'||!context.hostAlertSettings)throw new SettingsConfirmationError(503,'host_alert_unavailable');
+    let next:HostAlertSettings,previous:HostAlertSettings;
+    try{next=parseHostAlertSettings(body);previous=parseHostAlertSettings(context.hostAlertSettings());}catch{throw new SettingsConfirmationError(400,'invalid_alert_settings');}
+    const fingerprint=settingsFingerprint([operation,previous,next]);if(settingsFingerprint(previous)===settingsFingerprint(next))return {diff:null};
+    const diff=settingsChangeDiff({}, {}, {operation,force:true})!;
+    const summary=[`Host alerts: Needs you ${next.needsYou?'on':'off'}; General ${next.general?'on':'off'}`,...Object.entries(next.rules).map(([key,r])=>`${key}: ${r.kind}; warning ${r.warning}; urgent ${r.urgent}; clear ${r.clear}; holds ${r.warningMs}/${r.urgentMs}/${r.clearMs} ms; samples ${r.warningSamples}/${r.urgentSamples}`)];
+    return {diff:{...diff,fingerprint,summary,affectedConnections:[]}};
+  }
   if (path === "/ui/host-install") {
     const input = record(body);
     if (method !== "POST" || Object.keys(input).length !== 1 || typeof input.backend !== "string" || !/^[a-z][a-z0-9-]{0,31}$/.test(input.backend))
@@ -380,6 +394,15 @@ export function prepareSettingsEffect(method: string, path: string, body: unknow
       const applied = applyVerifiedAuthorityPatch(cfg.web?.verified_authority, parsed.verifiedAuthority);
       if (applied.next) after.fleet.web.verified_authority = applied.next; else delete after.fleet.web.verified_authority;
     }
+  } else if (path === "/api/settings/fleet/monitoring") {
+    if (!cfg) throw new SettingsConfirmationError(503, "fleet_unavailable");
+    const parsed = parseMonitoringSettings(body);
+    if ("error" in parsed) throw new SettingsConfirmationError(400, parsed.error);
+    const drive=context.hostMonitoringDrive?.();
+    before.fleet.monitoring={...monitoringConfig(cfg.monitoring),...(drive?{wsl_drive:drive}:{})};
+    const monitoring = { ...before.fleet.monitoring, ...parsed.patch };
+    if (monitoring.enabled && context.hostMonitoringAvailable?.() !== true) throw new SettingsConfirmationError(409, "monitoring_unavailable");
+    after.fleet.monitoring = monitoring;
   } else if (path === "/api/settings/fleet/runtimes") {
     if (!cfg) throw new SettingsConfirmationError(503, "fleet_unavailable");
     // M-2255: one parser with the handler; each switch is judged by direction (settings-change.ts).

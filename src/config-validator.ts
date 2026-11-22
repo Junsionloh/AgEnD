@@ -1,3 +1,4 @@
+import { monitoringProblem } from "./host-monitoring-config.js";
 import { t } from "./locale.js";
 import { quotaNoticeProblem } from "./quota-notice-config.js";
 import { publicLinkModeProblem, publicLinkNamedHostname, publicLinkPatchShape } from "./public-web-link.js";
@@ -410,6 +411,10 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
       else if (typeof value !== "boolean") err(`runtimes.${key}`, "must be a boolean");
     }
   }
+  if (config.monitoring !== undefined) {
+    const problem = monitoringProblem(config.monitoring);
+    if (problem) err("monitoring", problem);
+  }
   if (config.needs_you !== undefined && !isObj(config.needs_you)) {
     err("needs_you", "must be a mapping");
   } else if (isObj(config.needs_you)) {
@@ -793,6 +798,9 @@ export function validateClassicBotConfig(config: unknown): ValidationResult {
       if (!isObj(channel)) { err(`channels.${key}`, "must be a mapping"); continue; }
       const backendIssue = backendProblem(channel.backend, typeof channel.instanceName === "string" ? channel.instanceName : typeof channel.name === "string" ? channel.name : key, true);
       if (backendIssue) err(`channels.${key}.backend`, backendIssue);
+      if (channel.effort !== undefined && (typeof channel.effort !== "string" || !/^(low|medium|high|xhigh|max)$/.test(channel.effort))) {
+        err(`channels.${key}.effort`, "must be one of: low, medium, high, xhigh, max");
+      }
       validateAutoPause(channel.auto_pause_after, `channels.${key}.auto_pause_after`);
       if (channel.quota_notice !== undefined) { const problem = quotaNoticeProblem(channel.quota_notice); if (problem) err(`channels.${key}.quota_notice`, problem); }
       if (channel.tool_progress !== undefined && !["off", "standard", "verbose"].includes(String(channel.tool_progress))) {
@@ -806,6 +814,9 @@ export function validateClassicBotConfig(config: unknown): ValidationResult {
       }
       if (channel.web_echo !== undefined && typeof channel.web_echo !== "boolean") {
         err(`channels.${key}.web_echo`, "must be a boolean");
+      }
+      if (channel.restricted_mode !== undefined && typeof channel.restricted_mode !== "boolean") {
+        err(`channels.${key}.restricted_mode`, "must be a boolean");
       }
     }
   }

@@ -1,7 +1,19 @@
 // Types for fleet-office-pack.js: the page's module, which the host imports too (web-office-skins.ts,
 // web-office-store.ts), so both check a skin pack and an office's layout overrides by the same rules.
+/** One sheet of a multi-sheet or frame-list strip (`src` is `frames·w × h` px). */
+export interface PackStripSheet { src: string; frames: number }
 /** `dw` × `dh`: its displayed size in logical units (w·scale × h·scale unless the manifest says otherwise). */
-export interface PackStrip { src: string; frames: number; w: number; h: number; fps: number; ax: number; ay: number; dw: number; dh: number }
+export interface PackStrip {
+  src: string; frames: number; w: number; h: number; fps: number; ax: number; ay: number; dw: number; dh: number;
+  /** M-3394 (#4231): present on multi-sheet (`src: [...]`) and frame-list (`frames: [{ src, ms? }]`) strips. */
+  sheets?: PackStripSheet[];
+  /** M-3394: per-frame durations in ms (length === `frames`). */
+  durations?: number[];
+  /** M-3394: play once and hold the last frame. */
+  once?: boolean;
+  /** M-3394 (#4231): intro plays `0 .. loopFrom - 1` once, then loops `loopFrom .. frames - 1`. */
+  loopFrom?: number;
+}
 export interface PackPoint { x: number; y: number }
 /** #2691: a seat reserved for `for` (lent while they are all elsewhere when `lend`); a plain seat has neither. */
 export interface PackSeat extends PackPoint { for?: string[]; lend?: boolean }
@@ -27,9 +39,40 @@ export interface CheckedPack {
   portraits?: { default?: PackPortrait; byInstance: Record<string, PackPortrait>; byUser: Record<string, PackPortrait>; npc: Record<string, PackPortrait> };
   /** #2861: the dialogue box's look — a 9-slice frame and colours (#rrggbb). */
   dialogBox?: { frame?: string; slice?: number; background?: string; border?: string; text?: string; name?: string };
+  /** #4256: optional agent profile card preset, visual style, and layout. */
+  card?: PackCard;
   /** #3685: areas an idle person now and then visits (a free seat there, for minSeconds–maxSeconds); absent: none. */
   idleVisits?: Array<{ area: string; weight: number; minSeconds: number; maxSeconds: number }>;
+  /** M-3432 (#4255): optional custom snacks the viewer may drag-to-feed or place on the floor. */
+  snacks?: PackSnack[];
 }
+/** M-3432 (#4255): one custom snack item from a pack's `snacks` list. */
+export interface PackSnack {
+  id: string;
+  label?: string | { en?: string; "zh-TW"?: string };
+  sprite: PackStrip;
+  eat?: PackStrip;
+  radius: number;
+}
+/** #4256: agent profile card style and layout from a skin pack. */
+export type CardPreset = "default" | "rpg" | "compact" | "dossier";
+export type CardRadius = "none" | "sm" | "md" | "lg";
+export type CardAvatarSize = "sm" | "md" | "lg";
+export type CardAvatarSource = "sprite" | "portrait";
+export type CardHeaderAlign = "left" | "center";
+export type CardSection = "header" | "level" | "rows" | "now" | "tell" | "actions";
+export type CardRowKey = "office" | "model" | "backend" | "today" | "firstSeen";
+export type CardHideKey = "instance" | "title" | "badge" | "level" | "xpBar" | "office" | "model" | "backend" | "today" | "firstSeen" | "now";
+export interface PackCardStyle {
+  background?: string; border?: string; text?: string; muted?: string; accent?: string;
+  barTrack?: string; barFill?: string; buttonBg?: string; buttonText?: string; buttonPrimaryBg?: string; buttonPrimaryText?: string;
+  backgroundImage?: string; frame?: string; slice?: number; radius?: CardRadius;
+}
+export interface PackCardLayout {
+  avatarSize?: CardAvatarSize; avatarSource?: CardAvatarSource; headerAlign?: CardHeaderAlign; width?: number;
+  sections?: CardSection[]; rows?: CardRowKey[]; rowColumns?: 1 | 2; hide?: CardHideKey[];
+}
+export interface PackCard { preset?: CardPreset; style?: PackCardStyle; layout?: PackCardLayout }
 /** #2861: a portrait's files by the state it is shown in (at least one). */
 export type PackPortrait = Partial<Record<"idle" | "working" | "needs", string>>;
 /** #2661: the Office levels' words (a pack's `levels`; #3679: the fleet-wide one too). */
@@ -52,10 +95,33 @@ export const LOGICAL: { w: number; h: number };
 export const CHAR_DEPTH: number;
 export const PACK_STATES: string[];
 export const BUBBLE_KEYS: string[];
+export const STRIP_LIMITS: { sheetFrames: number; sheets: number; frames: number; minMs: number; maxMs: number };
+export const SNACK_LIMITS: { max: number; minRadius: number; maxRadius: number; defaultRadius: number; labelMax: number };
+export function snackLabel(snack: PackSnack | null | undefined, lang?: string): string;
+export function stripDurationMs(st: PackStrip | null | undefined): number;
 export function own<T = unknown>(o: unknown, k: unknown): T | undefined;
 export function inherited(k: unknown): boolean;
 export function matteOk(v: unknown): v is string;
+export function relativeLuminance(hex: string): number | null;
+export function contrastRatio(hexA: string, hexB: string): number;
+export const CARD_PRESETS: CardPreset[];
+export const CARD_RADII: CardRadius[];
+export const CARD_AVATAR_SIZES: CardAvatarSize[];
+export const CARD_AVATAR_SOURCES: CardAvatarSource[];
+export const CARD_HEADER_ALIGNS: CardHeaderAlign[];
+export const CARD_SECTIONS: CardSection[];
+export const CARD_ROWS: CardRowKey[];
+export const CARD_HIDE: CardHideKey[];
+export const CARD_STYLE_COLORS: string[];
+export const CARD_LIMITS: { widthMin: number; widthMax: number; sliceMax: number; textContrast: number; uiContrast: number };
 export function checkStrip(v: unknown, at?: string, scale?: number): PackStrip;
+export function stripSheets(st: PackStrip | null | undefined): PackStripSheet[];
+export function stripImages(st: PackStrip | null | undefined): string[];
+export function stripFrameAt(st: PackStrip | null | undefined, ms: number): number;
+export function stripCell(st: PackStrip | null | undefined, frame: number): { src: string; col: number };
+export function stripMaxFps(st: PackStrip | null | undefined): number;
+export function packMaxFps(pack: CheckedPack | null | undefined): number;
+export function createClipClocks(): { elapsed(key: string, strip: PackStrip | null | undefined, ms: number): number; prune(seen: ReadonlySet<string>): void; clear(): void };
 export function checkSkinPack(x: unknown, opts?: { kept?: boolean }): { ok: true; pack: CheckedPack } | { ok: false; error: string };
 /** #3679: a fleet-wide `levels`, by a pack's rules. */
 export function checkLevels(v: unknown): { ok: true; levels: LevelWords } | { ok: false; error: string };

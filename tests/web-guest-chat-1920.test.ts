@@ -308,8 +308,8 @@ describe("live: a guest scoped to `a`", () => {
     const late2 = await pending;
     expect([late2.status, JSON.parse(late2.body).error]).toEqual([429, "guest_commands_rate_limited"]);
     vi.mocked(fm.webCommand).mockRestore();
-    // The status frame tells its palette which commands it may run on each agent.
-    expect(fm.getUiStatus().instances.find((i: { name: string }) => i.name === "a").guest_commands).toEqual(["ctx", "cancel", "btw", "steer"]);
+    // The status frame follows the shared table: /sysinfo is anyone-level here; /status stays admin-only.
+    expect(fm.getUiStatus().instances.find((i: { name: string }) => i.name === "a").guest_commands).toEqual(["sysinfo", "ctx", "cancel", "btw", "steer"]);
   });
   it("#2855: at most 30 saves a minute per guest account, every device of it counted together", async () => {
     scopedToA(); guestsChat(); freshLimits();
@@ -336,4 +336,22 @@ describe("live: a guest scoped to `a`", () => {
       expect((await raw(port, "GET", path, { cookie: cookieOf(admin) })).status, `admin ${q}`).toBe(404);
     }
   });
+});
+
+it("a guest may resend its own failed accepted message only in scope and while chat remains allowed", async () => {
+  scopedToA(); guestsChat(); const guest = session("guest", ALICE);
+  const delivered: any[] = [];
+  vi.spyOn(fm, "deliverHumanToInstance").mockImplementation(async (...args: any[]) => { delivered.push(args); return true; });
+  const first = await raw(port, "POST", "/ui/send", write(guest), JSON.stringify({ instance: "a", message: "Check the example again" }));
+  expect(first.status).toBe(200); const original = JSON.parse(first.body).messageId;
+  fm.finishDeliveryStatus("a", "web", original, "failed");
+  const row = fm.webChatHistory.list("a").find((m: any) => m.messageId === original);
+  const body = { instance: "a", boot: row.boot, id: row.id, attempt: row.retry.attempt };
+  expect((await raw(port, "POST", "/ui/resend", write(guest), JSON.stringify({ ...body, instance: "b" }))).status).toBe(404);
+  guestsChat(false);
+  expect((await raw(port, "POST", "/ui/resend", write(guest), JSON.stringify(body))).status).toBe(403);
+  expect(delivered).toHaveLength(1);
+  guestsChat();
+  expect((await raw(port, "POST", "/ui/resend", write(guest), JSON.stringify(body))).status).toBe(200);
+  expect(delivered).toHaveLength(2); expect(delivered[1][1].meta.web_guest).toBe("1");
 });

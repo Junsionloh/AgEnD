@@ -339,3 +339,79 @@ Part 1 (the resume menu and the retry row) is its own section. Same binaries and
   - The queued-transcript fixture is not re-made: the transcript record types are unchanged.
   - Paths are normalised to `/tmp/agend-audit/…`.
 - **Mutation checks:** reverting the OAuth shape, the gateway footer, the login-menu footer or the queue marker each turns the screens test red.
+
+## 2.1.326 → 2.1.327: no detector change (2026-11-18, M-3336)
+
+The binaries were 2.1.326 (sha256 `b6b3647d981130dc44fc670846ae97b6cde531ffb667cf9c4d17cfcafb38cb37`) and 2.1.327 (sha256 `343c744baa14bfd38286a7cb90871051f04379956da6c5b803a9e66019a76ac9`, byte-identical to the host's `~/.local/share/claude/versions/2.1.327`). The host had already self-updated to 2.1.327. The daily precheck said MAJOR (hard=9, hinted=0).
+
+- **Passes:** `OLD=326 NEW=327 PORT=18327`, pass1 and extra–extra7. The host's tmux server was never used (private sockets only).
+- **Classification:** all 72 captures (62 from pass1–extra6, 8 from extra7, the gateway pair) and the 30 error frames read alike under the production predicates, except `132-danger-fast`. That is the known timing race, and `danger-probe.sh` (new) shows it is the same on both versions:
+  - Down+Enter in one burst the instant the menu paints: the cursor moves to No and the Enter is dropped, 4/4 on 2.1.326 and 4/4 on 2.1.327 (this run's pass happened to catch 2.1.326 taking it).
+  - AgEnD's cadence (Down, 200 ms, Enter): declined, 4/4 on each. After a 0.5 s or 1 s wait: 8/8 on each.
+  - A menu left on No is confirmed by AgEnD's next poll with Enter (`confirm No`), never Down again.
+- **The precheck's new prompt strings are not AgEnD screens:**
+  - `No, keep connecting` is the IDE auto-connect toggle (`/config`, `--ide`).
+  - `No, keep the limit` and `Press Enter to confirm again.` are the spend-limit menu (`/rate-limit-options`).
+  - `No, keep plan` and `No, keep running` are "Stop ultraplan?".
+  - `Retrying in 0s` and `Yes, and switch to default (ask each time) for this session` occur only in the embedded changelog prose.
+  - `Usage limit reset. Re-running` left the binary only because the workflow pause notice became a template (`` `${…?"Continuing on this login":"Usage limit reset"}. Re-running ${n} waiting …` ``). The `Usage limit reset · Continuing automatically` note that `Daemon.USAGE_LIMIT_RESET` reads is unchanged.
+- **The resume footer count (`Enter to confirm`, 1 → 3)** is the spend-limit menu's two new strings, not the resume menu. The menu is unchanged and live-tested below.
+- **Arrow keys "stop at No instead of wrapping"** (2.1.327 changelog). `extra7.sh` (new) presses past both ends of the Bash permission prompt and the "Switch model?" confirmation. Both versions behave alike: on the permission prompt, Up from `1. Yes` lands on `4. No` and Down past No stays on it. On the switch confirmation, two Downs and then two Ups each leave the cursor on `1. Yes` on both versions. AgEnD's own `/model` answer presses Up only from a verified `2.` and re-reads the screen after each key (`Daemon.answerOwnSwitchDialog`).
+  - AgEnD never relies on a wrap. Its automatic keys are Down from a verified cursor (trust, Bypass, the dangerous-command menu, the resume menu), and a remote card walks one verified step at a time, never past a list's ends (`remote-card-answer.ts`). No AgEnD path types a number into a prompt.
+- **"Switch model?" (#1690)** shows `Enter to confirm · Esc to cancel` under its options on both versions. `claudeSwitchDialog` allows up to three rows under the pair, so it reads the screen as before (kind, target, cursor), and the runtime table holds it.
+- **Indentation:** 2.1.327 draws dialog bodies two columns in (2.1.326: three). Every predicate already allows any leading whitespace.
+- **Cold-resume prompt, live** (`cold-resume/live.mts`, 327 cases added): `327-lookup`, `327-summary-lookup`, `327-summary-newfocus` and `327-summary-newfocus-80` all PASS, as do `326-lookup` and `326-summary-newfocus` on the same rig (`rig.sh up 327`). Each time the prompt was seen, Escape was sent, the history was kept and the prompt was gone. `327-summary-newfocus` needed the retrySafe second Escape (#3589).
+- **Resume-from-summary menu, live** (`cold-resume/resume-menu.mts`, 327 cases added): `326-menu`, `327-menu` and `327-menu-80` PASS. Each time the menu was seen, Down and Enter were sent, the full session was kept and nothing was compacted.
+- **Fixtures:** `tests/fixtures/claude-2.1.327-*.pane.txt`, held by `tests/claude-2.1.327-screens.test.ts` (40 tests):
+  - the screens of the 2.1.326 set, each from the same capture of this pass (`bypass-dialog-cursor-accept` from capture 92);
+  - the live cold-resume and resume-menu frames;
+  - the retry rows (the generic first-attempt row from 0.2 s frames, `retry-fast.sh`, not committed; the no-wait row is the real 429 frame with only the wait replaced, as for 2.1.326);
+  - the gateway pair (`gw.sh`, not committed);
+  - new: `switch-model-opus` and `bash-permission-down-past-end`.
+  - Paths are normalised to `/tmp/agend-audit/…`, including the project key in "Earlier messages are saved in …".
+- **Shipped ledger:** `src/cli-audited.ts` lists 2.1.326 and 2.1.327, so the dashboard's Update for Claude goes to 2.1.327. The ledger test requires the Windows Runtime pin to be the newest audited release, so `src/runtime-cli-install.ts` moves to 2.1.327 too. Each integrity there is the registry's (`npm view … dist.integrity`), and each matches a tarball downloaded with `npm pack` (sha512). The same two packages as 2.1.325, no dependencies, and `claude.exe` at the same path. The signer is still verified at install.
+
+## 2.1.328 → 2.1.329: no detector change (2026-11-20, M-3477)
+
+The binaries were 2.1.328 (sha256 `a982d38030b97e750848add2cbb2df6d9a70d5544a22ca9b216a349ba25865e8`) and 2.1.329 (sha256 `30e2724e2aecb1bf5dc9f3130901afb71c5fa229051c190a6d7ad9aff6378d6d`), both byte-identical to the host's `~/.local/share/claude/versions/`. The host had already self-updated to 2.1.329. The daily precheck said MAJOR (hard=10, hinted=0).
+
+- **Passes:** `OLD=328 NEW=329 PORT=18329`, pass1, extra–extra7, `danger-probe.sh` and `trust-hooks.sh` (new). The host's tmux server was never used (private sockets only).
+  - Keep `AUDIT_DIR` out of any folder whose `package.json` says `"type": "module"`: the generated `statusline.js` is CommonJS, and under such a folder it fails, so every capture loses its statusline row. A `{"type":"commonjs"}` `package.json` in `AUDIT_DIR` avoids it.
+- **Classification:** all 72 captures read alike under the production predicates on both versions, except `132-danger-fast`, the known timing race. `danger-probe.sh` shows it is the same on both: Down+Enter in one burst leaves the cursor on No, 4/4 on each; AgEnD's cadence (Down, 200 ms, Enter) declines, 4/4 on each; 8/8 after a 0.5 s or 1 s wait.
+- **The precheck's new prompt strings are not AgEnD screens:**
+  - `Press Enter to open the sign-in page in your browser, or Ctrl+C to cancel.` is a new step of the organization gateway's identity-provider sign-in (`[gateway-idp]`, `hybrid_gateway_idp_sign_in`), shown only under enterprise managed hybrid settings. A person finishes that sign-in. No startup or runtime table answers it (`Press Enter to continue` is gated by `claudeSecurityNotesActive`).
+  - `continue the conversation here. Start a new conversation.`, `resume this conversation, …`, `resume the session that created …` and `resume the session from a URL …` are multi-organization refusals (a session that ran under another organization, or a URL resume under an organization sign-in). They are messages, not prompts.
+  - `continue this conversation here. To send/teleport a new conversation, …` is `/send-to-project`'s refusal text.
+  - `retrying in ~60s` is an auth debug-log line (proactive token refresh).
+- **Literal counts (`predlits.py`):** 333 checked, 90 in the binaries, 15 counts changed. `Start a new conversation` (2 → 6) and `Cloud gateway` (97 → 101) are the strings above. `claude auth login`, `auth token` and `Not logged in` are new sign-in and gateway help. `to navigate` (18 → 19) is a question dialog's `Tab/Arrow keys to navigate`. `fresh machine` (0 → 1) is embedded changelog prose. No predicate text disappeared.
+- **Trust dialog (2.1.329 changelog: it names where a folder's hooks are declared):** `trust-hooks.sh` (new) opens a folder whose `.claude/settings.json` declares a SessionStart hook. 2.1.329 adds one line, `⚠ This folder configures hooks that can run commands without asking, declared in .claude/settings.json`. At 160 and 80 columns it is read and answered exactly as the plain trust dialog (cursor on `No, exit`: Down). The hook never ran (the folder was never trusted).
+- **Cold-resume prompt, live** (`cold-resume/live.mts`, 328 and 329 cases added): `328-lookup`, `329-lookup`, `329-summary-lookup`, `328-summary-newfocus`, `329-summary-newfocus` and `329-summary-newfocus-80` all PASS. Each time the prompt was seen, Escape was sent, the history was kept and the prompt was gone.
+- **Resume-from-summary menu:** not reached on 2.1.328 or 2.1.329. From 2.1.328 its gate is `tengu_gleaming_fair_reuse` alone, and it opens only when a precomputed summary exists (otherwise `skipped_no_summary`). The rig has none, so the backdated session resumed straight away with the history kept and nothing compacted (`resume-menu.mts`, 328 and 329 cases). `327-menu` on the same rig still PASSes. The menu's literals are unchanged, and 2.1.327's fixtures keep pinning its screen.
+- **Cloud gateway URL step:** the rig did not reach it on either version (a `gatewayUrl` in the user settings no longer opens it from `/login`). Its predicate literals are unchanged, and 2.1.327's fixtures keep pinning it.
+- **Fixtures:** `tests/fixtures/claude-2.1.329-*.pane.txt`, held by `tests/claude-2.1.329-screens.test.ts` (36 tests):
+  - the screens of the 2.1.327 set, each from the same capture of this pass, except the gateway pair, the resume-summary menu and the generic first-attempt retry row (above);
+  - `mcp-approval` from the first run of this audit, because the clean rerun's fixed 4 s wait missed the dialog on both versions;
+  - new: `trust-hooks` and `trust-hooks-80`.
+  - Paths are normalised to `/tmp/agend-audit/…`.
+- **Mutation check:** a trust accept row that no longer matches turns the trust tests red, including the new hooks one.
+- **Shipped ledger (dev):** `src/cli-audited.ts` adds 2.1.328 (on the maintainer's ledger, not shipped until now) and 2.1.329, so the dashboard's Update for Claude goes to 2.1.329. The Windows Runtime pin (`src/runtime-cli-install.ts`) moves to 2.1.329: the same two packages, no dependencies, `claude.exe` at the same path; each integrity is the registry's and was checked against its downloaded tarball. The same change catches up the other shipped lag: Antigravity 1.5.12 and 1.5.13 (pin 1.5.13 from the windows_amd64 manifest, the 236040344-byte file checked against its sha512) and OpenCode 1.19.6 (its three packages' integrities checked the same way). Main has no shipped ledger.
+
+## 2.1.329 → 2.1.330: the file-send lead row and the usage-limit note (2026-11-21, M-3501)
+
+The binaries were 2.1.329 (sha256 `30e2724e2aecb1bf5dc9f3130901afb71c5fa229051c190a6d7ad9aff6378d6d`) and 2.1.330 (sha256 `f390eaa0814e6a1bff74cbb47acb74cb9c89d30ced809fe0af5af00c7bfe8ebb`), both byte-identical to the host's `~/.local/share/claude/versions/`. The host had already self-updated to 2.1.330. The daily precheck said MAJOR (hard=3).
+
+- **Passes:** `OLD=329 NEW=330 PORT=18330`, pass1, extra–extra7, `danger-probe.sh` and `trust-hooks.sh`, in an `AUDIT_DIR` with a `{"type":"commonjs"}` `package.json`. The host's tmux server was never used.
+- **Classification:** all 72 captures read alike under the production predicates on both versions, except `132-danger-fast`, the known race. `danger-probe.sh` gives the same outcome on both: 4/4 cursor on No for a burst, 4/4 declined at AgEnD's cadence, 8/8 after a wait.
+- **Detector change 1, the file-send card.** 2.1.330 rewrote the card's description. The lead row "This call sends <N> file(s) from this computer" / "to <connector>, which decides where to store …" is now "Allowing this sends a copy of 1 file" (or "a copy of <name>", or "copies of <N> files"), with an optional "(… outside this session's folders)", then "through Anthropic" / "to <connector>, a third-party app. Its terms and privacy policy apply.". That lead row is the only mark an ordinary file name gives the card (2.1.322's Gap A). Without it, a plain card was read as the dangerous-command prompt and answered No. `FILE_SEND_MARK` now also accepts a row that starts "Allowing this sends a copy of" or "Allowing this sends copies of <N> files". The 2.1.319–2.1.329 wording is still read. The live card needs a claude.ai connector, so the 2.1.330 fixtures are the 2.1.322 plain cards with the two lead rows rewritten from the 2.1.330 bundle (`tests/claude-file-send-card-2330.test.ts`).
+- **Detector change 2, the usage-limit note.** The transcript's informational note is now "Usage limit reached · set to continue automatically {when}" (and "Usage limit reached again · …"), with no " · esc to cancel" tail. To 2.1.329 it was "· continuing automatically {when} · esc to cancel". `CLAUDE_USAGE_LIMIT_PAUSE` reads both, with `{when}` still group 1, so the daemon's pause notice and `quotaPaused()` work again (`tests/claude-transcript-limits-2834.test.ts`). "Usage limit reset" (the end of a pause) is unchanged.
+- **The precheck's other hits are not AgEnD screens:**
+  - `Press Enter to try again, or ^C to stop. If that fails too, run …` and `press Enter to try now, or ^C to stop …` are the claude.ai connector check of `claude mcp`.
+  - `could not continue the previous session (…). Run claude --resume …` is the `--continue` exit message; only its neighbour changed.
+  - `resume the session that started it (…)` is tool-result text about a background MCP task.
+  - `… Run AGAIN …` is the watch skill's.
+- **OAuth screen:** 2.1.330 prints a short `https://claude.ai/oauth/authorize?<token>` and a "Hold Shift while selecting…" hint between the URL and the paste label. `claudeLoginScreenActive` still reads it as the sign-in (it looks for `oauth/authorize` within 13 rows of the paste label), and no AgEnD code parses the old URL's shape.
+- **Cold-resume prompt, live:** `329-lookup`, `330-lookup`, `330-summary-lookup`, `329-summary-newfocus`, `330-summary-newfocus` and `330-summary-newfocus-80` all PASS.
+- **MCP approval:** not re-captured. The pre-onboarded home now runs in auto mode, where neither version shows it. 2.1.329's fixture pins it.
+- **Fixtures:** `tests/fixtures/claude-2.1.330-*.pane.txt`, held by `tests/claude-2.1.330-screens.test.ts`, plus the two file-send cards above. The 2.1.330 busy-queued capture is registered in `tests/claude-queued-input-1169.test.ts`.
+- **Precheck manifest:** rebuilt, so the watch now also reads "Allowing this sends" and "set to continue".
+- **Shipped ledger (dev):** `src/cli-audited.ts` adds 2.1.330, and the Windows Runtime pin moves to 2.1.330: the same two packages, no dependencies, `claude.exe` at the same path, each integrity the registry's and checked against its downloaded tarball. Main has no shipped ledger.

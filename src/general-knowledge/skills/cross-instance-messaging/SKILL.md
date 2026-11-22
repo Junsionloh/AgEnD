@@ -91,3 +91,41 @@ never use `reply`, `react` or `edit_message` to send that question or answer int
 copied to the Hub. The room agent still has one conversation and may use what it learned on either side; sharing does
 not isolate its memory. The private channel-output fence survives an answer acknowledgement, contact expiry or restart;
 normal room output resumes after a new room-person input and a fresh idle check.
+
+## Restricted Classic room contacts
+
+A restricted Classic room may answer in its bound room and use its allowed public
+read tools. A non-admin or unknown-origin peer contact is held as an application:
+`sent:false`, `held:true`, with `authorization_id` and its state. Nothing has reached
+the target. Do not resend or work around it with another contact tool, a schedule,
+or a new instance. The target's Fleet administrator decides the retained request.
+Approval delivers it once; decline or expiry does not forward the held request.
+On decline or expiry, one AgEnD system notice names the ticket, target and outcome;
+stop waiting for that request. This is status only, not authority or a grant.
+A standing narrow contact grant can admit matching requests without another card.
+
+An administrator's approval or a matching administrator-written grant endorses
+that delivery: the receiving agent's origin stays unchanged. The source keeps its
+own origin, and the ticket keeps the original origin and decision audit. Existing
+target origins are not cleared. The server still retains an origin union per
+agent instance for ordinary relays without this endorsement, later turns and
+compaction. An earlier non-admin request
+can therefore require approval after an admin speaks directly to that worker.
+Only a verified managing administrator can explicitly clear retained origin in
+the agent's web Permissions tab, accepting the current conversation as their own
+work without erasing its text. The agent and peers have no clear tool. New
+non-admin input is restricted again; other agents, tickets and grants are unchanged.
+There is no automatic reset. A first legacy-to-restricted switch
+treats earlier history as unknown; saving the same mode leaves the origin alone.
+Unknown origins never match standing grants, so new contacts need separate approval.
+Known-person authority does not change when old receipt or hop metadata is trimmed.
+Approval does not clear that history or authorize the worker's data access or
+changes. A matching `report_result` return is allowed only for proven approved work,
+not an arbitrary correlation string. The Hub contact limit always takes precedence.
+Restricted attachment paths are limited to the room's own inbox/scratch; reply,
+react and edit cannot choose another room. Native tool coverage is separate: an
+uncovered backend is not protected by a claimed CLI sandbox.
+
+For a target with no Discord/Telegram adapter, only an already verified host
+operator may approve. An ordinary delegated Fleet worker with no explicit
+`channel_id` still inherits the primary adapter's Fleet administrators.

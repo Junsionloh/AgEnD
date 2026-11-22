@@ -49,6 +49,8 @@ export interface NeedsYouWorld {
 }
 
 export interface NeedsYouHubContext {
+  contactSuggestions?(): NeedsYouItem[];
+  hostAlerts?(): NeedsYouItem[];
   dataDir: string;
   /** Wall clock, for item ages and the outbox window. */
   now(): number;
@@ -87,8 +89,6 @@ export interface NeedsYouHubContext {
   /** Task board cards waiting for the person (#2246 step 3); none when the board is not open. */
   tasks?(): TaskInput[];
   backendSignIns?(): BackendSignInInput[];
-  /** M-3307: the host's Claude Code is an npm-global install (null: it is not, or not read). */
-  claudeNpmInstall?(): { path: string; since: number } | null;
   signInKeepAlive?(): import("./needs-you.js").SignInKeepAliveInput[];
   configIssues?(): NonNullable<import("./needs-you.js").NeedsYouInputs["configIssues"]>;
   hubExecution?(): import("./needs-you.js").HubExecutionAttentionInput[];
@@ -274,8 +274,11 @@ export class NeedsYouHub {
     }
     let hubHolds: import("./needs-you.js").HubHoldInput[] = [];
     try { hubHolds = this.ctx.hubHolds?.() ?? []; } catch { /* the holds are also in the fleet log */ }
-    this.items = deriveNeedsYou({ prompts: this.ctx.prompts(), instances: this.ctx.instances(), deliveries, tasks, backendSignIns: this.ctx.backendSignIns?.() ?? [], claudeNpm: (() => { try { return this.ctx.claudeNpmInstall?.() ?? null; } catch { return null; } })(), signInKeepAlive: (() => { try { return this.ctx.signInKeepAlive?.() ?? []; } catch { return []; } })(), configIssues: this.ctx.configIssues?.() ?? [], hubExecution, hubHolds, runtimeUpdates: this.ctx.runtimeUpdates?.() ?? [], tmuxHolds: (() => { try { return this.ctx.tmuxHolds?.() ?? []; } catch { return []; } })(), missedOffline: this.ctx.missedOffline?.() ?? [], ownerOf: i => this.ctx.ownerOf(i) });
+    this.items = deriveNeedsYou({ prompts: this.ctx.prompts(), instances: this.ctx.instances(), deliveries, tasks, backendSignIns: this.ctx.backendSignIns?.() ?? [], signInKeepAlive: (() => { try { return this.ctx.signInKeepAlive?.() ?? []; } catch { return []; } })(), configIssues: this.ctx.configIssues?.() ?? [], hubExecution, hubHolds, runtimeUpdates: this.ctx.runtimeUpdates?.() ?? [], tmuxHolds: (() => { try { return this.ctx.tmuxHolds?.() ?? []; } catch { return []; } })(), missedOffline: this.ctx.missedOffline?.() ?? [], ownerOf: i => this.ctx.ownerOf(i) });
+    try { this.items.push(...(this.ctx.contactSuggestions?.() ?? [])); }
+    catch (error) { this.ctx.log("warn", "Could not read Classic contact suggestions", { reason: error instanceof Error ? error.message : "unavailable" }); }
 
+    this.items.push(...(this.ctx.hostAlerts?.() ?? []));
     const webSig = renderSignature(this.items, now);
     if (webSig !== this.webSignature) {
       this.webSignature = webSig;
@@ -372,6 +375,8 @@ export class NeedsYouHub {
       const s = item.modelSwitch;
       return this.ctx.t(`needs.model_switch.${s.cause}`, s.original, s.served, this.ctx.t(`needs.model_switch.${s.scope}`));
     }
+    // M-3381: a world's restricted-mode suggestions, one line: how many rooms, and where to act.
+    if (item.contactSuggestionCount) return this.ctx.t("needs.contact_suggestions", item.contactSuggestionCount);
     const reason = item.runtimeUpdate ? this.ctx.t("runtime.update.attention") : item.reason === "usage_limit"
       ? this.ctx.t("needs.reason.usage_limit", item.detail || "Claude")
       : this.ctx.t(`needs.reason.${item.kiroChoice ? "kiro_choice" : item.reason}`);

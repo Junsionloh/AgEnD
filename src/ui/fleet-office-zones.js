@@ -50,9 +50,16 @@ export function overflowSpots(area, need = 0) {
  * `lend` (one no owner of it took). A reserved seat not lent, none of whose owners wants the area, is unavailable:
  * the area's overflow spots and `over` count without it. Seats without `for` work as before.
  */
-export function assignSeats(pack, wants, prev = new Map()) {
+export function assignSeats(pack, wants, prev = new Map(), seatPrefs = null) {
   const seats = new Map(), crowd = new Map(), taken = new Map(), spill = new Map(), demand = new Map(), wanting = new Map();
   const areaOf = (a) => own(pack.areas, a);
+  const prefOf = (name, area) => {
+    const p = prev.get(name);
+    if (p && p.area === area) return p;
+    const byArea = seatPrefs && own(seatPrefs, name);
+    const slot = byArea && own(byArea, area);
+    return Number.isInteger(slot) && slot >= 0 ? { area, slot } : null;
+  };
   for (const w of wants) {
     demand.set(w.area, (demand.get(w.area) || 0) + 1);
     if (!wanting.has(w.area)) wanting.set(w.area, new Set());
@@ -70,9 +77,9 @@ export function assignSeats(pack, wants, prev = new Map()) {
   const usedIn = (area) => { if (!taken.has(area)) taken.set(area, new Set()); return taken.get(area); };
   const give = (name, area, slot) => { const p = pos(area, slot); usedIn(area).add(slot); seats.set(name, { area, slot, x: p.x, y: p.y }); };
   const free = (w) => !seats.has(w.name) && !!areaOf(w.area);
-  // Owners first: their own seat from last time, then their first free one.
+  // Owners first: their own seat from last time (or saved seat pref), then their first free one.
   for (const w of wants) {
-    const p = prev.get(w.name), s = p && p.area === w.area && p.slot >= 0 && areaOf(w.area) ? areaOf(w.area).seats[p.slot] : null;
+    const p = prefOf(w.name, w.area), s = p && p.slot >= 0 && areaOf(w.area) ? areaOf(w.area).seats[p.slot] : null;
     if (s && mine(s, w.name) && !usedIn(w.area).has(p.slot)) give(w.name, w.area, p.slot);
   }
   for (const w of wants) {
@@ -81,8 +88,8 @@ export function assignSeats(pack, wants, prev = new Map()) {
     if (slot >= 0) give(w.name, w.area, slot);
   }
   for (const w of wants) {
-    const p = prev.get(w.name);
-    if (!free(w) || !p || p.area !== w.area || !pos(w.area, p.slot) || usedIn(w.area).has(p.slot)) continue;
+    const p = prefOf(w.name, w.area);
+    if (!free(w) || !p || !pos(w.area, p.slot) || usedIn(w.area).has(p.slot)) continue;
     const s = p.slot >= 0 ? areaOf(w.area).seats[p.slot] : null;
     if (s && s.for && !lent(s)) continue;                       // reserved for someone else (theirs would be taken above)
     give(w.name, w.area, p.slot);
@@ -106,11 +113,11 @@ export function assignSeats(pack, wants, prev = new Map()) {
  * the desks layout (rooms → desks with a seat), in logical units, plus `mode: "zones"`, the pack's areas and graph (and
  * its `straight`, #2634, and `idleVisits`, #3685), the seats given (`seats`, the next call's `prev`), `crowd` and `over` (the areas over capacity).
  */
-export function zonesLayout(pack, nodes, prev = new Map(), { night = false } = {}) {
+export function zonesLayout(pack, nodes, prev = new Map(), { night = false, seatPrefs = null } = {}) {
   // At night (#2568) the idle go to bed: the area asleep people go to while it has a free seat; the rest doze where they are.
   const bed = zoneOf(pack, "paused"), bedSeats = own(pack.areas, bed)?.seats || [], sleepers = new Set(), inBed = new Set();
   const wantsOf = (beds) => nodes.filter((n) => n.state !== "missing").map((n) => ({ name: n.name, area: beds.has(n.name) ? bed : zoneOf(pack, n.state) }));
-  let placed = assignSeats(pack, wantsOf(inBed), prev);
+  let placed = assignSeats(pack, wantsOf(inBed), prev, seatPrefs);
   if (night) {
     // #2691 review: who goes to bed is decided by the seat assignment itself (assignSeats' reservation rules), one
     // sleeper at a time — whoever has a bed of their own there first, then the rest in the fleet's order. A sleeper
@@ -122,7 +129,7 @@ export function zonesLayout(pack, nodes, prev = new Map(), { night = false } = {
     const hasBed = (n) => bedSeats.some((s) => s.for && s.for.includes(n.name));
     for (const n of idle) sleepers.add(n.name);
     for (const n of [...idle.filter(hasBed), ...idle.filter((n) => !hasBed(n))]) {
-      const trial = assignSeats(pack, wantsOf(new Set([...inBed, n.name])), prev), s = trial.seats.get(n.name);
+      const trial = assignSeats(pack, wantsOf(new Set([...inBed, n.name])), prev, seatPrefs), s = trial.seats.get(n.name);
       if (!s || s.area !== bed || s.slot < 0) {
         if (!hasBed(n)) break;                                  // no bed free for anyone without one: none for the rest either
         continue;
@@ -215,6 +222,23 @@ function withinArea(near, seat, graph, home) {
   if (kept.length) return kept;
   const others = Object.keys(areas).filter((k) => k !== home && areas[k].rect).map((k) => areas[k].rect);
   return inside.filter((w) => legs(w).every((pts) => pts.every((p, i) => !i || !others.some((r) => crosses(r, pts[i - 1], p)))));
+}
+/**
+ * M-3286 / M-3432: whether walking from `from` to `to` (and returning to `returnTo`) keeps a person in area `home`:
+ * `to` is inside `home`'s rect, and both outbound and return walks (including straightened legs on `graph.straight`)
+ * either stay inside `home`'s rect or pass through no other area's interior.
+ */
+export function routeStaysInArea(from, to, graph, home, returnTo = from) {
+  if (!graph || typeof graph !== "object") return true;
+  const areas = graph.areas || {}, a = own(areas, home);
+  if (!a || !a.rect) return false;
+  if (!inRect(a.rect, to)) return false;
+  const legs = [walkPts(graph, from, to)];
+  if (returnTo) legs.push(walkPts(graph, to, returnTo));
+  if (legs.every((pts) => pts.every((p) => inRect(a.rect, p)))) return true;
+  const others = Object.keys(areas).filter((k) => k !== home && areas[k].rect).map((k) => areas[k].rect);
+  const strictIn = (r, p) => p.x > r.x && p.x < r.x + r.w && p.y > r.y && p.y < r.y + r.h;
+  return legs.every((pts) => pts.every((p, i) => !others.some((r) => strictIn(r, p) || (i > 0 && crosses(r, pts[i - 1], p)))));
 }
 /**
  * Where `name`, seated at `seat`, should be at `t` (ms) while idle: a spot near the seat, or the seat. `area` (M-3286:
@@ -487,7 +511,8 @@ export function createWalkers() {
         if (w.to.x === to.x && w.to.y === to.y) continue;
         const here = posAt(w, now), via = routeVia(graph, { x: here.x, y: here.y }, { x: to.x, y: to.y });
         const pts = graph.straight ? straighten(via) : via;   // #2634: timed along the longer way
-        by.set(name, { pts, start: now, ms: Math.max(1, pathLength(pts) / WALK.SPEED), to });
+        const speed = to.speed > 0 ? to.speed : WALK.SPEED;
+        by.set(name, { pts, start: now, ms: Math.max(1, pathLength(pts) / speed), to });
       }
     },
     at(name, now) { const w = by.get(name); return w ? posAt(w, now) : null; },

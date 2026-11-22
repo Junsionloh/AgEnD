@@ -21,6 +21,7 @@ import { CompactMeter } from "/assets/usage-meter.js";   // #3321: the Usage pan
 import { CliProductMark, cliLabel } from "./cli-picker.js";
 import { identityText } from "./account-identity.js";
 import { UsageBlock } from "./usage-pool.js";   // AGEND-113: every pool and window an account reports, as the server sends them
+import { credentialText, credentialRequestState, credentialStatusText, credentialVerificationTime, credentialRequestHint, removeClaudeCredential } from "./claude-credentials.js";
 import { openSignIn, refreshSignIn, signInStore } from "./backend-signin.js";
 import { capsOf } from "./cli-caps.js";
 import { toast } from "/assets/ui-toast.js";
@@ -32,6 +33,7 @@ import { KeepAliveControl } from "./accounts-keepalive.js";   // #3292
 // cache that still holds #3536's module: "does not provide an export named 'VersionLine'") and takes the whole page with it. A namespace import links with either; the names both modules
 // have are read as before, and a copy of host-install.js without the version line simply shows no version line (the Install button and the run are all it ever had).
 import * as hostInstall from "./host-install.js";
+import { assetUrl } from "/assets/asset-url.js";
 const { HostInstallRun, InstallButton, hostInstallStore, hostInstallText, refreshHostInstall, runFor } = hostInstall;
 const VersionLine = typeof hostInstall.VersionLine === "function" ? hostInstall.VersionLine : () => null;
 
@@ -71,7 +73,7 @@ register("accounts", {
     usedPopTitle: "Agents using this account — choose one to open its settings",
   },
   "zh-TW": {
-    title: "帳號", hint: "這台 AgEnD 主機與已配對電腦上各 CLI 的連接：預設連接與具名帳號（憑證設定檔）、誰在使用，以及每週用量。",
+    title: "帳號", hint: "這台 AgEnD 主機與已配對電腦上各 CLI 的連接：預設連接與具名帳號、誰在使用，以及每週用量。",
     loading: "正在讀取帳號…", failed: "無法讀取帳號。", empty: "這台主機上沒有安裝或被 Agent 使用的 CLI。",
     def: "預設連接", profile: "帳號「{0}」", state_usable: "已連接", state_not_signed_in: "尚未連接", state_reconnect: "需要重新連接", state_unknown: "未確認",
     state_not_installed: "未安裝", state_too_old: "版本太舊",
@@ -114,7 +116,7 @@ function linkAccountsCss(doc = typeof document !== "undefined" ? document : null
   try {
     if (!doc || !doc.head || doc.querySelector('link[data-accounts-css="1"]')) return;
     const link = doc.createElement("link");
-    link.setAttribute("rel", "stylesheet"); link.setAttribute("href", "/assets/accounts.css"); link.setAttribute("data-accounts-css", "1");
+    link.setAttribute("rel", "stylesheet"); link.setAttribute("href", assetUrl("/assets/accounts.css")); link.setAttribute("data-accounts-css", "1");
     doc.head.appendChild(link);
   } catch { /* the view still works without it */ }
 }
@@ -133,6 +135,7 @@ export function listenAccountsEvent() {
   const on = appStore.get().streamOn;
   if (typeof on !== "function") return;
   // AGEND-133: the same event moves a dashboard install (started, ended): its run is read again with the accounts, on this one listener.
+  window.addEventListener("agend-credentials-changed",()=>{void refreshAccounts({fresh:true});void refreshSignIn();});
   accountsEventOff = on("backend_login", () => { if (accountsStore.get().loaded) { void refreshAccounts({ fresh: true }); void refreshHostInstall(); } }) || (() => {});
 }
 let reading = null, started = 0, applied = 0;
@@ -395,36 +398,42 @@ function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, ope
   const machine = row.scope && row.scope.kind === "machine" ? row.scope : null;
   // AGEND-124: the computer's OWN login of a CLI whose Runtime signs it out (Antigravity: `signOutOwn`) is signed out from here too; Claude Code's never is.
   const manageable = !machine || (row.signIn && (!!row.profile || row.signOutOwn === true));
-  const canSignOut = manageable && typeof onSignOut === "function" && row.state === "usable" && SIGN_OUT_CLIS.has(row.backend);
-  const who = identityText(row.identity);
+  const managed=!!row.credentialUnavailable||row.credential?.source==="managed";
+  const canSignOut = !managed && manageable && typeof onSignOut === "function" && row.state === "usable" && SIGN_OUT_CLIS.has(row.backend);
+  const who = managed ? "" : identityText(row.identity);
   // AGEND-133 (#3521): a CLI that is not installed on the host gets Install on its default row (the server looks up the command; the page sends the CLI's id).
   const canInstall = !machine && !row.profile && row.state === "not_installed" && !!row.install;
   const installState = useStore(hostInstallStore);
   const installRun = !machine && !row.profile ? runFor(installState, row.backend) : null;
   const installingNow = !!installRun && installRun.phase === "running";
   // Every pool and every window the account reports, as the server gives them (accounts-view.ts `accountUsage`); the page lays them out, it does not pick.
-  const usageGroups = Array.isArray(row.usageGroups) ? row.usageGroups.filter((g) => g && Array.isArray(g.windows) && g.windows.length) : [];
+  const usageGroups = !managed && Array.isArray(row.usageGroups) ? row.usageGroups.filter((g) => g && Array.isArray(g.windows) && g.windows.length) : [];
   const why = machine && machine.readOnlyReason && !MACHINE_LEVEL.has(machine.readOnlyReason) ? reasonText(machine.readOnlyReason, machine.name, cliLabel(row.backend), (capsOf(row.backend) && capsOf(row.backend).structuredMinVersion) || "") : "";
   // Four layers in one box: the title bar (name, state, default tag · the buttons), the meta bar (who, used by), the usage block (every pool and window it reports) and Keep connection alive as the box's foot.
   return html`<div class="s-row s-account-row" data-account=${row.profile || "default"}>
     <div class="s-account-title-bar">
       <div class="s-account-title-left"><strong>${rowName(row)}</strong>
-        <span class=${`tag s-auth-state is-${row.state || "unknown"}`}>${installingNow ? hostInstallText(installRun.mode === "update" ? "updating" : "installing") : tx(row.reconnect ? "state_reconnect" : `state_${row.state || "unknown"}`)}</span>
+        <span class=${`tag s-auth-state is-${managed?(credentialRequestState(row.credential)==="verified"?"usable":credentialRequestState(row.credential)==="needs-replacement"?"not_signed_in":"unknown"):row.state || "unknown"}`}>${managed?(row.credential?.kind?credentialStatusText(row.credential):tx("state_not_signed_in")):installingNow ? hostInstallText(installRun.mode === "update" ? "updating" : "installing") : tx(row.reconnect ? "state_reconnect" : `state_${row.state || "unknown"}`)}</span>
         ${row.usedBy.fleetDefault && cli.profiles ? html`<span class="tag s-account-default-tag">${machine ? tx("machineDefaultTag") : tx("fleetDefaultTag")}</span>` : null}</div>
       ${readOnly ? null : html`<span class="s-actions">
         ${canInstall ? html`<${InstallButton} backend=${row.backend} blocked=${running} />` : null}
-        ${row.signIn && typeof onSignIn === "function" ? html`<button type="button" class=${row.state === "not_signed_in" ? "btn btn-sm btn-primary" : "btn btn-sm"} disabled=${running} onClick=${() => onSignIn({ backend: row.backend, ...(row.profile ? { profile: row.profile } : {}), ...(machine ? { machine } : {}) })}>${row.state === "usable" ? tx("signInAgain") : tx("signIn")}</button>` : null}
+        ${row.signIn && typeof onSignIn === "function" ? html`<button type="button" class=${row.state === "not_signed_in" ? "btn btn-sm btn-primary" : "btn btn-sm"} disabled=${running} onClick=${() => onSignIn({ backend: row.backend, ...(row.profile ? { profile: row.profile } : {}), ...(machine ? { machine } : {}),...(managed?{method:row.credential?.kind==="setup-token"?"oauth":"api"}:{}) })}>${row.credential?.kind?credentialText("replace"):row.state === "usable" ? tx("signInAgain") : tx("signIn")}</button>` : null}
         ${!machine && cli.profiles && row.state !== "not_signed_in" && row.state !== "not_installed" && typeof onMove === "function" ? html`<button type="button" class="btn btn-sm" onClick=${() => onMove(row)}>${tx("moveHere")}</button>` : null}
         ${canSignOut && !machine && !row.profile && row.signIn ? html`<button type="button" class="btn btn-sm s-account-switch" disabled=${running} onClick=${() => onSignOut(row, "switch")}>${manageWords.switchAccount()}</button>` : null}
+        ${managed&&row.credential?.kind?html`<button type="button" class="btn btn-sm danger" disabled=${running} onClick=${()=>removeClaudeCredential(row.profile)}>${credentialText("remove")}</button>`:null}
         ${canSignOut ? html`<button type="button" class="btn btn-sm btn-ghost s-account-signout" disabled=${running} onClick=${() => onSignOut(row, "signout")}>${manageWords.signOut()}</button>` : null}
-        ${manageable && row.profile && typeof onRemove === "function" ? html`<button type="button" class="btn btn-sm btn-ghost danger s-account-remove" onClick=${() => onRemove(row)}>${manageWords.remove()}</button>` : null}
+        ${manageable && row.profile && typeof onRemove === "function" ? html`<button type="button" class="btn btn-sm danger s-account-remove" onClick=${() => onRemove(row)}>${manageWords.remove()}</button>` : null}
       </span>`}
     </div>
     <div class="s-account-meta-bar">
+      ${managed?html`<span class="tag">${row.credential?.kind?credentialText(row.credential.kind==="setup-token"?"tokenTag":"apiTag"):tx("state_not_signed_in")}</span>`:null}
+      ${managed&&credentialVerificationTime(row.credential)?html`<small data-credential-verified-at>${credentialVerificationTime(row.credential)}</small>`:null}
       ${who ? html`<span class="tag s-account-identity">${who}</span>` : null}
       <${UsedBy} row=${row} label=${usedText(row)} openAgent=${openAgent} />
       ${machine ? html`<small class="s-account-usage is-none" title=${tx("machineNoUsageHint")}>${tx("machineNoUsage")}</small>` : null}
     </div>
+    ${managed?html`<p class="note">${credentialText("usage")}</p>`:null}
+    ${managed&&credentialRequestHint(row.credential)?html`<p class="note" data-credential-request-hint>${credentialRequestHint(row.credential)}</p>`:null}
     ${usageGroups.length ? html`<${UsageBlock} groups=${usageGroups} stale=${row.usageStale === true} staleInfo=${row.usageStaleInfo} tagOf=${usageTag} label=${tx("usageLabel")} staleText=${tx("winStale")} />` : null}
     ${why ? html`<p class="note s-account-why">${why}</p>` : null}
     ${canInstall && !installRun ? html`<p class="note s-account-why">${hostInstallText("notInstalled")}</p>` : null}
@@ -433,7 +442,7 @@ function Row({ cli, row, onMove, onRemove, onSignIn = openSignIn, onSignOut, ope
     ${!machine && !row.profile && !readOnly ? html`<${VersionLine} row=${row} label=${cliLabel(row.backend)} blocked=${running} />` : null}
     ${!machine && !row.profile ? html`<${HostInstallRun} backend=${row.backend} label=${cliLabel(row.backend)} />` : null}
     ${!readOnly && !row.signIn && row.hostCommand ? html`<details class="s-host-cli-help"><summary>${machine ? tx("machineCommand") : tx("hostCommand")}</summary><p class="note">${machine ? tx("machineCommandHint", machine.name) : tx("hostCommandHint")}</p>${machine ? html`<p class="s-host-cli-command"><code>${row.hostCommand}</code></p>` : null}</details>` : null}
-    ${!readOnly && row.keepAlive && row.state !== "not_installed" && (!row.scope || row.scope.kind === "host") ? html`<${KeepAliveControl} row=${row} onSaved=${() => refreshAccounts({ fresh: true })} />` : null}
+    ${!managed && !readOnly && row.keepAlive && row.state !== "not_installed" && (!row.scope || row.scope.kind === "host") ? html`<${KeepAliveControl} row=${row} onSaved=${() => refreshAccounts({ fresh: true })} />` : null}
   </div>`;
 }
 

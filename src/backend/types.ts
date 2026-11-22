@@ -107,6 +107,10 @@ export interface BackendSessionProof {
 }
 
 export interface CliBackendConfig {
+  /** Server-owned reference only; never a secret value or accepted web/backend option. */
+  managedClaudeCredential?: import("../claude-credential-launch.js").ManagedClaudeBinding;
+  /** Server-owned Classic policy only; not a field accepted from tool arguments. */
+  classicRestriction?: import("../classic-cli-guard.js").ClassicRestrictedPlan;
   workingDirectory: string;
   instanceDir: string;
   instanceName: string;
@@ -163,7 +167,7 @@ export interface CliBackendConfig {
 export type ErrorActionType = "notify" | "failover" | "restart" | "pause" | "backoff_restart" | "nudge_continue";
 
 /** Categorizes detected errors for logging and response. */
-export type ErrorType = "rate_limit" | "auth_error" | "crash" | "network" | "quota" | "timeout" | "model_error" | "config_error" | "outdated_cli";
+export type ErrorType = "rate_limit" | "auth_error" | "crash" | "network" | "quota" | "timeout" | "model_error" | "config_error" | "outdated_cli" | "stale_auth";
 
 export interface ErrorPattern {
   /** Optional low-usage reminder; delivered once per account by the usage evaluator instead. */
@@ -571,6 +575,8 @@ export interface InputDraft {
 export interface CliBackend {
   /** Observation ownership only; never a model-selection capability. */
   modelObservationLaunch?(): import("../claude-model-observation.js").ClaudeModelLaunch;
+  /** Metadata-only proof binding for an ordinary local managed Claude launch. */
+  credentialObservationLaunch?(): {launch:import("../claude-model-observation.js").ClaudeModelLaunch;binding:Readonly<import("../claude-credential-launch.js").ManagedClaudeBinding>;sourceCurrent():boolean} | null;
   /** The CLI binary name (e.g. "claude", "codex", "agy") */
   readonly binaryName: string;
 
@@ -828,6 +834,7 @@ export interface CliBackend {
 
   /** Build the shell command string to launch the CLI in a tmux window. */
   buildCommand(config: CliBackendConfig): string;
+  classicNativeGuard?(plan: import("../classic-cli-guard.js").ClassicRestrictedPlan): import("../contact-auth-types.js").ContactGuardStatus;
 
   /**
    * A warning the last buildCommand wants the operator to see (e.g. Codex's

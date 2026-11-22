@@ -27,12 +27,12 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { join } from "node:path";
 import { atomicWriteFileSync } from "./atomic-write.js";
 import { imageSize, sniffMedia, stripMetadata } from "./web-image-meta.js";
-import { checkSkinPack, own, packImages, packPortraitImages, packStrips, type CheckedPack } from "./ui/fleet-office-pack.js";
+import { checkSkinPack, own, packImages, packStrips, stripSheets, type CheckedPack } from "./ui/fleet-office-pack.js";
 
 const MiB = 1024 * 1024;
-/** #2632: 160 files and 20 MiB a pack (was 64, 6 MiB) — room for a whole fleet's character sets. */
+/** #2632: 160 files and 20 MiB a pack (was 64, 6 MiB) — room for a whole fleet's character sets. M-3394: packPixels caps total decoded pixels per pack (64 Mpx ≈ 256 MiB RGBA) to protect phones. */
 export const SKIN_LIMITS = {
-  packs: 16, files: 160, fileBytes: 2 * MiB, packBytes: 20 * MiB, manifestBytes: 64 * 1024, side: 4096, pixels: 16 * MiB, name: 60, src: 200,
+  packs: 16, files: 160, fileBytes: 2 * MiB, packBytes: 20 * MiB, manifestBytes: 64 * 1024, side: 4096, pixels: 16 * MiB, packPixels: 64 * MiB, name: 60, src: 200,
 } as const;
 /** The most an upload's body may be: every picture's base64 (4/3) plus the manifest and the envelope. */
 export const SKIN_WIRE_BYTES = Math.ceil((SKIN_LIMITS.packBytes * 4) / 3) + SKIN_LIMITS.manifestBytes + 64 * 1024;
@@ -92,12 +92,14 @@ export function checkSkinPicture(name: string, bytes: Uint8Array): { ok: true; k
   return { ok: true, kept: Buffer.from(kept), width: size.width, height: size.height };
 }
 
-/** The sizes the checked manifest asks of its pictures: each STRIP exactly frames·w × h; the background and foreground 16:9. */
+/** The sizes the checked manifest asks of its pictures: each STRIP sheet exactly frames·w × h; the background and foreground 16:9. */
 function sizesAgree(pack: CheckedPack, sizes: Map<string, { width: number; height: number }>): SkinRefusal | null {
   for (const { at, strip } of packStrips(pack)) {
-    const s = sizes.get(strip.src);
-    if (s && (s.width !== strip.frames * strip.w || s.height !== strip.h)) {
-      return refuse(400, "skin_strip_dimensions", `${at}: ${strip.src} is ${s.width}×${s.height} px; its strip needs ${strip.frames * strip.w}×${strip.h} (frames·w × h)`);
+    for (const sheet of stripSheets(strip)) {
+      const s = sizes.get(sheet.src);
+      if (s && (s.width !== sheet.frames * strip.w || s.height !== strip.h)) {
+        return refuse(400, "skin_strip_dimensions", `${at}: ${sheet.src} is ${s.width}×${s.height} px; its strip needs ${sheet.frames * strip.w}×${strip.h} (frames·w × h)`);
+      }
     }
   }
   const bg = pack.background ? sizes.get(pack.background) : undefined;
@@ -105,19 +107,36 @@ function sizesAgree(pack: CheckedPack, sizes: Map<string, { width: number; heigh
   const fg = pack.foreground ? sizes.get(pack.foreground) : undefined;
   if (fg && fg.width * 9 !== fg.height * 16) return refuse(400, "skin_foreground_aspect", `foreground: ${pack.foreground} is ${fg.width}×${fg.height} px; it must be 16:9`);
   // #2861: a portrait is a half-body picture (at most PORTRAIT_MAX); the dialogue box's frame a small 9-slice (FRAME_MAX).
-  const frame = pack.dialogBox?.frame;
-  for (const src of packPortraitImages(pack)) {
-    const s = sizes.get(src), max = src === frame ? FRAME_MAX : PORTRAIT_MAX;
-    if (s && (s.width > max.w || s.height > max.h)) return refuse(400, "skin_portrait_dimensions", `${src === frame ? "dialogBox.frame" : "portraits"}: ${src} is ${s.width}×${s.height} px; at most ${max.w}×${max.h}`);
+  const p = pack.portraits;
+  const portraits = p ? [p.default, ...Object.values(p.byInstance), ...Object.values(p.byUser), ...Object.values(p.npc)].flatMap((e) => (e ? Object.values(e) : [])) : [];
+  for (const src of new Set(portraits)) {
+    const s = sizes.get(src);
+    if (s && (s.width > PORTRAIT_MAX.w || s.height > PORTRAIT_MAX.h)) return refuse(400, "skin_portrait_dimensions", `portraits: ${src} is ${s.width}×${s.height} px; at most ${PORTRAIT_MAX.w}×${PORTRAIT_MAX.h}`);
   }
-  if (frame && pack.dialogBox?.slice) {
+  const frame = pack.dialogBox?.frame;
+  if (frame) {
     const s = sizes.get(frame);
-    if (s && (pack.dialogBox.slice * 2 >= s.width || pack.dialogBox.slice * 2 >= s.height)) return refuse(400, "skin_portrait_dimensions", `dialogBox.slice: ${pack.dialogBox.slice} px a side leaves nothing of ${frame} (${s.width}×${s.height})`);
+    if (s && (s.width > FRAME_MAX.w || s.height > FRAME_MAX.h)) return refuse(400, "skin_portrait_dimensions", `dialogBox.frame: ${frame} is ${s.width}×${s.height} px; at most ${FRAME_MAX.w}×${FRAME_MAX.h}`);
+    if (s && pack.dialogBox?.slice && (pack.dialogBox.slice * 2 >= s.width || pack.dialogBox.slice * 2 >= s.height)) return refuse(400, "skin_portrait_dimensions", `dialogBox.slice: ${pack.dialogBox.slice} px a side leaves nothing of ${frame} (${s.width}×${s.height})`);
+  }
+  // #4256: card backgroundImage (CARD_BG_MAX) and 9-slice frame (FRAME_MAX + slice bounds).
+  const cardBg = pack.card?.style?.backgroundImage;
+  if (cardBg) {
+    const s = sizes.get(cardBg);
+    if (s && (s.width > CARD_BG_MAX.w || s.height > CARD_BG_MAX.h)) return refuse(400, "skin_card_dimensions", `card.style.backgroundImage: ${cardBg} is ${s.width}×${s.height} px; at most ${CARD_BG_MAX.w}×${CARD_BG_MAX.h}`);
+  }
+  const cardFrame = pack.card?.style?.frame;
+  if (cardFrame) {
+    const s = sizes.get(cardFrame);
+    if (s && (s.width > FRAME_MAX.w || s.height > FRAME_MAX.h)) return refuse(400, "skin_card_dimensions", `card.style.frame: ${cardFrame} is ${s.width}×${s.height} px; at most ${FRAME_MAX.w}×${FRAME_MAX.h}`);
+    const slice = pack.card?.style?.slice;
+    if (s && slice && (slice * 2 >= s.width || slice * 2 >= s.height)) return refuse(400, "skin_card_dimensions", `card.style.slice: ${slice} px a side leaves nothing of ${cardFrame} (${s.width}×${s.height})`);
   }
   return null;
 }
-/** #2861: the largest portrait, and the largest dialogue-box frame (image px). */
+/** #2861 / #4256: the largest portrait, card background, and 9-slice frame (image px). */
 export const PORTRAIT_MAX = { w: 1024, h: 1536 };
+export const CARD_BG_MAX = { w: 1024, h: 1024 };
 export const FRAME_MAX = { w: 512, h: 512 };
 
 /**
@@ -149,7 +168,7 @@ export function checkSkinUpload(body: unknown, by: string, now: number): SkinChe
   }
   for (const src of named) if (!sent.includes(src)) return refuse(400, "skin_file_missing", `${src}: named by the manifest, not sent`);
   const files: Record<string, SkinFile> = {}, pictures = new Map<string, Buffer>(), sizes = new Map<string, { width: number; height: number }>();
-  let total = 0;
+  let total = 0, totalPixels = 0;
   for (const src of named) {
     const b64 = own(body.files, src);
     if (typeof b64 !== "string" || b64.length % 4 !== 0 || !B64.test(b64)) return refuse(400, "skin_invalid", `files.${src}: base64`);
@@ -158,6 +177,8 @@ export function checkSkinUpload(body: unknown, by: string, now: number): SkinChe
     if (!pic.ok) return pic;
     total += pic.kept.length;
     if (total > SKIN_LIMITS.packBytes) return refuse(413, "skin_too_large", `at most ${SKIN_LIMITS.packBytes / MiB} MiB in all`);
+    totalPixels += pic.width * pic.height;
+    if (totalPixels > SKIN_LIMITS.packPixels) return refuse(400, "skin_too_many_pixels", `at most ${SKIN_LIMITS.packPixels / MiB} Mpx of pictures in all`);
     const id = hash32(pic.kept);
     files[src] = { id, bytes: pic.kept.length, width: pic.width, height: pic.height };
     pictures.set(id, pic.kept);

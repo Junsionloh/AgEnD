@@ -1,7 +1,11 @@
+import type { ClaudeRequestObservation } from "./claude-request-observation.js";
+import { managedClaudeBinding } from "./claude-credential-launch.js";
 import { HUB_REPORT_TARGET } from "./hub-report-target.js";
 import { RoomConversationGeneration, roomContextInputMarker } from "./hub-room-conversation.js";
 import { checkpointGrokDelivery, type GrokDeliveryProof } from "./grok-delivery-proof.js";
 import { nativePaneToolRefusal } from "./native-pane-tools.js";
+import { classicGuardInventory, classicPlanDigest, invalidateClassicGuard, type ClassicRestrictedPlan, type ClassicRestrictionInput } from "./classic-cli-guard.js";
+import { CLASSIC_RESTRICTED_TOOLS, type ContactGuardStatus } from "./contact-auth-types.js";
 import { generalByName } from "./general-instance.js";
 import { ClaudeModelObserver, normalizeClaudeModel, type ModelObservation } from "./claude-model-observation.js";
 import type { SubagentSource } from "./subagent-service.js";
@@ -880,7 +884,7 @@ const INPUT_TRANSIENT_STALL_MS = 30_000;
  */
 const INPUT_TRANSIENT_WAIT_MS = 10 * 60_000;
 const INPUT_TRANSIENT_POLL_MS = 250;
-/** Max "stranded text → submit → wait for prompt → re-check" rounds per delivery; each may send one recovery Enter. */
+/** Max actual stranded-text recovery Enters per delivery; a busy observation spends none. */
 const STRANDED_INPUT_MAX_ROUNDS = 3;
 /** The Claude phrasing every backend was judged by before #1217; still the default for a backend that names none. */
 const LEGACY_NO_CONVERSATION = /no conversation found|no conversation to (continue|resume)|no previous (session|conversation)/i;
@@ -1880,6 +1884,8 @@ export class Daemon extends EventEmitter {
    * instance is still auth-broken and must not resume raising alarms.
    */
   private authFailureUnresolved = false;
+  /** A process-local login failure cannot be repaired by a valid auth file or idle chrome. */
+  private staleAuth: { generation: number; since: number } | null = null;
   /** One login-screen auth report per spawn — the screen persists across polls. */
   private loginScreenReported = false;
   /** #2795: the auth pattern match the token-free check is still to judge; it arms nothing until confirmAuthFailure(). */
@@ -2172,7 +2178,7 @@ export class Daemon extends EventEmitter {
   private paneQuotaPatterns(): ErrorPattern[] {
     if (!["codex", "grok"].includes(this.backend?.binaryName ?? "")) return [];
     const patterns = this.backend?.getErrorPatterns?.() ?? [];
-    return this.backend?.binaryName === "codex" ? patterns.filter(ep => Daemon.isCodexUsageLimitPause(ep)) : patterns.filter(ep => ep.type === "quota");
+    return this.backend?.binaryName === "codex" ? patterns.filter(ep => Daemon.isCodexUsageLimitPause(ep) || ep.type === "stale_auth") : patterns.filter(ep => ep.type === "quota");
   }
 
   private async prepareQuotaReplayHistory(reuseWindow: boolean): Promise<void> {
@@ -2190,7 +2196,20 @@ export class Daemon extends EventEmitter {
       this.startupAdmission?.();
       if (!current()) return;
       const patterns = this.paneQuotaPatterns();
-      const messages = oldPane.split(/\r?\n/).filter(row => patterns.some(ep => ep.pattern.test(row)));
+      // A quota frame can span several wrapped rows. Keep the complete rows
+      // each actual match covered, rather than testing the rows independently.
+      // Exact spans dedupe overlapping rules without collapsing repeated hits.
+      const spans = new Map<string, string>();
+      for (const ep of patterns) {
+        const flags = ep.pattern.flags.includes("g") ? ep.pattern.flags : ep.pattern.flags + "g";
+        for (const match of oldPane.matchAll(new RegExp(ep.pattern.source, flags))) {
+          const start = oldPane.lastIndexOf("\n", match.index) + 1;
+          const newline = oldPane.indexOf("\n", match.index + match[0].length);
+          const end = newline < 0 ? oldPane.length : newline;
+          spans.set(`${start}:${end}`, oldPane.slice(start, end));
+        }
+      }
+      const messages = [...spans.values()];
       this.quotaReplay = { messages, current: () => true, spawn, fence, attempt };
     }
   }
@@ -2204,7 +2223,13 @@ export class Daemon extends EventEmitter {
     if (!history) return;
     this.quotaReplay = null;
     if (history.spawn !== this.spawnGeneration || history.fence !== this.launchFenceEpoch || history.attempt !== this.launchAttempt || !history.current()) return;
-    for (const ep of this.paneQuotaPatterns()) {
+    const patterns = this.paneQuotaPatterns();
+    // Grok's old quota frame can also contain a 401. That same proven frame
+    // must not arm the auth gate after its quota was absorbed as history.
+    if (this.backend?.binaryName === "grok") {
+      patterns.push(...(this.backend.getErrorPatterns?.() ?? []).filter(ep => ep.type === "auth_error"));
+    }
+    for (const ep of patterns) {
       const count = Math.min(Daemon.countOccurrences(ep.pattern, pane), quotaHistoryCount(pane, ep.pattern, history.messages));
       if (!count) continue;
       const key = Daemon.errorPatternKey(ep);
@@ -2225,7 +2250,7 @@ export class Daemon extends EventEmitter {
   }
 
   private quotaOccurrencesAfterInput(pane: string, ep: ErrorPattern): { input: NonNullable<Daemon["quotaInput"]>; count: number } | null {
-    if (!(this.backend?.binaryName === "codex" && Daemon.isCodexUsageLimitPause(ep)
+    if (!(this.backend?.binaryName === "codex" && (Daemon.isCodexUsageLimitPause(ep) || ep.type === "stale_auth")
       || this.backend?.binaryName === "grok" && ep.type === "quota")) return null;
     const input = this.quotaInput, history = input?.history;
     if (!input || !history || history.spawn !== this.spawnGeneration || history.fence !== this.launchFenceEpoch
@@ -2396,6 +2421,11 @@ export class Daemon extends EventEmitter {
     return super.emit(event, ...args);
   }
 
+  /** Attention remains active for General/busy agents too, until a new launch takes ownership. */
+  staleAuthIssue(): { since: number } | null {
+    return this.staleAuth?.generation === this.spawnGeneration ? { since: this.staleAuth.since } : null;
+  }
+
   /**
    * Undo an auth suspicion once the backend's token-free probe has said the credentials are fine. Since #2795 a pane
    * pattern match arms nothing before that probe (its pending match is just dropped); what is left to undo is a
@@ -2404,6 +2434,7 @@ export class Daemon extends EventEmitter {
    * is still live and stays.
    */
   clearSuspectedAuthFailure(): boolean {
+    if (this.staleAuthIssue()) return false;
     this.unverifiedAuthMatch = null;
     if (!this.authFailureUnresolved && !this.loginScreenReported) return false;
     this.authFailureUnresolved = false;
@@ -2515,6 +2546,52 @@ export class Daemon extends EventEmitter {
   }
 
 
+  private classicRestriction: ClassicRestrictedPlan | undefined;
+  private classicRestrictionFailed = false;
+  private classicRestrictionNeedsRestart = false;
+  setClassicRestriction(input: ClassicRestrictionInput): void {
+    if (this.runtimeIdentity?.kind !== "classic") {
+      if (input?.mode === "legacy") return; // The optional adapter also sees existing/default-kind starts.
+      throw Error("Classic restriction requires a Classic room");
+    }
+    try {
+      if (!input || !["legacy", "restricted"].includes(input.mode)) throw Error("invalid-policy");
+      const next = input.mode === "restricted" ? { roomKey: this.name, policyRevision: input.policyRevision ?? 0,
+        publicRead: input.roomTools.publicRead, allowedMcpTools: structuredClone(input.roomTools.allowedMcpTools),
+        allowedAgendTools: [...CLASSIC_RESTRICTED_TOOLS] } : undefined;
+      // A1's revision also changes for contact grants and approvers. Validate it,
+      // but preserve the frozen launch when the native tool policy is unchanged.
+      if (next) classicPlanDigest(next);
+      const before = this.classicRestriction ? classicPlanDigest({ ...this.classicRestriction, policyRevision: 0 }) : null;
+      const after = next ? classicPlanDigest({ ...next, policyRevision: 0 }) : null;
+      if (before !== after) {
+        invalidateClassicGuard(this.instanceDir);
+        if (this.classicRestriction && !next && this.processStatus === "running") this.classicRestrictionNeedsRestart = true;
+        this.classicRestriction = next;
+      }
+      this.classicRestrictionFailed = false;
+    } catch {
+      this.classicRestrictionFailed = true;
+      try { invalidateClassicGuard(this.instanceDir); } catch { /* failed remains visible and refuses the next launch */ }
+    }
+  }
+  private assertClassicRestrictionLaunch(expected: string | null): void {
+    const current = this.classicRestriction ? classicPlanDigest(this.classicRestriction) : null;
+    if (this.classicRestrictionFailed || current !== expected) throw Error("Restricted room policy changed while CLI launch was being prepared");
+  }
+  classicNativeGuard(): ContactGuardStatus {
+    const backend = this.config.backend ?? this.backend?.binaryName ?? "unknown";
+    if (this.classicRestrictionFailed) return classicGuardInventory({ state: "failed", backend, reason: "guard-unavailable" });
+    if (!this.classicRestriction) return classicGuardInventory(this.classicRestrictionNeedsRestart
+      ? { state: "restart-required", backend, reason: "stale-policy" }
+      : { state: "not-covered", backend, reason: "legacy-mode" });
+    if (this.nativePaneLifecycle) return classicGuardInventory({ state: "not-covered", backend, reason: "unsupported-platform" });
+    const status = this.backend?.classicNativeGuard?.(this.classicRestriction)
+      ?? { state: "not-covered" as const, backend, reason: "unsupported-backend" };
+    return classicGuardInventory(status.state === "ready" && this.processStatus !== "running"
+      ? { state: "restart-required", backend, reason: "not-running" } : status);
+  }
+
   /** Internal lifecycle injection, before start. Native paths and provider files stay on their runner. */
   setNativePaneLifecycle(native: NativePaneLifecycle): void {
     if (this.tmux || this.ipcServer || this.nativePaneLifecycle) throw Error("Native pane adapter must be bound before daemon startup");
@@ -2605,6 +2682,38 @@ export class Daemon extends EventEmitter {
   private statusEmojiAvoidList: (() => string[] | undefined) | undefined;
   setStatusEmojiAvoidList(list: (() => string[] | undefined) | undefined): void {
     this.statusEmojiAvoidList = list;
+  }
+
+  private credentialChangeIncarnation:{windowId:string;pid:number}|null=null;
+  /** Claim an idle local Claude pane for an account change; queued input cannot race the final capture. */
+  async quiesceClaudeCredential():Promise<boolean>{
+    const spawn=this.spawnGeneration,fence=this.launchFenceEpoch;
+    return this.paneWriteLock.run(async()=>{
+      const turn=this.turnReplyGuard.snapshot(),deliveryEpoch=this.deliveryEpoch;
+      if(turn&&!turn.cancelledByUser&&!turn.completionDelivered)return false;
+      if(this.backend?.binaryName!=="claude"||this.usesNativePane()||this.spawning||this.healthCheckPaused||this.deliveryWritesStopping||this.startupAborted||this.isPaused)return false;
+      if(!await this.isPaneAuthoritativelyIdle())return false;
+      const windowId=this.tmux?.getWindowId();if(!windowId)return false;
+      let pid:number|null=null;try{pid=await this.paneHost.getPanePid(this.tmuxSessionName,windowId);}catch{return false;}
+      if(pid===null||!Number.isSafeInteger(pid)||pid<=1||windowId!==this.tmux?.getWindowId())return false;
+      // A tool pause can look idle. Re-read the owned logical turn after both
+      // pane awaits; new input or another turn must not inherit this idle proof.
+      const currentTurn=this.turnReplyGuard.snapshot();
+      if((currentTurn&&!currentTurn.cancelledByUser&&!currentTurn.completionDelivered)||currentTurn?.generation!==turn?.generation||deliveryEpoch!==this.deliveryEpoch)return false;
+      if(spawn!==this.spawnGeneration||fence!==this.launchFenceEpoch||this.spawning||this.healthCheckPaused||this.deliveryWritesStopping||this.startupAborted||this.isPaused)return false;
+      this.credentialChangeIncarnation={windowId,pid};this.fenceDeliveryWritesForStop();return true;
+    });
+  }
+
+  /** Read-only proof for the exact pane captured above; never kill a replacement window. */
+  async claudeCredentialRetired():Promise<boolean>{
+    const inc=this.credentialChangeIncarnation;if(!inc)return false;
+    try{
+      const windows=await TmuxManager.listWindowsStrict(this.tmuxSessionName);
+      if(!windows.some(window=>window.id===inc.windowId))return true;
+      const pid=await this.paneHost.getPanePid(this.tmuxSessionName,inc.windowId);
+      return pid!==null&&pid!==inc.pid;
+    }catch{return false;}
   }
 
   /** Fence pane writers before lifecycle captures pre-kill reconciliation evidence. */
@@ -3190,6 +3299,7 @@ export class Daemon extends EventEmitter {
     if (this.sessionOomStopUnpersisted) return t("inst.session_oom_hold");
     const oomStop = readSessionOomStop(this.instanceDir);
     if (oomStop.blocked) return sessionOomStopHint(oomStop);
+    if (this.staleAuthIssue()) return t("inst.codex_stale_auth");
     if (this.pauseWakeState !== "active") return t("delivery.hold_state", this.pauseWakeState);
     if (this.inputBlockedDialogKey !== null) return t("delivery.hold_dialog", this.inputBlockedDialogKey);
     if (this.authFailureUnresolved) return t("delivery.hold_auth");
@@ -4002,8 +4112,10 @@ export class Daemon extends EventEmitter {
           if (this.nativePaneLifecycle) {
             if (this.healthCheckPaused) { scheduleNext(); return; }
             const native = this.nativePaneLifecycle, pane = this.tmux;
+            const footprintObservedAt=this.footprintEnabled?Date.now():0,footprintOwner=this.footprintEnabled?JSON.stringify(this.interactionOwner()):null;
             const status = await pane?.getPaneStatus();
             if (this.runtimeMonitorsFrozen || native !== this.nativePaneLifecycle || pane !== this.tmux) return;
+            if(this.footprintEnabled&&status?.alive&&status.pid&&footprintOwner===JSON.stringify(this.interactionOwner()))this.footprintPane={pid:status.pid,owner:footprintOwner,observedAt:footprintObservedAt,pane};
             const snapshot = native.snapshot?.();
             if (status?.alive === false && snapshot?.state === "exited") {
               this.healthCheckPaused = true;
@@ -4041,11 +4153,13 @@ export class Daemon extends EventEmitter {
             return true;
           };
 
+          const footprintObservedAt=this.footprintEnabled?Date.now():0;
           let paneStatus = await healthTmux.getPaneStatus();
           // Auto-pause intentionally exits the pane process. A health tick that
           // began just before pause must not classify that exit as a crash.
           if (discardStaleHealth()) return;
           if (paneStatus?.alive) {
+            if(this.footprintEnabled&&footprintObservedAt>0&&paneStatus.pid)this.footprintPane={pid:paneStatus.pid,owner:JSON.stringify(healthOwner),observedAt:footprintObservedAt,pane:healthTmux};
             // A CLI shutdown also closes its MCP children. Revive tools only for
             // a positively live pane, never while its exit is being classified.
             measureSyncWork("daemon.healthCheck", () => this.checkMcpServerAlive());
@@ -4847,6 +4961,7 @@ export class Daemon extends EventEmitter {
     now = Date.now(),
     busyPattern: RegExp | null = null,
   ): void {
+    if (this.staleAuthIssue()) return; // Ready chrome and recovery deadlines cannot repair this process.
     // Count occurrences across the WHOLE pane (not just text after the last
     // ready prompt). One shared counter (the static below): arm requires
     // count > baseline, so a drifted clone here would silently gate nudges.
@@ -4958,7 +5073,7 @@ export class Daemon extends EventEmitter {
       // composer to establish its baseline; later appended occurrences remain eligible.
       if ((ep.type === "rate_limit" && ep.action === "nudge_continue") || ep.historyUntilLiveComposer) {
         const baseline = this.nudgeBaselines?.get(key);
-        if (baseline === undefined || count <= baseline) {
+        if ((baseline === undefined || count <= baseline) && !(ep.type === "stale_auth" && newQuotaAfterInput)) {
           if (baseline !== undefined) this.lastErrorCount.set(key, count);
           continue;
         }
@@ -5062,6 +5177,10 @@ export class Daemon extends EventEmitter {
         this.logger.warn({ reason: String(err) }, "CLI launch repair failed");
       });
       return;
+    }
+    if (ep.type === "stale_auth") {
+      this.staleAuth = { generation: this.spawnGeneration, since: now };
+      this.authFailureUnresolved = true;
     }
     // #2795: auth text on the pane proves nothing about the credentials (22 of 22 such matches on the main host were
     // conversation text). It arms nothing here; it only asks the lifecycle's token-free check, and a failing check
@@ -5908,7 +6027,7 @@ export class Daemon extends EventEmitter {
 
     // Clean up backend config files
     if (this.backend?.cleanup) {
-      this.backend.cleanup(this.buildBackendConfig());
+      this.backend.cleanup(this.buildBackendConfig(false));
     }
     // Clean up checked-out repos
     try { rmSync(join(this.instanceDir, "repos"), { recursive: true, force: true }); } catch { /* best effort */ }
@@ -5962,6 +6081,14 @@ export class Daemon extends EventEmitter {
     return { ...snapshot, interaction: this.getInteractionSnapshot() };
   }
 
+  private footprintEnabled=false;
+  private footprintPane: {pid:number;owner:string;observedAt:number;pane:unknown}|null=null;
+  setHostFootprintEnabled(enabled:boolean):void {this.footprintEnabled=enabled;if(!enabled)this.footprintPane=null;}
+  hostFootprintRoot():{pid:number;owner:string;observedAt:number}|null {
+    const cached=this.footprintPane;
+    if(!this.footprintEnabled||!cached||cached.pane!==this.tmux||cached.owner!==JSON.stringify(this.interactionOwner())||this.isPaused||this.spawning||this.healthCheckPaused||this.runtimeMonitorsFrozen||Date.now()-cached.observedAt>120000)return null;
+    return {pid:cached.pid,owner:cached.owner,observedAt:cached.observedAt};
+  }
   private interactionOwner(): InteractionOwner {
     return { bootId: this.bootId, spawnGeneration: this.spawnGeneration,
       launchAttempt: this.launchAttempt, launchFenceEpoch: this.launchFenceEpoch };
@@ -6463,7 +6590,7 @@ export class Daemon extends EventEmitter {
     // auth pause — otherwise the instance would pause again the moment it idles.
     this.pausePending = false;
     this.pauseReconfirmAuth = false;
-    this.authFailureUnresolved = false;
+    if (!this.staleAuthIssue()) this.authFailureUnresolved = false;
     this.unverifiedAuthMatch = null;
     this.loginScreenReported = false;
     this.fatalStartupReported = false;
@@ -7209,6 +7336,11 @@ export class Daemon extends EventEmitter {
     this.claudeModelObserver = modelObserver;
     this.modelObservationBound = false;
     const owner = launchIdentity(this.interactionOwner());
+    const credentialLaunch=source||!this.isClaudeCodeBackend()?null:this.backend?.credentialObservationLaunch?.();
+    monitor.on("claude_request",(record:ClaudeRequestObservation,launchId:string)=>{
+      if(!credentialLaunch||credentialLaunch.binding.kind==="subscription"||this.transcriptMonitor!==monitor||owner!==launchIdentity(this.interactionOwner())||this.deliveryWritesStopping||this.startupAborted||launchId!==credentialLaunch.launch.id||this.backend?.credentialObservationLaunch?.()?.launch.id!==launchId||record.at<credentialLaunch.launch.startedAt||!credentialLaunch.sourceCurrent())return;
+      this.emit("claude_credential_request",{binding:credentialLaunch.binding,record,owner:this.interactionOwner()});
+    });
     let reminderSession = modelObserver?.checkpoint().sessionId ?? null;
     const observeReminderBoundary = (sessionId: string, before: ModelObservation, after: ModelObservation) => {
       const selected = (s: ModelObservation) => normalizeClaudeModel(s.session ?? s.launch);
@@ -8497,7 +8629,7 @@ export class Daemon extends EventEmitter {
     // Durable cross-instance rows are still retryable before a pane write. Their
     // terminal state is announced by the outbox only after its retry/TTL policy
     // is exhausted; emitting ❌ here would expose a transient gate timeout.
-    if (status && !verdict.durableAttempt) this.emit("message_failed", status); // ❌
+    if (status && !verdict.durableAttempt) this.emit("message_failed", { ...status, phase, proof }); // ❌
     return false;
   }
 
@@ -8906,7 +9038,7 @@ export class Daemon extends EventEmitter {
     const settleGeneration = this.spawnGeneration;
     const settleFence = this.launchFenceEpoch;
     if (cancelled()) return false;
-    if (this.refuseFatalStartupDelivery(verdict, status)) return false;
+    if (this.refuseBlockedDelivery(verdict, status)) return false;
 
     let windowId = this.getWindowId();
 
@@ -8987,26 +9119,44 @@ export class Daemon extends EventEmitter {
       // must come back AND the check runs again — the stranded text may still
       // be there. "failed" (the Enter could not be sent) fails the delivery:
       // pasting now would submit both messages as one.
-      for (let round = 0; ; round++) {
-        // Budget check BEFORE the next mutating call: each round may send one
-        // recovery Enter, so exactly STRANDED_INPUT_MAX_ROUNDS of them go out.
-        if (round >= STRANDED_INPUT_MAX_ROUNDS) {
-          this.logger.error({ round }, "Input row still not clear after the stranded-text recovery budget — reporting delivery failure");
-          return this.failDelivery(verdict, status, "stranded-input", "retry-budget-exhausted");
+      const inputDeadline = Date.now() + 30 * 60_000;
+      let submissions = 0;
+      let unavailableProbes = 0;
+      for (;;) {
+        if (cancelled()) return false;
+        if (Date.now() >= inputDeadline) {
+          this.logger.error("Input row stayed unavailable until the delivery deadline");
+          return this.failDelivery(verdict, status, "stranded-input", "input-not-clear-timeout");
         }
-        const stranded = await this.submitStrandedInputIfAny(windowId);
+        // Only actual recovery Enters spend the submission budget. A live pane's
+        // unreadable/changing composer may need time, not three synchronous probes.
+        const stranded = await this.submitStrandedInputIfAny(windowId, submissions < STRANDED_INPUT_MAX_ROUNDS);
         if (cancelled()) return false;
         if (stranded === "idle") break;
+        if (stranded === "exhausted") {
+          this.logger.error({ submissions }, "Input row still not clear after the stranded-text recovery budget — reporting delivery failure");
+          return this.failDelivery(verdict, status, "stranded-input", "retry-budget-exhausted");
+        }
         if (stranded === "failed") {
-          this.logger.error({ round }, "Could not submit the stranded text — reporting delivery failure");
+          this.logger.error({ submissions }, "Could not submit the stranded text — reporting delivery failure");
           return this.failDelivery(verdict, status, "stranded-input", "enter-failed");
         }
-        const readyAgain = await this.waitForPaneReadyForDelivery(windowId);
+        if (stranded === "submitted") submissions++;
+        // Only the proven empty unknown-footer candidate needs the timed
+        // fallback. Preserve the existing bounded refusal for other unsafe
+        // input (including a stranded draft whose footer cannot be proved).
+        if (stranded === "busy" && this.footerFallbackPaneKey === null && ++unavailableProbes >= STRANDED_INPUT_MAX_ROUNDS) {
+          return this.failDelivery(verdict, status, "stranded-input", "input-not-clear");
+        }
+        const readyAgain = await this.waitForPaneReadyForDelivery(windowId, inputDeadline - Date.now());
         if (cancelled()) return false;
         if (!readyAgain) {
-          this.logger.error("Pane never returned to its prompt after submitting stranded input — reporting delivery failure");
+          this.logger.error("Pane never returned to its prompt after checking stranded input — reporting delivery failure");
           return this.failDelivery(verdict, status, "stranded-input", "prompt-timeout");
         }
+        // After startup, the general idle gate can pass while the stricter input
+        // proof is still collecting a stable composer. Yield before re-reading it.
+        if (stranded === "busy") await new Promise(resolve => setTimeout(resolve, BOTTOM_READY_POLL_MS));
       }
     }
 
@@ -9025,7 +9175,7 @@ export class Daemon extends EventEmitter {
         // here (startup dismissal needs this lock) — back out and redo the
         // delivery from the top, where the settle wait runs again outside it.
         if (!settledClean || settleGeneration !== this.spawnGeneration || this.spawning) return "spawn-started";
-        if (this.refuseFatalStartupDelivery(verdict, status)) return false;
+        if (this.refuseBlockedDelivery(verdict, status)) return false;
         // A passive startup phase may paint after the outer readiness probe.
         // It clears without input, so waiting under the pane lock cannot starve
         // a dialog dismisser and closes the final clear→paste TOCTOU window.
@@ -9054,6 +9204,7 @@ export class Daemon extends EventEmitter {
         // same process, a pause/stop/respawn is not (launchFenceEpoch moves even
         // when a failed pause resumes the monitors).
         const writeCurrent = () => !cancelled()
+          && !this.staleAuthIssue()
           && !this.deliveryWritesStopping
           && !this.runtimeMonitorsFrozen
           && !this.spawning
@@ -10216,6 +10367,7 @@ export class Daemon extends EventEmitter {
    * pane proves nothing. The silence gate comes first and costs no capture.
    */
   private async paneReadinessForDelivery(windowId: string): Promise<"ready" | "busy" | "dialog" | "transient" | "unknown"> {
+    if (this.staleAuthIssue()) { this.resetFooterFallback(); return "dialog"; }
     // Each early return below is the pane seen outside the footer-fallback
     // candidate state, and never reaches deliveryInputReadyPane: reset here.
     if (!this.isPaneIdleForDelivery(windowId)) { this.resetFooterFallback(); return "busy"; }
@@ -10462,7 +10614,7 @@ export class Daemon extends EventEmitter {
     return "not-cleared";
   }
 
-  private async submitStrandedInputIfAny(windowId: string): Promise<"idle" | "submitted" | "busy" | "failed"> {
+  private async submitStrandedInputIfAny(windowId: string, allowSubmit = true): Promise<"idle" | "submitted" | "busy" | "failed" | "exhausted"> {
     if (!this.tmux || !this.backend) return "idle";
     const prompt = this.backend.getBottomReadyPattern?.();
     if (!prompt) return "idle";
@@ -10476,7 +10628,7 @@ export class Daemon extends EventEmitter {
     if (pre === "stranded") {
       this.logger.warn({ windowId }, "Unsubmitted message found in the input row — submitting it before this delivery");
     }
-    return this.paneWriteLock.run(async (): Promise<"idle" | "submitted" | "busy" | "failed"> => {
+    return this.paneWriteLock.run(async (): Promise<"idle" | "submitted" | "busy" | "failed" | "exhausted"> => {
       // Re-check UNDER the lock right before the key goes out: between the
       // pre-check and acquiring the lock the CLI may have started generating
       // (the stranded text got submitted by someone else, or the dismisser
@@ -10486,6 +10638,7 @@ export class Daemon extends EventEmitter {
       const state = await this.strandedInputState(prompt, requireBottomReady);
       if (state === "clear") return "idle";
       if (state !== "stranded") return "busy"; // busy, or unreadable: no evidence the prompt is free
+      if (!allowSubmit) return "exhausted"; // a final clear check is allowed, a fourth recovery Enter is not
       const sent = await this.sendDeliveryEnter("stranded-input-submit");
       return sent ? "submitted" : "failed";
     });
@@ -10502,6 +10655,16 @@ export class Daemon extends EventEmitter {
     try { pane = await this.tmux!.capturePane(); } catch { return "unknown"; }
     if (this.inputTransientInPane(pane)) return "busy";
     if (this.backend?.getBusyPattern?.()?.test(pane)) return "busy";
+    // The timed footer fallback is valid only in a live raw TUI, even
+    // after the startup guard has retired. Historical shell scrollback is not
+    // evidence that a composer still owns the terminal.
+    const known = this.backend?.isDeliveryInputReadyPane?.(pane);
+    if (known === false && this.backend?.isStableUnknownLayoutIdlePane?.(pane)) {
+      if (this.nativePaneLifecycle || await this.tmux?.getPaneInputMode?.() !== "raw") {
+        this.resetFooterFallback();
+        return "busy";
+      }
+    }
     if (!this.deliveryInputReadyPane(pane)) return "busy";
     if (strandedAgendMessageInInput(pane, prompt)) {
       // A cancelled human turn can restore its text here. Idle observation must not let a later delivery submit it.
@@ -10674,6 +10837,7 @@ export class Daemon extends EventEmitter {
   }
 
   /**
+   * A stale process login refuses delivery before any write; durable attempts stay retryable.
    * While the CLI is parked on a fatal startup screen (see fatalStartupBlocked),
    * no pane write may happen: paste+Enter into the corrupt-config modal would
    * confirm "Exit and fix manually" and exit the CLI. The message is failed (❌)
@@ -10681,7 +10845,11 @@ export class Daemon extends EventEmitter {
    * what to fix, and holding would only build a queue that floods the pane the
    * moment the flag clears.
    */
-  private refuseFatalStartupDelivery(verdict: DeliveryVerdict, status?: DeliveryStatus): boolean {
+  private refuseBlockedDelivery(verdict: DeliveryVerdict, status?: DeliveryStatus): boolean {
+    if (this.staleAuthIssue()) {
+      this.failDelivery(verdict, status, "pre-write", "stale-auth");
+      return true;
+    }
     if (!this.fatalStartupBlocked && !this.modelMinimumBlocked) return false;
     this.logger.error("Delivery refused — CLI startup or model-version repair is held");
     this.failDelivery(verdict, status, "fatal-startup", "blocked-before-write");
@@ -12872,7 +13040,7 @@ export class Daemon extends EventEmitter {
   }
 
   /** Build config object for the CLI backend */
-  private buildBackendConfig(): CliBackendConfig {
+  private buildBackendConfig(forLaunch = true): CliBackendConfig {
     // Antigravity 1.1.17 has no per-workspace MCP config, but its global MCP
     // children inherit the CLI process environment. The backend installs one
     // environment-selecting launcher, so MCP is now the safe default here too.
@@ -12949,6 +13117,7 @@ export class Daemon extends EventEmitter {
       ? resolveToolSet(this.config, this.name, "general")
       : resolveToolSet(this.config, this.name);
     mcpEnv.AGEND_TOOL_SET = toolSet;
+    if (this.classicRestriction) mcpEnv.AGEND_CLASSIC_ALLOWED_TOOLS = JSON.stringify(this.classicRestriction.allowedAgendTools);
     // The dashboard features the person switched off: out of the tool menu from this start (the fleet refuses them
     // at once, whatever the menu still shows).
     const dashboardOff = dashboardFeaturesOff(dashboardAccessOf(this.config));
@@ -13007,8 +13176,12 @@ export class Daemon extends EventEmitter {
 
     const backendName = this.config.backend ?? "claude-code";
     const backendOptions = this.config.backend_options?.[backendName];
+    const managedClaudeCredential = forLaunch && backendName === "claude-code"
+      ? managedClaudeBinding(resolve(this.instanceDir, "..", ".."), resolveCredentialProfile(backendOptions)) : null;
 
     return {
+      ...(managedClaudeCredential ? { managedClaudeCredential } : {}),
+      ...(this.classicRestriction ? { classicRestriction: this.classicRestriction } : {}),
       workingDirectory: this.config.working_directory,
       instanceDir: this.instanceDir,
       instanceName: this.name,
@@ -14185,11 +14358,17 @@ export class Daemon extends EventEmitter {
   private async trySpawnInsideGate(reuseWindow = false, startupTimeoutMs?: number, repairAdmission?: (attempt: number) => boolean): Promise<boolean> {
     if (this.nativePaneLifecycle) throw Error("Native relaunch requires its owned exit and a new lifecycle reservation");
     let expectedAttempt = this.launchAttempt;
-    const admit = () => { this.startupAdmission?.(); if (repairAdmission && !repairAdmission(expectedAttempt)) throw new Error("CLI repair superseded by another launch, pause or stop"); };
+    const restrictionStamp = this.classicRestriction ? classicPlanDigest(this.classicRestriction) : null;
+    const admit = () => {
+      this.startupAdmission?.();
+      this.assertClassicRestrictionLaunch(restrictionStamp);
+      if (repairAdmission && !repairAdmission(expectedAttempt)) throw new Error("CLI repair superseded by another launch, pause or stop");
+    };
     this.assertSessionOomAdmission();
     admit();
     const launchFence = this.launchFenceEpoch;
-    const backendConfig = this.buildBackendConfig();
+    const backendConfig = this.buildBackendConfig(true);
+    if (this.classicRestrictionFailed) throw Error("Restricted room policy is unavailable");
 
     // A compatibility refusal is not a failed resume: no configuration, pin, history or pane may change.
     if (this.backend?.assertLaunchSupported) {
@@ -14216,6 +14395,7 @@ export class Daemon extends EventEmitter {
     if (launchFence !== this.launchFenceEpoch) throw new Error("Launch cancelled: the instance was stopped or paused while the launch was being prepared");
 
     this.backend!.writeConfig(backendConfig);
+    this.classicRestrictionNeedsRestart = false;
     if (freshInboundInstructions) this.installCompactInboundInstructions();
     else { this.compactInboundInstructions = false; this.inboundCompatibilityPending = true; this.resetInboundPresentation(); }
     this.backend!.preTrust?.(this.config.working_directory, backendConfig);

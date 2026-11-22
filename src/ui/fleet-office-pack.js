@@ -182,8 +182,8 @@ export const PACK_STATES = ["needs", "crashed", "stuck", "working", "idle", "pau
 /** M-3293 (#4119): what a bubbles table may name — the states, and the Office's two reactions (a pat, a feed). */
 export const BUBBLE_KEYS = [...PACK_STATES, "pat", "feed"];
 const POSES = ["working", "idle", "paused", "needs", "walk", "walkDown", "walkUp", "walkSide"], PROPS = ["task", "send", "report", "broadcast"];
-/** A character set's strips: its poses, and what its people send (#2562). */
-const SET_STRIPS = [...POSES, "prop"];
+/** A character set's strips: its poses, optional eat (M-3432 #4255) and dragged (M-3445 #4267) poses, and what its people send (#2562). */
+const SET_STRIPS = [...POSES, "eat", "dragged", "prop"];
 /** A furniture item's walking strips (#2596): a character set's walking poses. */
 const WALKS = ["walk", "walkDown", "walkUp", "walkSide"];
 const BUILT_IN = new Set(["pixel", "studio"]);
@@ -198,8 +198,23 @@ const SRC = /^[A-Za-z0-9._/-]{1,200}$/;
 const HEX = /^#[0-9a-f]{6}$/i;
 const LIMIT = { areas: 32, seats: 64, furniture: 128, waypoints: 512, edges: 2048, sets: 64, byInstance: 500, lines: 12, line: 40, seatFor: 16, titles: 32, title: 24, fixed: 500,
   portraitInstances: 500, portraitUsers: 200, portraitNpcs: 128, slice: 128, idleVisits: 8 };
+/** M-3394 (#4231): strip animation caps — per-sheet frames, multi-sheet count, total frames, and per-frame duration (ms). */
+export const STRIP_LIMITS = { sheetFrames: 32, sheets: 32, frames: 600, minMs: 33, maxMs: 60000 };
+/** M-3432 (#4255): snack manifest caps — entries per pack, attraction radius (logical units), and label length. */
+export const SNACK_LIMITS = { max: 12, minRadius: 60, maxRadius: 1280, defaultRadius: 260, labelMax: 24 };
 /** #2861: a portrait's expressions, by the state it is shown in (a missing one: idle, then any given). */
 export const PORTRAIT_STATES = ["idle", "working", "needs"];
+/** M-3433 (#4256): optional agent profile card style & layout enums and caps. */
+export const CARD_PRESETS = ["default", "rpg", "compact", "dossier"];
+export const CARD_RADII = ["none", "sm", "md", "lg"];
+export const CARD_AVATAR_SIZES = ["sm", "md", "lg"];
+export const CARD_AVATAR_SOURCES = ["sprite", "portrait"];
+export const CARD_HEADER_ALIGNS = ["left", "center"];
+export const CARD_SECTIONS = ["header", "level", "rows", "now", "tell", "actions"];
+export const CARD_ROWS = ["office", "model", "backend", "today", "firstSeen"];
+export const CARD_HIDE = ["instance", "title", "badge", "level", "xpBar", "office", "model", "backend", "today", "firstSeen", "now"];
+export const CARD_STYLE_COLORS = ["background", "border", "text", "muted", "accent", "barTrack", "barFill", "buttonBg", "buttonText", "buttonPrimaryBg", "buttonPrimaryText"];
+export const CARD_LIMITS = { widthMin: 280, widthMax: 400, sliceMax: 128, textContrast: 4.5, uiContrast: 3.0 };
 /** #2861: a person's account as the chat records it (`adapter:id`, web-chat-history.ts FROM). */
 const ACCOUNT = /^[^\s:]{1,64}:[^\s:]{1,128}$/;
 
@@ -229,15 +244,115 @@ function list(v, max, at) { if (!Array.isArray(v)) throw new Refused(at, "a list
 /** Whether `v` is a pack's `matte`: a colour as #rrggbb (six hex digits, either case). */
 export const matteOk = (v) => typeof v === "string" && HEX.test(v);
 
-/** A frame strip, strictly; `scale` the pack's (its displayed size, dw × dh, is resolved here). */
+/** M-3433 (#4256): WCAG 2.1 relative luminance (0–1) for a #rrggbb colour, or null when invalid. */
+export function relativeLuminance(hex) {
+  if (!matteOk(hex)) return null;
+  const ch = (i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * ch(1) + 0.7152 * ch(3) + 0.0722 * ch(5);
+}
+
+/** M-3433 (#4256): WCAG 2.1 contrast ratio (1–21) between two #rrggbb colours, or 0 when either is invalid. */
+export function contrastRatio(hexA, hexB) {
+  const a = relativeLuminance(hexA), b = relativeLuminance(hexB);
+  if (a === null || b === null) return 0;
+  const hi = Math.max(a, b), lo = Math.min(a, b);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** A frame strip, strictly; `scale` the pack's (its displayed size, dw × dh, is resolved here).
+ * Supports three forms:
+ * 1. Single horizontal sheet (existing): `{ src: "idle.png", frames: 4, w, h, fps?, durations?, once?, loopFrom? }`
+ * 2. Multi-sheet sequence (#4231): `{ src: ["a.png", "b.png"], frames: 32 | [32, 16], w, h, fps?, durations?, once?, loopFrom? }`
+ * 3. Frame list with per-frame durations (M-3394): `{ frames: [{ src: "f1.png", ms?: 1200 }, …], w, h, fps?, once?, loopFrom? }`
+ */
 export function checkStrip(v, at = "strip", scale = 2) {
   obj(v, at);
-  keys(v, ["src", "frames", "w", "h", "fps", "ax", "ay", "dw", "dh"], at);
+  keys(v, ["src", "frames", "durations", "w", "h", "fps", "ax", "ay", "dw", "dh", "once", "loopFrom"], at);
   const w = int(v.w, 1, 512, `${at}.w`), h = int(v.h, 1, 512, `${at}.h`);
   const dw0 = v.dw === undefined ? null : num(v.dw, 1, LOGICAL.w, `${at}.dw`), dh0 = v.dh === undefined ? null : num(v.dh, 1, LOGICAL.h, `${at}.dh`);
   const dw = dw0 ?? (dh0 !== null ? (dh0 * w) / h : w * scale), dh = dh0 ?? (dw0 !== null ? (dw0 * h) / w : h * scale);
-  return { src: src(v.src, `${at}.src`), frames: int(v.frames, 1, 32, `${at}.frames`), w, h, fps: v.fps === undefined ? 4 : num(v.fps, 0, 30, `${at}.fps`),
-    ax: v.ax === undefined ? w / 2 : num(v.ax, 0, w, `${at}.ax`), ay: v.ay === undefined ? h : num(v.ay, 0, h, `${at}.ay`), dw, dh };
+  const ax = v.ax === undefined ? w / 2 : num(v.ax, 0, w, `${at}.ax`), ay = v.ay === undefined ? h : num(v.ay, 0, h, `${at}.ay`);
+  if (v.once !== undefined && typeof v.once !== "boolean") throw new Refused(`${at}.once`, "true or false");
+  const once = v.once === true;
+  let firstSrc, totalFrames, sheets = null, durations = null, fps = 4;
+
+  if (v.src === undefined && Array.isArray(v.frames)) {
+    // Form 3: explicit frame list [{ src, ms? }, …], each image 1 frame (w × h).
+    if (v.durations !== undefined) throw new Refused(`${at}.durations`, "use ms on each entry in frames");
+    const items = list(v.frames, STRIP_LIMITS.frames, `${at}.frames`);
+    if (!items.length) throw new Refused(`${at}.frames`, "at least 1 frame");
+    fps = v.fps === undefined ? 4 : num(v.fps, 0, 30, `${at}.fps`);
+    let hasMs = false;
+    const parsed = items.map((e, i) => {
+      const here = `${at}.frames[${i}]`;
+      obj(e, here); keys(e, ["src", "ms"], here);
+      const file = src(e.src, `${here}.src`);
+      const ms = e.ms === undefined ? null : int(e.ms, STRIP_LIMITS.minMs, STRIP_LIMITS.maxMs, `${here}.ms`);
+      if (ms !== null) hasMs = true;
+      return { src: file, ms };
+    });
+    if (hasMs && v.fps === 0) throw new Refused(`${at}.fps`, "0 cannot be used with frame ms");
+    firstSrc = parsed[0].src;
+    totalFrames = parsed.length;
+    sheets = parsed.map((e) => ({ src: e.src, frames: 1 }));
+    if (hasMs) {
+      const fallbackMs = Math.max(STRIP_LIMITS.minMs, Math.min(STRIP_LIMITS.maxMs, Math.round(1000 / (fps > 0 ? fps : 4))));
+      durations = parsed.map((e) => e.ms ?? fallbackMs);
+    }
+  } else if (Array.isArray(v.src)) {
+    // Form 2: multi-sheet sequence of horizontal strips.
+    const files = list(v.src, STRIP_LIMITS.sheets, `${at}.src`).map((s, i) => src(s, `${at}.src[${i}]`));
+    if (!files.length) throw new Refused(`${at}.src`, "at least 1 file");
+    let counts;
+    if (Array.isArray(v.frames)) {
+      if (v.frames.length !== files.length) throw new Refused(`${at}.frames`, `must have ${files.length} entries (one per image in src)`);
+      counts = v.frames.map((n, i) => int(n, 1, STRIP_LIMITS.sheetFrames, `${at}.frames[${i}]`));
+    } else {
+      const n = int(v.frames, 1, STRIP_LIMITS.sheetFrames, `${at}.frames`);
+      counts = files.map(() => n);
+    }
+    totalFrames = counts.reduce((a, b) => a + b, 0);
+    if (totalFrames > STRIP_LIMITS.frames) throw new Refused(`${at}.frames`, `at most ${STRIP_LIMITS.frames} frames in all`);
+    firstSrc = files[0];
+    sheets = files.map((file, i) => ({ src: file, frames: counts[i] }));
+    if (v.durations !== undefined) {
+      if (v.fps !== undefined) throw new Refused(`${at}.durations`, "cannot be used with fps");
+      const ds = list(v.durations, STRIP_LIMITS.frames, `${at}.durations`);
+      if (ds.length !== totalFrames) throw new Refused(`${at}.durations`, `must have ${totalFrames} entries (one per frame)`);
+      durations = ds.map((d, i) => int(d, STRIP_LIMITS.minMs, STRIP_LIMITS.maxMs, `${at}.durations[${i}]`));
+    } else {
+      fps = v.fps === undefined ? 4 : num(v.fps, 0, 30, `${at}.fps`);
+    }
+  } else {
+    // Form 1: single horizontal strip (unchanged for existing packs).
+    firstSrc = src(v.src, `${at}.src`);
+    totalFrames = int(v.frames, 1, STRIP_LIMITS.sheetFrames, `${at}.frames`);
+    if (v.durations !== undefined) {
+      if (v.fps !== undefined) throw new Refused(`${at}.durations`, "cannot be used with fps");
+      const ds = list(v.durations, STRIP_LIMITS.sheetFrames, `${at}.durations`);
+      if (ds.length !== totalFrames) throw new Refused(`${at}.durations`, `must have ${totalFrames} entries (one per frame)`);
+      durations = ds.map((d, i) => int(d, STRIP_LIMITS.minMs, STRIP_LIMITS.maxMs, `${at}.durations[${i}]`));
+    } else {
+      fps = v.fps === undefined ? 4 : num(v.fps, 0, 30, `${at}.fps`);
+    }
+  }
+
+  let loopFrom = 0;
+  if (v.loopFrom !== undefined) {
+    if (once) throw new Refused(`${at}.loopFrom`, "cannot be used with once");
+    loopFrom = int(v.loopFrom, 0, totalFrames - 1, `${at}.loopFrom`);
+  }
+
+  return {
+    src: firstSrc, frames: totalFrames, w, h, fps, ax, ay, dw, dh,
+    ...(sheets ? { sheets } : {}),
+    ...(durations ? { durations } : {}),
+    ...(once ? { once: true } : {}),
+    ...(loopFrom > 0 ? { loopFrom } : {}),
+  };
 }
 /** A furniture item's night (#2568): { sprite, x, y } — at bedtime it is drawn as `sprite` (playing) at (x, y), its own place when left out. */
 function nightOf(v, at, scale) {
@@ -402,6 +517,100 @@ function dialogBoxOf(v) {
   return out;
 }
 
+/** M-3433 (#4256): a unique ordered list of allowed enum values. */
+function uniqueEnumList(v, allowed, at) {
+  const items = list(v, allowed.length, at), seen = new Set();
+  return items.map((s, i) => {
+    if (typeof s !== "string" || !allowed.includes(s)) throw new Refused(`${at}[${i}]`, `one of ${allowed.join(", ")}`);
+    if (seen.has(s)) throw new Refused(`${at}[${i}]`, `"${s}" listed twice`);
+    seen.add(s);
+    return s;
+  });
+}
+
+/**
+ * M-3433 (#4256): a pack's optional `card` — agent profile card preset, visual style (strict #rrggbb colours with
+ * WCAG contrast checks on explicit pairs, optional backgroundImage and 9-slice frame, corner radius), and layout
+ * (avatar size/source, header alignment, width, section/row ordering, columns, hideable fields). Null when absent.
+ */
+function cardOf(v) {
+  if (v === undefined) return null;
+  obj(v, "card");
+  keys(v, ["preset", "style", "layout"], "card");
+  const out = {};
+  if (v.preset !== undefined) {
+    if (typeof v.preset !== "string" || !CARD_PRESETS.includes(v.preset)) throw new Refused("card.preset", `one of ${CARD_PRESETS.join(", ")}`);
+    out.preset = v.preset;
+  }
+  if (v.style !== undefined) {
+    const s = obj(v.style, "card.style");
+    keys(s, [...CARD_STYLE_COLORS, "backgroundImage", "frame", "slice", "radius"], "card.style");
+    if (s.slice !== undefined && s.frame === undefined) throw new Refused("card.style.slice", "only with frame");
+    const st = {};
+    for (const k of CARD_STYLE_COLORS) {
+      if (s[k] === undefined) continue;
+      if (!matteOk(s[k])) throw new Refused(`card.style.${k}`, "a colour as #rrggbb");
+      st[k] = s[k].toLowerCase();
+    }
+    if (s.backgroundImage !== undefined) st.backgroundImage = src(s.backgroundImage, "card.style.backgroundImage");
+    if (s.frame !== undefined) {
+      st.frame = src(s.frame, "card.style.frame");
+      st.slice = s.slice === undefined ? 8 : int(s.slice, 1, CARD_LIMITS.sliceMax, "card.style.slice");
+    }
+    if (s.radius !== undefined) {
+      if (typeof s.radius !== "string" || !CARD_RADII.includes(s.radius)) throw new Refused("card.style.radius", `one of ${CARD_RADII.join(", ")}`);
+      st.radius = s.radius;
+    }
+    const pairs = [
+      ["text", "background", CARD_LIMITS.textContrast],
+      ["muted", "background", CARD_LIMITS.textContrast],
+      ["accent", "background", CARD_LIMITS.textContrast],
+      ["buttonText", "buttonBg", CARD_LIMITS.textContrast],
+      ["buttonPrimaryText", "buttonPrimaryBg", CARD_LIMITS.textContrast],
+      ["border", "background", CARD_LIMITS.uiContrast],
+      ["barFill", "barTrack", CARD_LIMITS.uiContrast],
+    ];
+    for (const [fg, bg, min] of pairs) {
+      if (st[fg] && st[bg]) {
+        const ratio = contrastRatio(st[fg], st[bg]);
+        if (ratio < min) throw new Refused(`card.style.${fg}`, `contrast ratio against ${bg} must be at least ${min}:1 (got ${ratio.toFixed(2)}:1)`);
+      }
+    }
+    out.style = st;
+  }
+  if (v.layout !== undefined) {
+    const l = obj(v.layout, "card.layout");
+    keys(l, ["avatarSize", "avatarSource", "headerAlign", "width", "sections", "rows", "rowColumns", "hide"], "card.layout");
+    const ly = {};
+    if (l.avatarSize !== undefined) {
+      if (typeof l.avatarSize !== "string" || !CARD_AVATAR_SIZES.includes(l.avatarSize)) throw new Refused("card.layout.avatarSize", `one of ${CARD_AVATAR_SIZES.join(", ")}`);
+      ly.avatarSize = l.avatarSize;
+    }
+    if (l.avatarSource !== undefined) {
+      if (typeof l.avatarSource !== "string" || !CARD_AVATAR_SOURCES.includes(l.avatarSource)) throw new Refused("card.layout.avatarSource", `one of ${CARD_AVATAR_SOURCES.join(", ")}`);
+      ly.avatarSource = l.avatarSource;
+    }
+    if (l.headerAlign !== undefined) {
+      if (typeof l.headerAlign !== "string" || !CARD_HEADER_ALIGNS.includes(l.headerAlign)) throw new Refused("card.layout.headerAlign", `one of ${CARD_HEADER_ALIGNS.join(", ")}`);
+      ly.headerAlign = l.headerAlign;
+    }
+    if (l.width !== undefined) ly.width = int(l.width, CARD_LIMITS.widthMin, CARD_LIMITS.widthMax, "card.layout.width");
+    if (l.sections !== undefined) {
+      const secs = uniqueEnumList(l.sections, CARD_SECTIONS, "card.layout.sections");
+      if (!secs.includes("header") || !secs.includes("actions")) throw new Refused("card.layout.sections", 'must include "header" and "actions"');
+      ly.sections = secs;
+    }
+    if (l.rows !== undefined) ly.rows = uniqueEnumList(l.rows, CARD_ROWS, "card.layout.rows");
+    if (l.rowColumns !== undefined) {
+      if (l.rowColumns !== 1 && l.rowColumns !== 2) throw new Refused("card.layout.rowColumns", "1 or 2");
+      ly.rowColumns = l.rowColumns;
+    }
+    if (l.hide !== undefined) ly.hide = uniqueEnumList(l.hide, CARD_HIDE, "card.layout.hide");
+    out.layout = ly;
+  }
+  return out;
+}
+
 /**
  * #3685: a pack's `idleVisits` — up to LIMIT.idleVisits { area, weight 1–100, minSeconds 5–600, maxSeconds minSeconds–600 },
  * each an area the pack defines, none twice; [] when it has none.
@@ -417,6 +626,52 @@ function idleVisitsOf(v, areas) {
     const minSeconds = int(e.minSeconds, 5, 600, `${at}.minSeconds`);
     return { area: e.area, weight: int(e.weight, 1, 100, `${at}.weight`), minSeconds, maxSeconds: int(e.maxSeconds, minSeconds, 600, `${at}.maxSeconds`) };
   });
+}
+
+/** M-3432 (#4255): a snack's label — string (1–24 chars) or `{ en?, "zh-TW"? }`. */
+function snackLabelOf(v, at) {
+  const ok = (s, here) => {
+    if (typeof s !== "string" || !s.trim() || [...s.trim()].length > SNACK_LIMITS.labelMax || /[\u0000-\u001f\u007f]/.test(s)) {
+      throw new Refused(here, `1–${SNACK_LIMITS.labelMax} characters`);
+    }
+    return s.trim();
+  };
+  if (typeof v === "string") return ok(v, at);
+  obj(v, at);
+  keys(v, ["en", "zh-TW"], at);
+  const out = {};
+  if (v.en !== undefined) out.en = ok(v.en, `${at}.en`);
+  if (v["zh-TW"] !== undefined) out["zh-TW"] = ok(v["zh-TW"], `${at}.zh-TW`);
+  if (!Object.keys(out).length) throw new Refused(at, 'a string, or { "en"?, "zh-TW"? }');
+  return out;
+}
+
+/** M-3432 (#4255): a pack's optional `snacks` list — 1–12 snack items with sprites, optional eat overlay, and attraction radius. */
+function snacksOf(v, scale) {
+  if (v === undefined) return [];
+  const items = list(v, SNACK_LIMITS.max, "snacks");
+  if (!items.length) throw new Refused("snacks", "at least 1 snack");
+  const seen = new Set();
+  return items.map((e, i) => {
+    const at = `snacks[${i}]`;
+    obj(e, at);
+    keys(e, ["id", "label", "sprite", "eat", "radius"], at);
+    if (!nameOk(e.id) || seen.has(e.id)) throw new Refused(`${at}.id`, "a new name of letters, digits, _ or - (not an inherited one)");
+    seen.add(e.id);
+    const label = e.label === undefined ? null : snackLabelOf(e.label, `${at}.label`);
+    const sprite = checkStrip(e.sprite, `${at}.sprite`, scale);
+    const eat = e.eat === undefined ? null : checkStrip(e.eat, `${at}.eat`, scale);
+    const radius = e.radius === undefined ? SNACK_LIMITS.defaultRadius : num(e.radius, SNACK_LIMITS.minRadius, SNACK_LIMITS.maxRadius, `${at}.radius`);
+    return { id: e.id, ...(label !== null ? { label } : {}), sprite, ...(eat ? { eat } : {}), radius };
+  });
+}
+
+/** M-3432 (#4255): display label for a checked snack in `lang` ("en" or "zh-TW"), falling back to its id. */
+export function snackLabel(snack, lang = "en") {
+  if (!snack) return "";
+  if (typeof snack.label === "string") return snack.label;
+  if (snack.label && typeof snack.label === "object") return own(snack.label, lang) || own(snack.label, "en") || own(snack.label, "zh-TW") || snack.id;
+  return snack.id;
 }
 
 /**
@@ -440,7 +695,7 @@ export function checkLevels(v) {
 export function checkSkinPack(x, { kept = false } = {}) {
   try {
     obj(x, "pack");
-    keys(x, ["format", "id", "scale", "background", "foreground", "matte", "areas", "stateZones", "door", "mailDrop", "waypoints", "edges", "straight", "furniture", "characters", "byInstance", "props", "bubbles", "bubblesByInstance", "room", "desk", "levels", "portraits", "dialogBox", "idleVisits"], "pack");
+    keys(x, ["format", "id", "scale", "background", "foreground", "matte", "areas", "stateZones", "door", "mailDrop", "waypoints", "edges", "straight", "furniture", "characters", "byInstance", "props", "bubbles", "bubblesByInstance", "room", "desk", "levels", "portraits", "dialogBox", "idleVisits", "snacks", "card"], "pack");
     if (x.format !== 1) throw new Refused("format", "1");
     if (typeof x.id !== "string" || !ID.test(x.id)) throw new Refused("id", "1–40 letters, digits, _ or -");
     if (BUILT_IN.has(x.id) || (!kept && RESERVED.has(x.id))) throw new Refused("id", "a built-in skin's id");
@@ -540,7 +795,8 @@ export function checkSkinPack(x, { kept = false } = {}) {
       bubblesByInstance[k] = bubblesOf(v, `bubblesByInstance.${k}`);
     }
     const levels = levelsOf(x.levels);
-    const portraits = portraitsOf(x.portraits, fids), dialogBox = dialogBoxOf(x.dialogBox);
+    const portraits = portraitsOf(x.portraits, fids), dialogBox = dialogBoxOf(x.dialogBox), card = cardOf(x.card);
+    const snacks = snacksOf(x.snacks, scale);
     const room = x.room === undefined ? {} : obj(x.room, "room"), desk = x.desk === undefined ? {} : obj(x.desk, "desk");
     keys(room, ["floor", "wall"], "room"); keys(desk, ["back", "front", "lit"], "desk");
     const opt = (v, at) => (v === undefined ? undefined : src(v, at));
@@ -554,6 +810,7 @@ export function checkSkinPack(x, { kept = false } = {}) {
       room: { floor: opt(room.floor, "room.floor"), wall: opt(room.wall, "room.wall") }, desk: { back: opt(desk.back, "desk.back"), front: opt(desk.front, "desk.front"), lit: opt(desk.lit, "desk.lit") },
       ...(levels ? { levels } : {}), ...(idleVisits.length ? { idleVisits } : {}),
       ...(portraits ? { portraits } : {}), ...(dialogBox ? { dialogBox } : {}),
+      ...(snacks.length ? { snacks } : {}), ...(card ? { card } : {}),
     } };
   } catch (err) {
     if (err instanceof Refused) return { ok: false, error: err.message };
@@ -562,29 +819,40 @@ export function checkSkinPack(x, { kept = false } = {}) {
 }
 /** The checked pack, or null. */
 export const skinPackOk = (x) => { const r = checkSkinPack(x); return r.ok ? r.pack : null; };
-/** #2861: the pictures only the dialogue box uses — every portrait and the box's frame (loaded when it first needs one). */
+/** #2861 / #4256: pictures loaded lazily (portraits, dialogue-box frame, card background/frame). */
 export const packPortraitImages = (pack) => {
   const p = pack.portraits, all = p ? [p.default, ...Object.values(p.byInstance), ...Object.values(p.byUser), ...Object.values(p.npc)] : [];
-  return [...new Set([...all.flatMap((e) => (e ? Object.values(e) : [])), pack.dialogBox && pack.dialogBox.frame].filter(Boolean))];
+  const cs = pack.card && pack.card.style;
+  return [...new Set([...all.flatMap((e) => (e ? Object.values(e) : [])), pack.dialogBox && pack.dialogBox.frame, cs && cs.backgroundImage, cs && cs.frame].filter(Boolean))];
 };
+/** The sheets a strip draws from, in order: `[{ src, frames }]` (single-sheet strips have one entry). */
+export const stripSheets = (st) => (st && Array.isArray(st.sheets) ? st.sheets : st && st.src ? [{ src: st.src, frames: st.frames }] : []);
+/** Every unique image file a strip references. */
+export const stripImages = (st) => [...new Set(stripSheets(st).map((s) => s.src))];
+
 /** The pictures the scene draws (what a loader fetches before spriteSkin draws). */
-export const packSceneImages = (pack) => [...new Set([pack.background, pack.foreground, pack.room.floor, pack.room.wall, pack.desk.back, pack.desk.front, pack.desk.lit,
-  ...pack.furniture.flatMap((f) => [f.sprite.src, f.activeSprite && f.activeSprite.src, f.night && f.night.sprite.src, ...Object.values(f.walk || {}).map((st) => st.src)]),
-  ...Object.values(pack.characters).flatMap((s) => Object.values(s).map((st) => st.src)), ...Object.values(pack.props).map((st) => st.src)].filter(Boolean))];
+export const packSceneImages = (pack) => [...new Set([pack.background, pack.foreground, pack.room && pack.room.floor, pack.room && pack.room.wall,
+  pack.desk && pack.desk.back, pack.desk && pack.desk.front, pack.desk && pack.desk.lit,
+  ...packStrips(pack).flatMap(({ strip }) => stripImages(strip))].filter(Boolean))];
 /** Every image a pack names: the scene's and (#2861) the dialogue box's — what an upload must send, and nothing else. */
 export const packImages = (pack) => [...new Set([...packSceneImages(pack), ...packPortraitImages(pack)])];
 
 /** Every frame strip a checked pack names, with where (the host checks each image is frames·w × h). */
 export function packStrips(pack) {
   const out = [];
-  for (const f of pack.furniture) {
-    out.push({ at: `furniture.${f.id}.sprite`, strip: f.sprite });
+  if (!pack || typeof pack !== "object") return out;
+  for (const f of pack.furniture || []) {
+    if (f.sprite) out.push({ at: `furniture.${f.id}.sprite`, strip: f.sprite });
     if (f.activeSprite) out.push({ at: `furniture.${f.id}.activeSprite`, strip: f.activeSprite });
-    if (f.night) out.push({ at: `furniture.${f.id}.night.sprite`, strip: f.night.sprite });
+    if (f.night && f.night.sprite) out.push({ at: `furniture.${f.id}.night.sprite`, strip: f.night.sprite });
     for (const [k, st] of Object.entries(f.walk || {})) out.push({ at: `furniture.${f.id}.walk.${k}`, strip: st });
   }
-  for (const [k, set] of Object.entries(pack.characters)) for (const [pose, st] of Object.entries(set)) out.push({ at: `characters.${k}.${pose}`, strip: st });
-  for (const [k, st] of Object.entries(pack.props)) out.push({ at: `props.${k}`, strip: st });
+  for (const [k, set] of Object.entries(pack.characters || {})) for (const [pose, st] of Object.entries(set)) out.push({ at: `characters.${k}.${pose}`, strip: st });
+  for (const [k, st] of Object.entries(pack.props || {})) out.push({ at: `props.${k}`, strip: st });
+  for (const sn of pack.snacks || []) {
+    if (sn.sprite) out.push({ at: `snacks.${sn.id}.sprite`, strip: sn.sprite });
+    if (sn.eat) out.push({ at: `snacks.${sn.id}.eat`, strip: sn.eat });
+  }
   return out;
 }
 
@@ -823,4 +1091,130 @@ export const walkStrip = (f) => (f && f.walking && f.walk ? poseStrip(f.walk, "w
 export function stripBox(st, x, y, mirror = false) {
   const kx = st.dw / st.w, ky = st.dh / st.h;
   return { x: Math.round(x - (mirror ? st.w - st.ax : st.ax) * kx), y: Math.round(y - st.ay * ky), w: st.dw, h: st.dh };
+}
+
+// ── M-3394 (#4231): multi-sheet & variable-duration strip playback ──
+
+const DURATION_INDEX = new WeakMap();
+const SHEET_INDEX = new WeakMap();
+
+/** Binary search for the smallest index `i` in strictly-increasing `ends` with `value < ends[i]`. */
+function upperBound(ends, value) {
+  let lo = 0, hi = ends.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (value < ends[mid]) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
+}
+
+function durationIndex(st) {
+  let idx = DURATION_INDEX.get(st);
+  if (idx) return idx;
+  const ends = new Array(st.durations.length);
+  let sum = 0;
+  for (let i = 0; i < st.durations.length; i++) { sum += st.durations[i]; ends[i] = sum; }
+  const loopFrom = st.loopFrom > 0 && st.loopFrom < ends.length ? st.loopFrom : 0;
+  const loopStart = loopFrom > 0 ? ends[loopFrom - 1] : 0;
+  idx = { ends, total: sum, loopStart, loopSpan: sum - loopStart };
+  DURATION_INDEX.set(st, idx);
+  return idx;
+}
+
+function sheetIndex(st) {
+  let idx = SHEET_INDEX.get(st);
+  if (idx) return idx;
+  const sheets = st.sheets, ends = new Array(sheets.length), starts = new Array(sheets.length);
+  let sum = 0;
+  for (let i = 0; i < sheets.length; i++) { starts[i] = sum; sum += sheets[i].frames; ends[i] = sum; }
+  idx = { sheets, starts, ends };
+  SHEET_INDEX.set(st, idx);
+  return idx;
+}
+
+/**
+ * The frame index (0 .. st.frames - 1) of a strip at elapsed time `ms`.
+ * `ms <= 0` always yields frame 0 (reduced motion, still previews, or clip start).
+ * Supports fixed `fps`, per-frame `durations`, `once: true` (play once and hold last frame),
+ * and `loopFrom` (play intro `0 .. loopFrom - 1` once, then loop `loopFrom .. last`).
+ */
+export function stripFrameAt(st, ms) {
+  if (!st || st.frames <= 1 || !(ms > 0)) return 0;
+  if (Array.isArray(st.durations) && st.durations.length === st.frames) {
+    const { ends, total, loopStart, loopSpan } = durationIndex(st);
+    if (total <= 0) return 0;
+    if (st.once) return ms >= total ? st.frames - 1 : upperBound(ends, ms);
+    const t = loopStart > 0 && loopSpan > 0
+      ? (ms < loopStart ? ms : loopStart + ((ms - loopStart) % loopSpan))
+      : ms % total;
+    return upperBound(ends, t);
+  }
+  if (!(st.fps > 0)) return 0;
+  const raw = Math.floor((ms / 1000) * st.fps);
+  if (st.once) return Math.min(st.frames - 1, raw);
+  const lf = st.loopFrom > 0 && st.loopFrom < st.frames ? st.loopFrom : 0;
+  if (lf > 0) return raw < lf ? raw : lf + ((raw - lf) % (st.frames - lf));
+  return raw % st.frames;
+}
+
+/** Which image (`src`) and horizontal frame column (`col`) hold global frame index `frame` of `st`. */
+export function stripCell(st, frame) {
+  const f = Math.max(0, Math.min((st && st.frames ? st.frames : 1) - 1, Math.floor(Number(frame) || 0)));
+  if (!st || !Array.isArray(st.sheets)) return { src: st ? st.src : "", col: f };
+  const { sheets, starts, ends } = sheetIndex(st);
+  const i = upperBound(ends, f);
+  return { src: sheets[i].src, col: f - starts[i] };
+}
+
+/** The highest frame rate (frames/s) a strip needs for smooth playback; 0 when static. */
+export function stripMaxFps(st) {
+  if (!st || st.frames <= 1) return 0;
+  if (Array.isArray(st.durations) && st.durations.length) {
+    let minMs = Infinity;
+    for (let i = 0; i < st.durations.length; i++) if (st.durations[i] < minMs) minMs = st.durations[i];
+    return minMs > 0 && Number.isFinite(minMs) ? 1000 / minMs : 0;
+  }
+  return st.fps > 0 ? st.fps : 0;
+}
+
+/** M-3432 (#4255): total duration (ms) of one full pass through `st`; 0 when static or invalid. */
+export function stripDurationMs(st) {
+  if (!st || !(st.frames >= 1)) return 0;
+  if (Array.isArray(st.durations) && st.durations.length === st.frames) {
+    return durationIndex(st).total;
+  }
+  if (st.frames <= 1 || !(st.fps > 0)) return 0;
+  return Math.round((st.frames / st.fps) * 1000);
+}
+
+/** The highest frame rate any strip in `pack` needs; 0 for built-ins without animated strips. */
+export function packMaxFps(pack) {
+  let max = 0;
+  for (const { strip } of packStrips(pack)) {
+    const f = stripMaxFps(strip);
+    if (f > max) max = f;
+  }
+  return max;
+}
+
+/**
+ * Per-entity clip clock: records when each key entered its current strip so `once` and `loopFrom`
+ * start at frame 0 on pose/state changes and continue seamlessly across re-renders.
+ */
+export function createClipClocks() {
+  const by = new Map();
+  return {
+    elapsed(key, strip, ms) {
+      if (!(ms > 0) || !strip) return 0;
+      const cur = by.get(key);
+      if (cur && cur.strip === strip) return Math.max(0, ms - cur.since);
+      by.set(key, { strip, since: ms });
+      return 0;
+    },
+    prune(seen) {
+      for (const k of [...by.keys()]) if (!seen.has(k)) by.delete(k);
+    },
+    clear() { by.clear(); },
+  };
 }

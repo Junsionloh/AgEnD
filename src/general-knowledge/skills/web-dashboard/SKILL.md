@@ -182,6 +182,8 @@ them load; nothing loads before you get there. Past each agent's newest 500, the
 - **Search hits and pins** open the page around the message, however far back it is.
 - **Admins only** (over the public link too); a guest sees only the chat's newest messages, as before.
 
+A web message the server accepted but could not deliver shows **Resend** on its failed bubble. Its sender can send it again there: the same bubble keeps its quote and attached files. If a quoted message or file is no longer available, it stays failed and explains how to write a new message. Needs you keeps the failed delivery while it is being resent and clears it when delivery is confirmed.
+
 **Sending.** Type and press Enter. A message sent while the agent works waits its turn; `/steer <text>` goes into
 the current turn, `/btw <question>` asks a side question. **Stop reply** (or Esc) interrupts the reply and drops
 queued messages. While the agent works, "*name* is working…" and **Stop reply** sit in a bar above the message box; the
@@ -267,6 +269,10 @@ Access & security → **Shared pages** lists the live ones.
 **Slash commands** (the **Commands** palette): `/ctx`, `/compact [instructions]`, `/clear` (asks first), `/model
 [name]`, `/backend [backend] [model] [effort]` (asks first), `/effort [level]`, `/cancel`, `/btw`, `/steer`, `/pause`,
 `/wake`, `/save <file>` (not for a guest on a public link; an admin session there may, M-3278). Anything else: "Not a command here — Enter sends it as a message."
+`/backend` also works in a ClassicBot room, on web, Discord and Telegram, for an admin of that room. Choose the backend,
+then its model and effort, and confirm. Nothing changes before confirmation. Each backend's saved account settings
+are kept; a stopped room stays stopped. For a restricted room, the confirmation explains guard coverage: an uncovered
+backend or version runs with its normal permissions; contact approval still applies.
 At 70% context, quick actions **Compact** and **Clear…** appear. `/raw <text>` (an admin session, the public link's too since M-3278; never a guest there) passes text to the CLI
 unwrapped.
 
@@ -443,7 +449,7 @@ blinking light (needs you, crashed, looks stuck). With **Live** on, each message
 desk to desk along the corridors in the Key's colours; a delegation in progress is a purple folder on the worker's
 desk. Hover a desk for its name, state and backend; a click or tap (or Enter in the desk list) opens the
 person's profile card (#2661: a 320 px popover beside them, following them; Esc, a press elsewhere or the same person
-again closes it; on a phone a bottom sheet): level and XP, office and area, model, backend, today, first seen, the
+again closes it; on a phone a bottom sheet; #4256: a skin pack's optional `card` key can pick a preset — `default`, `rpg`, `compact`, `dossier` — plus WCAG-checked `#rrggbb` colours, `backgroundImage`, 9-slice `frame`, and section/row layout while keeping share-link field stripping intact): level and XP, office and area, model, backend, today, first seen, the
 activity line, **Find in office** and **Chat**. A double-click opens the chat directly. Each name tag has a level badge
 (lifetime work, docs/office.md § Levels; **Settings → Web dashboard → Office levels**, `web.office_levels`; #3679: the
 fleet's own titles for every office in **Settings → Web dashboard → Level titles for every office**, a pack's `levels`
@@ -455,13 +461,16 @@ the rest. **Show** picks a team or the Lobby and **People** pins chosen instance
 in each (Everyone, Picked: whole teams or single instances, or #2752 Nobody: its style's NPCs only; none picked = everyone) and its style,
 #4104 **Idle people stay in their own area** (per office, off by default: idle strolls stay in the seat's area, no visits),
 #4119 **Drag and pat** in the Office bar (per device, on by default, off with reduced motion; never on a share link): drag
-someone and they walk back; their card's Pat/Feed show hearts and words; nothing reaches the agent unless that card's
+someone onto another valid seat in their area (#4266) to seat them there immediately (persisted per device/office/style, swapping cleanly and respecting reserved seats and `stayInArea`) or drop on empty floor to walk back; while held they play a `dragged` pose (#4267: optional `characters.<set>.dragged` / `default.dragged` strip or built-in lifted dangle, returning to their prior pose on drop); their card's Pat/Feed show hearts and words; nothing reaches the agent unless that card's
 **Tell <agent> (with their next message)** is ticked (per agent, off) — then one `[Office] … patted your head ×N` line rides
-its next real message's `[Recent reactions: …]` (never a wake; capped); a pack's `bubbles.<lang>.pat` / `.feed` give the words, and upload or delete **skin packs** (an
+its next real message's `[Recent reactions: …]` (never a wake; capped); a pack's `bubbles.<lang>.pat` / `.feed` give the words; (#4255) packs with optional `snacks` (1–12 items, `sprite`, optional `eat` overlay, `radius`) and `characters.<set>.eat` show a floating snack tray (bottom-left; above zone pills on phone) for drag-to-feed, tap-to-arm, and placed snacks (up to 6 on floor, 30 s TTL, up to 4 nearest idle racers honoring `stayInArea`, first eats and others scatter; packs without `snacks` stay unchanged), and upload or delete **skin packs** (an
 artist's pictures: `manifest.json` plus PNGs, format v1, kept in `web-office-skins/` in the AgEnD home; the host
-checks every rule — PNG only, each strip exactly frames·w × h, a 16:9 background, size caps — and never changes a
-pack; a strip may give its displayed size, `dw`/`dh`, apart from its pictures' size, and a character may walk four
-ways with `walkDown`, `walkUp` and `walkSide`, the side one mirrored for left). #2692: an agent with **Office skin
+checks every rule — PNG only, each strip sheet exactly frames·w × h, a 16:9 background, size and 64 Mpx decoded-pixel caps — and never changes a
+pack; a strip may give its displayed size, `dw`/`dh`, apart from its pictures' size, a character may walk four
+ways with `walkDown`, `walkUp` and `walkSide` (the side one mirrored for left), and (#4231) any strip may chain
+multiple sheets (`src: [...]`, up to 32 sheets / 600 frames) or list individual frames with per-frame `ms`
+(`frames: [{ src, ms? }]`) or `durations`, plus `once: true` or `loopFrom` (intro then loop), holding frame 0 under
+reduced motion). #2692: an agent with **Office skin
 packs** on (`office_pack_access`, Dashboard access) can check, upload, replace, delete and restore packs itself (one
 previous version kept per pack); **Agents changing packs** under the packs names those agents, sets whether their changes
 **Need my yes** (the default) or **Apply at once**, and approves or rejects the waiting ones (also from the notice's
@@ -551,6 +560,8 @@ text is ever shown; instances with `cross_instance_visibility: hidden` are left 
 every 5 s.
 
 ## Finding an instance
+
+Right-click an Agent row in the left sidebar to open that Agent's chat actions without first changing chats. On touch, hold the row; with the row focused, press Shift+F10 or the context-menu key. The same shared menu/sheet and applicable actions are used as the chat header's **⋯**, with a Favorite toggle using the sidebar's existing saved favorites and limit. Split chat opens the selected Agent beside the current chat wherever the workspace is available. Existing row favorite/split controls remain available. Its Card tile opens that selected Agent's card in a dialog without changing the current chat's card preference. Escape or an outside press closes it. Moving or scrolling cancels a touch hold. Guests and read-only viewers do not gain these chat controls; the row's existing favorites/workspace **⋯** remains separate.
 
 **The sidebar list.** Grouped by team (an instance in `teams.<name>.members` under its first team, whatever its tags), else by
 its first tag ("#" before the heading), ClassicBot rooms under Classic, the rest under Other; Settings → Agents the same (#2172).
@@ -753,7 +764,12 @@ A Claude Code installed with npm (`npm install -g @anthropic-ai/claude-code`) ha
 #4146): it runs claude.ai/install.sh for the audited version in the install window. npm's own updates can be cut off by an
 AgEnD restart and leave `claude` half-installed; the native install avoids that. Afterwards the card says where `claude`
 runs now. If the npm copy is still there, **Remove the npm copy** is a separate step: it says which folder it removes and
-runs `npm -g uninstall @anthropic-ai/claude-code` in that npm folder. Needs you reminds you while Claude Code is an npm install.
+runs `npm -g uninstall @anthropic-ai/claude-code` in that npm folder; the card offers it whenever Claude Code runs from the native
+install and an npm copy is still on the computer (also after a restart). This offer is only on AI accounts, not in Needs you.
+
+**Managed Claude credentials (M-3419)** — Accounts → Connect (also Needs you → Connect account) offers the existing subscription login, a token obtained with setup-token, or an Anthropic API key. Pasting, replacing and removing saved credentials requires the local dashboard and a current verified administrator, even though ordinary subscription login can run over a public link. Never put a key/token in chat, an agent tool call or a proposal. Values are encrypted; Save makes no model request and reports saved-unverified. Source-class checks are not provider validation. A fresh normal successful request bound to the current launch/profile/credential revision marks it Verified with a timestamp. A 401/403 shows Needs replacement; network/unconfirmed errors stay Unknown and do not mean the credential is invalid. No extra model request is sent. Replacing, removing or changing source clears the stamp. Managed profiles do not show an old subscription identity, meters or keep-alive. Used-profile changes list affected users, require idle local panes and positive old-pane retirement before commit; busy/paused/unknown consumers refuse, and failed restarts are listed. Removing the saved value leaves the profile disconnected; explicitly choosing Subscription switches back to its native login. Profile/conversation assignments stay. A managed secret must be removed before deleting its profile. Removing AgEnD's copy does not revoke it at Anthropic. The launcher clears ambient credentials and uses a private API-key helper or child-only setup-token environment. Organization-managed Claude settings are unsupported. Same-OS-user agents are not isolated from runtime secrets.
+
+For the token method, **Get a token for me** opens a private browser sign-in on the local host. It uses the same verified-admin gate, a 10-minute Connect-account deadline and an owned cleanup; only safe sign-in controls reach the page, and the printed token goes directly to encrypted storage after cleanup. Paste remains available. Cancel or expiry never changes the selected source; if saving is uncertain, read account status before retrying. No model request is made by this flow.
 
 **Antigravity (agy) in Accounts (#3771; AGEND-224)** — agy **can** be connected from the dashboard now (it could not
 before), from Settings → AI accounts & keys → Accounts, admin sessions only (the public link's too, M-3278). What the Antigravity
@@ -823,6 +839,14 @@ other Windows PCs to pair** (`runtimes.remote_runtime`), **Agents at once on eac
 under **Manual options**, a pairing code. Each computer: its CLIs (**Install a CLI**, **Update to *version***, only while
 that PC's owner allowed it there), its accounts, and its update status. See docs/remote-runtime.md.
 
+**Notifications → Host monitoring** (「主機監測」): **Monitor this computer** and **Include agent footprint** are off by default; off is explicitly saved as false. On a supported computer, **View host health** opens Fleet → Host health. Sampling runs every 30–60 seconds; local history is capped at 64 MiB. It uses a background history worker; memory and write costs vary by computer. Agent footprint is a separate opt-in: one bounded process snapshot per minute. The administrator page shows CPU as a share of total computer capacity, descendant RSS estimates, known output-file sizes, and shared service overhead separately. Workspaces are not scanned. Turning monitoring off asks before deleting its history, then waits for physical close and cleanup; a failed cleanup is not a clean Off state. Off starts no monitoring collector, timer, worker or history file.
+
+**Fleet → Host health** (「主機狀態」, administrator only) shows current CPU, memory/pressure and relevant disks, with 1h / 24h / 7d / 30d recorded trends. Refresh reads caches/history; it does not start a new probe or turn monitoring on. Missing data stays unavailable, stale values keep their last-success time, and chart gaps are not zero. New history says **Collecting history…** until enough recorded buckets exist for a trend. WSL CPU/memory are WSL's figures; the Windows drive holding its virtual disk is separate. If that drive is unknown, choose it in Monitoring settings. The drive choice is kept in a private local sidecar, separate from fleet.yaml, so this choice does not prevent an older release from starting; missing or invalid sidecar data uses automatic detection. macOS APFS volumes can share free space: never add those values together; available memory is an estimate and unknown pressure is not Normal. Unsupported computers say so instead of offering a misleading enable link.
+
+Host alerts use per-resource warning/urgent thresholds and recovery holds. Settings → Notifications → Host monitoring controls Needs you and General destinations and thresholds. General starts off to avoid duplicate notices from the existing disk-watch script; arrange that handoff separately. Acknowledgment leaves an issue visible; snooze is bounded to one day, and urgent escalation bypasses a warning snooze. Delivery failures retry with bounded backoff; only successful delivery advances reminder time. Host incidents and their actions are administrator-only. `/sysinfo` includes a cached monitoring summary and never starts monitoring probes. Turning monitoring off also fences queued alerts and removes their bounded local state.
+
+History retains up to 24 hours of raw data and 30 days of five-minute rollups, subject to the shared cap. Below 2 GiB free on state storage or the verified WSL backing drive, history pauses and current samples remain in memory. Recovery needs both above 4 GiB for ten minutes. Agent raw samples retain up to six hours and rollups up to seven days within that same cap, possibly less at capacity. The independent existing disk watcher is unchanged.
+
 **Notifications** — **Quota notices** (「用量提醒」, #3302): one reminder per account at the **Remaining percentages**
 and **Periods** you choose, shared by its agents, **Send to** General.
 
@@ -875,6 +899,10 @@ Shown read-only ("Set in fleet.yaml"): `web.allowed_hosts`, `view_access`, `prev
 (edit mode) adds the edit to the bar, and Save writes it. While it waits, Agents, Shared agent settings and the
 connections are off (and the setup wizard); while those have unsaved changes, the editor only reads.
 
+Routine automatic additions to fleet.yaml keep existing source lines, including comments and inline collections, rather
+than reprinting the file. Normal setting edits keep flow collections and leave long lines unwrapped. Existing validation
+and alias-isolation rules still apply.
+
 **Setup wizard** — agent (backend, directory, name) → platform → token and server/group, your user ID → preview →
 **Create and start**. The directory may be left empty: the agent gets its own folder, `~/.agend/workspaces/<name>`
 (shown under the field); one that is entered must be absolute. On a Telegram or Discord connection the first agent
@@ -909,6 +937,11 @@ Alpha preview line"). Guests and agents can't update.
 
 For an agent changing its *own* look, the `web-appearance` skill has the tools and limits. What a person sees in
 Settings → **Look**, card by card (the app icon and card upload limits are in **Web dashboard**; following reduced motion and custom CSS off here are in **Preferences**):
+- **Colours** — **Other…** (「其他…」) in the theme menu, or **Choose…** (「選擇…」) in Look, opens a centred chooser: Default, Clear Sky / 晴空,
+  Meadow / 青草, Night Violet / 夜紫 and Mint / 薄荷. Every palette works with System, Light and Dark; changing the
+  appearance keeps the palette. Choices preview at once; **Apply** keeps them, **Cancel** or Escape puts them back.
+  Meadow adds a soft sage gradient and an original static leaf/grass texture behind the chat.
+  The palette is kept in this browser. Agents' own themes and the person's custom CSS still take precedence.
 - **Agents' themes** — **Show agents' themes, effects and widgets**; off, every chat looks the same and pictures and
   ring colours fall back to the bots' own (all devices).
 - **Ambient effects** — an agent's falling petals, snow, rising lanterns, twinkles or stars on a click, drawn behind

@@ -1,4 +1,7 @@
+import { historyQuery } from './host-monitoring-history-policy.js';
+import { handleClaudeCredentials, type ClaudeCredentialApi } from "./web-claude-credentials.js";
 import { pipeline } from "node:stream/promises";
+import { handleContactAuthorizationApi, type ContactApiHost } from "./contact-auth-api.js";
 import { buildAgentExport, parseAgentExport } from "./agent-export.js";
 import { STRUCTURED_PROFILE_BACKENDS } from "./structured-signin-transport.js";
 import { hubModeOf, hubNameOf, type HubSwitches } from "./hub-mode.js";
@@ -53,7 +56,7 @@ import { ROUTE_WORKER_CSP, ROUTE_WORKER_PATH, sendPanelHtml } from "./web-host-g
 import { libavoidFile } from "./web-libavoid.js";
 import { shellRoute } from "./web-shell-routes.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createReadStream, createWriteStream, existsSync, readFileSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, readFileSync, closeSync } from "node:fs";
 import { servedAssets } from "./auth-api.js";
 import { assetIntact, assetsUnchanged, assetVersion, assetVersionMark, answerStaleAsset, buildModuleGraph, staticClosure, versionShell, IMMUTABLE_PRIVATE, type ModuleGraph } from "./web-asset-version.js";
 import { join, dirname } from "node:path";
@@ -260,6 +263,20 @@ const safeInstanceSegment = (name: string): boolean => /^[^\\/\x00]+$/.test(name
  */
 /** #1920 phase 1b: the open streams that are a guest's, and whose — each event is projected for them (guestFrameData). */
 const streamGuests = new WeakMap<ServerResponse, GuestRequest>();
+const streamContactProjection = new WeakMap<ServerResponse, (event: string, data: unknown) => unknown>();
+function contactNeedsFor(req: IncomingMessage, url: URL, ctx: WebApiContext, base: unknown[]): unknown[] {
+  const auth=evaluateWebRequest(req as unknown as WebGateRequest,url,ctx.webToken??null,ctx.webSessions,{touch:false});
+  const admin=auth.kind==='allow'&&auth.via==='session'&&auth.session.tier==='admin';
+  base=admin?base:base.filter(item=>!item||typeof item!=='object'||(item as {type?:string}).type!=='host');
+  const ordinary = base.filter(item => !item || typeof item !== "object" || (item as { type?: string }).type !== "contact");
+  const actor = ctx.contactActor?.(req, url);
+  if (actor && ctx.contactNeeds) return [...ordinary, ...ctx.contactNeeds(actor)];
+  const observer = ctx.contactSuggestionActor?.(req, url);
+  // A session identity may see benign room suggestions, never pending approval tickets.
+  const suggestions = observer && ctx.contactNeeds ? ctx.contactNeeds(observer).filter(item => item && typeof item === "object"
+    && (item as { reason?: string }).reason === "contact_restricted_suggestion") : [];
+  return [...ordinary, ...suggestions];
+}
 
 /**
  * The task board's rule over the public link: an instance kept out of sight (cross_instance_visibility: hidden) is not
@@ -363,7 +380,9 @@ export function broadcastSseEvent(
         if (shown !== undefined) client.write(sseFrame(event, shown));
         continue;
       }
-      client.write(payload);
+      const project = streamContactProjection.get(client);
+      const shown = project ? project(event, data) : data;
+      if (shown !== undefined) client.write(shown === data ? payload : sseFrame(event, shown, id));
     } catch (err) {
       dead.push(client);
       onError?.(err);
@@ -407,7 +426,21 @@ export interface AccountMachine { id: string; actor: string }
 /** What an account write answers: done, or a code (and, for a computer, its own refusal sentence). */
 export type AccountWriteResult = { ok: true } | { ok: false; error: string; clash?: string; users?: unknown; message?: string };
 
-export interface WebApiContext {
+export interface WebApiContext extends ClaudeCredentialApi {
+  hostHistoryQuery?(range:unknown,series:unknown):Promise<import('./host-monitoring-history.js').HostHistoryResult>;
+  hostHealthSnapshot?(agentOffset?:number): import("./host-monitoring.js").HostHealthSnapshot;
+  hostAlertAction?(key:string,revision:number,actor:string,snoozeMs?:number):Promise<boolean>;
+  clearContactOrigin?: ContactApiHost["clearContactOrigin"];
+  contactPermissions?: ContactApiHost["contactPermissions"];
+  writeContactPermissions?: ContactApiHost["writeContactPermissions"];
+  contactAuthorization?: ContactApiHost["contactAuthorization"];
+  contactAuthorizations?: ContactApiHost["contactAuthorizations"];
+  decideContactAuthorization?: ContactApiHost["decideContactAuthorization"];
+  contactActor?(req: IncomingMessage, url: URL): import("./contact-auth-types.js").ContactPerson | null;
+  contactNeeds?(actor: import("./contact-auth-types.js").ContactPerson): unknown[];
+  acknowledgeContactSuggestion?(instance: string, actor: import("./contact-auth-types.js").ContactPerson): void;
+  acknowledgeContactSuggestionFromWeb?(instance: string, req: IncomingMessage, url: URL): void;
+  contactSuggestionActor?(req: IncomingMessage, url: URL): import("./contact-auth-types.js").ContactPerson | null;
   recoverNativePane?(name:string,launchId:string,authorized:()=>boolean):Promise<void>;
   startFreshNativePane?(name:string,launchId:string,sessionId:string|null,authorized:()=>boolean):Promise<void>;
   nativeInstanceRuntime?(): import("./fleet-windows-runtime.js").FleetWindowsRuntime;
@@ -1515,7 +1548,7 @@ function handleBackendLogin(req: IncomingMessage, res: ServerResponse, url: URL,
  * is ever run; `POST …/cancel` `{}` stops the running one. Every answer is no-store.
  */
 const HOST_INSTALL_STATUS: Readonly<Record<string, number>> = { not_allowed: 403, unsupported: 400, already: 409, not_installed: 409, up_to_date: 409, version_unreadable: 409, cli_self_updating: 409,
-  not_npm: 409, still_npm: 409, no_npm_copy: 409, busy: 409, shutting_down: 503, failed: 500 };
+  not_npm: 409, still_npm: 409, no_npm_copy: 409, npm_busy: 409, busy: 409, shutting_down: 503, failed: 500 };
 function handleHostInstall(req: IncomingMessage, res: ServerResponse, url: URL, ctx: WebApiContext, path: string, method: string): boolean {
   res.setHeader("Cache-Control", "private, no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -1579,6 +1612,7 @@ function handleHostInstall(req: IncomingMessage, res: ServerResponse, url: URL, 
  * or a read session (M-3278: the public link's admin session may) — refused before the body is read, and again after it.
  */
 const ACCOUNT_STATUS: Readonly<Record<string, number>> = {
+  credential_connected: 409,
   backend: 400, name: 400, confirm: 400, exists: 409, case_clash: 409, unsafe_root: 409, in_use: 409, users_unknown: 409, signing_in: 409, missing: 404,
   unsafe: 409, default_home: 409, failed: 500, unsupported: 400, still_signed_in: 409,
   // #3190 Part 3c: a paired computer (the Runtime there decides; these are what the server can say before it asks, or what the computer answered).
@@ -2147,6 +2181,48 @@ export function handleWebRequest(
 ): boolean {
   const path = url.pathname;
   const method = req.method ?? "GET";
+  if (path === "/ui/host-history") {
+    res.setHeader("Cache-Control", "private, no-store");
+    const auth=()=>evaluateWebRequest(req as unknown as WebGateRequest,url,ctx.webToken??null,ctx.webSessions,{touch:false});
+    const who=auth();
+    if(who.kind!=="allow"||who.via!=="session"||who.session.tier!=="admin"){json(res,403,{error:"admin_session_required"});return true;}
+    const range=url.searchParams.get('range'),series=url.searchParams.getAll('series');
+    try{
+      if(method!=="GET"||url.search.length>4096||url.searchParams.getAll('range').length!==1||[...url.searchParams.keys()].some(k=>k!=='range'&&k!=='series'))throw Error();
+      historyQuery(range,series,Date.now());
+    }catch{json(res,400,{error:"invalid_history_query"});return true;}
+    if(!ctx.hostHistoryQuery){json(res,503,{error:"history_unavailable"});return true;}
+    void Promise.resolve().then(()=>ctx.hostHistoryQuery!(range,series)).then(answer=>{
+      if(res.destroyed)return;
+      const current=auth();
+      if(current.kind!=="allow"||current.via!=="session"||current.session.tier!=="admin"||current.session.idHash!==who.session.idHash){json(res,403,{error:"admin_session_required"});return;}
+      json(res,200,answer);
+    },()=>{if(!res.destroyed)json(res,503,{error:"history_unavailable"});});
+    return true;
+  }
+  if(path==='/ui/host-alert-action'){
+    res.setHeader('Cache-Control','private, no-store');
+    const auth=()=>evaluateWebRequest(req as unknown as WebGateRequest,url,ctx.webToken??null,ctx.webSessions,{touch:false});
+    const who=auth();if(who.kind!=='allow'||who.via!=='session'||who.session.tier!=='admin'){json(res,403,{error:'admin_session_required'});return true;}
+    if(method!=='POST'||url.search){json(res,400,{error:'invalid_host_alert_action'});return true;}
+    void readBoundedWebBody(req,2048).then(async bytes=>{
+      const current=()=>{const value=auth();return value.kind==='allow'&&value.via==='session'&&value.session.tier==='admin'&&value.session.idHash===who.session.idHash;};
+      if(!current())return json(res,403,{error:'admin_session_required'});
+      let input:any;try{input=JSON.parse(bytes.toString('utf8'));}catch{return json(res,400,{error:'invalid_host_alert_action'});}
+      if(!input||Array.isArray(input)||Object.keys(input).some(k=>!['key','revision','snoozeMs'].includes(k))||typeof input.key!=='string'||!/^[a-zA-Z0-9:_-]{1,128}$/.test(input.key)||!Number.isSafeInteger(input.revision)||input.revision<1||(input.snoozeMs!==undefined&&(!Number.isSafeInteger(input.snoozeMs)||input.snoozeMs<60000||input.snoozeMs>86400000)))return json(res,400,{error:'invalid_host_alert_action'});
+      const ok=await ctx.hostAlertAction?.(input.key,input.revision,'web:'+who.session.idHash,input.snoozeMs);
+      if(!current())return json(res,403,{error:'admin_session_required'});
+      json(res,ok?200:409,{ok:!!ok,...(!ok?{error:'host_alert_stale'}:{})});
+    }).catch(()=>{if(!res.headersSent)json(res,503,{error:'host_alert_unavailable'});});return true;
+  }
+  if (path === "/ui/host-health") {
+    res.setHeader("Cache-Control", "private, no-store");
+    const who = evaluateWebRequest(req as unknown as WebGateRequest, url, ctx.webToken ?? null, ctx.webSessions, {touch:false});
+    if (who.kind !== "allow" || who.via !== "session" || who.session.tier !== "admin") { json(res,403,{error:"admin_session_required"}); return true; }
+    if (method !== "GET" || [...url.searchParams.keys()].some(k=>k!=="agentOffset") || url.searchParams.getAll("agentOffset").length>1 || !/^(?:0|50|100)$/.test(url.searchParams.get("agentOffset")??"0")) { json(res,400,{error:"invalid_host_health_request"}); return true; }
+    if (!ctx.hostHealthSnapshot) { json(res,503,{error:"host_monitoring_unavailable"}); return true; }
+    json(res,200,ctx.hostHealthSnapshot(Number(url.searchParams.get("agentOffset")??0))); return true;
+  }
   // Auth check for all /ui routes. Defence in depth behind the fleet-manager
   // gate: the same session cookie or header token, and an unset token closes
   // the panel instead of comparing null against a missing credential.
@@ -2175,6 +2251,8 @@ export function handleWebRequest(
   }
 
   if (handleAgentRuntimeChange(req, res, url, ctx)) return true;
+  if (ctx.contactPermissions && ctx.writeContactPermissions && ctx.contactAuthorization && ctx.contactAuthorizations && ctx.decideContactAuthorization && ctx.contactActor
+    && handleContactAuthorizationApi(req, res, url, ctx as ContactApiHost)) return true;
   if (handleNativeInstanceRequest(req, res, url, ctx)) return true;
   if (handleWindowsCliRequest(req, res, url, ctx)) return true;
   if (handleRuntimeRequest(req, res, url, ctx)) return true;
@@ -2420,7 +2498,7 @@ export function handleWebRequest(
       prompts: ctx.listWebPrompts?.() ?? [],
       // #1386: "Needs you" rides the passive channels only — no endpoint of its own to poll. Over the public link,
       // without the task board's hidden cards (#2306 review).
-      needs: visibleNeeds(ctx, linkRestricted(req, url, ctx), ctx.needsYouItems?.() ?? []),
+      needs: visibleNeeds(ctx, linkRestricted(req, url, ctx), contactNeedsFor(req, url, ctx, ctx.needsYouItems?.() ?? [])),
       // #1577: the newest message this answer accounts for — after a restart, the last restored one until this process
       // records its own (`<boot>-0` would be after(0): the whole restored history again on every poll).
       cursor: history ? history.pollCursor() : null,
@@ -2454,6 +2532,22 @@ export function handleWebRequest(
     // (§5.2), then only what guestFrameData lets through — no prompts or Needs you.
     const guest = guestRequestOf(req);
     if (guest) { streamGuests.set(res, guest); guest.streamOpened?.(); }
+    if (!guest) streamContactProjection.set(res, (event, value) => {
+      if (event === "needs") return { items: contactNeedsFor(req, url, ctx,
+        (value && typeof value === "object" && Array.isArray((value as { items?: unknown }).items)) ? (value as { items: unknown[] }).items : []) };
+      if (event === "contact-auth") {
+        const actor = ctx.contactActor?.(req, url);
+        if (!actor || !value || typeof value !== "object") return undefined;
+        const change = value as { instance?: string; ticketId?: string };
+        try {
+          if (change.ticketId) ctx.contactAuthorization?.(change.ticketId, actor);
+          else if (change.instance) ctx.contactPermissions?.(change.instance, actor);
+          else return undefined;
+          return value;
+        } catch { return undefined; }
+      }
+      return value;
+    });
     const statusFrame = () => `event: status\ndata: ${JSON.stringify(guest ? guestStatus(ctx.getUiStatus(), guest.scope()) : ctx.getUiStatus())}\n\n`;
     res.write(`${statusFrame()}${sseClock()}`);
     // An EventSource that reconnects says what it last saw: send what it missed, before anything new.
@@ -2476,7 +2570,7 @@ export function handleWebRequest(
     // The same for the fleet prompts (C4): one posted, answered or expired during a gap is caught up here.
     if (!guest && ctx.listWebPrompts) res.write(`event: prompts\ndata: ${JSON.stringify(ctx.listWebPrompts())}\n\n`);
     // #1386: and "Needs you" as it is now; changes follow as `needs` events.
-    if (!guest && ctx.needsYouItems) res.write(`event: needs\ndata: ${JSON.stringify({ items: ctx.needsYouItems() })}\n\n`);
+    if (!guest && ctx.needsYouItems) res.write(`event: needs\ndata: ${JSON.stringify({ items: contactNeedsFor(req, url, ctx, ctx.needsYouItems()) })}\n\n`);
     ctx.sseClients.add(res);
     // #1956: the heartbeat's status comes from the one build every open stream shares each tick (statusTick), with
     // this stream's own projection; this stream's checks stay its own.
@@ -2537,7 +2631,7 @@ export function handleWebRequest(
     // #2848: the chat has messages, none of them a guest's to see (all between agents, or kept before they were marked):
     // said, so its empty chat is explained rather than blank. Only that there are some — never how many, or what.
     const allHidden = !!guest && messages.length === 0 && (ctx.webChatHistory?.list(instance, 1).length ?? 0) > 0;
-    json(res, 200, { messages, boot: ctx.webChatHistory?.boot ?? null, lastId: ctx.webChatHistory?.lastId ?? 0, ...(allHidden ? { allHidden: true } : {}) });
+    json(res, 200, { messages, resendOwner: webPersonOf(req, url, ctx)?.voterKey ?? null, boot: ctx.webChatHistory?.boot ?? null, lastId: ctx.webChatHistory?.lastId ?? 0, ...(allHidden ? { allHidden: true } : {}) });
     return true;
   }
 
@@ -2771,6 +2865,11 @@ export function handleWebRequest(
   }
 
   // ── Send message ───────────────────────────────────────
+
+  if (method === "POST" && path === "/ui/resend") {
+    void handleResendMessage(req, res, ctx).catch(() => { if (!res.destroyed && !res.headersSent) json(res, 503, { error: "Resend unavailable" }); });
+    return true;
+  }
 
   if (method === "POST" && path === "/ui/send") {
     handleSendMessage(req, res, ctx);
@@ -3275,6 +3374,7 @@ export function handleWebRequest(
   if (path === "/ui/host-install" || path === "/ui/host-install/cancel" || HOST_CLI_PATHS.has(path)) return handleHostInstall(req, res, url, ctx, path, method);
   // #3292: before the accounts prefix — its Add pattern (`POST /ui/accounts/<backend>`) would read "keep-alive" as a backend.
   if (path === "/ui/accounts/keep-alive") return handleAccountKeepAlive(req, res, url, ctx, method);
+  if (handleClaudeCredentials(req, res, url, ctx)) return true;
   if (path.startsWith("/ui/accounts/")) return handleAccountWrite(req, res, url, ctx, path, method);
 
   // #1386: Acknowledge a "Needs you" delivery item — a session write (CSRF, checked by the gate) or the CLI's header
@@ -3491,6 +3591,27 @@ export function handleWebRequest(
       if (!permitWebContinuation(req, res, ctx)) return;
       const id = body && typeof body === "object" ? body.id : undefined;
       if (typeof id !== "string") { json(res, 400, { error: "id required" }); return; }
+      if (id.startsWith("contact-suggest:")) {
+        try {
+          if (ctx.acknowledgeContactSuggestionFromWeb) ctx.acknowledgeContactSuggestionFromWeb(id.slice("contact-suggest:".length), req, url);
+          else {
+            const actor = ctx.contactActor?.(req, url);
+            if (!actor || !ctx.acknowledgeContactSuggestion) throw Error("verification-required");
+            ctx.acknowledgeContactSuggestion(id.slice("contact-suggest:".length), actor);
+          }
+          json(res, 200, { acknowledged: true });
+        } catch (err) {
+          const code = err instanceof Error ? err.message : "";
+          if (code === "forbidden" || code === "verification-required") json(res, 403, { error: code, code });
+          else {
+            const raw = err && typeof err === "object" ? (err as { code?: unknown }).code : undefined;
+            const cause = typeof raw === "string" && /^[A-Z][A-Z0-9_]{1,48}$/.test(raw) ? raw : "unknown";
+            ctx.logger.error({ code: cause }, "Contact suggestion dismissal could not be saved");
+            json(res, 503, { error: "unavailable", code: "unavailable" });
+          }
+        }
+        return;
+      }
       const verdict = evaluateWebRequest(req as unknown as WebGateRequest, url, ctx.webToken ?? null, ctx.webSessions, { touch: false });
       if (verdict.kind !== "allow") { json(res, 401, { error: WEB_TOKEN_INVALID_MESSAGE }); return; }
       const principal = verdict.via === "session" && verdict.session ? `web:${verdict.session.handle}` : "cli";
@@ -4506,6 +4627,88 @@ function webSendDedupeOf(ctx: WebApiContext): WebSendDedupe {
   return d;
 }
 
+/** Resend only retained server content, with one new attempt on the same bubble. */
+async function handleResendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebApiContext): Promise<void> {
+  const url = new URL(req.url ?? "/", "http://localhost"), arrival = webAuthorityOf(req, url, ctx);
+  let raw: unknown;
+  try { raw = JSON.parse((await readBoundedWebBody(req, 8192)).toString("utf8")); }
+  catch { json(res, 400, { error: "Invalid resend request" }); return; }
+  if (!permitWebContinuation(req, res, ctx)) return;
+  const parsed = z.object({ instance: z.string().min(1).max(128), boot: z.string().regex(/^[0-9a-f]{1,32}$/),
+    id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), attempt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER) }).strict().safeParse(raw);
+  if (!parsed.success) { json(res, 400, { error: "Invalid resend request" }); return; }
+  const { instance, boot, id, attempt } = parsed.data, history = ctx.webChatHistory;
+  const person = webPersonOf(req, url, ctx), guest = guestRequestOf(req), refused = guestChatRefusal(guest, instance);
+  if (!person) { json(res, 401, { error: WEB_TOKEN_INVALID_MESSAGE }); return; }
+  if (refused) { json(res, refused.status, { error: refused.error }); return; }
+  const native = isWindowsInstance(ctx.fleetConfig?.instances[instance]);
+  if (native && !nativeCliAuthorization(req, url, ctx)) { json(res, 403, { error: "Windows runtime requires an administrator on the local dashboard" }); return; }
+  const row = history?.find(instance, boot, id);
+  if (!row || row.role !== "user" || row.retry?.owner !== person.voterKey || (guest && !guestSeesMessage(row, guest, guest.scope()))) {
+    json(res, 404, { error: "Message is not available to resend" }); return;
+  }
+  if (native && row.attachments?.length) { json(res, 400, { error: "Attachments are not supported by this runtime yet" }); return; }
+  if (guest && guestCommandText(row.text)) { json(res, 403, { error: "guest_no_commands" }); return; }
+  if (gatewayRequestContext(req) && row.text.startsWith("/raw ") && !adminAdmissionOf(req, url, ctx)) { json(res, 403, { error: t("web.raw_public_refused") }); return; }
+  const registered = registeredChatInstance(ctx, instance);
+  if (!registered && !ctx.instanceIpcClients.has(instance)) { json(res, 404, { error: "Instance not found" }); return; }
+  const admission = admissionOf(req, url, ctx);
+  const authorityCurrent = () => admission !== null && admissionOf(req, url, ctx) === admission
+    && webPersonOf(req, url, ctx)?.voterKey === person.voterKey
+    && (!guest || (guest.current() && !guestChatRefusal(guest, instance)))
+    && (native ? isWindowsInstance(ctx.fleetConfig?.instances[instance]) && nativeCliAuthorization(req, url, ctx)
+      : registered ? registeredChatInstance(ctx, instance) : ctx.instanceIpcClients.has(instance));
+  const stillCurrent = () => !res.destroyed && authorityCurrent();
+  const update = () => ctx.emitSseEvent("delivery", { instance, boot: row.boot, id: row.id, messageId: row.messageId, delivery: row.delivery, retry: row.retry });
+  if (row.retry.attempt === attempt + 1 && row.delivery !== "failed") { json(res, 200, { sent: true, repeated: true, message: row }); return; }
+  if (row.delivery !== "failed" || row.retry.attempt !== attempt) { json(res, 409, { error: "This delivery changed; refresh and try again" }); return; }
+  const quoted = row.replyTo ? history!.find(instance, row.replyTo.boot, row.replyTo.id) : undefined;
+  if (row.replyTo && (!quoted || (guest && !guestSeesMessage(quoted, guest, guest.scope())))) { json(res, 409, { error: t("web.reply_gone"), reason: "reply_gone" }); return; }
+  const files: Array<Pick<UploadEntry, "kind" | "path" | "name">> = [];
+  const limits = uploadLimits(ctx.fleetConfig?.web, { publicLink: gatewayRequestContext(req) !== undefined });
+  let totalBytes = 0;
+  if ((row.attachments?.length ?? 0) > limits.maxFiles) { json(res, 409, { error: "The attachments exceed the current file limit", reason: "attachment_gone" }); return; }
+  for (const attachment of row.attachments ?? []) {
+    const opened = "id" in attachment ? ctx.webFiles?.open(attachment.id) : null;
+    if (!opened) { json(res, 409, { error: "An attached file is no longer available", reason: "attachment_gone" }); return; }
+    try {
+      if (opened.file.instance !== instance) { json(res, 409, { error: "An attached file is no longer available", reason: "attachment_gone" }); return; }
+      totalBytes += opened.file.size;
+      if (opened.file.size > limits.maxFileBytes || totalBytes > limits.maxTotalBytes) { json(res, 409, { error: "The attachments exceed the current file limit", reason: "attachment_gone" }); return; }
+      files.push({ kind: opened.file.kind, name: opened.file.name, path: opened.file.realPath });
+    } finally { closeSync(opened.fd); }
+  }
+  if (!stillCurrent()) { json(res, 403, { error: "The session or instance changed" }); return; }
+  const { authority } = confirmAfterBody(arrival, webAuthorityOf(req, url, ctx, instance));
+  const nativeRequestId = isNativeExecInstance(ctx.fleetConfig?.instances[instance]) ? randomUUID() : undefined;
+  const nativeJournalIds = nativeRequestId ? new Set((ctx.nativeInstanceRuntime?.().get(instance)?.turns ?? []).map(turn => `native:${turn.id}:user`)) : undefined;
+  const messageId = nativeRequestId ? `native:${nativeRequestId}:user` : newWebMessageId(), claimed = history!.beginResend(instance, boot, id, attempt, person.voterKey, messageId, nativeJournalIds);
+  if (claimed.kind === "refused") { json(res, 409, { error: "This delivery changed; refresh and try again" }); return; }
+  if (claimed.kind === "already") { json(res, 200, { sent: true, repeated: true, message: claimed.message }); return; }
+  update();
+  const delivery = attachmentDelivery(row.text, files);
+  const adapter = ctx.getAdapterForInstance ? ctx.getAdapterForInstance(instance) : ctx.adapter;
+  const payload = { type: "fleet_inbound", content: delivery.text, ...(nativeRequestId ? { requestId: nativeRequestId } : {}), targetSession: instance, meta: {
+    chat_id: ctx.getGroupIdForInstance?.(instance) ?? String(ctx.fleetConfig?.channel?.group_id ?? ""),
+    thread_id: String(ctx.fleetConfig?.instances[instance]?.topic_id ?? ""), message_id: messageId,
+    user: person.name, user_id: person.userId, source: "web", ts: new Date().toISOString(), adapter_id: adapter?.id,
+    ...(guest ? { web_guest: "1" } : {}), ...delivery.meta, ...(quoted ? { reply_to_text: webChatReplyText(quoted) } : {}),
+  } };
+  let handedOff = false;
+  try {
+    const delivered = ctx.deliverHumanToInstance ? await ctx.deliverHumanToInstance(instance, payload, webHumanOrigin(false, authority), row.text, { stillCurrent, ...(native ? { authorityCurrent } : {}) })
+      : await ctx.deliverToInstance(instance, payload, { stillCurrent, ...(native ? { authorityCurrent } : {}) });
+    if (delivered === false) throw new Error("delivery changed");
+    handedOff = true;
+    if (!res.destroyed) json(res, 200, { sent: true, message: row });
+  } catch (error) {
+    if (handedOff) return; // a lost HTTP answer does not make the accepted pane handoff fail
+    history!.setDelivery(instance, messageId, "failed"); update();
+    ctx.logger.error({ instance, err: error }, "Web resend handoff failed");
+    json(res, 503, { ...webDeliveryFailure(error), message: row });
+  }
+}
+
 function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebApiContext): void {
   const arrival = webAuthorityOf(req, new URL(req.url ?? "/", "http://localhost"), ctx);   // #1939 §3: again after the body
   let body = "";
@@ -4749,7 +4952,7 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
       ctx.lastInboundUser.set(instance, person.name);
       ctx.eventLog?.logActivity("message", person.name, (message || `[${files.length} file(s)]`).slice(0, 200), instance);
       // #1920: the account that wrote it (a guest sees its own); channel-visible once its copy was sent (above).
-      ctx.emitSseEvent("message", { instance, sender: person.name, role: "user", text: message, ts, attachments: files.map(publicAttachment), messageId, ...(person.bound ? { from: person.voterKey } : {}),
+      ctx.emitSseEvent("message", { instance, sender: person.name, role: "user", retryOwner: person.voterKey, text: message, ts, attachments: files.map(publicAttachment), messageId, ...(person.bound ? { from: person.voterKey } : {}),
         ...(quoted ? { replyTo: webChatReplyRef(quoted) } : {}), ...(clientId ? { clientId } : {}) });
       json(res, 200, { sent: true, messageId });
     } catch {

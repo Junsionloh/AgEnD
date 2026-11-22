@@ -149,6 +149,11 @@ jobs:
           npm ci
           npm run build
           npx vitest run --shard=${{ matrix.shard }}/4
+      # Run the durable suites exactly once, with no other unit worker competing.
+      # Their real SQLite/FULL, fsync, crypto and original 10s case budget remain.
+      - name: Run serial durable fixtures
+        if: needs.detect-changes.outputs.text-only != 'true' && matrix.shard == 1
+        run: npx vitest run --config vitest.config.durable.ts
 
   # ── integration tests (serial, real-resource) ────────────────────────────────
   # Always runs; skips heavy work for text-only PRs.
@@ -293,9 +298,17 @@ jobs:
   # no page error or CSP report. The runner image's own Google Chrome — this job never downloads a browser (no
   # `playwright install`); playwright-core is an exact-pinned devDependency. Always runs; skips on a text-only PR.
   # Locally, the whole matrix: docs/development.md → "UI gate".
+  # M-3332: three legs in parallel (one job, one result for `build`: it fails if any leg does). Leg 1 also runs the fixed
+  # gates (Settings, Hub pages, Hub shell, composer width); every leg runs its shard of the found smokes
+  # (scripts/ci/ui-gate-smokes.mjs --shard k/3). One leg took 15 min before; each is ~6-8 min now.
   ui-gate:
     runs-on: ubuntu-24.04
     needs: detect-changes
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    name: ui-gate (${{ matrix.shard }}/3)
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -334,17 +347,18 @@ jobs:
         if: needs.detect-changes.outputs.text-only != 'true'
         run: |
           node scripts/ci/prepare-ui-gate-fonts.mjs --cache-dir "$RUNNER_TEMP/ui-gate-cjk-cache" --output-dir "$RUNNER_TEMP/ui-gate-cjk-fonts"
-      - name: Run the UI gate
+      - name: Install
         if: needs.detect-changes.outputs.text-only != 'true'
+        run: npm ci
+      - name: Run the UI gate
+        if: matrix.shard == 1 && needs.detect-changes.outputs.text-only != 'true'
         env:
           GATE: ci
           OUT: ${{ runner.temp }}/ui-gate
           FONTCONFIG_FILE: ${{ steps.cjk-fonts.outputs.fontconfig }}
-        run: |
-          npm ci
-          PW_DIR="$GITHUB_WORKSPACE" REPO="$GITHUB_WORKSPACE" npx tsx scripts/manual/smoke/smoke-settings-ui-gate.mts
+        run: PW_DIR="$GITHUB_WORKSPACE" REPO="$GITHUB_WORKSPACE" npx tsx scripts/manual/smoke/smoke-settings-ui-gate.mts
       - name: Run the UI gate on the Hub pages
-        if: needs.detect-changes.outputs.text-only != 'true'
+        if: matrix.shard == 1 && needs.detect-changes.outputs.text-only != 'true'
         env:
           GATE: ci
           OUT: ${{ runner.temp }}/ui-gate
@@ -354,7 +368,7 @@ jobs:
       # Settings open on the screen), one card frame per page, the notices card in the page's column, Hub-only requests.
       # Runs even when a gate before it failed, so one run shows every gate's verdict.
       - name: Run the Hub shell gate
-        if: (success() || failure()) && needs.detect-changes.outputs.text-only != 'true' && steps.cjk-fonts.outcome == 'success'
+        if: (success() || failure()) && matrix.shard == 1 && needs.detect-changes.outputs.text-only != 'true' && steps.cjk-fonts.outcome == 'success'
         env:
           GATE: ci
           OUT: ${{ runner.temp }}/ui-gate
@@ -363,7 +377,7 @@ jobs:
       # M-2904: the chat composer keeps one input width whatever the agent's state (working / stuck / waiting / idle),
       # desk and phone; Stop is in the working bar. Same fixture and Chrome; its pictures land in the same artifact.
       - name: Composer width (no layout shift on a state flip)
-        if: (success() || failure()) && needs.detect-changes.outputs.text-only != 'true'
+        if: (success() || failure()) && matrix.shard == 1 && needs.detect-changes.outputs.text-only != 'true'
         env:
           OUT: ${{ runner.temp }}/ui-gate
           PORT: '19641'
@@ -383,9 +397,9 @@ jobs:
         env:
           OUT: ${{ runner.temp }}/ui-gate
           FONTCONFIG_FILE: ${{ steps.cjk-fonts.outputs.fontconfig }}
-        run: PW_DIR="$GITHUB_WORKSPACE" REPO="$GITHUB_WORKSPACE" node scripts/ci/ui-gate-smokes.mjs
+        run: PW_DIR="$GITHUB_WORKSPACE" REPO="$GITHUB_WORKSPACE" node scripts/ci/ui-gate-smokes.mjs --shard ${{ matrix.shard }}/3
       - name: Save verified CJK archive (best effort, after the gate)
-        if: always() && needs.detect-changes.outputs.text-only != 'true' && steps.cjk-fonts.outcome == 'success' && steps.cjk-cache.outputs.cache-hit != 'true'
+        if: always() && matrix.shard == 1 && needs.detect-changes.outputs.text-only != 'true' && steps.cjk-fonts.outcome == 'success' && steps.cjk-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
         timeout-minutes: 1
         continue-on-error: true
@@ -396,8 +410,67 @@ jobs:
         if: failure() && needs.detect-changes.outputs.text-only != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ui-gate
+          name: ui-gate-${{ matrix.shard }}
           path: ${{ runner.temp }}/ui-gate
+          retention-days: 7
+
+  # ── iPhone keyboard suite (M-3357) ──────────────────────────────────────────
+  # Every past iPhone keyboard bug, each red when its fix is undone (scripts/ci/keyboard-suite.mjs; the human view:
+  # docs/dev/iphone-keyboard-suite.md). Always runs; the work only when the change touches the keyboard's code (the
+  # shell's keyboard fit, the composers, app.css, the document listeners that read the box) or the suite itself — and on
+  # every push, tag and manual run (no diff to judge: fail closed). Three steps: the cases' unit tests; each fix undone
+  # alone turns its own tests red; the keyboard smokes in WebKit (Safari's engine) from the pinned Playwright image
+  # (the runner's checkout and node_modules mounted; no browser download, no --privileged, loopback only).
+  keyboard-suite:
+    runs-on: ubuntu-24.04
+    needs: detect-changes
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Does the change touch the keyboard's code?
+        id: touches
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/ci/keyboard-suite.mjs --touches
+      - name: Skip the keyboard suite (no keyboard code changed)
+        if: steps.touches.outputs.run != 'true'
+        run: echo "No keyboard code changed — keyboard suite skipped."
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.touches.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        if: steps.touches.outputs.run == 'true'
+        run: npm ci
+      - name: Every case's unit tests
+        if: steps.touches.outputs.run == 'true'
+        run: node scripts/ci/keyboard-suite.mjs --unit
+      - name: Each fix undone turns its own tests red
+        if: steps.touches.outputs.run == 'true'
+        run: node scripts/ci/keyboard-suite.mjs --reverts
+      - name: The keyboard smokes in WebKit (pinned Playwright image)
+        if: steps.touches.outputs.run == 'true'
+        env:
+          IMAGE: mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
+          OUT: ${{ runner.temp }}/keyboard-suite
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          docker run --rm --init --ipc=host --memory 3g --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -v "$OUT:$OUT" -w "$GITHUB_WORKSPACE" \
+            -e PW_ENGINE=webkit -e PW_DIR="$GITHUB_WORKSPACE" -e REPO="$GITHUB_WORKSPACE" -e OUT="$OUT" \
+            "$IMAGE" node scripts/ci/keyboard-suite.mjs --smokes
+      - name: The smokes' pictures (on failure)
+        if: failure() && steps.touches.outputs.run == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: keyboard-suite
+          path: ${{ runner.temp }}/keyboard-suite
           retention-days: 7
 
   # Real NTFS ACL proof, isolated to a fresh hosted Windows runner on release lines.
@@ -424,7 +497,7 @@ jobs:
   # is release-only; its skip is accepted only outside its explicit event scope.
   build:
     runs-on: ubuntu-24.04
-    needs: [detect-changes, changelog, actions-pinned, setup, test-shard, test-integration, test-pwsh, hub-directory, docs-tests, ui-gate, install-smoke, release-rollback-smoke, runtime-profile-privacy]
+    needs: [detect-changes, changelog, actions-pinned, setup, test-shard, test-integration, test-pwsh, hub-directory, docs-tests, ui-gate, keyboard-suite, install-smoke, release-rollback-smoke, runtime-profile-privacy]
     if: always()
     steps:
       - name: Check all jobs succeeded
@@ -440,6 +513,7 @@ jobs:
           PROFILE_PRIVACY_REQUIRED: ${{ (github.event_name == 'pull_request' && startsWith(github.base_ref, 'release/')) || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')) }}
           DOCS_TESTS: ${{ needs.docs-tests.result }}
           UI_GATE: ${{ needs.ui-gate.result }}
+          KEYBOARD: ${{ needs.keyboard-suite.result }}
           SMOKE: ${{ needs.install-smoke.result }}
           ROLLBACK: ${{ needs.release-rollback-smoke.result }}
         run: |
@@ -454,7 +528,7 @@ jobs:
             exit 1
           fi
           failed=()
-          for name_result in "setup:$SETUP" "test-shard:$SHARD" "test-integration:$INTEGRATION" "test-pwsh:$PWSH" "hub-directory:$HUB_DIRECTORY" "docs-tests:$DOCS_TESTS" "ui-gate:$UI_GATE" "install-smoke:$SMOKE" "release-rollback-smoke:$ROLLBACK"; do
+          for name_result in "setup:$SETUP" "test-shard:$SHARD" "test-integration:$INTEGRATION" "test-pwsh:$PWSH" "hub-directory:$HUB_DIRECTORY" "docs-tests:$DOCS_TESTS" "ui-gate:$UI_GATE" "keyboard-suite:$KEYBOARD" "install-smoke:$SMOKE" "release-rollback-smoke:$ROLLBACK"; do
             name="${name_result%%:*}"
             result="${name_result##*:}"
             if [ "$result" != "success" ]; then

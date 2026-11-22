@@ -45,8 +45,9 @@
 // among them by base y), then the foreground, then the crowd counts, tags and bubbles.
 import { t } from "/assets/app-i18n.js";
 import { frameAt, nameHash } from "./fleet-office-model.js";
-import { CHAR_DEPTH, LOGICAL, checkSkinPack, own, packPortraitImages, packSceneImages, poseStrip, stripBox, walkStrip } from "./fleet-office-pack.js";
+import { CHAR_DEPTH, LOGICAL, checkSkinPack, own, packPortraitImages, packSceneImages, poseStrip, stripBox, stripCell, stripFrameAt, stripImages, walkStrip } from "./fleet-office-pack.js";
 import { tierColours } from "./fleet-office-levels.js";
+import { assetUrl } from "/assets/asset-url.js";
 
 export { nameHash };
 
@@ -153,6 +154,12 @@ function drawDeskBack(ctx, d, look) {
   ctx.restore();
 }
 
+/** M-3445 (#4267): default lifted/dangling motion when a character is dragged without a custom `dragged` strip (zero sway when ms <= 0). */
+export function draggedMotion(ms) {
+  if (!(ms > 0)) return { lift: 10, tilt: 0 };
+  return { lift: 10 + Math.sin(ms * 0.011) * 1.5, tilt: Math.sin(ms * 0.009) * 0.14 };
+}
+
 function drawCharacter(ctx, d, look, ms, env) {
   if (look.pose === "away") return;
   const h = nameHash(look.name), skin = SKIN_TONES[h % SKIN_TONES.length], hair = HAIR[(h >>> 3) % HAIR.length];
@@ -167,6 +174,31 @@ function drawCharacter(ctx, d, look, ms, env) {
     art(ctx, d, 2.6, 4.6, 0.7, 0.5, "rgba(255, 120, 120, 0.45)", dy); art(ctx, d, 6.7, 4.6, 0.7, 0.5, "rgba(255, 120, 120, 0.45)", dy);
   };
   const body = (dy) => { art(ctx, d, 1, 6, 8, 5, coat, dy); art(ctx, d, 4, 6, 2, 2, shirt, dy); };
+  if (look.pose === "dragged") {
+    // M-3445 (#4267): lifted off the ground shadow, swaying gently with flailing arms and kicking legs (still when ms <= 0).
+    const sx = d.seat ? d.seat.x : d.x + CX, sy = d.seat ? d.seat.y : d.y + 53;
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+    ctx.beginPath(); ctx.ellipse(sx, sy, 12, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    const { lift, tilt } = draggedMotion(ms);
+    const px0 = d.x + CX, py0 = d.y + TOP + 4 - lift;
+    ctx.translate(px0, py0);
+    if (tilt) ctx.rotate(tilt);
+    ctx.translate(-px0, -py0 - lift);
+    head(0, false); body(0);
+    // Surprised tiny "o" mouth & arms raised/flailing alternately.
+    art(ctx, d, 4.6, 4.7, 0.8, 0.7, eye);
+    const alt = ms > 0 && (f % 2 === 1);
+    art(ctx, d, 0, alt ? 4.5 : 6, 1, 3, coat); art(ctx, d, -0.4, alt ? 3.8 : 5.3, 1.2, 1, skin);
+    art(ctx, d, 9, alt ? 6 : 4.5, 1, 3, coat); art(ctx, d, 9.2, alt ? 5.3 : 3.8, 1.2, 1, skin);
+    // Dangling kicking legs.
+    const legs = "#3a3f4b";
+    art(ctx, d, alt ? 2.1 : 2.7, 11, 2, alt ? 2.2 : 1.7, legs);
+    art(ctx, d, alt ? 5.3 : 5.9, 11, 2, alt ? 1.7 : 2.2, legs);
+    ctx.restore();
+    return;
+  }
   if (look.pose === "working") {
     head(0, false); body(0);
     // Typing: the hands take turns on the keyboard; the screen's lines change.
@@ -267,7 +299,7 @@ function drawProp(ctx, it, ms, env) {
 }
 
 /** Frames per pose and the loop's speed (the built-in strips). */
-export const FRAMES = { working: 4, idle: 4, paused: 3, needs: 2, walk: 2 };
+export const FRAMES = { working: 4, idle: 4, paused: 3, needs: 2, walk: 2, dragged: 4 };
 export const FPS = 4;
 
 const BUBBLE_FONT = "600 11px system-ui, sans-serif";
@@ -317,11 +349,12 @@ export function tagBox(ctx, x, y, label, compact = false) {
   ctx.restore();
   return { x: Math.round(x - w / 2), y: y + k.top, w, h: k.h, text: t };
 }
-/** #2860: what a tag covers with its level badge: on a full tag's top-left corner (half outside); left of a compact one. */
+/** #2860: what a tag covers with its level badge: on a full tag's top-left corner (clear of the first letter); left of a compact one. */
 export function tagFootprint(ctx, box, badge, compact = false) {
   if (!badge) return box;
   if (compact) { const w = badgeWidth(ctx, badge) + 1; return { x: box.x - w, y: box.y, w: box.w + w, h: box.h }; }
-  return { x: box.x - 10, y: box.y - 7, w: box.w + 10, h: box.h + 7 };
+  const left = badge.mark ? 6 : Math.max(10, badgeWidth(ctx, badge) - 3);
+  return { x: box.x - left, y: box.y - 7, w: box.w + left, h: box.h + 7 };
 }
 function badgeWidth(ctx, badge) {
   if (badge.mark) return 8;
@@ -338,13 +371,12 @@ function badgeWidth(ctx, badge) {
  */
 export function drawBadge(ctx, x, y, badge, pal, inline = false) {
   if (!badge) return;
-  // #2860 inline (a compact tag): (x, y) is the tag's left edge and middle; the badge sits just left of it, whole.
-  if (inline) { const w = badgeWidth(ctx, badge); x = x - 1 - w + (badge.mark ? w / 2 : w / 2 - 3); y = y + (badge.mark ? 0 : 1); }
   const c = tierColours(badge.tier, pal);
   ctx.save();
   ctx.globalAlpha = 1;
   if (badge.mark) {
-    ctx.translate(x, y); ctx.rotate(Math.PI / 4);
+    const mx = inline ? x - 1 - 4 : x;
+    ctx.translate(mx, y); ctx.rotate(Math.PI / 4);
     ctx.fillStyle = pal.surface; ctx.fillRect(-4, -4, 8, 8);
     ctx.fillStyle = c.bg; ctx.fillRect(-4, -4, 8, 8);
     ctx.strokeStyle = c.line; ctx.lineWidth = 1; ctx.strokeRect(-3.5, -3.5, 7, 7);
@@ -353,7 +385,9 @@ export function drawBadge(ctx, x, y, badge, pal, inline = false) {
   }
   ctx.font = BADGE_FONT;
   const w = Math.max(12, Math.ceil((ctx.measureText ? ctx.measureText(badge.text).width : badge.text.length * 5) + 6)), h = 11;
-  const bx = Math.round(x - w / 2 + 3), by = Math.round(y - h / 2 - 1);
+  // Normal tag: badge overlaps only the left border corner (right edge at x + 3), leaving the first letter at x + 5 unobstructed.
+  const bx = inline ? Math.round(x - 1 - w) : Math.round(x - w + 3);
+  const by = inline ? Math.round(y - h / 2) : Math.round(y - h / 2 - 1);
   // An opaque surface first, so a tint reads the same over any picture.
   ctx.fillStyle = pal.surface; ctx.fillRect(bx, by, w, h);
   ctx.fillStyle = c.bg; ctx.fillRect(bx, by, w, h);
@@ -525,23 +559,48 @@ export const studioSkin = { ...pixelSkin, id: "studio", pack: STUDIO_PACK, drawB
  */
 export function spriteSkin(pack, images, base = pixelSkin) {
   const img = (src) => (src && images.get(src)) || null;
+  const ready = (st) => !!st && (Array.isArray(st.sheets) ? stripImages(st).every((s) => !!img(s)) : !!img(st.src));
+  const clipMs = (env, key, st, ms) => (ms > 0 && env && typeof env.clock === "function" ? env.clock(key, st, ms) : ms);
   // A strip's frame at its displayed size (dw × dh, unsmoothed), its anchor on (x, y); mirrored about the anchor.
   const strip = (ctx, st, ms, x, y, frame = null, mirror = false) => {
-    const im = img(st && st.src);
+    if (!ready(st)) return false;
+    const f = frame ?? stripFrameAt(st, ms), cell = stripCell(st, f), im = img(cell.src);
     if (!im) return false;
-    const f = frame ?? frameAt(ms, st.frames, st.fps), b = stripBox(st, x, y, mirror);
+    const b = stripBox(st, x, y, mirror);
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    if (mirror) { ctx.translate(b.x + b.w, b.y); ctx.scale(-1, 1); ctx.drawImage(im, f * st.w, 0, st.w, st.h, 0, 0, b.w, b.h); }
-    else ctx.drawImage(im, f * st.w, 0, st.w, st.h, b.x, b.y, b.w, b.h);
+    if (mirror) { ctx.translate(b.x + b.w, b.y); ctx.scale(-1, 1); ctx.drawImage(im, cell.col * st.w, 0, st.w, st.h, 0, 0, b.w, b.h); }
+    else ctx.drawImage(im, cell.col * st.w, 0, st.w, st.h, b.x, b.y, b.w, b.h);
     ctx.restore();
     return true;
   };
   const setOf = (look) => own(pack.characters, own(pack.byInstance, look.name)) || own(pack.characters, "default");
-  /** The strip a look shows (its pose; walking, by its heading), when its picture is loaded. */
+  /** M-3432 (#4255): eating strip for `name` (their set's `eat`, else `default.eat`, else null). */
+  const eatStripOf = (name) => {
+    const st = own(setOf({ name }) || {}, "eat") || own(own(pack.characters, "default") || {}, "eat") || null;
+    return st && ready(st) ? st : null;
+  };
+  /** M-3445 (#4267): dragged strip for `name` (their set's `dragged`, else `default.dragged`, else null). */
+  const draggedStripOf = (name) => {
+    const st = own(setOf({ name }) || {}, "dragged") || own(own(pack.characters, "default") || {}, "dragged") || null;
+    return st && ready(st) ? st : null;
+  };
+  /** The strip a look shows (its pose; walking, by its heading), when all its pictures are loaded. */
   const shown = (look, walking = look.pose === "walk") => {
+    if (!walking && look.pose === "dragged") {
+      const dragSt = draggedStripOf(look.name);
+      if (dragSt) return { strip: dragSt, mirror: false, customDragged: true };
+      const fallback = poseStrip(setOf(look), look.basePose || "idle", look.heading);
+      return fallback && ready(fallback.strip) ? { ...fallback, customDragged: false } : null;
+    }
+    if (!walking && look.pose === "eat") {
+      const eatSt = eatStripOf(look.name);
+      if (eatSt) return { strip: eatSt, mirror: false };
+      const fallback = poseStrip(setOf(look), look.basePose || "idle", look.heading);
+      return fallback && ready(fallback.strip) ? fallback : null;
+    }
     const ps = poseStrip(setOf(look), walking ? "walk" : look.pose, look.heading);
-    return ps && img(ps.strip.src) ? ps : null;
+    return ps && ready(ps.strip) ? ps : null;
   };
   return {
     ...base,
@@ -585,10 +644,10 @@ export function spriteSkin(pack, images, base = pixelSkin) {
       if (f.shape) { drawFurniture(ctx, f, active, ms, env); return; }
       // An NPC walking (#2596): its walk strip for its heading (walkSide mirrored going left), when its picture is loaded.
       const ws = walkStrip(f);
-      if (ws && strip(ctx, ws.strip, ms, f.x, f.y, null, ws.mirror)) return;
+      if (ws && ready(ws.strip) && strip(ctx, ws.strip, clipMs(env, `fw:${f.id}`, ws.strip, ms), f.x, f.y, null, ws.mirror)) return;
       // Active: its activeSprite (or its strip) plays; otherwise its strip loops ("loop", #2570) or its first frame holds.
-      if (active) strip(ctx, f.activeSprite || f.sprite, ms, f.x, f.y);
-      else if (f.loop) strip(ctx, f.sprite, ms, f.x, f.y);
+      if (active) { const st = f.activeSprite || f.sprite; strip(ctx, st, clipMs(env, `fa:${f.id}`, st, ms), f.x, f.y); }
+      else if (f.loop) strip(ctx, f.sprite, clipMs(env, `fl:${f.id}`, f.sprite, ms), f.x, f.y);
       else strip(ctx, f.sprite, 0, f.x, f.y, 0);
     },
     drawCharacter(ctx, d, look, ms, env) {
@@ -596,9 +655,56 @@ export function spriteSkin(pack, images, base = pixelSkin) {
       const ps = shown(look);
       ctx.save();
       if (look.dim) ctx.globalAlpha = 0.35;
-      const done = !!ps && strip(ctx, ps.strip, ms, d.seat.x, d.seat.y, null, ps.mirror);
+      const cms = ps ? clipMs(env, `c:${look.name || (d && d.key) || ""}`, ps.strip, ms) : ms;
+      let done = false;
+      if (ps && look.pose === "dragged") {
+        // M-3445 (#4267): ground shadow under feet; custom `dragged` strip plays as authored, otherwise built-in lifted dangle.
+        ctx.save();
+        ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+        ctx.beginPath(); ctx.ellipse(d.seat.x, d.seat.y, Math.max(10, Math.round(ps.strip.dw * 0.24)), 4.5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        if (ps.customDragged) {
+          done = strip(ctx, ps.strip, cms, d.seat.x, d.seat.y, null, ps.mirror);
+        } else {
+          const { lift, tilt } = draggedMotion(ms);
+          const b = stripBox(ps.strip, d.seat.x, d.seat.y);
+          const px0 = d.seat.x, py0 = b.y + Math.min(10, b.h * 0.22) - lift;
+          ctx.translate(px0, py0);
+          if (tilt) ctx.rotate(tilt);
+          ctx.scale(0.96, 1.04);
+          ctx.translate(-px0, -py0 - lift);
+          done = strip(ctx, ps.strip, cms, d.seat.x, d.seat.y, null, ps.mirror);
+        }
+      } else {
+        done = !!ps && strip(ctx, ps.strip, cms, d.seat.x, d.seat.y, null, ps.mirror);
+      }
       ctx.restore();
-      if (!done) base.drawCharacter(ctx, d, look, ms, env);
+      if (!done) base.drawCharacter(ctx, d, look.pose === "eat" ? { ...look, pose: look.basePose || "idle" } : look, ms, env);
+    },
+    /** M-3432 (#4255): character's eating strip (set.eat → default.eat → null) when loaded. */
+    eatStrip: eatStripOf,
+    /** M-3445 (#4267): character's dragged strip (set.dragged → default.dragged → null) when loaded. */
+    draggedStrip: draggedStripOf,
+    /** M-3432 (#4255): draw a snack strip (placed on floor or eat overlay) at logical (x, y). */
+    drawSnack(ctx, st, ms, x, y, env, clipKey = null) {
+      if (!st || !ready(st)) return false;
+      const sms = clipKey ? clipMs(env, clipKey, st, ms) : ms;
+      return strip(ctx, st, sms, x, y);
+    },
+    /** M-3432 (#4255): draw frame 0 of a snack strip fitted cleanly inside a square tray/ghost icon canvas. */
+    drawSnackIcon(ctx, st, size) {
+      if (!st || !ready(st)) return false;
+      const cell = stripCell(st, 0), im = img(cell.src);
+      if (!im) return false;
+      const pad = 2, avail = Math.max(1, size - pad * 2);
+      const scale = Math.min(avail / st.w, avail / st.h);
+      const dw = Math.max(1, Math.round(st.w * scale)), dh = Math.max(1, Math.round(st.h * scale));
+      const dx = Math.round((size - dw) / 2), dy = Math.round((size - dh) / 2);
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(im, cell.col * st.w, 0, st.w, st.h, dx, dy, dw, dh);
+      ctx.restore();
+      return true;
     },
     charBox(look, at) {
       const ps = shown({ ...look, heading: at.heading }, !!at.walking);
@@ -607,7 +713,9 @@ export function spriteSkin(pack, images, base = pixelSkin) {
     // An item in the air: its sender's own (their set's "prop", #2562), else the pack's for its kind, else the built-in one.
     drawProp(ctx, it, ms, env) {
       const mine = it.from ? own(setOf({ name: it.from }) || {}, "prop") : null;
-      if (!strip(ctx, mine || own(pack.props, it.hue), ms, it.x, it.y)) base.drawProp(ctx, it, ms, env);
+      const st = mine || own(pack.props, it.hue);
+      const pms = st && it.id ? clipMs(env, `p:${it.id}`, st, ms) : ms;
+      if (!strip(ctx, st, pms, it.x, it.y)) base.drawProp(ctx, it, ms, env);
     },
   };
 }
@@ -615,7 +723,7 @@ export function spriteSkin(pack, images, base = pixelSkin) {
 // ── The built-in cozy (#2631): the zones layout on a warm pixel-art office drawn as one picture, the built-in people ──
 
 /** Its picture, shipped with the page (src/ui/shared/office/cozy.png, auth-api.ts ASSETS: public static, as the font). */
-export const COZY_BACKGROUND = "/assets/office-cozy.png";
+export const COZY_BACKGROUND = assetUrl("/assets/office-cozy.png");
 const pts = (...xy) => xy.map(([x, y]) => ({ x, y }));
 // The seats are feet points on the picture: chairs in front of the desks, the sofa, the coffee table and machine, the
 // beanbags (a sleeper's bottom), in front of the whiteboard. The rects put a crowd's first extra spots (fleet-office-zones.js
@@ -662,7 +770,7 @@ const wps = (list) => list.map(([id, x, y]) => ({ id, x, y }));
 // alert corner bottom-right, one straight aisle up the middle from a bottom-centre door ──
 
 /** The guild: a fantasy adventurers' guild hall (src/ui/shared/office/guild.png). */
-export const GUILD_BACKGROUND = "/assets/office-guild.png";
+export const GUILD_BACKGROUND = assetUrl("/assets/office-guild.png");
 // Seats: the chairs at the six map desks, the tavern bench, the stools round the table, the bar; the inn beds (a sleeper's
 // middle); in front of the quest board.
 const GUILD_AREAS = {
@@ -696,7 +804,7 @@ export const GUILD_PACK = {
 };
 
 /** The school: a classroom (src/ui/shared/office/school.png). */
-export const SCHOOL_BACKGROUND = "/assets/office-school.png";
+export const SCHOOL_BACKGROUND = assetUrl("/assets/office-school.png");
 // Seats: the chairs at the six student desks; the sofa, the two stools, the vending machine; the nurse's beds; in front
 // of the chalkboard.
 const SCHOOL_AREAS = {
@@ -769,7 +877,12 @@ const MAX_LOADED = 24;
 const defaultImage = (url) => new Promise((resolve) => {
   if (typeof Image !== "function") { resolve(null); return; }
   const im = new Image();
-  im.onload = () => resolve(im);
+  im.onload = () => {
+    // M-3394 (#4231): pre-decode each sheet before handing the skin to the renderer so multi-sheet
+    // boundaries never trigger a synchronous decode hitch on desktop or phone.
+    if (typeof im.decode === "function") im.decode().then(() => resolve(im), () => resolve(im));
+    else resolve(im);
+  };
   im.onerror = () => resolve(null);
   im.src = url;
 });

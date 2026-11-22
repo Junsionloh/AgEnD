@@ -14,8 +14,11 @@
 (function () {
   "use strict";
   var KEY = "agend_theme";
+  var PALETTE_KEY = "agend_palette";
+  var PALETTES = ["sky", "meadow", "violet", "mint"];
   var SYNCED_FLAG = "agend_prefs_synced";
   function valid(v) { return v === "light" || v === "dark" ? v : "system"; }
+  function validPalette(v) { return PALETTES.indexOf(v) >= 0 ? v : ""; }
   function read() {
     try { return valid(localStorage.getItem(KEY)); } catch (e) { return "system"; }   // storage blocked: follow the device
   }
@@ -26,6 +29,8 @@
     var root = document.documentElement;
     if (v === "system") root.removeAttribute("data-theme");
     else root.setAttribute("data-theme", v);
+    if (palette) root.setAttribute("data-palette", palette);
+    else root.removeAttribute("data-palette");
   }
   /** The host's choice for this page: a theme, or null — none known here (no data-prefs, or not in step yet). */
   function hostChoice() {
@@ -39,18 +44,46 @@
     return inStep ? "system" : null;
   }
   var current = hostChoice();
+  // Built-in colours are this browser's base palette. Agent page colours and owner CSS remain above it.
+  var palette = "";
+  try { palette = validPalette(localStorage.getItem(PALETTE_KEY)); } catch (e) { /* default */ }
   if (current !== null) cache(current); else current = read();
   apply(current);
   var listeners = [];
+  var preview = null;
+  function retirePreview() {
+    if (preview) { current = preview.mode; palette = preview.colours; preview = null; }
+  }
+  function changed() {
+    apply(current);
+    for (var i = 0; i < listeners.length; i++) { try { listeners[i](current); } catch (e) { /* independent listeners */ } }
+  }
+  function cachePalette() {
+    try { if (palette) localStorage.setItem(PALETTE_KEY, palette); else localStorage.removeItem(PALETTE_KEY); } catch (e) { /* this page only */ }
+  }
   window.AgendTheme = {
     /** The theme this page shows. */
     get: function () { return current; },
+    getPalette: function () { return palette; },
+    setPalette: function (v) { retirePreview(); palette = validPalette(v); cachePalette(); changed(); },
     /** Choose "system", "light" or "dark" (this browser's copy; app-prefs.js keeps the host's); applied now even when it cannot be stored. */
     set: function (v) {
+      retirePreview();
       current = valid(v);
       cache(current);
-      apply(current);
-      for (var i = 0; i < listeners.length; i++) { try { listeners[i](current); } catch (e) { /* one listener's error stops no other */ } }
+      changed();
+    },
+    /** A dialog's temporary paint. An outside choice retires it; cancel never overwrites that newer choice. */
+    beginPreview: function () {
+      retirePreview();
+      var lease = { mode: current, colours: palette }, before = current, beforePalette = palette;
+      preview = lease;
+      return {
+        isCurrent: function () { return preview === lease; },
+        update: function (mode, colours) { if (preview !== lease) return; current = valid(mode); palette = validPalette(colours); changed(); },
+        cancel: function () { if (preview !== lease) return; preview = null; current = before; palette = beforePalette; changed(); },
+        commit: function () { if (preview !== lease) return false; preview = null; cache(current); cachePalette(); changed(); return true; },
+      };
     },
     /** Call `fn` with the theme whenever it changes on this page (an open Preferences shows it); returns the unsubscribe. */
     onChange: function (fn) {
@@ -107,7 +140,21 @@
   window.addEventListener("pageshow", schedule);
   // Page palettes are applied to the shell; routes replace headers. Coalesce paints and
   // ignore content attributes so updating this meta element cannot trigger itself.
-  new MutationObserver(schedule).observe(document.documentElement, {
-    subtree: true, childList: true, attributes: true, attributeFilter: ["class", "style", "data-theme", "data-agent"],
+  // M-3455: the split view's grid (.ws-geometry) changes only its size and drag state on these attributes — never a colour;
+  // M-3486: nor does a text box's height.
+  // A divider drag writes them every frame; re-reading the header colours then forced a layout and style walk per frame.
+  function relevant(records) {
+    if (!records || !records.length) return true;
+    for (var i = 0; i < records.length; i++) {
+      var r = records[i];
+      if (r.type !== "attributes") return true;
+      // M-3486: a text box's own height (the composer grows with its text: a style write each time it is measured).
+      if (r.attributeName === "style" && r.target.tagName === "TEXTAREA") continue;
+      if (!r.target.classList || !r.target.classList.contains("ws-geometry")) return true;
+    }
+    return false;
+  }
+  new MutationObserver(function (records) { if (relevant(records)) schedule(); }).observe(document.documentElement, {
+    subtree: true, childList: true, attributes: true, attributeFilter: ["class", "style", "data-theme", "data-palette", "data-agent"],
   });
 })();

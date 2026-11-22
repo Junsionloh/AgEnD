@@ -26,6 +26,7 @@ import { warmModules } from "./module-warm.js";
 
 const boot = document.body.dataset;
 const workspaceLanding = location.pathname === "/ui";
+const previewRequested = new URLSearchParams(location.search).get("presentation") === "preview";
 const popoutRequested = new URLSearchParams(location.search).get("presentation") === "popout";
 // #1523 N3: this device's text size, on the root before the first paint of any panel.
 initTextSize();
@@ -82,6 +83,7 @@ if (hubPage) {
     // The chat store this page booted — whichever import succeeded (a Retry loads ?retry=<n>) — is the page's one owner
     // of its prompts; Needs you finds it here and never imports the chat itself (#1463 review).
     appStore.set({ chatOwner: m.boot({ stream, boot }) });
+    appStore.set({ sidebarChatMenu: !guestPage() && m.SidebarChatMenu?.contextVersion === 1 ? m.SidebarChatMenu : null });
     // Loaded only after the stream opened (a Retry): the frames sent on connect never reached it — catch up once.
     if (stream.started()) stream.catchUp();
     return m;
@@ -153,13 +155,18 @@ if (hubPage) {
     showDialog(m.CreateInstanceDialog);
   };
   setNewInstanceOpener(onNewInstance);
+  if (previewRequested) {
+    Promise.all([import("/ui/js/preview-popout.js"), chatBoot]).then(([preview, chat]) => {
+      return preview.installPreviewWindow({ nav: navigation, chat });
+    }).catch(() => {}); // An unavailable optional module leaves the original authenticated chat.
+  }
   // Optional alpha feature: an old server/CSS/module set keeps the original single-panel path and drafts.
   if (!guest && popoutRequested && boot.chatWorkspace === "1") {
     Promise.all([import("/ui/js/chat-popout.js"), chatBoot]).then(([popout, chat]) => {
       popout.installPopout({ nav: navigation, chat, scope: boot.chatLayoutScope });
     }).catch(() => {}); // old optional assets retain the full single-chat frame and the parent's draft
   }
-  if (!guest && !popoutRequested && boot.chatWorkspace === "1" && getComputedStyle(document.documentElement).getPropertyValue("--chat-workspace-version").trim() === "1"
+  if (!guest && !popoutRequested && !previewRequested && boot.chatWorkspace === "1" && getComputedStyle(document.documentElement).getPropertyValue("--chat-workspace-version").trim() === "1"
     && getComputedStyle(document.documentElement).getPropertyValue("--chat-workspace-geometry-version").trim() === "1") {
     Promise.all([import("/ui/js/chat-workspace.js"), chatBoot]).then(([workspace, chat]) => {
       workspace.installWorkspaceEntry({ nav: navigation, chat, landing: workspaceLanding, scope: boot.chatLayoutScope,

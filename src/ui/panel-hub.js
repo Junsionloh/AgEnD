@@ -21,6 +21,7 @@ import { createStore, useStore } from "/assets/app-store.js";
 import { navigate, navStore } from "/assets/app-nav.js";
 import { Empty, ErrorState, Skeleton } from "/assets/ui-states.js";
 import { Icon } from "/assets/ui-icons.js";
+import { useJumpIdle } from "/assets/jump-idle.js";
 import { confirmDialog } from "/assets/ui-confirm.js";
 import { Dialog } from "/assets/ui-dialog.js";
 import { PairingNotices } from "./hub-quick-pairing.js";
@@ -58,6 +59,8 @@ import { PageHead } from "/assets/page-head.js";
 import { bindRoomFeedback, bootHubPreview, downloadHtml, draftWithLine, panelOpenFor, roomPanelKey, roomPanelOpts, setHubPreviewOptIn } from "./hub-preview.js";
 import { DropOverlay, MAX_FILES, PendingFiles, hf, pageCarriesFiles, pasteToAttach, putBackText, roomTakesFiles, uploadChosen, useFileDrop } from "./hub-attachments.js";
 import { composerCaret, insertQuote, installQuoteSelection, showCaret } from "/assets/chat-quote.js";
+import { installTableSelection } from "/assets/chat-table-select.js";
+import { assetUrl } from "/assets/asset-url.js";
 register("hubAccess", {
   en: { tag: "Access needs checking", refused: "Asking was refused. Check your access before trying again.", check: "Check access", limited: "Asking was refused; the previous access information needs checking." },
   "zh-TW": { tag: "需要確認權限", refused: "提問遭到拒絕。請先重新檢查權限，再試一次。", check: "重新檢查權限", limited: "提問遭到拒絕，先前的權限資訊需要重新確認。" },
@@ -261,7 +264,7 @@ function linkHubSigninCss(doc = typeof document !== "undefined" ? document : nul
   try {
     if (!doc || !doc.head || doc.querySelector('link[data-hub-signin-css="1"]')) return;
     const link = doc.createElement("link");
-    link.setAttribute("rel", "stylesheet"); link.setAttribute("href", "/assets/hub-signin.css"); link.setAttribute("data-hub-signin-css", "1");
+    link.setAttribute("rel", "stylesheet"); link.setAttribute("href", assetUrl("/assets/hub-signin.css")); link.setAttribute("data-hub-signin-css", "1");
     doc.head.appendChild(link);
   } catch { /* the page still works without it */ }
 }
@@ -588,7 +591,7 @@ function HubChats() {
   // A room of a Hub with rooms: the shared thread with the room's store, composer and members panel (hub-room-thread.js).
   if (id && listed && !listed.legacy) return html`<${HubRoomPage} key=${id} roomId=${id} listed=${listed} Thread=${HubThread} client=${hubClient()}
     rooms=${rs.rooms} openRoom=${(rid) => navigate(roomPath(rid))} goList=${() => navigate("/ui/hub")}
-    onLeft=${() => { void refreshRooms(); navigate("/ui/hub"); }} onMe=${noteHubMeId} />`;
+    onLeft=${() => { void refreshRooms(); navigate("/ui/hub"); }} onMe=${noteHubMeId} pinsOn=${roomPinsLive()} />`;
   if (id && room) return html`<${HubRoomView} key=${id} room=${room} />`;
   if (id) return html`<${HubRoomLoading} error=${rs.error} />`;
   if (opening && (!rs.loaded || recentRoom(rs.rooms))) return html`<${PanelHeader} title=${hc("chats")} /><div class="hub-home"><div class="hub-home-pick center"><${Skeleton} variant="rows" lines=${4} /></div></div>`;
@@ -908,6 +911,8 @@ function HubThread({ store, name, panelKey, threadRef, extra = null, emptyView =
       ...(typeof ex.react === "function" ? { react: (x) => thread.pickReaction?.(msgKey(x)), canReact: (x) => !!x.roomMessage && ex.canReact?.(x) !== false, reactLabel: ex.reactLabel } : {}),
       // M-3311 (3): Copy link where the page gives a message an address (a room: extra.linkOf).
       ...(typeof ex.linkOf === "function" ? { linkOf: (x) => ex.linkOf(x) } : {}),
+      // M-3340: Pin / Unpin where the page keeps pins (a room of a Hub with room-pins-v1: extra.pin), mine only.
+      ...(typeof ex.pin === "function" ? { pin: (x) => ex.pin(x), pinned: (x) => ex.pinned?.(x) === true, canPin: (x) => ex.canPin?.(x) !== false } : {}),
     });
     // M-3311 (2): the Fleet chat's 「引用」 — a passage selected in one message goes into this conversation's composer as a quote
     // at the caret (chat-quote.js; panel-chat.js's own install), through the box's typing path. `extra.quote.field()`: the box.
@@ -935,13 +940,17 @@ function HubThread({ store, name, panelKey, threadRef, extra = null, emptyView =
         }, 0);
       },
     }) : () => {};
+    // M-3326: the Fleet chat's table cell selection (a desk; chat-table-select.js), in every Hub conversation.
+    const offCells = installTableSelection(list, { phone });
     return () => {
-      offActions(); offQuote();
+      offActions(); offQuote(); offCells();
       paging = false;
       off(); offOpt(); offPanel(); sc.removeEventListener("scroll", onScroll); list.removeEventListener("click", thread.onClick);
       thread.dispose(true); list.remove(); th.current = null; if (threadRef && threadRef.current === thread) threadRef.current = null;
     };
   }, [store]);
+  // M-3493: the Fleet chat's 最新 (M-3492): it fades out JUMP_IDLE_MS after the last scroll (shared/jump-idle.js).
+  const jumpIdle = useJumpIdle(scroller, jump.show, store);
   return html`<div class="scroller hub-scroller" ref=${scroller}>
     <div class="thread-host" ref=${host}></div>
     ${/* #3145: that every asker shares the agent's one conversation is said before anyone types. */ ""}
@@ -950,7 +959,8 @@ function HubThread({ store, name, panelKey, threadRef, extra = null, emptyView =
       : !loaded && store.error() ? html`<${ErrorState} message=${errText({ code: store.error() })} onRetry=${() => store.refresh()} />` : null}
     ${empty && loaded && !store.closed() && emptyView ? html`<div class="center hub-room-empty">${emptyView}</div>` : null}
     ${empty && loaded && !store.closed() && !emptyView ? html`<div class="center hub-room-empty"><${Empty} icon="chat" title=${hc("emptyRoom", name)} hint=${personalAgentQuestionHint(store.room())??`${hc("emptyRoomHint", store.room().ownerName || name)}${lang() === "zh-TW" ? "" : " "}${hw("roomShared")}`} /></div>` : null}
-    <div class="jump-dock">${jump.show ? html`<button data-trust="thread-control" type="button" class="jump-latest" onClick=${() => th.current && th.current.jumpLatest()}>
+    <div class="jump-dock">${jump.show ? html`<button data-trust="thread-control" type="button" ref=${jumpIdle.ref} class=${`jump-latest${jumpIdle.idle ? " is-idle" : ""}`}
+      onClick=${() => th.current && th.current.jumpLatest()} onFocus=${jumpIdle.onFocus} onBlur=${jumpIdle.onBlur}>
       <${Icon} name="down" size=${16} />${jump.unseen > 0 ? t("chat.newBelow", jump.unseen) : t("chat.jumpLatest")}</button>` : null}</div>
   </div>`;
 }
@@ -1008,7 +1018,7 @@ function HubMine() {
   useEffect(() => {
     linkHubChatCss(); linkHubOwnerCss();
     if (!document.querySelector('link[data-hub-sharing-css="1"]')) {
-      const link = document.createElement("link"); link.rel = "stylesheet"; link.href = "/assets/hub-sharing.css";
+      const link = document.createElement("link"); link.rel = "stylesheet"; link.href = assetUrl("/assets/hub-sharing.css");
       link.setAttribute("data-hub-sharing-css", "1"); document.head.appendChild(link);
     }
   }, []);
@@ -1051,6 +1061,7 @@ function HubMine() {
         <div class="hub-rows">${mine.map((e) => html`<a key=${e.id} class="s-row hub-row hub-row-link" href=${`/ui/hub/exposures?agent=${encodeURIComponent(e.id)}`}>
           <${Avatar} name=${e.displayName} /><span class="hub-row-text"><strong>${e.displayName}</strong>${e.intro?html`<small class="note">${e.intro}</small>`:null}<small class="note">${grantSummary(e.grants)}</small></span>
           ${stateTag(e.state, e.kind === "personal")}<${Icon} name="next" size=${16} /></a>`)}</div></section>` : null}
+      ${mine.length > 0 && session?.features?.includes("room-owner-requests-v1") ? html`<${LazyRoomPart} load=${() => import("./hub-room-owner-requests.js")} name="OwnerAgentRequestSetting" props=${{ client: hubClient(), scope: session.csrf }} />` : null}
     </div>${allowTarget ? html`<${AllowDialog} x=${allowTarget} act=${act} onClose=${() => setAllowTarget(null)} />` : null}</div>`;
 }
 
@@ -1097,6 +1108,7 @@ function HubAgentPage({ x, act, msg }) {
         </div>`)}</div>` : html`<p class="note">${roomCount > 0 ? hroom("agentNoOneToOne") : hw("noGrants")}</p>`}
         ${roomCount > 0 ? html`<p class="note hub-rooms-can-ask">${hroom("roomsCanAskIt")}</p>` : null}
       </section>
+      ${session?.features?.includes("room-agent-discovery-v1") && typeof client.agentRoomDiscovery === "function" ? html`<${LazyRoomPart} load=${() => import("./hub-room-owner-requests.js")} name="OwnerAgentDiscoverySetting" props=${{ client, scope: session.csrf, exposure: x }} />` : null}
       ${roomsLive() ? html`<${LazyRoomPart} load=${() => import("./hub-invitations.js")} name="AgentRoomsSection" props=${{ client: hubClient(), exposureId: x.id, onRooms: setRoomCount }} />` : null}
       <${QuotaVisibilityRow} exposure=${x} onSaved=${() => act(async () => ({ ok: true }))} />
       <section class="card"><h3>${ho("recent")}</h3><p class="note">${ho("recentLead")}</p>
@@ -1219,6 +1231,8 @@ function LazyRoomPart({ load, name, props = {} }) {
 }
 const teamsLive = () => { const c = hubClient(); return typeof c.teamsLive === "function" && c.teamsLive() === true; };
 const roomPurposeLive=()=>session?.features?.includes("room-purpose-v1")&&hubClient().roomPurposeV1===true;
+// M-3340: personal pins — a Hub that keeps them (room-pins-v1) and a client that can ask; an older Hub shows no Pin at all.
+const roomPinsLive=()=>session?.features?.includes("room-pins-v1")===true&&typeof hubClient().roomPins==="function";
 const roomsLive = () => { const c = hubClient(); return typeof c.roomsLive === "function" && c.roomsLive() === true; };
 function LazyThisHub({ directory }) {
   const [C, setC] = useState(null);

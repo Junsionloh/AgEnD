@@ -20,10 +20,11 @@ import { modelSwitchText, modelName, observationLabel } from "/assets/model-obse
 //   #2182: routed around the cards and through the boxes' doors by libavoid in a worker (fleet-route-scene.js), each
 //   line from card to card; the lanes are the fallback.
 import { html, useEffect, useLayoutEffect, useMemo, useRef, useState } from "/assets/app-html.js";
-import { appStore } from "/assets/app-store.js";
+import { appStore, guestPage } from "/assets/app-store.js";
 import { t, register } from "/assets/app-i18n.js";
 import { chatPath } from "/assets/app-route.js";
 import { navigate } from "/assets/app-nav.js";
+import { openOfficeChatWindow } from "./chat-popout.js";
 import { Empty, Skeleton } from "/assets/ui-states.js";
 import { Icon } from "/assets/ui-icons.js";
 import { avatarOf, firstCharacter, namesOf } from "/assets/instance-nav.js";
@@ -34,7 +35,7 @@ import { OC, REST_KEY, SUM_LINE, canvasLayout, hits, needle, openingRegion, summ
 import { createTrafficStore, FAR_K, HEAD, POLL_MS, sendingBy, trafficEdges } from "./fleet-traffic.js";
 import { routeScene } from "./fleet-route-scene.js";
 import { K_MAX, K_MIN, fitView, gestureState, gestures, miniPoint, pinchView, wheelFactor, zoomAt, zoomKey } from "./fleet-canvas-view.js";
-import { createRouteClient } from "./fleet-route.js";
+import { createRouteClient, warmRouter } from "./fleet-route.js";
 
 register("orgc", {
   en: {
@@ -461,6 +462,8 @@ export function OrgCanvas({ org, app, lease }) {
   // M-3253: on a phone the Office's tools (and Live) are one ⋯ sheet at the end of this bar: one row, Find keeps its width.
   const phone = useOfficePhone(), [officeMore, setOfficeMore] = useState(false), officeSheet = phone && mode === "office";
   const traffic = useTraffic(lease, live);
+  // M-3328: Live on — the router's files are asked for now, together, not one by one at the first routed scene.
+  useEffect(() => { if (live && typeof Worker === "function") warmRouter(); }, [live]);
   const sending = useMemo(() => sendingBy(traffic), [traffic]);
   const [folded, setFolded] = useState(readFolded);
   const [query, setQuery] = useState("");
@@ -510,7 +513,7 @@ export function OrgCanvas({ org, app, lease }) {
     </div>
     ${mode === "canvas" && live && keyOpen ? html`<${Legend} />` : null}
     ${mode === "list" ? html`<${OrgChart} org=${org} app=${app} bare=${true} sending=${sending} />`
-      : mode === "office" ? html`<${Office} view=${view} traffic=${live ? traffic : null} q=${q} lease=${lease} onOpen=${openChat}
+      : mode === "office" ? html`<${Office} view=${view} traffic=${live ? traffic : null} q=${q} lease=${lease} onOpen=${guestPage() ? null : openOfficeChatWindow}
           more=${officeSheet && officeMore} onMore=${officeSheet ? setOfficeMore : null} live=${live} onLive=${setLive} />`
       : html`<${Canvas} view=${view} folded=${folded} onFold=${onFold} q=${q} jump=${jump} traffic=${live ? traffic : null} />`}
   </div>`;

@@ -133,6 +133,23 @@ A minimal zones pack:
 
 `room.png` must be 16:9, and each strip's picture exactly `frames·w × h` pixels: 128×48 for `idle` above.
 
+**Longer and multi-image animations (#4231).** A single horizontal strip holds up to 32 frames. For longer animations (5–10 seconds or more, such as 300 frames at 30 FPS), or poses with variable frame timing, any strip can also be written in two more ways — and you can mix classic single-image strips with multi-image strips in the same pack:
+
+- **Multi-sheet sequence:** give `src` as a list of horizontal PNG strips (up to 32 sheets, up to 600 frames in all) played seamlessly end to end, with `frames` as either one count per sheet (when every sheet has the same count) or a list matching `src`:
+
+```json
+"working": {
+  "src": ["people/work_01.png", "people/work_02.png", "people/work_03.png"],
+  "frames": [32, 32, 16],
+  "w": 64, "h": 96, "fps": 12,
+  "loopFrom": 16
+}
+```
+
+- **Frame list with per-frame durations:** omit `src` and pass `frames` as a list of `{ "src", "ms"? }` entries (up to 600 steps, each image `w × h` px, `ms` 33–60000). The same file may appear in multiple steps and is only uploaded and decoded once. Any single-sheet or multi-sheet strip can also pass a `durations` array (`ms` per frame) instead of `fps`.
+- **Playback:** strips loop from frame 0 by default. Set `"once": true` to play once and hold the last frame, or `"loopFrom": <index>` to play an intro (`0 .. loopFrom - 1`) once and loop the rest. With reduced motion (`prefers-reduced-motion: reduce`), every strip holds frame 0.
+- **Splitting tip:** keep each sheet within 32 frames and 4096 px wide (e.g., 10 sheets × 30 frames of 64×96 px = 300 frames, 10 s at 30 FPS). Keep the whole pack within 160 files, 20 MiB, and 64 Mpx of total decoded pixels so phones stay smooth.
+
 **Areas, seats and states.** An area is a rect `[x, y, w, h]` and its seats in the order they fill up. A seat is `[x, y]`, where the person's feet go, inside its area's rect. `stateZones` sends each state (`needs`, `crashed`, `stuck`, `working`, `idle`, `paused`, `stopped`, `missing`) to an area; a state it doesn't name goes to `"default"`, else the first area. Bedtime sends the idle to the area `paused` uses.
 
 **Characters.** `characters.default` with at least `idle` is required. A set's poses are `working`, `idle`, `paused` and `needs`; a missing pose is drawn as `idle`. More sets (up to 64) can be given to instances by name with `byInstance: { "atlas": "fox" }`.
@@ -187,6 +204,65 @@ A person's line for a state comes from the first of these that has lines for it,
 - `dialogBox.frame` is a 9-slice picture up to 512×512 px with `slice` image px a side (1–128, default 8); the colours are `#rrggbb`, each defaulting to the dashboard's.
 - They're loaded only the first time the box needs them.
 
+**Custom snacks and eating animations (#4255).** A pack can ship optional snacks and an `eat` pose (`characters.<set>.eat`, any single-sheet, multi-sheet, or frame-list strip):
+
+```json
+"snacks": [
+  {
+    "id": "cookie",
+    "label": { "en": "Cookie", "zh-TW": "餅乾" },
+    "sprite": { "src": "snacks/cookie.png", "frames": 1, "w": 24, "h": 24, "dw": 28, "dh": 28 },
+    "eat": { "src": "snacks/cookie_eat.png", "frames": 4, "w": 24, "h": 24, "fps": 6, "once": true },
+    "radius": 260
+  }
+]
+```
+
+- `snacks` holds 1–12 entries, each with a unique `id`, optional `label` (1–24 chars or `{ "en"?, "zh-TW"? }`), required `sprite`, optional `eat` crumb overlay strip, and optional `radius` (60–1280 logical units, default 260). All snack PNGs count toward the pack's file, byte, and 64 Mpx pixel caps.
+- When a pack omits `snacks`, no snack tray is shown and the card's built-in **Feed** button works unchanged.
+
+**Being-dragged animation (#4267).** A character set may include an optional `dragged` strip (`characters.<set>.dragged`, falling back to `characters.default.dragged`; supports single-sheet, multi-sheet, and frame-list strips). When omitted, a dragged character plays a built-in lifted, dangling motion over a floor shadow and returns to its normal pose when released.
+
+**Agent profile card (`card`).** A pack can optionally restyle the Agent profile card (the popover beside a person, or bottom sheet on a phone) with a curated preset, colours, artwork, and layout:
+
+```json
+"card": {
+  "preset": "rpg",
+  "style": {
+    "background": "#1f1916",
+    "backgroundImage": "ui/card_bg.png",
+    "frame": "ui/card_frame.png",
+    "slice": 12,
+    "border": "#c8a165",
+    "text": "#f6ead7",
+    "muted": "#c9b69a",
+    "accent": "#e5b84b",
+    "barTrack": "#382d25",
+    "barFill": "#e5b84b",
+    "buttonBg": "#3a2c22",
+    "buttonText": "#f6ead7",
+    "buttonPrimaryBg": "#c88d2e",
+    "buttonPrimaryText": "#1a120b",
+    "radius": "sm"
+  },
+  "layout": {
+    "avatarSize": "lg",
+    "avatarSource": "portrait",
+    "headerAlign": "center",
+    "width": 340,
+    "sections": ["header", "level", "rows", "now", "tell", "actions"],
+    "rows": ["office", "model", "backend", "today", "firstSeen"],
+    "rowColumns": 2,
+    "hide": ["instance"]
+  }
+}
+```
+
+- `preset` picks a curated layout: `default`, `rpg`, `compact`, or `dossier`. Explicit `style` and `layout` keys override the preset. Packs without `card` keep the default card unchanged.
+- `style` colours are strict `#rrggbb` (never raw CSS). Explicit pairs are WCAG-checked on upload: `text`/`background`, `muted`/`background`, `accent`/`background`, `buttonText`/`buttonBg`, and `buttonPrimaryText`/`buttonPrimaryBg` must be at least 4.5:1; `border`/`background` and `barFill`/`barTrack` at least 3.0:1. `backgroundImage` is a PNG up to 1024×1024 px (drawn with a readability scrim); `frame` is a 9-slice PNG up to 512×512 px with `slice` 1–128 (default 8, `slice * 2 < min(w, h)`). Both are lazy-loaded when a card opens. `radius` is `none`, `sm`, `md`, or `lg`.
+- `layout` sets `avatarSize` (`sm` 44 px, `md` 56 px, `lg` 84 px), `avatarSource` (`sprite` or `portrait` from `portraits`, falling back to the idle sprite), `headerAlign` (`left` or `center`), desktop `width` (280–400 px; ignored on phone bottom sheets), `sections` (unique ordered subset of `header`, `level`, `rows`, `now`, `tell`, `actions` — `header` and `actions` are always required if `sections` is set), `rows` (unique ordered subset of `office`, `model`, `backend`, `today`, `firstSeen`), `rowColumns` (`1` or `2`), and `hide` (unique subset of `instance`, `title`, `badge`, `level`, `xpBar`, `office`, `model`, `backend`, `today`, `firstSeen`, `now`).
+- Share links still strip `model`, `backend`, `today`, `firstSeen`, `tell`, and actions before `card.layout` runs — a pack can never reveal hidden fields on a share link.
+
 **Checking a pack.** The check is strict: an unknown key, a value out of range, or a name that refers to nothing refuses the whole pack, with where it broke. An agent with pack access can run `office_pack_check` on a folder without storing anything (see [below](#let-an-agent-manage-skin-packs)). The page and the host use the same rules.
 
 ## Arrange the layout
@@ -220,7 +296,8 @@ These need a zones style.
 
 - **Bedtime** (the **Bedtime 0–6: the idle sleep** box, per device, off by default): from 00:00 to 06:00 on the viewer's clock, idle people go to the sleeping area (the area `paused` uses) while it has a free seat, and sleep there with Zzz bubbles. The rest doze where they are. Working people keep working. Furniture with a `night` is drawn asleep at its night place.
 - **Strolls:** now and then an idle person walks to a nearby waypoint that no seat is on, stays a few seconds and walks back. A furniture item with `walk` strolls the same way. Strolls happen in a single office (not All offices), not with reduced motion, and not while Edit layout is open. With the office's **Idle people stay in their own area** (#4104), a stroll ends only at a waypoint inside the area the person (or the furniture's spot) is in. The walk there and back stays inside that area where the graph allows, or else crosses only corridors (outside every area). A spot that can only be reached through another area isn't used, so the person stays seated, and nobody goes on a visit. A walking furniture item whose spot is in no area strolls as before.
-- **Drag and pat** (the **Drag and pat** box in the Office bar, per device, on by default; #4119): pick someone up and drop them anywhere, and they walk back to their seat along the usual route. With a mouse, press on them and move. On a phone, press and hold until they lift (a finger that moves first pans the view, as before). Their card has **Pat** and **Feed**: a few hearts rise over their head and they say something in a bubble. It's in a single office of your own dashboard only: not in All offices, the carousel, Edit layout or a share link, and never with reduced motion (the box is then off and locked). It's yours alone: nothing is stored on the host or shown to anyone else, and the agent isn't told, unless you tick **Tell <agent> (with their next message)** on their card (per agent, off by default). Then each pat or feed is queued, and the next message that reaches that agent anyway carries one line in its `[Recent reactions: …]`, such as `[Office] <your name> patted your head ×3`. It never wakes the agent or sends anything by itself. At most 20 of each kind wait per person, and the line is cut at 200 characters. A skin pack can give its own words for a pat and a feed (`bubbles.<lang>.pat` and `.feed`, see below).
+- **Drag and pat** (the **Drag and pat** box in the Office bar, per device, on by default; #4119, #4266, #4267): pick someone up and carry them around — while held they lift above the floor in a `dragged` pose (the pack's optional `characters.<set>.dragged` / `default.dragged` strip, or a built-in dangling animation), and valid seats in their current area show floor rings. Drop them onto another valid seat in their area to seat them there immediately (swapping cleanly if another non-owner occupies it, respecting reserved seats and **Idle people stay in their own area**; your seat choice persists per device for that office and style, and they keep working in the new seat). Drop them on empty floor instead and they return to their seat (walking back along the route, staying inside their area when **Idle people stay in their own area** is on). Press Escape to cancel a drag. With a mouse, press on them and move. On a phone, press and hold until they lift (a finger that moves first pans the view, as before). Their card has **Pat** and **Feed**: a few hearts rise over their head and they say something in a bubble. It's in a single office of your own dashboard only: not in All offices, the carousel, Edit layout or a share link, and never with reduced motion (the box is then off and locked). It's yours alone: nothing is stored on the host or shown to anyone else, and the agent isn't told, unless you tick **Tell <agent> (with their next message)** on their card (per agent, off by default). Then each pat or feed is queued, and the next message that reaches that agent anyway carries one line in its `[Recent reactions: …]`, such as `[Office] <your name> patted your head ×3`. It never wakes the agent or sends anything by itself. At most 20 of each kind wait per person, and the line is cut at 200 characters. A skin pack can give its own words for a pat and a feed (`bubbles.<lang>.pat` and `.feed`, see below).
+- **Custom snacks** (when the active skin pack defines `snacks` and **Drag and pat** is on; #4255): a floating snack tray appears at the bottom-left (above the zone pills on a phone). Drag a snack onto any awake character — or tap a snack to select it and tap a character — to feed them directly (plays their `eat` strip if supplied, or `default.eat`, with hearts, `feed` words, and optional **Tell**). Drop a snack on empty floor to place it (up to 6 on the floor at once; unclaimed snacks expire after 30 s): up to 4 nearest idle characters within its `radius` race along the room's corridors to claim it (respecting **Idle people stay in their own area**). The first to reach it eats it; the other racers briefly say "Too slow!" and walk back to their seats. Sleeping characters are never woken. Everything stays client-local and is hidden on share links, All offices, the carousel, Edit layout, and with reduced motion.
 - **Visits** (a pack's `idleVisits`, #3685): now and then an idle person goes to another area instead, such as a garden or a hot spring, sits on a free seat there for a while and walks back to their own seat. A free seat is one nobody sits on, no other visitor is heading for, and that isn't reserved for someone else (unless it's lent). With no free seat they stroll as usual. At each turn when they could stroll, each entry's `weight` is weighed against 100 for the usual stroll, so one entry of weight 20 sends them off at 20 of every 120 turns. The stay is `minSeconds`–`maxSeconds` after they get there. Nobody visits their own area, anyone who isn't idle stays put, and visits follow the same rules as strolls (a single office, no reduced motion, not in Edit layout). Whether and when someone visits, and which area, follows from the name and the time alone, so it is the same on every screen. Which free seat they take there can differ between screens: each open page keeps the seats its visitors are already in, so someone who turns idle later doesn't move them, and a page opened later works the seats out afresh.
 - **Mail:** a message to someone in this office from someone outside it flies in at the door as a letter and lands at the pack's `mailDrop` (or the office's own from Edit layout). Without one it lands at the waypoint nearest the middle of the room, off every seat. More letters wait 16 px apart to the right, never on a seat. With reduced motion no letters are shown. Its person walks over and picks it up, unless they're asleep. A letter waits up to a minute.
 - **Traffic** between people in the same office flies from sender to receiver. A delegation stays in progress until the worker's report comes back.
@@ -418,21 +495,25 @@ A fleet admin can also approve a pending pack change with **Approve** on its not
 | `room`, `desk` | ❌ | Desks layout pictures: `room.floor`, `room.wall`, `desk.back`, `desk.front`, `desk.lit` |
 | `levels` | ❌ | `{ titles, fixed }`: the levels' titles and pinned titles (see [Titles from a skin pack](#titles-from-a-skin-pack)) |
 | `portraits`, `dialogBox` | ❌ | the dialogue box's faces and look (see [Make a skin pack](#make-a-skin-pack)) |
+| `card` | ❌ | `{ preset?, style?, layout? }`: optional Agent profile card preset (`default`, `rpg`, `compact`, `dossier`), WCAG-checked `#rrggbb` colours, `backgroundImage` (≤ 1024×1024 px), 9-slice `frame` (≤ 512×512 px), and layout overrides (#4256) |
 
 A seat is `[x, y]` or `{ "x", "y", "for": [instance, …] (up to 16), "lend": false }`, inside its area. Coordinates run 0–1280 across and 0–720 down. A name the pack declares can't be one every object already has (`constructor`, `toString`, `__proto__`, …).
 
 ### Strips
 
-A STRIP is `{ "src", "frames", "w", "h", "fps", "ax", "ay", "dw", "dh" }`:
+A STRIP is `{ "src", "frames", "durations", "w", "h", "fps", "ax", "ay", "dw", "dh", "once", "loopFrom" }`:
 
 | Key | Range | Default |
 |---|---|---|
-| `src` | a file in the pack: letters, digits, `. _ - /`, no `..`, not starting with `/` | — |
-| `frames` | 1–32, side by side, left to right, no gaps | — |
+| `src` | a file in the pack (or a list of 1–32 horizontal strip files played in sequence; omit when `frames` is a list of `{ src, ms? }` objects). Letters, digits, `. _ - /`, no `..`, not starting with `/` | — |
+| `frames` | single `src`: 1–32; multi-`src`: 1–32 per sheet or a matching list of counts (1–600 total); without `src`: list of 1–600 `{ "src", "ms"? }` frames (`w × h` each) | — |
+| `durations` | optional list of per-frame durations in ms (33–60000, length = total frames; cannot be used with `fps` or frame-object `frames`) | — |
 | `w`, `h` | 1–512 image pixels per frame | — |
 | `fps` | 0–30; 0 shows the first frame only | 4 |
 | `ax`, `ay` | the anchor in image pixels | bottom centre |
 | `dw`, `dh` | the displayed size in logical units (1–1280, 1–720) | `w·scale`, `h·scale` |
+| `once` | `true`: play once from frame 0 and hold the last frame | `false` |
+| `loopFrom` | `0` to `totalFrames − 1`: play intro frames `0 .. loopFrom − 1` once, then loop from `loopFrom` (not with `once: true`) | `0` |
 
 ### Furniture
 
@@ -473,8 +554,9 @@ An office's `overrides` (written by Edit layout; checked on every `PUT /ui/offic
 |---|---|
 | Packs kept | 16 (plus one previous version each, kept for agents' restores) |
 | Files in a pack | 160 |
-| One file | 2 MiB, 4096 × 4096 px, PNG only (checked by signature, every chunk read, metadata stripped) |
-| A whole pack | 20 MiB |
+| One file | 2 MiB, 4096 × 4096 px (16 Mpx), PNG only (checked by signature, every chunk read, metadata stripped) |
+| A whole pack | 20 MiB, 64 Mpx of decoded pixels in all |
+| One strip | up to 32 frames per sheet, 32 sheets, 600 total frames, 33–60000 ms per frame |
 | The manifest | 64 KiB |
 | All packs on disk | 640 MiB, previous versions included |
 | Offices | 20; saves 20 a minute per person |
@@ -500,6 +582,7 @@ An office's `overrides` (written by Edit layout; checked on every `PUT /ui/offic
 ## Upgrading and rolling back
 
 - **Upgrading** keeps your offices, packs and layouts; nothing needs migrating by hand.
+- **A pack with `card` and rolling back** (#4256). An older version refuses a pack with a `card` key and draws its offices as Desks, with a note; the pack stays intact on disk until upgrading back. Remove `card` before rolling back if you need it on an older version.
 - **A pack with `portraits` or `dialogBox` and rolling back** (#2861). As with `levels`, an older version refuses such a pack and draws it as Desks, with a note. Remove the keys, or re-upload without them, before rolling back. Nothing else about the dialogue box is stored on the host.
 - **A pack with `levels` and rolling back.** A version before levels refuses a pack that has a `levels` key, so such a pack is drawn as Desks there, with a note. Remove the key, or re-upload the pack without it, if you need to roll back.
 - **Level titles for every office and rolling back.** An older version ignores the fleet's titles (`levels` in `web-offices.json`), and its next save of the offices drops them. Set them again after upgrading.
@@ -535,3 +618,4 @@ Every feature below is in 2.3.2; the table names the version it first appeared i
 |---|---|
 | Carousel (signage): chosen offices fill the screen in turn, n/m picker, Pause/Next, kept per browser (#4010) | 2.4.0-beta |
 | Edit offices → Idle people stay in their own area (#4104) | 2.4.0-beta |
+| Multi-sheet and frame-list character animations (`src` arrays, `frames` objects, `durations`, `once`, `loopFrom`, up to 600 frames) (#4231) | 2.4.0-beta |

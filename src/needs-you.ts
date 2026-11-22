@@ -10,7 +10,7 @@ import type { ModelSwitch } from "./claude-model-observation.js";
 
 import type { ConfigIssue } from "./config-history.js";
 
-export type NeedsYouType = "prompt" | "awaiting_input" | "instance" | "delivery" | "task" | "backend" | "config" | "missed" | "hub" | "runtime";
+export type NeedsYouType = "prompt" | "awaiting_input" | "instance" | "delivery" | "task" | "backend" | "config" | "missed" | "hub" | "runtime" | "contact" | "host";
 
 export interface NeedsYouItem {
   /** Stable per occurrence: a new episode, crash or delivery is a new id (§3). */
@@ -23,6 +23,7 @@ export interface NeedsYouItem {
   /** Which kind of wait, for the title (localized by the renderer, not here). */
   reason: NeedsYouReason;
   modelSwitch?: ModelSwitch;
+  hostAlert?: import('./host-monitoring-alert-policy.js').HostAlertRecord;
   quiet?: true;
   /** One line, may be "": a prompt's text, an interaction summary, "source → target · kind". */
   detail: string;
@@ -49,6 +50,10 @@ export interface NeedsYouItem {
    */
   lane?: string;
   configIssue?: ConfigIssue;
+  contactTicket?: { id: string; source: string; target: string };
+  contactSuggestion?: { instance: string };
+  /** M-3381: the chat's one line for a world's restricted-mode suggestions — how many rooms it stands for. */
+  contactSuggestionCount?: number;
   generalLocation?: true;
   /** Keep reason=dialog for tabs loaded before this compatibility hold existed. */
   kiroChoice?: true;
@@ -64,16 +69,17 @@ export interface NeedsYouItem {
 }
 
 export type NeedsYouReason =
+  | "host_health"
+  | "contact_request" | "contact_restricted_suggestion"
   | "hang" | "exited" | "assist" | "question"                       // prompt
   | "permission" | "dangerous_command" | "login" | "dialog" | "terminal_input"   // awaiting_input
   | "general_windows_offline" | "general_location_hold"
-  | "model_switch" | "auth_paused" | "crashed" | "usage_limit" | "native_pane_hold" | "backend_missing"  // instance
+  | "model_switch" | "auth_paused" | "stale_auth" | "crashed" | "usage_limit" | "native_pane_hold" | "backend_missing"  // instance
   | "delivery_uncertain" | "delivery_failed"                        // delivery
   | "missed_offline"                                                // missed while the fleet was down
   | "task_review" | "task_blocked" | "task_stalled" | "backend_signin" | "config_invalid" | "config_fallback"
   | "hub_proposal" | "hub_execution_hold" | "hub_unavailable"
-  | "tmux_hold"
-  | "claude_npm_install";                                           // M-3307: the host's Claude Code is an npm-global install                                                    // M-2457: the bundled tmux's server/window held
+  | "tmux_hold";                                                    // M-2457: the bundled tmux's server/window held
 
 /** S-51: the Hub (or this fleet's Hub membership) is held: why, as the composition's reason code and localized text. */
 export interface HubHoldInput {
@@ -113,6 +119,8 @@ export interface InstanceInput {
   interactionSummary?: string | null;
   /** The pause marker's reason, for a paused instance; and when it was paused. */
   pauseReason?: string | null;
+  /** Process-local login hold, including General/busy agents before a pause completes. */
+  staleAuth?: { since: number } | null;
   pausedAt?: number | null;
   /** "crashed" with the time the fleet first saw it so (§3.3). */
   crashedAt?: number | null;
@@ -184,8 +192,6 @@ export interface NeedsYouInputs {
   deliveries: DeliveryInput[];
   tasks?: TaskInput[];
   backendSignIns?: BackendSignInInput[];
-  /** M-3307 (#4146): the host's Claude Code is an npm-global install (its package directory, and since when it was seen): AI accounts offers the switch to Claude's native install. */
-  claudeNpm?: { path: string; since: number } | null;
   signInKeepAlive?: SignInKeepAliveInput[];
   configIssues?: Array<ConfigIssue & { detail: string; owner?: string }>;
   hubExecution?: HubExecutionAttentionInput[];
@@ -263,6 +269,10 @@ export function deriveNeedsYou(inputs: NeedsYouInputs): NeedsYouItem[] {
         reason: "dialog", kiroChoice: true, detail: inst.kiroCompatibility.message, since: inst.kiroCompatibility.since });
     }
     // §3.3 instance: paused for sign-in, or crashed.
+    if (inst.staleAuth || inst.pauseReason === "stale_auth") {
+      items.push({ id: `stale-auth:${inst.name}:${inst.staleAuth?.since ?? inst.pausedAt ?? 0}`, type: "instance", instance: inst.name,
+        reason: "stale_auth", detail: "", since: inst.staleAuth?.since ?? inst.pausedAt ?? 0 });
+    }
     if (inst.pauseReason === "auth") {
       items.push({ id: `auth:${inst.name}:${inst.pausedAt ?? 0}`, type: "instance", instance: inst.name, reason: "auth_paused", detail: "", since: inst.pausedAt ?? 0,
         ...(inst.signIn ? { signIn: { backend: inst.signIn.backend, ...(inst.signIn.profile ? { profile: inst.signIn.profile } : {}) } } : {}) });
@@ -304,7 +314,6 @@ export function deriveNeedsYou(inputs: NeedsYouInputs): NeedsYouItem[] {
   }
 
   // Installer-selected backends are fleet-level web items, including when no agent uses them.
-  if (inputs.claudeNpm) items.push({ id: `claude-npm:${inputs.claudeNpm.since}`, type: "backend", instance: "", reason: "claude_npm_install", detail: inputs.claudeNpm.path, since: inputs.claudeNpm.since });
   for (const b of inputs.backendSignIns ?? []) items.push({
     id: `backend-signin:${b.backend}:${b.since}`, type: "backend", instance: "", reason: "backend_signin", detail: b.backend, since: b.since,
     ...(b.browser ? { signIn: { backend: b.backend } } : {}),
@@ -413,6 +422,7 @@ export function renderSignature(items: readonly NeedsYouItem[], nowMs: number): 
     i.lane ?? null,
     i.hubProposal ?? null,
     i.runtimeUpdate ?? false,
+    i.hostAlert ?? null,
   ]));
 }
 

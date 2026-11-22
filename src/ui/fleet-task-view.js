@@ -12,13 +12,14 @@ import { Menu } from "/assets/ui-menu.js";
 import { RunMark, runOf } from "./fleet-task-run.js";
 import { OwnerChip } from "./fleet-task-owner.js";
 import { COLUMNS, ProgressBar, UNASSIGNED, Who, readStored, recentlyDone, relTime, reviewLabel, waitsForYou, waitsList, waitsOn, wrapUpText, writeStored } from "./fleet-task-common.js";
+import { assetUrl } from "/assets/asset-url.js";
 
 /** The task board's stylesheet, linked once (a tab opened before an upgrade has an app.css without these rules). */
 export function linkTaskBoardCss(doc = typeof document !== "undefined" ? document : null) {
   try {
     if (!doc || !doc.head || doc.querySelector('link[data-tb-css="1"]')) return;
     const link = doc.createElement("link");
-    link.setAttribute("rel", "stylesheet"); link.setAttribute("href", "/assets/task-board.css"); link.setAttribute("data-tb-css", "1");
+    link.setAttribute("rel", "stylesheet"); link.setAttribute("href", assetUrl("/assets/task-board.css")); link.setAttribute("data-tb-css", "1");
     doc.head.appendChild(link);
   } catch { /* the board still works without it */ }
 }

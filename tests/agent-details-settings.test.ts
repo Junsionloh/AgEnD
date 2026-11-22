@@ -48,9 +48,10 @@ async function form(inst: Record<string, unknown>, defaults: Record<string, unkn
 
 describe("the categories", () => {
   it("a fleet agent has Overview + five; a Windows native agent has no channel category; a ClassicBot room has Runtime and Channels only", () => {
-    expect(G.categoriesOf("fleet")).toEqual(["overview", "basic", "runtime", "work", "channel", "adv"]);
-    expect(G.categoriesOf("native")).toEqual(["overview", "basic", "runtime", "work", "adv"]);
-    expect(G.categoriesOf("classic")).toEqual(["overview", "runtime", "channel"]);
+    // M-3339: every kind ends with Permissions (contact-permissions.js).
+    expect(G.categoriesOf("fleet")).toEqual(["overview", "basic", "runtime", "work", "channel", "adv", "permissions"]);
+    expect(G.categoriesOf("native")).toEqual(["overview", "basic", "runtime", "work", "adv", "permissions"]);
+    expect(G.categoriesOf("classic")).toEqual(["overview", "runtime", "channel", "permissions"]);
   });
   it("which kind a page is: the room's read says classic, a Windows runtime is native, anything else is a fleet agent", () => {
     expect(G.agentKind({ kind: "classic" }, { runtime: "wsl" })).toBe("classic");
@@ -94,8 +95,8 @@ describe("every field of the old agent dialog is in a category, with its ⓘ", (
   });
   it("each category's settings carry an ⓘ (the shared InfoTip) and the Status emojis say what they are", async () => {
     const f = await form({ backend: "claude-code", working_directory: "/w" });
-    for (const cat of ["basic", "runtime", "work", "channel", "adv"]) expect(p.root.querySelectorAll(`[data-cat="${cat}"] .s-tipbtn`).length, cat).toBeGreaterThan(0);
-    expect(p.root.querySelectorAll(".s-tipbtn").length).toBeGreaterThanOrEqual(20);
+    for (const cat of ["basic", "runtime", "work", "channel", "adv"]) expect(p.root.querySelectorAll(`[data-cat="${cat}"] .info-tip-btn`).length, cat).toBeGreaterThan(0);
+    expect(p.root.querySelectorAll(".info-tip-btn").length).toBeGreaterThanOrEqual(20);
     expect(f.$('[data-cat="channel"]')?.textContent).toContain("What this is");
     expect(f.$('[data-cat="basic"]')?.textContent).toContain("Formerly");                   // Agent instructions: the field Settings called "System prompt"
     expect(f.$('[data-cat="adv"]')?.textContent).not.toContain("System prompt");           // one place only

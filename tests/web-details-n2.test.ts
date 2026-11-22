@@ -170,7 +170,7 @@ describe("the switch keeps the instance", () => {
   it("Chat's ⋯ → Details is the page now, not a dialog", async () => {
     const pg = await app("/ui/chat/web-dev");
     pg.root.querySelector(".p-chat .menu > button").click(); await settle();
-    pg.root.querySelectorAll(".p-chat .menu-list .menu-item").find((b: any) => b.textContent.trim() === "Instance details").click(); await settle(6);
+    pg.root.querySelectorAll(".p-chat .menu-list .menu-item").find((b: any) => b.textContent.trim() === "Agent details").click(); await settle(6);
     expect([await route(), pg.root.querySelector("dialog") ? "dialog" : null]).toEqual([{ panel: "details", instance: "web-dev" }, null]);
   });
   it("Chat's ⋯ → Full width: off by default; checked, the chat takes the panel's width (data-width), kept on this device; no item on a phone", async () => {
@@ -227,12 +227,12 @@ describe("Details (Q1 = B)", () => {
     // Carried over, none new (leader 2026-10-10): no Delete on Details — it stays in Chat's ⋯ and Settings.
     // #1629: then a person's Lock and Reset of the agent's web theme.
     const THEME = ["Colour…", "Lock theme", "Reset theme…"];   // #1958: its colour, before the theme's Lock and Reset
-    expect(await menuItems(pg)).toEqual(["Restart instance", "Stop instance", "Pause", ...THEME]);
-    await choose(pg, "Stop instance");
+    expect(await menuItems(pg)).toEqual(["Restart agent", "Stop agent", "Pause", ...THEME]);
+    await choose(pg, "Stop agent");
     await choose(pg, "Pause");
     expect(calls.filter(c => c.startsWith("POST"))).toEqual(["POST /ui/stop/web-dev", "POST /api/settings/instances/web-dev/pause"]);
     await go("/ui/fleet/agent/api-server");
-    expect(await menuItems(pg)).toEqual(["Start instance", ...THEME]);
+    expect(await menuItems(pg)).toEqual(["Start agent", ...THEME]);
     await go("/ui/fleet/agent/qa-bot");
     expect(await menuItems(pg)).toEqual(["Wake", ...THEME]);
     await choose(pg, "Wake");
@@ -283,13 +283,14 @@ describe("the Settings tab of an agent (Details & settings)", () => {
     expect(pg.root.querySelectorAll(".p-details > .s-nav .s-nav-head").map((x: any) => x.textContent)).toEqual(["Status", "Settings"]);
     expect(navItems(pg)).toEqual([["Overview", "/ui/fleet/agent/web-dev?cat=overview", "page"], ["Basic info", "/ui/fleet/agent/web-dev?cat=basic", null],
       ["Runtime & model", "/ui/fleet/agent/web-dev?cat=runtime", null], ["Workspace", "/ui/fleet/agent/web-dev?cat=work", null],
-      ["Channels", "/ui/fleet/agent/web-dev?cat=channel", null], ["Advanced", "/ui/fleet/agent/web-dev?cat=adv", null]]);
-    expect(pg.root.querySelectorAll(".p-details > .s-nav .seg-item svg.icon").length).toBe(6);       // an icon in front of every item you can open
+      ["Channels", "/ui/fleet/agent/web-dev?cat=channel", null], ["Advanced", "/ui/fleet/agent/web-dev?cat=adv", null],
+      ["Permissions", "/ui/fleet/agent/web-dev?cat=permissions", null]]);   // M-3339
+    expect(pg.root.querySelectorAll(".p-details > .s-nav .seg-item svg.icon").length).toBe(7);       // an icon in front of every item you can open
     expect(pg.root.querySelector(".p-details .s-back")?.getAttribute("href")).toBe("/ui/fleet/agent/web-dev");
     // The Overview keeps everything Details showed (read-only), and the ⋯ menu's actions.
     expect(pg.root.querySelector("#ap-panel-overview")?.hasAttribute("hidden")).toBe(false);
     expect(pg.root.querySelector(".p-details .d-config")).not.toBeNull();
-    expect(pg.root.querySelectorAll(".p-details .d-actions button").map((b: any) => b.textContent.trim())).toEqual(["Restart instance", "Stop instance", "Pause"]);
+    expect(pg.root.querySelectorAll(".p-details .d-actions button").map((b: any) => b.textContent.trim())).toEqual(["Restart agent", "Stop agent", "Pause"]);
   });
   it("an edit is staged at once (the Settings bar, a dot on its category), the draft stays when another category opens, and Discard puts it back", async () => {
     const pg = await app("/ui/fleet/agent/web-dev?cat=basic");
@@ -363,10 +364,10 @@ describe("the Settings tab of an agent (Details & settings)", () => {
     const pg = await app("/ui/fleet/agent/web-dev");
     expect(pg.root.querySelector(".p-details")?.className).toContain("p-agent-page");
   });
-  it("a ClassicBot room: Overview, Runtime & model and Channels & replies only", async () => {
+  it("a ClassicBot room: Overview, Runtime & model, Channels & replies and Permissions (M-3339) only", async () => {
     const pg = await app("/ui/fleet/agent/classic-ops-1?cat=channel");
     await untilRead(); await settle(12);
-    expect(navItems(pg).map((i: any) => i[0])).toEqual(["Overview", "Runtime & model", "Channels & replies"]);
+    expect(navItems(pg).map((i: any) => i[0])).toEqual(["Overview", "Runtime & model", "Channels & replies", "Permissions"]);
     expect(pg.root.querySelector("#ap-panel-channel #cl-tp")).not.toBeNull();
     expect(pg.root.querySelector("#ap-panel-runtime #cl-be")).not.toBeNull();
   });

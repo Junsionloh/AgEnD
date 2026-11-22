@@ -20,20 +20,20 @@ export interface FixtureInstance {
 
 /** Team names: long Latin, long CJK, short, and one mixed with an emoji. */
 export const TEAMS = [
-  "Platform Infrastructure & Release Engineering",
-  "產品官網前端重構與部署小組",
-  "QA",
-  "資料平台 Data Platform",
-  "Research",
-  "星海傳說手遊伺服器維運組",
-  "Mobile Clients (iOS / Android)",
-  "文件與教學",
+  "Example Infrastructure and Long Release Engineering Team",
+  "示範介面與版面配置團隊",
+  "Example QA",
+  "示範資料 Example Data",
+  "Example Research",
+  "示範伺服器測試小組",
+  "Example Mobile Clients",
+  "示範文件",
 ] as const;
 
 const LATIN = [
-  "agend-leader-t1500000000000799511", "agend-dev-claude-t1500000000000083558", "agend-reviewer-t1500000000000996543",
-  "tm1-platform-backend-sr4-server-t1500000000000130997", "ota-svc-frontend-release-candidate-t1500000000000915890",
-  "games-manifests-asset-pipeline-t1500000000000872809", "web-claude", "sol", "fable", "qa-1",
+  "fleet-lead", "core-dev", "code-reviewer",
+  "synthetic-gateway-worker-for-long-name-layout-probes", "web-preview-bot",
+  "media-pack-builder", "web-claude", "sol", "fable", "qa-1",
   "infra-terraform-state-reconciler-weekly-audit", "nightly-benchmarks", "docs-site-builder", "mobile-ios-release-train",
   "mobile-android-crash-triage", "data-warehouse-dbt-models-and-freshness", "kiro-steering-experiments", "grok-scout",
   "codex-refactor-bot", "opencode-sandbox", "agy-design-review", "muse-writer", "release-notes-drafter",
@@ -41,16 +41,15 @@ const LATIN = [
   "customer-support-macros", "localization-zh-tw-review", "a",
 ];
 const CJK = [
-  "產品官網-t1500000000000165914", "遊戲開發-opus-t1500000000000445013", "遊戲企劃", "產品專案區-grok-bot",
+  "示範文件撰寫與校對助理-layout-probes", "pixel-art-helper", "plan-scribe", "room-grok-bot",
   "資料清洗與報表自動化助理", "客服知識庫維護", "研發週報彙整", "伺服器監控與告警分流", "美術資源命名檢查",
   "多語系翻譯校對（繁中）", "測試案例產生器", "需求訪談紀錄整理", "部署前檢查清單", "效能分析與火焰圖解讀",
   "資料庫遷移演練", "合約條款比對", "行銷文案草稿", "遊戲數值平衡試算", "玩家回饋分類", "排程與值班表",
 ];
 const DISPLAY = [
-  "平台基礎設施與發佈工程負責人（主要）", "Grok — answers in the Classic room", "產品官網前端重構與部署助理",
-  "Release captain for the Android and iOS trains, weekly", "資料平台 dbt 模型新鮮度監控", "夜間效能基準測試",
-  // Emoji sequences a font may draw unjoined (a family as three people, flags as letters): names must still fit.
-  "👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧 家庭群組", "🇹🇼🇯🇵🇺🇸🇰🇷🇹🇼🇯🇵 跨區值班", "👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽 review bot",
+  "示範發佈與長名稱版面測試助理（主要）", "Example room helper", "示範網站介面與部署助理",
+  "Example release helper for long desktop and phone labels", "示範資料更新與檢查助理", "示範夜間效能測試",
+  "👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧 示範家庭群組", "🇹🇼🇯🇵🇺🇸🇰🇷🇹🇼🇯🇵 示範跨區值班", "👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽 Example reviewer",
 ];
 
 /** About 60 instances: one General, long names in both scripts, every backend, teams, a few odd states. */
@@ -95,9 +94,9 @@ export const TEXT = {
   description: "Long description used for the org chart and the details page: keeps the dbt models fresh, flags late sources, and posts a weekly summary to the team topic — 每週一早上九點彙整。",
   planName: "Team Premium (6.25x)",
   planNameLong: "Team Premium (6.25x) — 研發部門共用訂閱，含額外用量與優先支援",
-  profileName: "Alex 林 — 平台工程 Platform Engineering",
+  profileName: "Example user — 示範使用者",
   widgetLabels: ["今日完成的工作項目數量（含審查）", "Open pull requests waiting for review", "夜間基準：p95 延遲", "Build", "部署前檢查清單完成度"],
   widgetValues: ["12 / 15（80%）", "7 — oldest is 3 days", "182 ms（比上週快 12%）", "#4821 passed", "9 of 11 items checked"],
-  chatCjk: "好的，我已經完成部署前檢查清單的前九項，剩下兩項需要你確認：\n1. 資料庫遷移腳本是否要在離峰時段執行？\n2. CDN 快取要不要在發佈後立刻清除？\n\n| 項目 | 狀態 | 負責人 |\n|---|---|---|\n| 單元測試 | ✅ 通過 | 產品官網-t1500000000000165914 |\n| 端對端測試 | ⏳ 進行中 | QA |\n\n請在今天下午五點前回覆，謝謝！",
+  chatCjk: "好的，我已經完成部署前檢查清單的前九項，剩下兩項需要你確認：\n1. 資料庫遷移腳本是否要在離峰時段執行？\n2. CDN 快取要不要在發佈後立刻清除？\n\n| 項目 | 狀態 | 負責人 |\n|---|---|---|\n| 單元測試 | ✅ 通過 | 示範文件撰寫與校對助理-layout-probes |\n| 端對端測試 | ⏳ 進行中 | QA |\n\n請在今天下午五點前回覆，謝謝！",
   chatLatin: "Here is the summary of last night's benchmark run: p95 latency is **182 ms** (down 12% week over week), and the only regression is in `search-indexer`'s cold start. Full flame graph attached; the hot path is `buildIndex → tokenize → normalizeCjk`.",
 };

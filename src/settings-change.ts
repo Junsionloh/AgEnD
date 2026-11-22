@@ -113,6 +113,8 @@ const DIRECTIONAL: ReadonlyArray<{ path: readonly string[]; def: number | boolea
   { path: ["fleet", "web", "usage_report_on_public_link"], def: true, looser: () => false },   // M-3278: on by default
   // M-2255: Settings → Runtime. Switching a Windows runtime on lets agents run more — this PC's Windows CLIs, or other
   // computers that pair with the fleet — so it waits for a General admin; switching one off applies at once.
+  { path: ["fleet", "monitoring", "enabled"], def: false, looser: () => false },
+  { path: ["fleet", "monitoring", "agent_footprint"], def: false, looser: () => false },
   { path: ["fleet", "runtimes", "windows_cli"], def: false, looser: (a, b) => b === true && a !== true },
   { path: ["fleet", "runtimes", "remote_runtime"], def: false, looser: (a, b) => b === true && a !== true },
   // #2953 1.8: how many Windows agents run at once on each computer applies at once either way — it is load, not reach
@@ -549,6 +551,12 @@ export function settingsChangeDiff(before: unknown, after: unknown, options: {
         : key === "native_adapter" ? value === "exec" || value === "pane"
         : key === "tags" ? Array.isArray(value) && value.length <= 32 && value.every(tag => typeof tag === "string" && tag.length > 0 && tag.length <= 64)
         : typeof value === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value));
+      if (!valid(old) || !valid(next)) throw new SettingsConfirmationError(400, "unsupported_sensitive_effect");
+      add(changeLine(`${label}: ${settingsDisplay(old)} → ${settingsDisplay(next)}`, [label], old, next)); return;
+    }
+    // Rollback-safe drive preference: only the exact schema-owned letter may be displayed.
+    if (["fleet.monitoring.wsl_drive", "monitoring.wsl_drive"].includes(path.join("."))) {
+      const valid = (value: unknown) => value === undefined || (typeof value === "string" && /^[A-Z]?$/.test(value));
       if (!valid(old) || !valid(next)) throw new SettingsConfirmationError(400, "unsupported_sensitive_effect");
       add(changeLine(`${label}: ${settingsDisplay(old)} → ${settingsDisplay(next)}`, [label], old, next)); return;
     }

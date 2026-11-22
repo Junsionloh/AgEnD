@@ -76,6 +76,7 @@ export interface ClassicChannel {
   instanceName: string;
   backend?: string;
   model?: string;
+  effort?: string;
   displayName?: string;
   description?: string;
   autoPauseAfter?: number;
@@ -99,6 +100,8 @@ export interface ClassicChannel {
   backendOptions?: BackendOptions;
   createdAt: string;
   createdBy: string;
+  /** Missing on existing rooms means legacy; only explicit admin action changes it. */
+  restrictedMode?: boolean;
 }
 
 interface ClassicDefaults {
@@ -127,6 +130,7 @@ interface ClassicBotYaml {
     name?: string;
     backend?: string;
     model?: string;
+    effort?: string;
     display_name?: string;
     description?: string;
     auto_pause_after?: number;
@@ -141,6 +145,7 @@ interface ClassicBotYaml {
     pre_task_command?: string;
     createdBy?: string;
     createdAt?: string;
+    restricted_mode?: boolean;
   }>;
 }
 
@@ -352,6 +357,7 @@ export class ClassicChannelManager {
               instanceName,
               backend: val.backend,
               model: val.model,
+              effort: val.effort,
               displayName: val.display_name,
               description: val.description,
               autoPauseAfter: val.auto_pause_after,
@@ -366,6 +372,7 @@ export class ClassicChannelManager {
               backendOptions: this.readBackendOptions(val.backend_options, key),
               createdAt: val.createdAt ?? "",
               createdBy: val.createdBy ?? "",
+              ...(val.restricted_mode !== undefined ? { restrictedMode: val.restricted_mode !== false } : {}),
             },
           });
         }
@@ -471,10 +478,11 @@ export class ClassicChannelManager {
         createdBy: ch.createdBy,
         createdAt: ch.createdAt,
       };
-      for (const key of ["adapterId", "backend", "model", "display_name", "description", "auto_pause_after", "context_lines", "tool_progress", "reply_completion_guard", "quota_notice", "reply_triggers", "web_echo", "backend_options", "collab", "pre_task_command"]) delete entry[key];
+      for (const key of ["adapterId", "backend", "model", "effort", "display_name", "description", "auto_pause_after", "context_lines", "tool_progress", "reply_completion_guard", "quota_notice", "reply_triggers", "web_echo", "backend_options", "collab", "pre_task_command"]) delete entry[key];
       if (ch.adapterId) entry.adapterId = ch.adapterId;
       if (ch.backend) entry.backend = ch.backend;
       if (ch.model) entry.model = ch.model;
+      if (ch.effort) entry.effort = ch.effort;
       if (ch.displayName) entry.display_name = ch.displayName;
       if (ch.description) entry.description = ch.description;
       if (ch.autoPauseAfter !== undefined) entry.auto_pause_after = ch.autoPauseAfter;
@@ -487,6 +495,7 @@ export class ClassicChannelManager {
       if (ch.replyTriggers !== undefined) entry.reply_triggers = ch.replyTriggers;
       if (ch.collab) entry.collab = ch.collab;
       if (ch.preTaskCommand) entry.pre_task_command = ch.preTaskCommand;
+      if (ch.restrictedMode !== undefined) entry.restricted_mode = ch.restrictedMode;
       obj.channels![this.compositeKey(ch.channelId, ch.adapterId)] = entry as any;
     }
     return obj;
@@ -928,12 +937,21 @@ export class ClassicChannelManager {
       ...(backend ? { backend } : {}),
       createdAt: new Date().toISOString(),
       createdBy: userId,
+      restrictedMode: true,
     };
     this.channels.set(this.compositeKey(channelId, adapterId), ch);
     this.rebuildChannelIds();
     this.save();
     this.logger.info({ channelId, adapterId, instanceName }, "Registered classic channel");
     return ch;
+  }
+
+  setRestrictedMode(instanceName: string, restricted: boolean): void {
+    const channel = this.getAll().find(value => value.instanceName === instanceName);
+    if (!channel) throw Error("Classic room not found");
+    const previous = channel.restrictedMode;
+    channel.restrictedMode = restricted;
+    try { this.save(); } catch (error) { channel.restrictedMode = previous; throw error; }
   }
 
   unregister(channelId: string, adapterId?: string): ClassicChannel | undefined {

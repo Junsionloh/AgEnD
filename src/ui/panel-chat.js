@@ -10,8 +10,9 @@ import { GeneralLocation } from "./general-location.js";
 // The instance's own actions (details, start, stop, restart, delete) are in the header's ⋯ menu, and only the ones
 // that apply to its state are offered (#1408 rough edges 4 and 7).
 import { html, Fragment, useEffect, useLayoutEffect, useRef, useState } from "/assets/app-html.js";
+import { JUMP_IDLE_MS, useJumpIdle } from "/assets/jump-idle.js";
 import { lang, register, t } from "/assets/app-i18n.js";
-import { AgentSheetButton } from "/assets/agent-sheet.js";
+import { AgentSheetButton, AgentSheet } from "/assets/agent-sheet.js";
 import { appStore, createStore, guestPage, guestTrusted, useStore } from "/assets/app-store.js";
 import { ComposerAuth, useWebAuthorization } from "/assets/web-authorize.js";
 import { useLease } from "/assets/app-ctx.js";
@@ -19,7 +20,7 @@ import * as paneContext from "/assets/app-ctx.js";
 import { backendLabel, modelText, namesOf, namesStore, navStore as instanceNavStore, supportsInstanceFeature } from "/assets/instance-nav.js";
 import { machineName } from "/assets/machine-name.js";
 import { PanelHeader, onPanelKey, setTitle, statusClass, statusLabel, openDrawer, requestNewInstance, needsCount, openSearch } from "/assets/app-shell.js";
-import { detailsPath, textLinkSegments, sectionPath, NEEDS_PATH, fleetEntryPath, settingsPath, viewPath, logPath } from "/assets/app-route.js";
+import { chatPath, detailsPath, textLinkSegments, sectionPath, NEEDS_PATH, fleetEntryPath, settingsPath, viewPath, logPath } from "/assets/app-route.js";
 import { InstanceSwitch } from "/assets/instance-switch.js";
 import { HeaderTools, setTextSize, textSizeStore, usageOffered, TEXT_SIZES } from "/assets/header-tools.js";
 import { UsageDialog } from "/assets/usage-dialog.js";
@@ -60,6 +61,7 @@ import { applyTheme, clearAmbient, resolvedMode, themeFor, themeImageUrl, themeM
 import { colorMenuItem } from "/assets/identity-color.js";
 import { brokenPictures, cardFoldable, IdentityCard, useCard } from "/assets/identity-card.js";
 import { AgentWidget, instanceBinds, widgetFor } from "/assets/agent-widget.js";
+import { assetUrl } from "/assets/asset-url.js";
 // #1629 r4 §1: the identity card under the chat's header — hidden by default; shown or not is this device's choice.
 // #2217 (the user, 2026-10-19): no row of its own; its picture and bio can be folded away (the banner stays) — this
 // device's choice too, kept the same way. The user (2026-10-20): no control on the card — one card button in the header
@@ -112,6 +114,49 @@ const needKey = (item) => String(item?.nonce || item?.id || JSON.stringify(item 
  * count), Fleet, Settings — then this chat's items, and ends with 「✓ 已驗證」 (the line under the composer no longer
  * says it). A Needs-you item that arrives meanwhile, for another agent, is a short toast. A desk's ⋯ is unchanged.
  */
+/** One target-bound action list for the header and sidebar; the server remains the authority. */
+export function chatAgentMenuItems({ name, inst, wide, pinCount = 0, onPins, onDelete,
+  onDetails = () => navigate(detailsPath(name)), onSplit = () => appStore.get().chatWorkspace?.open(name) }) {
+  if (guestPage()) return [];
+  const running = inst.status === "running";
+  const action = async (verb) => {
+    let r;
+    try { const res = await fetch(`/ui/${verb}/${encodeURIComponent(name)}`, { method: "POST", headers: { "Content-Type": "application/json" } }); r = await res.json(); }
+    catch (err) { r = { error: err && err.message ? err.message : t("chat.disconnected") }; }
+    if (r && r.error) toast(r.error, false);
+    else if (r && r.held) toast(r.message);
+    else toast(t(verb === "start" ? "chat.started" : verb === "stop" ? "chat.stoppedInst" : "chat.restarted", name));
+  };
+  return [
+    // #1523 N2: Details is a page now (the Fleet side of this instance), not a dialog.
+    supportsInstanceFeature(inst,"details") ? { key: "details", label: t("chat.details"), icon: "info", onSelect: () => onDetails() } : null,
+    appStore.get().chatWorkspace ? { key: "splitChat", label: t("chatWorkspace.split"), icon: "sidebar", onSelect: () => onSplit() } : null,
+    inst.runtime === "windows" ? {key:"settings",label:t("app.settings"),icon:"settings",onSelect:() => navigate(sectionPath("agents"))} : null,
+    running || !supportsInstanceFeature(inst,"lifecycle") ? null : { key: "start", label: t("chat.start"), icon: "play", onSelect: () => action("start") },
+    running && supportsInstanceFeature(inst,"lifecycle") ? { key: "restart", label: t("chat.restart"), icon: "restart", onSelect: () => action("restart") } : null,
+    running && supportsInstanceFeature(inst,"lifecycle") ? { key: "stop", label: t("chat.stopInstance"), icon: "stop", onSelect: () => action("stop") } : null,
+    // #1958: its identity colour and where it shows (the public link too, as profile edits).
+    // #3153 P1: the folder it works in, read-only — an admin only (M-3278: over the public link too), and not an
+    // agent on another machine (the server also refuses General and coordinators: their folder is the fleet's own).
+    inst.runtime === "windows" || inst.machine_id || inst.general_topic === true ? null
+      : { key: "workspace", label: t("chat.wsOpen"), icon: "file", onSelect: () => openWorkspace({ key: `ws:${name}`, instance: name }) },
+    // M-3271: the pinned list — here too, for a phone (its header shows ← title ⋯ only) and a narrow pane.
+    pinCount ? { key: "pins", label: `${t("chat.pinsTitle")} · ${pinCount}`, icon: "pin", onSelect: onPins } : null,
+    colorMenuItem(name, inst),
+    // #1629: a person's control over this agent's theme — not over the public link (it only views themes).
+    ...themeMenuItems(name),
+    // #2117: its ambient — why it is not showing here (with the way to change that), and a person's Clear.
+    ...ambientMenuItems(name, { publicLink: false, clear: clearAmbient }),   // M-3278
+    // AGEND-181: the activity timeline above each reply (this browser's choice), when the Log is on.
+    ...(activityOffered() && activityInfo(name)?.level !== "off" ? [
+      { key: "activity", checkbox: true, checked: activityPrefs.get().on, label: t("act.menuActivity"), onSelect: () => setActivityOn(!activityPrefs.get().on) },
+      ...(activityInfo(name)?.thinking ? [{ key: "thinking", checkbox: true, checked: activityPrefs.get().thinking, disabled: !activityPrefs.get().on, label: t("act.menuThinking"), onSelect: () => setActivityThinking(!activityPrefs.get().thinking) }] : []),
+    ] : []),
+    narrowScreen() ? null : { key: "fullWidth", checkbox: true, checked: wide, label: t("chat.fullWidth"), onSelect: () => setChatWide(!wide) },
+    { key: "delete", label: t("chat.delete"), icon: "trash", danger: true, onSelect: onDelete },
+  ];
+}
+
 function ChatMoreMenu({ items, name, inst = null, card = null, navKey, lease = null }) {
   const app = useStore(appStore);
   const auth = useWebAuthorization();
@@ -164,6 +209,8 @@ import { createThread, msgKey } from "/assets/chat-thread.js";
 import { ComposerInput, WorkBarView, touchScreen } from "/assets/chat-composer.js";
 import { installMessageActions } from "/assets/chat-msg-actions.js";
 import { composerCaret, insertQuote, installQuoteSelection, showCaret } from "./chat-quote.js";
+import { installTableSelection } from "/assets/chat-table-select.js";
+import { contactBadgeHtml, installBadgeRefresh } from "./contact-ticket-badge.js";
 import { createEmojiIndex } from "./chat-emojis.js";
 import { pollPublicPreview } from "./preview-status.js";
 import { createMentionIndex } from "./chat-mentions.js";
@@ -189,7 +236,7 @@ export function linkWorkBarCss(doc = typeof document !== "undefined" ? document 
   try {
     if (!doc || !doc.head || doc.querySelector('link[data-chat-work-bar-css="1"]')) return;
     const link = doc.createElement("link");
-    link.setAttribute("rel", "stylesheet"); link.setAttribute("href", "/assets/chat-work-bar.css"); link.setAttribute("data-chat-work-bar-css", "1");
+    link.setAttribute("rel", "stylesheet"); link.setAttribute("href", assetUrl("/assets/chat-work-bar.css")); link.setAttribute("data-chat-work-bar-css", "1");
     doc.head.appendChild(link);
   } catch { /* Stop still works without it */ }
 }
@@ -392,10 +439,11 @@ export function boot({ stream, boot: bootData, deps = {} }) {
     clearReply: (instance) => store.clearReply(instance),
     addToDraft: (instance, line) => { feedbackInstance = instance; recordEdit(composerField(instance)); store.addToDraft(instance, line); },
     focus: (instance = feedbackInstance) => {
+      import("./preview-popout.js").then(m => m.leavePreviewWindow()).catch(() => {});
       const el = composerField(instance); if (!el) return;
       el.focus();
       // After the render that shows the line: the caret at its end.
-      setTimeout(() => { if (composerField(instance) !== el) return; try { const n = el.value.length; el.setSelectionRange(n, n); } catch { /* not a text field */ } }, 0);
+      setTimeout(() => { if (composerField(instance) !== el) return; el.focus(); try { const n = el.value.length; el.setSelectionRange(n, n); } catch { /* not a text field */ } }, 0);
     },
   });
   // #1604: the preview opt-in and Tour live in Settings → This device now (and on each preview card's menu).
@@ -453,6 +501,7 @@ export function ChatPanel({ route, navKey }) {
   const app = useStore(appStore);
   const name = route.instance;
   const inst = name ? app.instances.find(i => i.name === name) : null;
+
   useEffect(() => {
     if (store.show) {
       if (!name || !inst) return;
@@ -508,6 +557,16 @@ function useResolvedMode(lease) {
 }
 
 function ChatView({ name, inst, lease, navKey, exec, awaiting }) {
+  const [previewPopout, setPreviewPopout] = useState(null);
+  useEffect(() => {
+    let alive = true, owner = null; setPreviewPopout(null);
+    if (!name || !inst) return;
+    import("./preview-popout.js").then(m => m.createPreviewPopout(name)).then(value => {
+      if (!alive) { value?.close(); return; } owner = value;
+      if (owner) setPreviewPopout(() => spec => owner.open(spec));
+    }).catch(() => {});
+    return () => { alive = false; owner?.close(); };
+  }, [name, !!inst]);
   const pane = paneContext.usePane?.(), paneNow = useRef(pane); paneNow.current = pane;
   const bindings = useRef({ input: { current: null }, box: { current: null }, composing: false }).current;
   const ids = pane ? Object.fromEntries(["msgIn", "attachBtn", "stopBtn", "sendBtn", "cmdPalette"].map(key => [key, `pane-${pane.id}-${key}`])) : {};
@@ -591,43 +650,8 @@ function ChatView({ name, inst, lease, navKey, exec, awaiting }) {
     e.preventDefault();
     store.cancelReply(name);
   })), [lease]);
-  const running = inst.status === "running";
-  const action = async (verb) => {
-    let r;
-    try { const res = await fetch(`/ui/${verb}/${encodeURIComponent(name)}`, { method: "POST", headers: { "Content-Type": "application/json" } }); r = await res.json(); }
-    catch (err) { r = { error: err && err.message ? err.message : t("chat.disconnected") }; }
-    if (r && r.error) toast(r.error, false);
-    else if (r && r.held) toast(r.message);
-    else toast(t(verb === "start" ? "chat.started" : verb === "stop" ? "chat.stoppedInst" : "chat.restarted", name));
-  };
-  const items = [
-    // #1523 N2: Details is a page now (the Fleet side of this instance), not a dialog.
-    supportsInstanceFeature(inst,"details") ? { key: "details", label: t("chat.details"), icon: "info", onSelect: () => (paneNow.current?.navigate || navigate)(detailsPath(name)) } : null,
-    appStore.get().chatWorkspace ? { key: "splitChat", label: t("chatWorkspace.split"), icon: "sidebar", onSelect: () => appStore.get().chatWorkspace.pick() } : null,
-    inst.runtime === "windows" ? {key:"settings",label:t("app.settings"),icon:"settings",onSelect:() => navigate(sectionPath("agents"))} : null,
-    running || !supportsInstanceFeature(inst,"lifecycle") ? null : { key: "start", label: t("chat.start"), icon: "play", onSelect: () => action("start") },
-    running && supportsInstanceFeature(inst,"lifecycle") ? { key: "restart", label: t("chat.restart"), icon: "restart", onSelect: () => action("restart") } : null,
-    running && supportsInstanceFeature(inst,"lifecycle") ? { key: "stop", label: t("chat.stopInstance"), icon: "stop", onSelect: () => action("stop") } : null,
-    // #1958: its identity colour and where it shows (the public link too, as profile edits).
-    // #3153 P1: the folder it works in, read-only — an admin only (M-3278: over the public link too), and not an
-    // agent on another machine (the server also refuses General and coordinators: their folder is the fleet's own).
-    inst.runtime === "windows" || inst.machine_id || inst.general_topic === true ? null
-      : { key: "workspace", label: t("chat.wsOpen"), icon: "file", onSelect: () => openWorkspace({ key: `ws:${name}`, instance: name }) },
-    // M-3271: the pinned list — here too, for a phone (its header shows ← title ⋯ only) and a narrow pane.
-    pinCount ? { key: "pins", label: `${t("chat.pinsTitle")} · ${pinCount}`, icon: "pin", onSelect: openPins } : null,
-    colorMenuItem(name, inst),
-    // #1629: a person's control over this agent's theme — not over the public link (it only views themes).
-    ...themeMenuItems(name),
-    // #2117: its ambient — why it is not showing here (with the way to change that), and a person's Clear.
-    ...ambientMenuItems(name, { publicLink: false, clear: clearAmbient }),   // M-3278
-    // AGEND-181: the activity timeline above each reply (this browser's choice), when the Log is on.
-    ...(activityOffered() && activityInfo(name)?.level !== "off" ? [
-      { key: "activity", checkbox: true, checked: activityPrefs.get().on, label: t("act.menuActivity"), onSelect: () => setActivityOn(!activityPrefs.get().on) },
-      ...(activityInfo(name)?.thinking ? [{ key: "thinking", checkbox: true, checked: activityPrefs.get().thinking, disabled: !activityPrefs.get().on, label: t("act.menuThinking"), onSelect: () => setActivityThinking(!activityPrefs.get().thinking) }] : []),
-    ] : []),
-    narrowScreen() ? null : { key: "fullWidth", checkbox: true, checked: wide, label: t("chat.fullWidth"), onSelect: () => setChatWide(!wide) },
-    { key: "delete", label: t("chat.delete"), icon: "trash", danger: true, onSelect: () => setDialog("delete") },
-  ];
+  const items = chatAgentMenuItems({ name, inst, wide, pinCount, onPins: openPins, onDelete: () => setDialog("delete"),
+    onDetails: () => (paneNow.current?.navigate || navigate)(detailsPath(name)), onSplit: () => appStore.get().chatWorkspace.pick() });
   const cls = statusClass(inst, exec, awaiting);
   // #1920 phase 3: a guest has this chat only — no Details, View or Log to switch to, no lifecycle, colour, theme,
   // effect management or delete (a guest's status frame carries no model or effort either, so those chips do not show).
@@ -664,7 +688,7 @@ function ChatView({ name, inst, lease, navKey, exec, awaiting }) {
         <${ChatAmbient} name=${name} surface=${effectSurface} part="front" />
       </div>
       <${PreviewPanel} name=${name} split=${split} msgs=${() => store.state.msgs[name] || []} subscribe=${(fn) => store.subscribe(fn)}
-        keyOf=${msgKey} reveal=${(k) => thread.current && thread.current.reveal(k)} download=${downloadHtml} allow=${(commit) => setPreviewOptIn(true, commit)} />
+        popout=${previewPopout} keyOf=${msgKey} reveal=${(k) => { const owner = thread.current; import("./preview-popout.js").then(m => m.leavePreviewWindow(), () => {}).then(() => { if (lease.current() && thread.current === owner) owner?.reveal(k); }); }} download=${downloadHtml} allow=${(commit) => setPreviewOptIn(true, commit)} />
     </div>
     <${LightboxHost} owner=${view} />
     ${attachmentsSupported ? html`<div data-trust="drop" class="drop-overlay" aria-hidden="true"><div class="drop-card"><${Icon} name="attach" size=${32} /><span>${t("chat.dropHere")}</span></div></div>` : null}
@@ -767,6 +791,9 @@ function threadEntry(name, doc) {
     onEmpty: (v) => e.sink?.setEmpty(v && store.allHidden(name) ? "hidden" : v),
     setPreviewOptIn, copyText, download: downloadHtml, toggleWrap,
     clickReplyButton: (id, index) => store.clickReplyButton(name, id, index),      // #1266
+    contactBadge: (x) => { installBadgeRefresh(); return contactBadgeHtml(x); },   // M-3339: 聯絡申請 #R… / 已准轉交 #R… (kept current)
+    canResend: (message) => store.canResend(name, message),
+    resendMessage: (key) => store.resendMessage(name, key),
     retryOutgoing: (clientId) => store.retryOutgoing(name, clientId),              // a failed send's Retry and Delete
     deleteOutgoing: (clientId) => store.deleteOutgoing(name, clientId),
     putBackOutgoing: (clientId) => { recordEdit(composerField(name)); store.putBackOutgoing(name, clientId); },   // undoable, as typing
@@ -856,11 +883,14 @@ function follow(name, thread) {
 }
 
 /** The thread's view: Preact owns the scroller and the jump pill; the kept list (chat-thread.js) is put inside it. */
+export { JUMP_IDLE_MS };
 function Thread({ name, label = name, th, bindings }) {
   const pane = paneContext.usePane?.(), paneNow = useRef(pane); paneNow.current = pane;
   const scroller = useRef(null), host = useRef(null);
   const [jump, setJump] = useState({ show: false, unseen: 0 });
   const [empty, setEmpty] = useState(false);
+  // M-3492/M-3493: 最新 fades out JUMP_IDLE_MS after the last scroll (shared with the Hub's threads: jump-idle.js).
+  const jumpIdle = useJumpIdle(scroller, jump.show, name);
   useLayoutEffect(() => { keptThreads.get(name)?.list.setAttribute("aria-label",t("chat.conversationWith",label)); },[name,label]);
   useLayoutEffect(() => {
     const doc = host.current.ownerDocument;
@@ -898,6 +928,8 @@ function Thread({ name, label = name, th, bindings }) {
       pinned: (x) => isPinned(name, msgKey(x)),
       canPin: (x) => !guestPage() && pinOffered(name) && (x.role === "agent" || x.role === "user") && /^[0-9a-f]{1,32}-\d{1,15}$/.test(msgKey(x)),
     });
+    // M-3326: a table's cells selected as a spreadsheet's (a desk: drag down a column or across a block; Ctrl/Cmd+C as TSV).
+    const offCells = installTableSelection(ls, { phone: () => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches });
     // M-2789: select a passage in a message → 「引用」 → it goes into the composer as a quote at the caret, repeatable.
     const offQuote = installQuoteSelection(ls, {
       field: () => bindings.input.current,
@@ -944,7 +976,7 @@ function Thread({ name, label = name, th, bindings }) {
     return () => {
       window.removeEventListener("hashchange", onHash);
       unfollow();
-      offActions(); offQuote();
+      offActions(); offQuote(); offCells();
       sc.removeEventListener("scroll", onScroll);
       ls.removeEventListener("click", thread.onClick);
       if (mountedThreads.get(name) === owner) mountedThreads.delete(name);
@@ -965,7 +997,8 @@ function Thread({ name, label = name, th, bindings }) {
     <div class="thread-host" ref=${host}></div>
     ${empty === "hidden" ? html`<${Empty} icon="chat" title=${t("chat.guestAllHidden")} hint=${t("chat.guestAllHiddenHint")} />`
       : empty ? html`<${Empty} icon="chat" title=${t("chat.noMessages")} />` : null}
-    </div><div class="jump-dock">${jump.show ? html`<button data-trust="thread-control" type="button" class="jump-latest" onClick=${() => { const t2 = th.current; if (!t2) return; if (store.pagingState(name).detached) void store.backToLatest(name).then(() => t2.jumpLatest()); else t2.jumpLatest(); }}
+    </div><div class="jump-dock">${jump.show ? html`<button data-trust="thread-control" type="button" ref=${jumpIdle.ref} class=${`jump-latest${jumpIdle.idle ? " is-idle" : ""}`} onClick=${() => { const t2 = th.current; if (!t2) return; if (store.pagingState(name).detached) void store.backToLatest(name).then(() => t2.jumpLatest()); else t2.jumpLatest(); }}
+        onFocus=${jumpIdle.onFocus} onBlur=${jumpIdle.onBlur}
         aria-label=${jump.unseen > 0 ? t("chat.newBelow", jump.unseen) : t("chat.jumpLatest")}>
       <${Icon} name="down" size=${16} /><span class="jump-text">${jump.unseen > 0 ? t("chat.newBelow", jump.unseen) : t("chat.jumpLatest")}</span>${
         /* The user (before 2.4.0-beta.3): no unread counts for now — a phone's round button has no badge. */ ""}</button>` : null}</div>
@@ -1009,6 +1042,38 @@ function Dock({ name, inst, lease, exec, awaiting, workingLabel, bindings, ids, 
 /** #2233: a backend's "not signed in" choice offers Sign in (the module behind the session gate, loaded when asked). */
 function openBackendSignIn(backend) {
   import("./backend-signin.js").then((m) => m.openSignIn({ backend }), () => toast(t("app.loadFailed"), false));
+}
+
+/** Reports contain plain strings; HTM escapes every title, header, cell and note. */
+function CommandReport({ report, command }) {
+  const [filter, setFilter] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const trigger = useRef(null);
+  const wasExpanded = useRef(false);
+  // The inline trigger is recreated when the modal closes; restore focus after its ref is mounted.
+  useLayoutEffect(() => {
+    if (wasExpanded.current && !expanded) trigger.current?.focus({ preventScroll: true });
+    wasExpanded.current = expanded;
+  }, [expanded]);
+  const query = filter.trim().toLocaleLowerCase();
+  const rows = command === "status" && query
+    ? report.rows.filter(row => row.some(value => value.toLocaleLowerCase().includes(query))) : report.rows;
+  const view = html`<section class=${`cmd-report cmd-report-${command}${expanded ? " cmd-report-expanded" : ""}`} aria-label=${report.title}>
+    ${expanded ? null : html`<h3>${report.title}</h3>`}
+    <div class="cmd-report-tools">
+      ${command === "status" ? html`<label class="field"><span class="sr-only">${t("chat.cmdReportFilter")}</span>
+        <input type="search" aria-label=${t("chat.cmdReportFilter")} placeholder=${t("chat.cmdReportFilter")}
+          value=${filter} onInput=${e => setFilter(e.target.value)} /></label>` : null}
+      ${expanded ? null : html`<button type="button" class="btn btn-sm btn-ghost" ref=${trigger} data-report-expand onClick=${() => setExpanded(true)}>${t("chat.cmdReportOpen")}</button>`}
+    </div>
+    ${command === "status" ? html`<p class="note cmd-report-count">${query ? t("chat.cmdReportMatches", rows.length, report.rows.length) : t("chat.cmdReportCount", report.rows.length)}${report.notes[0] ? " · " + report.notes[0] : ""}</p>` : null}
+    <div class="cmd-report-body" tabIndex="0" aria-label=${report.title}>
+      ${rows.length ? html`<table class=${command === "status" ? "us-table" : "cmd-metrics"}><thead><tr>${report.columns.map(label => html`<th scope="col">${label}</th>`)}</tr></thead>
+        <tbody>${rows.map(row => html`<tr>${row.map((value, i) => html`<td data-label=${report.columns[i]}>${value}</td>`)}</tr>`)}</tbody></table>` : query ? html`<p class="note">${t("chat.cmdReportEmpty")}</p>` : null}
+      ${(command === "status" ? report.notes.slice(1) : report.notes).map(note => html`<p class="note">${note}</p>`)}
+    </div>
+  </section>`;
+  return expanded ? html`<div class="cmd-report-modal"><${Dialog} title=${report.title} wide onClose=${() => setExpanded(false)}>${view}</${Dialog}></div>` : view;
 }
 
 /** #1269: what the last chat command answered — its text, why it was refused, or a list to choose from. */
@@ -1133,6 +1198,8 @@ function ModelMenu({ name, c, lease }) {
   return html`<div class="model-menu-scrim" onClick=${close}></div><div class="model-menu-pop" ref=${(el) => { pop.current = el; place(el); }} onKeyDown=${onKeys}>${body}</div>`;
 }
 
+const usesModelMenu = c => c?.command === "model" && (c.choices ? c.choices.step !== "backend" : c.busy && !c.error && !c.args);
+
 function CommandCard({ name, lease }) {
   const c = store.state.commands[name];
   if (!c) return null;
@@ -1145,7 +1212,7 @@ function CommandCard({ name, lease }) {
   // bottom sheet on a phone — not a card above the box. A failure, its result text and /backend stay the card.
   // The menu is /model's list: shown with its choices, or while that list loads. A model being switched to (a pick from the
   // menu, a typed "/model <id>") is the card's, as before (#4003 review).
-  if (c.command === "model" && (c.choices ? c.choices.step !== "backend" : c.busy && !c.error && !c.args)) return html`<${ModelMenu} name=${name} c=${c} lease=${lease} />`;
+  if (usesModelMenu(c)) return html`<${ModelMenu} name=${name} c=${c} lease=${lease} />`;
   const open = sub && sub.for === c.choices ? c.choices.options.find((o) => o.id === sub.id && o.effort) : null;
   const pickEffort = async (model, level) => {
     setSub(null);
@@ -1159,7 +1226,7 @@ function CommandCard({ name, lease }) {
       ${c.busy ? html`<span class="wait">${t("chat.cmdRunning", c.command)}</span>` : html`<button type="button" class="icon-btn" title=${t("chat.cmdDismiss")}
         aria-label=${t("chat.cmdDismiss")} onClick=${() => store.dismissCommand(name)}><${Icon} name="close" size=${14} /></button>`}</div></div>
     ${c.error ? html`<p class="cmd-text">${c.error}</p>` : null}
-    ${c.text ? html`<pre class="cmd-text">${c.text}</pre>` : null}
+    ${c.report ? html`<${CommandReport} report=${c.report} command=${c.command} />` : c.text ? html`<pre class="cmd-text">${c.text}</pre>` : null}
     ${c.compact ? html`<p class="cmd-text cmd-phase">${c.compact === "running" ? t("chat.compactRunning")
       : c.compact === "done" ? t("chat.compactDone") : c.compact === "timeout" ? t("chat.compactTimeout", "10")
       : c.compact === "lost" ? t("chat.compactLost") : c.compact === "not_compacted" ? t("chat.compactNotCompacted") : t("chat.compactUnknown")}</p>` : null}
@@ -1496,7 +1563,7 @@ function FileChip({ f, i, name, bindings }) {
 
 // ── Dialogs ──
 
-function DeleteDialog({ name, inst, onClose }) {
+function DeleteDialog({ name, inst, onClose, onDeleted = () => navigate("/ui") }) {
   // The dialog's own lease: it ends when the dialog goes (closed, or the chat left for another page). The delete
   // may still finish on the server, and says so, but a dialog that is gone never closes or navigates the page the
   // person is on now (#1425 review).
@@ -1523,7 +1590,7 @@ function DeleteDialog({ name, inst, onClose }) {
     if (handedOver || !lease.current()) return;
     setBusy(false);
     onClose();
-    navigate("/ui");
+    onDeleted();
   }
   return html`<${Dialog} title=${t("chat.deleteTitle", name)} onClose=${onClose} busy=${busy}
     actions=${html`<button type="button" class="btn" onClick=${onClose} disabled=${busy}>${t("chat.cancel")}</button>
@@ -1535,3 +1602,44 @@ function DeleteDialog({ name, inst, onClose }) {
   </${Dialog}>`;
 }
 ChatPanel.workspaceVersion = 1;
+
+/** Session-only injection: public InstanceNav never imports this module. */
+export function SidebarChatMenu({ inst, context, onClose, favorite = null }) {
+  const name = inst.name || inst.instance_name, lease = useLease(`sidebar-menu:${name}`);
+  const [phase, setPhase] = useState("menu");
+  const [, redraw] = useState(0);
+  const wide = useStore(chatWide).on;
+  useStore(themesStore); useStore(activityInfoStore); useStore(activityPrefs);
+  const auth = useWebAuthorization(), card = useCard(name, inst.card_v);
+  const pinCount = usePins(name).pins?.length || 0;
+  useEffect(() => store?.subscribe(target => { if (target === name) redraw(n => n + 1); }), [name]);
+  useEffect(() => {
+    if (phase !== "menu" || !activityShown() || activityInfo(name)?.level !== undefined) return;
+    const feed = observeActivity(name, { changed: () => feed.stop(), wantThinking: () => activityPrefs.get().thinking });
+    feed.start(); return () => feed.stop();
+  }, [name, phase, activityPrefs.get().on]);
+  const command = store?.state.commands[name];
+  useEffect(() => { if ((phase === "command" && !command) || (phase === "card" && !card)) setPhase(null); }, [phase, command, card]);
+  useEffect(() => { if (!phase) onClose(); }, [phase]);
+  const items = chatAgentMenuItems({ name, inst, wide, pinCount, onPins: () => setPhase("pins"), onDelete: () => setPhase("delete") });
+  const run = command => { setPhase("command"); void store.runCommand(name, command, "", { alive: () => lease.current() && !guestPage() }); };
+  const dismiss = () => setPhase(null);
+  const chat = { card: !!card, onCard: () => setPhase("card"),
+    ...(supportsInstanceFeature(inst, "commands") ? { onModel: () => run("model"),
+      modelText: `${shortModelName(modelLabel(inst.model || modelText(inst)))}${supportsInstanceFeature(inst, "effort") && effortChip(inst) ? ` · ${effortChip(inst)}` : ""}`,
+      onBackend: () => inst.runtime === "windows" ? navigate(sectionPath("agents")) : run("backend"), backendText: backendLabel(inst.backend) } : {}) };
+  return html`${phase === "menu" ? narrowScreen()
+    ? html`<${AgentSheet} name=${name} inst=${inst} current="chat" items=${items} extra=${[favorite, items.find(item => item?.key === "splitChat")].filter(Boolean)} chat=${chat} targetLabel=${inst.display_name || name}
+        verifiedUntil=${auth.st?.state === "verified" ? auth.st.until : null} onUsage=${() => setPhase("usage")} onClose=${dismiss} />`
+    : html`<${Menu} cls="agent-menu" fit=${true} topLayer=${true} ownerKey=${name} context=${{...context, onClose: dismiss}} items=${[favorite, ...items]} label=${t("agentRow.actions", inst.display_name || name)} />` : null}
+    ${phase === "delete" ? html`<${DeleteDialog} name=${name} inst=${inst} onClose=${dismiss}
+      onDeleted=${() => { if (navStore.get().route?.instance === name) navigate("/ui"); }} />` : null}
+    ${phase === "pins" ? html`<${PinsDialog} name=${name} onClose=${dismiss} onJump=${pin => { dismiss(); navigate(`${chatPath(name)}#m=${encodeURIComponent(pin.key)}`); }} />` : null}
+    ${phase === "usage" ? html`<${UsageDialog} owner=${`chat:${name}`} onClose=${dismiss} />` : null}
+    ${phase === "card" && card ? html`<${Dialog} title=${t("card.label", inst.display_name || name)} onClose=${dismiss}><${IdentityCard} name=${name} card=${card} compact=${true} /></${Dialog}>` : null}
+    ${phase === "command" && command ? usesModelMenu(command)
+      ? html`<${CommandCard} name=${name} lease=${lease} />`
+      : html`<${Dialog} title=${inst.display_name || name} onClose=${() => { store.dismissCommand(name); dismiss(); }}><${CommandCard} name=${name} lease=${lease} /></${Dialog}>` : null}`;
+}
+
+SidebarChatMenu.contextVersion = Menu.contextVersion === 1 && AgentSheet.sidebarTargetVersion === 1 ? 1 : 0;

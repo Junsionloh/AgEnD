@@ -201,6 +201,7 @@ export function createThread(list, scroller, opts) {
     if (x.role === "status") return statusHtml(x, time);
     const u = opts.isUser(x);
     // renderMarkdown escapes the whole text before it adds any tag of its own (chat-render.js).
+    const resend = opts.canResend?.(x) ? `<div data-trust="thread-control" class="msg-resend"><span class="muted">${escAttr(tr("chat.tick_failed"))} ·</span><button type="button" class="btn btn-sm" data-act="resend" data-arg="${escAttr(msgKey(x))}" ${x.resending ? "disabled" : ""}>${escAttr(tr(x.resending ? "chat.resending" : "chat.resend"))}</button></div>` : "";
     const ticks = u && x.delivery ? R().deliveryHtml(x.delivery, TICKS()) : "";
     const tools = u ? "" : `<div data-trust="thread-control" class="msg-tools"><button type="button" class="chip-btn icon-only" data-act="copyMsg" data-arg="${escAttr(msgKey(x))}" title="${escAttr(tr("chat.copyMessage"))}" aria-label="${escAttr(tr("chat.copyMessage"))}">${COPY}</button></div>`;
     const buttons = x.role === "agent" ? replyButtonsHtml(x.buttons) : "";
@@ -215,8 +216,10 @@ export function createThread(list, scroller, opts) {
     // A Hub sender's stateless badge is mounted as DOM below. Its escaped descriptor participates in keyed updates;
     // Fleet callers supply no senderBadge hook and retain their existing sender markup.
     const badge = opts.senderBadge && x.sourceBadge ? ` data-source-badge="${escAttr(JSON.stringify(x.sourceBadge))}"` : "";
+    // M-3339: a contact request's badge (聯絡申請 #R… / 已准轉交 #R…) — escaped HTML from the Fleet chat's hook; a Hub passes none.
+    const contact = typeof opts.contactBadge === "function" && x.contactTicket ? String(opts.contactBadge(x) || "") : "";
     // M-3092 (Hub rooms): another person's message, a bubble on the left (`msg-person`); the fleet never sets x.person.
-    return `<div class="msg ${u ? "user" : "agent"}${x.person ? " msg-person" : ""}" data-key="${escAttr(key)}" tabindex="-1">${act}<div class="meta"><span class="sender"${badge}>${escAttr(x.sender)}</span>${time}${ticks}</div>${quoteHtml(x.replyTo)}<div class="body">${clicked ? clickHtml(x.click) : `<div class="md">${renderedMarkdown(x.text, x.role === "agent", opts.emojis, opts.mentions, opts.mentionLabels?.(), x.role === "user" ? opts.taskRefs : undefined)}</div>`}${R().attachmentsHtml(x.attachments, { htmlCards: x.role === "agent", goneTitle: tr(x.archived ? "chat.attNotKeptTitle" : "chat.attGone"), goneLabel: tr(x.archived ? "chat.attNotKept" : "chat.attUnavailable"), inlinePreviews: !PUBLIC_LINK(), textPreviews: true })}${buttons}</div>${Array.isArray(x.reactionBar) ? reactBarHtml(x, key, reactable) : R().reactionsHtml(x.reactions, tr("chat.reactedBy", x.instance || ""))}${tools}</div>`;
+    return `<div class="msg ${u ? "user" : "agent"}${x.person ? " msg-person" : ""}" data-key="${escAttr(key)}" tabindex="-1">${act}<div class="meta"><span class="sender"${badge}>${escAttr(x.sender)}</span>${time}${ticks}${contact}</div>${quoteHtml(x.replyTo)}<div class="body">${clicked ? clickHtml(x.click) : `<div class="md">${renderedMarkdown(x.text, x.role === "agent", opts.emojis, opts.mentions, opts.mentionLabels?.(), x.role === "user" ? opts.taskRefs : undefined)}</div>`}${R().attachmentsHtml(x.attachments, { htmlCards: x.role === "agent", goneTitle: tr(x.archived ? "chat.attNotKeptTitle" : "chat.attGone"), goneLabel: tr(x.archived ? "chat.attNotKept" : "chat.attUnavailable"), inlinePreviews: !PUBLIC_LINK(), textPreviews: true })}${buttons}</div>${Array.isArray(x.reactionBar) ? reactBarHtml(x, key, reactable) : R().reactionsHtml(x.reactions, tr("chat.reactedBy", x.instance || ""))}${tools}${resend}</div>`;
   }
   /** M-3127: a room's words for its reaction controls (opts.reactText(key)), English when the page gives none. */
   function reactText(k, ...a) {
@@ -354,7 +357,9 @@ export function createThread(list, scroller, opts) {
       ? `<button type="button" data-trust="thread-control" class="chip-btn st-action" data-act="statusAction" data-arg="${escAttr(x.action.arg)}">${escAttr(x.action.label)}</button>` : "";
     // A Hub mention-stop sentence must stay readable at phone width. Ordinary Fleet status rows still fold.
     const folded = x.wrap === true ? "" : ` folded${overflows ? " overflows" : ""}`;
-    return `<div class="msg status-line${folded}"><div class="meta">${time}</div><div class="body"><div class="st-text">${body}</div>${x.wrap === true ? "" : more}${action}</div>${x.bare === true ? "" : tools}</div>`;
+    // M-3339: a ClassicBot room's held-request line carries its contact badge too (the Fleet chat's hook; a Hub passes none).
+    const contact = typeof opts.contactBadge === "function" && x.contactTicket ? String(opts.contactBadge(x) || "") : "";
+    return `<div class="msg status-line${folded}"><div class="meta">${time}${contact}</div><div class="body"><div class="st-text">${body}</div>${x.wrap === true ? "" : more}${action}</div>${x.bare === true ? "" : tools}</div>`;
   }
   /**
    * #1266: an agent reply's buttons. Labels are text (escaped, never Markdown); the click names the set and the index,
@@ -761,17 +766,47 @@ export function createThread(list, scroller, opts) {
    * a line with more than two rows always overflows (data-lines). Nothing laid out (no width): the guess it was drawn with.
    */
   function fitStatus() {
-    for (const m of list.querySelectorAll(".msg.status-line.folded")) {
-      const btn = m.querySelector(".st-more");
-      if (!btn || btn.dataset.lines) continue;
-      let measured = false, over = false;
-      for (const row of [...m.querySelectorAll(".st-ln")].slice(0, STATUS_FOLD_LINES)) {
-        if (!row.clientWidth) continue;
-        measured = true;
-        if (row.scrollWidth > row.clientWidth + 1) over = true;
-      }
-      if (measured && m.classList.contains("overflows") !== over) m.classList.toggle("overflows", over);
+    for (const m of list.querySelectorAll(".msg.status-line.folded")) if (!fitLine(m)) stale.add(m);
+    if (stale.size) watchStale();
+  }
+  /**
+   * One folded line; false when it was not measured because its contents are skipped. M-3486: a line whose contents the
+   * browser is skipping (content-visibility on the row while the split divider is dragged, #4277) is not measured:
+   * reading a size inside it lays that row out on its own, then locks it again — once per line, each frame (4,560 forced
+   * layouts in one drag of two real chats). It keeps its last answer until it is shown again (watchStale).
+   */
+  function fitLine(m) {
+    const btn = m.querySelector(".st-more");
+    if (!btn || btn.dataset.lines) return true;
+    const rows = [...m.querySelectorAll(".st-ln")].slice(0, STATUS_FOLD_LINES);
+    if (rows[0]?.checkVisibility && !rows[0].checkVisibility({ contentVisibilityAuto: true })) return false;
+    let measured = false, over = false;
+    for (const row of rows) {
+      if (!row.clientWidth) continue;
+      measured = true;
+      if (row.scrollWidth > row.clientWidth + 1) over = true;
     }
+    if (measured && m.classList.contains("overflows") !== over) m.classList.toggle("overflows", over);
+    return true;
+  }
+  /**
+   * #4295 review (Prism): a skipped line is measured as soon as it is shown again — the drag ended, or it was scrolled to —
+   * by its own check each frame (a style query, no layout) while any is waiting; nothing else is sure to come (the list's
+   * size need not change at the release). A line removed meanwhile is dropped. Stops when none waits, or the thread leaves.
+   */
+  const stale = new Set();
+  let staleFrame = null;
+  function watchStale() {
+    if (staleFrame !== null || disposed || parked || typeof requestAnimationFrame !== "function") return;
+    staleFrame = requestAnimationFrame(() => {
+      staleFrame = null;
+      for (const m of [...stale]) if (!m.isConnected || fitLine(m)) stale.delete(m);
+      if (stale.size) watchStale();
+    });
+  }
+  function unwatchStale() {
+    if (staleFrame !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(staleFrame);
+    staleFrame = null;
   }
   let ro = typeof ResizeObserver === "function" ? new ResizeObserver(resized) : null;
   if (ro) { ro.observe(list); ro.observe(scroller); }
@@ -1033,6 +1068,7 @@ export function createThread(list, scroller, opts) {
     else if (act === "reactAdd") { closePicker(true); reactFrom(el, true); }                       // a quick pick: mine added
     else if (act === "reactToggle") reactFrom(el, el.getAttribute("aria-pressed") !== "true");      // a chip: mine on or off
     else if (act === "jumpQuote") void jumpTo(el.dataset.arg);
+    else if (act === "resend") opts.resendMessage?.(el.dataset.arg);
     else if (act === "retryOut") opts.retryOutgoing?.(el.dataset.arg);                 // a failed send, again
     else if (act === "putBackOut") opts.putBackOutgoing?.(el.dataset.arg);              // back in the composer, to change it
     else if (act === "deleteOut") opts.deleteOutgoing?.(el.dataset.arg);
@@ -1065,6 +1101,7 @@ export function createThread(list, scroller, opts) {
     if (P()) P().stopAll("leave");
     for (const node of list.querySelectorAll(".html-card[data-att], .text-card[data-att]")) { const f = cardDrop.get(node); if (f) f(); }
     if (ro) { ro.disconnect(); ro = null; }
+    unwatchStale();
     if (growFrame !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(growFrame);
     if (growTimer !== null) clearTimeout(growTimer);
     growTimer = growFrame = null;
@@ -1087,6 +1124,7 @@ export function createThread(list, scroller, opts) {
     disposed = true;
     if (!parked) watchReader(scroller, false);
     if (ro) ro.disconnect();
+    unwatchStale(); stale.clear();
     if (P()) { if (own) P().stopIn(list); else P().stopAll("leave"); }
     for (const v of nodes.values()) v.handle?.unmount();
     nodes.clear();

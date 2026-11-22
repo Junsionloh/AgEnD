@@ -17,6 +17,7 @@ import { applyPageTheme, pageNow, resolvedMode, themesStore } from "./app-themes
 import { ErrorState, Skeleton } from "./ui-states.js";
 import { StaleTabPrompt, isStaleModuleError } from "./stale-tab.js";
 import { Dialog } from "./ui-dialog.js";
+import { ThemePicker, paletteName } from "./theme-picker.js";
 import { InstanceNav, RosterNav, namesStore, phoneDrawerStore, setNamesPrimary, sidebarDensityStore, setSidebarDensity, compactNameStore, setCompactName } from "./instance-nav.js";
 import { usageRailStore } from "./header-tools.js";
 import { RightRail, sidePanelStore } from "./side-panel.js";
@@ -415,7 +416,7 @@ function Sidebar({ route, onNewInstance, viewOnly }) {
     aria-current=${on(panel) ? "page" : undefined} aria-label=${count ? `${label} (${t(countText, count)})` : undefined} onClick=${closeDrawer}>
     <${Icon} name=${icon} /><span class="grow">${label}</span>${count ? html`<span class="nav-count" aria-hidden="true">${count}</span>` : null}</a>`;
   // alpha.2 (M-2300): an agent's request waiting for this web-only fleet's owner counts too (only the owner's page has any).
-  const needsCount = (Array.isArray(app.needs) ? app.needs.length : 0) + (Array.isArray(app.proposals) ? app.proposals.length : 0);
+  const needsTotal = needsCount(app);
   // View-only (an anonymous reader, #1408 §3): View and a way to sign in — nothing that needs a session is rendered.
   if (viewOnly) {
     return html`<aside id="sidebar" class="sidebar" aria-label=${t("app.menu")}>
@@ -465,7 +466,7 @@ function Sidebar({ route, onNewInstance, viewOnly }) {
     ${/* AgEnD Hub P1: a member fleet's "My fleet ↔ Hub" (shown once paired; nothing loads when the switch is off) */ hubMarks().member ? html`<${HubSwitcherSlot} />` : null}
     <nav data-trust="navigation" class="side-nav" aria-label=${t("app.menu")}>
       ${overview}
-      ${navLink("needs", NEEDS_PATH, "inbox", t("app.needsNav"), needsCount)}
+      ${navLink("needs", NEEDS_PATH, "inbox", t("app.needsNav"), needsTotal)}
       ${/* #2910 D2: a web-only fleet (no chat connection) has Notices — what General would have said. AGEND-122: a chat fleet too, while one is unread (a confirmation from another device that nothing else could carry). */
         (app.connections === 0 || (app.notices && app.notices.unread > 0)) && app.notices && app.notices.enabled ? navLink("notices", NOTICES_PATH, "bell", t("app.noticesNav"), app.notices.unread | 0, "app.noticesCount") : null}
       ${searchOffered(canCreate) ? searchRow() : null}
@@ -510,18 +511,21 @@ function ViewOnlyNav({ route }) {
  */
 export function DevicePrefs({ labels = false, fields = ["theme", "language", "names"] } = {}) {
   const [theme, setTheme] = useState(typeof AgendTheme !== "undefined" ? AgendTheme.get() : "system");
+  const [palette, setPalette] = useState(globalThis.AgendTheme?.getPalette?.() || ""), [coloursOpen, setColoursOpen] = useState(false);
   const [l, setL] = useState(lang());
   const names = useStore(namesStore);   // #1722
   const density = useStore(sidebarDensityStore).value;
   const compactName = useStore(compactNameStore).value ?? names.primary;
   // #1665: what is in force, as it changes — another device's choice arriving while this is open is shown at once.
-  useEffect(() => (typeof AgendTheme !== "undefined" && typeof AgendTheme.onChange === "function" ? AgendTheme.onChange(setTheme) : undefined), []);
+  useEffect(() => globalThis.AgendTheme?.onChange?.(value => { setTheme(value); setPalette(globalThis.AgendTheme.getPalette?.() || ""); }), []);
   useEffect(() => onLang(setL), []);
   const shows = (field) => fields.includes(field);
   return html`<div class=${`prefs${labels ? " labelled" : ""}`}>
     ${shows("theme") ? html`<label class="pref"><${Icon} name="sun" size=${16} /><span class=${labels ? "pref-label" : "sr-only"}>${t("app.theme")}</span>
-      <select id=${labels ? "pref-theme" : undefined} value=${theme} aria-label=${t("app.theme")} onChange=${(e) => { setTheme(e.target.value); if (typeof AgendTheme !== "undefined") AgendTheme.set(e.target.value); savePref("theme", e.target.value); }}>
-        <option value="system">${t("app.themeSystem")}</option><option value="light">${t("app.themeLight")}</option><option value="dark">${t("app.themeDark")}</option></select></label>` : null}
+      <select id=${labels ? "pref-theme" : undefined} value=${theme} aria-label=${t("app.theme")} onChange=${(e) => { const value = e.target.value; if (value === "other") { e.target.value = theme; setColoursOpen(true); return; } setTheme(value); if (typeof AgendTheme !== "undefined") AgendTheme.set(value); savePref("theme", value); }}>
+        <option value="system">${t("app.themeSystem")}</option><option value="light">${t("app.themeLight")}</option><option value="dark">${t("app.themeDark")}</option>
+        <option value="other">${palette ? t("app.themeOtherActive", paletteName(palette)) : t("app.themeOther")}</option></select></label>` : null}
+    ${coloursOpen ? html`<${ThemePicker} onClose=${() => setColoursOpen(false)} />` : null}
     ${shows("language") ? html`<label class="pref"><${Icon} name="globe" size=${16} /><span class=${labels ? "pref-label" : "sr-only"}>${t("app.language")}</span>
       <select id=${labels ? "pref-lang" : undefined} value=${l} aria-label=${t("app.language")} onChange=${(e) => { setL(e.target.value); setLang(e.target.value); savePref("lang", e.target.value); }}>
         <option value="en">English</option><option value="zh-TW">中文</option></select></label>` : null}
@@ -561,7 +565,12 @@ register("phoneNav", {
   "zh-TW": { back: "回到 Agent 清單" },
 });
 /** What Needs you counts: its items and the agents' proposals (the tab's badge, the sidebar's). */
-export function needsCount(app) { return (app.needs || []).length + (app.proposals || []).length; }
+/** M-3381: the rooms' restricted-mode suggestions count once (one group on the page), however many rooms. */
+export function needsCount(app) {
+  const needs = Array.isArray(app.needs) ? app.needs : [], proposals = Array.isArray(app.proposals) ? app.proposals : [];
+  const suggestions = needs.filter(i => i?.type === "contact" && i.reason === "contact_restricted_suggestion").length;
+  return needs.length - suggestions + (suggestions ? 1 : 0) + proposals.length;
+}
 
 export function PanelHeader({ title, sub, children, headingRef, nav, notice, pageControls, pageActions, back = null }) {
   const shell = useStore(shellStore);
@@ -625,7 +634,7 @@ function BottomTabs({ route, viewOnly }) {
   // last tab), Settings.
   return html`<nav data-trust="navigation" class="tabs" aria-label=${t("app.menu")}>
     ${tab(chatHref, "chat", t("app.chat"), !!open || (!!route && route.panel === "chat"), anyAwaiting)}
-    ${tab(NEEDS_PATH, "inbox", t("app.needsTab"), route && route.panel === "needs", (app.needs || []).length + (app.proposals || []).length, t("app.needsCount", (app.needs || []).length + (app.proposals || []).length))}
+    ${tab(NEEDS_PATH, "inbox", t("app.needsTab"), route && route.panel === "needs", needsCount(app), t("app.needsCount", needsCount(app)))}
     ${tab(fleetEntryPath(route), "fleet", t("app.fleet"), route && route.panel === "fleet")}
     ${tab(settingsPath(), "settings", t("app.settings"), route && route.panel === "settings")}
   </nav>`;
@@ -1264,6 +1273,8 @@ export function Shell({ panels, onNewInstance, viewOnly = false }) {
   //     composer's box writes its height only when its line count changes (#4026).
   // Pinned per keystroke by tests/web-typing-steady-m3265.test.ts and tests/web-keyboard-fit-3111.test.ts, and in the real app
   // (WebKit) by smoke-phone-kb-steady, smoke-phone-ime-keyboard-m3244 and smoke-phone-typing-steady-m3265.
+  // M-3357: every past keyboard case, each with the fix undone as a revert that must turn its tests red, is
+  // scripts/ci/keyboard-suite.mjs (CI's keyboard-suite job; docs/dev/iphone-keyboard-suite.md) — a fix here adds its case.
   // The bottom tabs (and the line under the composer) give their room to the keyboard on a phone (#2478).
   useEffect(() => {
     const vv = typeof window !== "undefined" ? window.visualViewport : null;
@@ -1317,7 +1328,22 @@ export function Shell({ panels, onNewInstance, viewOnly = false }) {
     let composedAt = -Infinity, pendH = 0, pendTop = 0;
     const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
     const frame = typeof requestAnimationFrame === "function" ? requestAnimationFrame : null;
-    const unfit = (el) => { if (el?.style) { el.style.removeProperty("height"); el.style.removeProperty("transform"); } };
+    // M-3327 (the user's iPhone recording, beta.11): the shell no longer chases the browser's pan with translateY(offsetTop).
+    // iOS animates its pan (to show the box) and takes it back once the shell is the view's height; the transform followed
+    // the readings, not the pan on screen, so the header dropped to mid-screen over a black band, the box was pushed under
+    // the keyboard (which panned again: a runaway), then everything snapped back. The shell stays at the top, the view's
+    // height, and a pan is undone (scrollTo 0) — the box is in view without one.
+    const unpan = (top) => { if (top > 0 && typeof window.scrollTo === "function") { try { window.scrollTo(0, 0); } catch { /* not scrollable */ } } };
+    // M-3327: the keyboard going away (the field left for something that is not a text field): iOS reports the taller view
+    // only once the keyboard has gone (~350 ms), so following the view held the box mid-air over the page's background, then
+    // dropped it in one frame. Now the shell takes its full height (the tallest view at this width) at the focusout, easing
+    // down (data-kb-closing: app.css) while the keyboard slides away over it (the keyboard state is down already: no field).
+    // The ease lasts its own time once started (CLOSE_MS ≥ app.css's 0.26 s), whenever iOS's late reading comes: taking the
+    // attribute away mid-way would cut the transition short (a snap) — so the result never depends on the event order.
+    const CLOSE_MS = 320;
+    let leaving = false, closingUntil = 0;
+    const closing = (el, on) => { if (el?.setAttribute) { if (on) el.setAttribute("data-kb-closing", ""); else el.removeAttribute("data-kb-closing"); } };
+    const unfit = (el) => { if (el?.style) { el.style.removeProperty("height"); el.style.removeProperty("transform"); } closing(el, false); closingUntil = 0; };
     const fit = () => {
       const el = root.current;
       if (!el?.style) return;
@@ -1335,16 +1361,15 @@ export function Shell({ panels, onNewInstance, viewOnly = false }) {
       const h = composingNow && fitH && w === fitW && seen > fitH ? fitH : seen;
       const settled = fitH && typingNow && w === fitW && now() >= followUntil;
       if (settled && Math.abs(h - fitH) <= NUDGE_PX && Math.abs(top - fitTop) <= NUDGE_PX) { moveSince = 0; return; }   // a nudge
-      if (settled && (h !== fitH || top !== fitTop) && !(fitH - h > KEYBOARD_MIN_PX)) {
+      // M-3327: a pan of a keyboard's height is the keyboard coming up (a tap on a box that already had the focus: no focus
+      // event, so no follow window), never a key's nudge — undone at once, like the keyboard's own height.
+      if (settled && (h !== fitH || top !== fitTop) && !(fitH - h > KEYBOARD_MIN_PX) && !(top - fitTop > KEYBOARD_MIN_PX)) {
         if (!moveSince || Math.abs(h - pendH) > NUDGE_PX || Math.abs(top - pendTop) > NUDGE_PX) { moveSince = now(); pendH = h; pendTop = top; }
         const held = DOWN_HOLD_MS - (now() - moveSince);
         const growWait = h > fitH && h - fitH <= KEYBOARD_MIN_PX ? composedAt + IME_GROW_HOLD_MS - now() : 0;
         if (held > 0 || growWait > 0) {                                // not held yet: the shell stays as it is
           // Held, but a grow after a composition still waits: the place (a pan) is followed now, the height later.
-          if (held <= 0 && Math.abs(top - fitTop) > NUDGE_PX) {
-            fitTop = top;
-            if (top) el.style.setProperty("transform", `translateY(${top}px)`); else el.style.removeProperty("transform");
-          }
+          if (held <= 0 && Math.abs(top - fitTop) > NUDGE_PX) { fitTop = top; unpan(top); }
           const left = held > 0 ? held : growWait;
           if (!moveTimer && typeof setTimeout === "function") moveTimer = setTimeout(() => { moveTimer = 0; fit(); }, left + 20);
           return;
@@ -1354,10 +1379,19 @@ export function Shell({ panels, onNewInstance, viewOnly = false }) {
       // A reading that says "down" while the field keeps focus is on hold (below): until it holds, the shell keeps the height
       // it had, so the box does not drop under a keyboard that is still there.
       const pending = downSince && now() - downSince < DOWN_HOLD_MS && fitH;
-      fitH = pending ? fitH : h;
+      // Leaving the field: the full height at once (not the view, which is still the keyboard's for a while).
+      // Leaving the field: the full height whatever the view says. Eased only while the view still says keyboard (iOS's
+      // reading comes once it has gone: then the keyboard is still on screen, sliding away over the shell); a view already
+      // grown (its reading came first) means the keyboard has gone — at once.
+      const left = leaving && !typingNow && !composingNow;
+      const gone = left && tallest > h;
+      if (gone && !(now() < closingUntil) && tallest - fitH > KEYBOARD_MIN_PX) closingUntil = now() + CLOSE_MS;
+      fitH = gone ? tallest : left ? h : pending ? fitH : h;
       fitTop = top; fitW = w;
+      closing(el, now() < closingUntil);
       el.style.setProperty("height", `${fitH}px`);
-      if (top) el.style.setProperty("transform", `translateY(${top}px)`); else el.style.removeProperty("transform");
+      el.style.removeProperty("transform");
+      unpan(top);
     };
     const follow = () => {
       if (!frame || !coarse()) return;
@@ -1394,7 +1428,8 @@ export function Shell({ panels, onNewInstance, viewOnly = false }) {
       if (up !== was) shellStore.set({ keyboard: up });
       fit();
     };
-    const focusChanged = () => { check(); follow(); };
+    // M-3327: a focusout whose focus goes to another text field is not the keyboard going away (it stays up).
+    const focusChanged = (e) => { leaving = e?.type === "focusout" && !isTextEntry(e.relatedTarget); check(); follow(); };
     const start = (e) => { composing = (e && e.target) || document.activeElement || null; };
     const end = () => { composing = null; composedAt = now(); check(); };
     check();

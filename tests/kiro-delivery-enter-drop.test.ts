@@ -29,7 +29,7 @@ const MESSAGE = "[user:example via discord, id:400000000000000042] MSG-1 pasted 
 const STRANDED = ` ▸ Time: 15s\n2% !> ${MESSAGE.split("\n")[0]}`;
 const STRANDED_WITH_ID = ` ▸ Time: 15s\n2% !> ${MESSAGE.replace(/\n/g, " ")}`;
 const GENERATING = `2% !> ${MESSAGE.split("\n")[0]}\n⠇ Thinking...`;
-const OLD_STRANDED = " ▸ Time: 9s\n7% !> [from:agend-leader-t1500000000000799511] an earlier message whose Enter was dropped";
+const OLD_STRANDED = " ▸ Time: 9s\n7% !> [from:fleet-lead] an earlier message whose Enter was dropped";
 const SUBMITTED_WITHOUT_SPINNER = [
   " ▸ Time: 9s",
   "32% λ !>",
@@ -556,7 +556,7 @@ describe("kiro delivery: stranded message from an earlier delivery (F3)", () => 
       captures++;
       return captures <= 2 ? OLD_STRANDED : h.state.pane;
     });
-    h.state.pane = "2% !> [from:agend-leader-t1500000000000799511] an earlier message whose Enter was dropped\n⠇ Thinking...";
+    h.state.pane = "2% !> [from:fleet-lead] an earlier message whose Enter was dropped\n⠇ Thinking...";
     const enters: string[] = [];
     h.enter.mockImplementation(async () => { enters.push("enter"); h.state.pane = GENERATING; return true; });
     h.paste.mockImplementation(async () => { enters.push("paste"); h.state.pane = STRANDED; return true; });
@@ -605,5 +605,28 @@ describe("non-Kiro backends keep the silence-based delivery path", () => {
     // pasted into on the silence decision alone, as before.
     expect(h.enter).toHaveBeenCalledTimes(1);   // no defensive retry for this backend
     expect(h.events).toContain("message_confirmed");
+  });
+});
+
+describe("bounded actual stranded submissions (M-3502)", () => {
+  it("never sends a fourth recovery Enter when the same old input remains", async () => {
+    const h = makeHarness(kiro()); dirs.push(h.dir); h.state.pane = OLD_STRANDED;
+    let enters = 0;
+    h.enter.mockImplementation(async () => { if (++enters > 3) throw Error("unexpected fourth recovery Enter"); return true; });
+    const failed = vi.fn(); h.daemon.on("message_failed", failed);
+    expect(await settle(h.daemon.deliverMessage(MESSAGE, STATUS, {}))).toBe(false);
+    expect(h.enter).toHaveBeenCalledTimes(3); expect(h.paste).not.toHaveBeenCalled();
+    expect(failed).toHaveBeenCalledWith(expect.objectContaining({ phase: "stranded-input", proof: "retry-budget-exhausted" }));
+  });
+  it("allows the final clear check after the third recovery Enter, then submits the new message once", async () => {
+    const h = makeHarness(kiro()); dirs.push(h.dir); h.state.pane = OLD_STRANDED;
+    let enters = 0; const keys = vi.spyOn(h.daemon, "sendDeliveryEnter");
+    h.enter.mockImplementation(async () => { enters++; h.state.pane = enters < 3 ? OLD_STRANDED : enters === 3 ? IDLE_BARE : GENERATING; return true; });
+    h.paste.mockImplementation(async () => { h.state.pane = STRANDED; return true; });
+    expect(await settle(h.daemon.deliverMessage(MESSAGE, STATUS, {}))).toBe(true);
+    expect(h.paste).toHaveBeenCalledOnce();
+    expect(keys.mock.calls.filter(call => call[0] === "stranded-input-submit")).toHaveLength(3);
+    expect(enters).toBe(5); // three recovery Enters plus Kiro's existing two-key submit path
+    expect(h.events).not.toContain("message_failed");
   });
 });

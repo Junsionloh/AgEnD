@@ -171,6 +171,8 @@ const ASSETS: Readonly<Record<string, { file: string; type: string }>> = {
   "theme.js": { file: join("shared", "theme.js"), type: "text/javascript; charset=utf-8" },
   // #1408: the design tokens every panel shares, and the font they name (Inter, SIL OFL 1.1: shared/fonts/OFL.txt).
   "model-picker.css": { file: join("shared", "model-picker.css"), type: "text/css; charset=utf-8" },
+  "preview-popout.css": { file: join("shared", "preview-popout.css"), type: "text/css; charset=utf-8" },
+  "office-dialogue.css": { file: join("shared", "office-dialogue.css"), type: "text/css; charset=utf-8" },
   // M-2904: Stop in the chat's working bar (linked by panel-chat.js; an older app.css lacks it).
   "chat-work-bar.css": { file: join("shared", "chat-work-bar.css"), type: "text/css; charset=utf-8" },
   "host-install.css": { file: join("shared", "host-install.css"), type: "text/css; charset=utf-8" },
@@ -193,6 +195,8 @@ const ASSETS: Readonly<Record<string, { file: string; type: string }>> = {
     // #3822: the in-place "this tab is older than AgEnD — reload" prompt the Outlet and lazy panels show (static, no data).
     "stale-tab.js",
     "module-warm.js",
+    // M-3328: a module's later stylesheets and pictures under the page's version (static, no data).
+    "asset-url.js",
     // #1408 step 2: View is public (an anonymous reader opens it under web.view_access: open), loaded on demand.
     "panel-view.js", "view-strings.js",
     // Claude history in the View: its renderer, loaded by View when a Claude agent's View is scrolled up (static code; the
@@ -204,6 +208,10 @@ const ASSETS: Readonly<Record<string, { file: string; type: string }>> = {
     "instance-switch.js", "chat-workspace-model.js", "chat-workspace-memory.js", "pane-geometry.js",
     // #1523 N3: every page's header tools (text size, usage), the usage dialog they open, and the read stream it shares with View.
     "header-tools.js", "usage-dialog.js", "usage-meter.js", "read-stream.js",
+    // M-3443: the one info icon (ⓘ), used by the usage dialog and Settings.
+    "info-tip.js",
+    // M-3492/M-3493: 最新's fade after scrolling, one behaviour for the Fleet chat and the Hub's threads.
+    "jump-idle.js",
     // M-3166: a phone's ⋯ sheet on an agent's pages (Chat, View, Log, Details) — static code, no data.
     "agent-sheet.js",
     // #2585: the docked side panel in the usage rail's place (the shell's right-hand column).
@@ -218,6 +226,7 @@ const ASSETS: Readonly<Record<string, { file: string; type: string }>> = {
     "owner-css.js",
     // #1629: agents' themes on their own chat surfaces (static code; the themes are read behind the gate).
     "app-themes.js",
+    "theme-picker.js",
     // #1629 r4 §1: the identity card (Details, the chat header, and View — whose anonymous reader sees cards too).
     "identity-card.js", "card-strings.js",
     // #1629 r4-4: widgets drawn by the page's own components (static code; the widgets are read behind the gate).
@@ -240,6 +249,9 @@ const ASSETS: Readonly<Record<string, { file: string; type: string }>> = {
     "chat-msg-actions.js",
     // M-3311 (2): 「引用」 on a selected passage — the Fleet chat's and a Hub conversation's. Its old /ui/js/ path re-exports it.
     "chat-quote.js",
+    // M-3326: a chat table's cells selected as a spreadsheet's (drag a column or a block, Ctrl/Cmd+C as TSV) — the Fleet
+    // chat's and a Hub conversation's.
+    "chat-table-select.js",
     // M-3125 PR3: a chat picture full size, its zoom and 「標註」 — the Fleet chat's and a Hub room's (old /ui/js/ paths re-export).
     "image-lightbox.js", "image-zoom.js", "image-annotate.js",
     // Hub E (#3226): the HTML side panel (versions, pages, Point at it). The fleet-only Files & changes and Share register

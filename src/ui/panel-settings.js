@@ -1,3 +1,4 @@
+import { HostMonitoringSettings } from "./settings-host-monitoring.js";
 import { SettingsBuildVersion } from "./settings-build-version.js";
 // #1408 step 3: the Settings panel (/settings[/<section>]) — agents, connections, ClassicBot rooms, general defaults,
 // the developer YAML. Behind the session gate (/ui/js/), loaded the first time it is opened.
@@ -79,6 +80,7 @@ import { useRuntimeCatalog } from "./runtime-catalog.js";
 import { ShortcutsHelpRow } from "./settings-shortcuts.js";
 import { GeneralLocation } from "./general-location.js";
 import { SettingsConnector } from "./settings-connector.js";
+import { ca } from "./contact-auth-strings.js";
 
 const tn = (k, ...v) => k === "sec_notifications" ? quotaNoticeText().title : t(`settings.${k}`, ...v);
 /**
@@ -117,6 +119,7 @@ export async function loadAll(lease) {
   if (!lease.current()) return null;
   if (!fleet.ok) return { error: true };
   out.fleet = fleet.body || {};
+  if(out.schema?.host_alert_defaults){const alerts=await read(lease,'/api/settings/fleet/host-alerts');if(!lease.current())return null;out.hostAlerts=alerts.ok?alerts.body:null;}
   const classic = await read(lease, "/api/settings/classic");
   if (!lease.current()) return null;
   out.classic = classic.body || {};
@@ -435,7 +438,7 @@ export function SettingsPanel({ route, navKey }) {
     : section === "agents" ? html`<${YamlLock} staged=${staged}><${Agents} ctx=${ctx} search=${search} clearSearch=${() => setSearch("")} openDialog=${toDialog} /></${YamlLock}>${SETTINGS_SECTIONS.includes("accounts") ? html`<p class="note s-agents-accounts-link">${layoutText("agentsAccountsNote")} <a href=${settingsPath("accounts")}>${layoutText("agentsAccountsLink")}<span aria-hidden="true">→</span></a></p>` : accountsCard()}`
     : section === "accounts" ? accountsCard()
     : section === "agent-defaults" ? html`<${GeneralLocation} /><${YamlLock} staged=${staged}><${General} key=${formKey} ctx=${ctx} part="fleet" />${!SETTINGS_SECTIONS.includes("notifications") ? html`<${QuotaNoticeSettings} key=${`quota:${formKey}`} ctx=${ctx} />` : null}</${YamlLock}>`
-    : section === "notifications" ? html`<${YamlLock} staged=${staged}><${QuotaNoticeSettings} key=${formKey} ctx=${ctx} /></${YamlLock}>`
+    : section === "notifications" ? html`<${YamlLock} staged=${staged}><${HostMonitoringSettings} key=${`monitoring:${formKey}`} ctx=${ctx} /><${QuotaNoticeSettings} key=${formKey} ctx=${ctx} /></${YamlLock}>`
     : section === "chat" ? html`<${SettingsConnector} /><${YamlLock} staged=${staged}><${Bots} ctx=${ctx} search=${search} openDialog=${toDialog} /></${YamlLock}>
         <${WebSection} key=${formKey} ctx=${ctx} staged=${staged} part="chat" />
         <div id="classicbot" class="s-anchor s-classic-area"><section class="card s-chat-classic"><h2 class="s-ap-group">ClassicBot</h2><${Classic} ctx=${ctx} search=${search} openDialog=${toDialog} /></section>
@@ -526,7 +529,7 @@ export function SettingsPanel({ route, navKey }) {
       <button type="button" class="btn btn-ghost btn-sm" disabled=${!ctx || yamlStaged(staged)} title=${ctx && yamlStaged(staged) ? tn("yamlUnsaved") : undefined} onClick=${openWizard}><${Icon} name="wand" size=${16} /><span class="hide-narrow">${tn("wizardButton")}</span></button>
       <button type="button" class="icon-btn" aria-label=${tn("helpButton")} title=${tn("helpButton")} onClick=${() => setDialog({ kind: "help", key: navKey })}><${Icon} name="info" /></button>
     </${PanelHeader}>
-    <nav data-trust="panel-navigation" class="seg s-nav" aria-label=${tn("title")}><${SettingsSearch} /><div class="s-nav-groups">${SETTINGS_GROUPS.map((g) => html`<div key=${g.id} class="s-nav-group" role="group" aria-labelledby=${`s-grp-${g.id}`}>
+    <nav data-trust="panel-navigation" class="seg s-nav" aria-label=${tn("title")}><${SettingsSearch} schema=${ctx?.schema} /><div class="s-nav-groups">${SETTINGS_GROUPS.map((g) => html`<div key=${g.id} class="s-nav-group" role="group" aria-labelledby=${`s-grp-${g.id}`}>
       <span class="s-nav-head" id=${`s-grp-${g.id}`}>${tn(`grp_${g.id}`)}</span>
       ${g.sections.map((k) => html`<a key=${k} href=${sectionPath(k)} class=${`seg-item${k === section ? " active" : ""}`} title=${tn(`sec_${k}`)}
         aria-current=${k === section ? "page" : undefined}><${Icon} name=${ICONS[k]} size=${16} /><span>${tn(`sec_${k}`)}</span></a>`)}</div>`)}</div></nav>
@@ -580,10 +583,10 @@ function marked(text, query) {
  * #2347 §6: search every setting — by its name, its config key, or the words people use (both languages: "token",
  * "語言", "port") — results grouped by section with where they are; Enter or a click goes there. "/" focuses it.
  */
-function SettingsSearch() {
+function SettingsSearch({schema}) {
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
-  const hits = useMemo(() => searchSettings(q).slice(0, 40), [q]);
+  const hits = useMemo(() => searchSettings(q, schema).slice(0, 40), [q, schema]);
   // Grouped by section, the group of the best match first (its order is the ranking's): Enter takes the best.
   const groups = useMemo(() => [...new Set(hits.map((e) => e.section))].map((s) => ({ section: s, items: hits.filter((e) => e.section === s) })), [hits]);
   const flat = groups.flatMap((g) => g.items);
@@ -1208,6 +1211,8 @@ function General({ ctx, part = "all" }) {
   return html`<div class=${fleetPart ? "s-defaults-layout" : "s-classic-layout"}><div class=${`form s-general s-part-${part}`}>
     ${fleetPart ? html`<${SharedAgentSettings} ctx=${ctx} form=${{ f, set, base, errors, warnings, unset, fc, notes, replyNote: fleetReply }} />` : null}
     ${classicPart ? html`<section class="card s-classic-defaults-card"><h3>${tn("classicDefaultsTitle")}</h3>
+      ${/* M-3339 (the leader's A3 decision): what a new room's default means, before any room is set — said here, plainly. */ ""}
+      <p class="s-info contact-new-rooms"><span aria-hidden="true">ⓘ</span><span>${ca("newRoomsRestricted")}</span></p>
       <div class="grid2">
         <div class=${fc("field", "classicBackend")}>${L(tn("classicBackend"), "classic_defaults.backend", "g-cbe")}<${BackendSelect} id="g-cbe" value=${f.classicBackend} onChange=${set("classicBackend")} hostOnly />
           ${!c.backend && f.classicBackend === base.classicBackend ? html`<${Inherited} text=${valueText(f.classicBackend, "backend")} builtin=${!d.backend} from=${inAgentDefaults("#g-be")} />` : null}</div>

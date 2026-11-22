@@ -26,7 +26,7 @@ import { RoomButtons } from "./buttons.js";
 import { HUB_ROOM_REACT_CAPABILITY, roomReactSchema } from "../protocol.js";
 import { replyButtonClickText } from "../../reply-buttons.js";
 import { pollResultsText, type PollBallot } from "../../reply-polls.js";
-import { RoomDirectoryCandidates, rememberRoomPeople, type RoomPersonSelection } from "./directory.js";
+import { RoomDirectoryCandidates, rememberRoomPeople, roomPersonLabels, type RoomPersonSelection } from "./directory.js";
 import type { HubAttachmentStore } from "../attachments/store.js";
 import type { HubAttachmentRef } from "../types.js";
 import { isInlineImage } from "../attachments/limits.js";
@@ -76,6 +76,8 @@ export function searchSnippet(text: string, terms: string[], width = 120): { sni
 const reactSchema = z.strictObject({ emoji: z.string().min(1).max(16), on: z.boolean() });
 /** M-3127: the most distinct emoji one post carries. */
 export const ROOM_REACTION_LIMIT = 12;
+/** M-3340: a person's pins per room (the Fleet chat's own limit, chat-pins.js PINS_MAX). */
+export const ROOM_PINS_MAX = 50;
 /** One emoji as a person picks it: one grapheme, a pictograph (ZWJ sequences, FE0F and skin tones kept), no controls. */
 export function validRoomEmoji(s: unknown): s is string {
   if (typeof s !== "string" || s.length < 1 || s.length > 16 || /[\u0000-\u001f\u007f\s]/u.test(s)) return false;
@@ -470,18 +472,23 @@ export class HubGroupRooms {
         me: { canCreateRooms: canCreateRoom(this.core, db, me), assistant: this.assistant.availability()?.enabled === true }, invitations: 0 };
     }, this.fence(ctx));
   }
-  async candidates(ctx: HubRequestContext, q: string, kind: string) {
+  async candidates(ctx: HubRequestContext, q: string, kind: string, discovery = false) {
     if (q.length > 64 || /[\u0000-\u001f\u007f]/.test(q) || !["person", "team", "group", "agent"].includes(kind)) throw new HubProtocolError("invalid");
     const me = await this.who(ctx);
     const allowed = (db: DB) => canCreateRoom(this.core, db, me) || !!db.prepare(`SELECT 1 FROM hub_room_members m JOIN hub_group_rooms r ON r.id=m.room_id
       WHERE m.kind='person' AND m.subject=? AND m.role='manager' AND r.archived=0`).get(me);
     if (kind === "agent") {
       this.core.atomic(db => { if (!allowed(db)) throw new HubRoomRefusal(403, "denied"); }, this.fence(ctx));
-      const view = await new HubCatalogService(this.core).visible(ctx);
-      const hits = [...view.mine.map(e => ({ kind: "agent" as const, id: e.id, name: e.displayName, mine: true, owner: { name: this.core.atomic(db => this.name(db, me)) } })),
-        ...view.askable.map(({ exposure: e, ownerName }) => ({ kind: "agent" as const, id: e.id, name: e.displayName, mine: false, owner: { name: ownerName } }))]
-        .filter(e => e.name.toLowerCase().startsWith(q.trim().toLowerCase())).slice(0, 20);
-      this.fence(ctx).assertCurrent(); return this.core.atomic(db=>hits.map(row=>({...row,...agentIntro(db,row.id)})),this.fence(ctx));
+      const catalog = new HubCatalogService(this.core);
+      return (discovery ? catalog.withRoomVisible.bind(catalog) : catalog.withVisible.bind(catalog))(ctx, view => {
+        const hits = [...view.mine.map(e => ({ kind: "agent" as const, id: e.id, name: e.displayName, mine: true, owner: { name: this.core.atomic(db => this.name(db, me)) } })),
+          ...view.askable.map(({ exposure: e, ownerName }) => ({ kind: "agent" as const, id: e.id, name: e.displayName, mine: false, owner: { name: ownerName } })),
+          ...(view.findable ?? []).map(({ exposure: e, ownerName }) => ({ kind: "agent" as const, id: e.id, name: e.displayName, mine: false, discoverable: true, owner: { name: ownerName } }))]
+          .filter(e => e.name.toLowerCase().startsWith(q.trim().toLowerCase())).slice(0, 20);
+        this.fence(ctx).assertCurrent(); return this.core.atomic(db => {
+          if (!allowed(db)) throw new HubRoomRefusal(403, "denied");
+          return hits.map(row => ({ ...row, ...agentIntro(db, row.id) }));
+      }, this.fence(ctx)); });
     }
     if (q.trim().length >= 2 && (kind === "group" && this.core.deps.directory.searchPolicyGroups || kind === "person" && this.core.deps.directory.searchGrantPeople)) {
       return this.directory.search(ctx, me, q.trim(), kind as "person" | "group", () => this.core.atomic(db => {
@@ -493,13 +500,13 @@ export class HubGroupRooms {
       if (kind === "team") return [];
       if (kind !== "person") return [];
       const prefix = `${q.trim().replace(/[\\%_]/g, c => `\\${c}`)}%`;
-      return db.prepare("SELECT person,display_name FROM hub_people WHERE status='active' AND (display_name LIKE ? ESCAPE '\\' OR login_label LIKE ? ESCAPE '\\') ORDER BY display_name,person LIMIT 20")
-        .all(prefix, prefix) as { person: string; display_name: string }[];
+      return db.prepare("SELECT person,display_name,login_label FROM hub_people WHERE status='active' AND (display_name LIKE ? ESCAPE '\\' OR login_label LIKE ? ESCAPE '\\') ORDER BY display_name,person LIMIT 20")
+        .all(prefix, prefix) as { person: string; display_name: string; login_label: string }[];
     }, this.fence(ctx));
-    const hits: { kind: "person"; id: string; name: string }[] = [];
-    for (const row of rows) if (await this.core.eligible(personFromString(row.person))) hits.push({ kind: "person", id: row.person, name: row.display_name });
+    const hits: { id: string; name: string; account: string }[] = [];
+    for (const row of rows) if (await this.core.eligible(personFromString(row.person))) hits.push({ id: row.person, name: row.display_name, account: row.login_label });
     return this.core.atomic(db => { if (!allowed(db)) throw new HubRoomRefusal(403, "denied");
-      return kind === "team" ? (this.core.deps.roomTeamCandidates?.(db, q.trim()) ?? []).slice(0, 20).map(row => ({ kind: "team", ...row })) : hits;
+      return kind === "team" ? (this.core.deps.roomTeamCandidates?.(db, q.trim()) ?? []).slice(0, 20).map(row => ({ kind: "team", ...row })) : roomPersonLabels(hits);
     }, this.fence(ctx));
   }
   private candidateAllowed(ctx: HubRequestContext, me: string): void {
@@ -773,6 +780,43 @@ export class HubGroupRooms {
     // The post as it now is, on the stream every open tab already reads (message.updated): no new event name.
     if (done.changed) this.emit({ type: "message.updated", roomId: id, data: { roomId: id, message: this.projection(done.post) }, sequence: done.post.sequence });
     return { reactions: done.reactions };
+  }
+  /**
+   * M-3340: the signed-in person's own pins in a group room — newest first, each with the message as messages() shows it to
+   * them now. A pin whose message they can no longer see (it is older than their joining, or its question is not theirs)
+   * is left out. Nobody else's pins are ever read, and nobody else learns of these.
+   */
+  async pins(ctx: HubRequestContext, id: string): Promise<{ pins: Array<{ messageId: string; pinnedAt: number; message: RoomMessage }> }> {
+    const me = await this.who(ctx);
+    return this.core.atomic(db => ({ pins: this.pinList(db, id, this.member(db, id, me), me) }), this.fence(ctx));
+  }
+  /** M-3340: pin (on) or unpin a message the person can see; answers with their pins. Past ROOM_PINS_MAX: 409 pins-full. */
+  async pin(ctx: HubRequestContext, id: string, postId: unknown, on: boolean) {
+    const target = validated(uuid, postId), me = await this.who(ctx);
+    const out = this.core.atomic(db => {
+      const member = this.member(db, id, me);
+      if (on) {
+        const post = this.visiblePost(db, id, member, target);
+        if (post.author_kind === "system") throw new HubRoomRefusal(409, "invalid");
+        const has = db.prepare("SELECT 1 FROM hub_room_pins WHERE room_id=? AND person=? AND post_id=?").get(id, me, post.id);
+        if (!has && (db.prepare("SELECT COUNT(*) n FROM hub_room_pins WHERE room_id=? AND person=?").get(id, me) as { n: number }).n >= ROOM_PINS_MAX) throw new HubRoomRefusal(409, "pins-full");
+        if (!has) db.prepare("INSERT INTO hub_room_pins(room_id,person,post_id,pinned_at) VALUES(?,?,?,?)").run(id, me, post.id, this.core.now());
+      } else db.prepare("DELETE FROM hub_room_pins WHERE room_id=? AND person=? AND post_id=?").run(id, me, target);
+      return { pins: this.pinList(db, id, member, me) };
+    }, this.fence(ctx));
+    // The person's other tabs and devices read their pins again; the event says only which room.
+    this.emit({ type: "pins.changed", roomId: id, data: { roomId: id }, audiencePerson: me });
+    return out;
+  }
+  private pinList(db: DB, id: string, member: MemberRow, me: string) {
+    const rows = db.prepare("SELECT post_id,pinned_at FROM hub_room_pins WHERE room_id=? AND person=? ORDER BY pinned_at DESC,rowid DESC").all(id, me) as { post_id: string; pinned_at: number }[];
+    const out: Array<{ messageId: string; pinnedAt: number; message: RoomMessage }> = [];
+    for (const row of rows) {
+      let post: PostRow;
+      try { post = this.visiblePost(db, id, member, row.post_id); } catch { continue; }
+      out.push({ messageId: row.post_id, pinnedAt: row.pinned_at, message: this.projection(post) });
+    }
+    return out;
   }
   /**
    * M-3127: a post exactly as messages() shows it to `member` — since their joined_sequence, its lineage's audience floor

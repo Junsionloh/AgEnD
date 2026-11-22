@@ -219,13 +219,21 @@ export async function openPublicLink(fx: { fm: any; browser: any }, opts: { host
       const ctx = await freshContext(fx.browser, c, popts.reducedMotion === true);
       // Stubbed transport: https://HOST/* → the gateway's local port, with that Host (the gateway pins it), as the tunnel
       // would carry it. The public link has no live stream (the page polls); one asked for anyway is refused.
+      // M-3331: every request on its own connection, at once — unthrottled, as cloudflared's origin side can be (Go's
+      // http.Transport, no per-host cap: AgEnD sets no originRequest options; Fable on #4174). M-3329 had capped this at 8
+      // in flight, a gentler tunnel than the real one, while the gateway still reset connections past its 32; since #4176
+      // the gateway holds those for a slot, and this fixture checks that against the burst a page really makes.
       await ctx.route(`https://${HOST}/**`, async (route: any) => {
         const req = route.request(), u = new URL(req.url());
+        if (/text\/event-stream/.test(req.headers().accept ?? "")) { await route.abort().catch(() => {}); return; }
         try {
-          if (/text\/event-stream/.test(req.headers().accept ?? "")) { await route.abort(); return; }
           const response = await route.fetch({ url: `http://127.0.0.1:${gatewayPort}${u.pathname}${u.search}`, headers: { ...req.headers(), host: HOST } });
           await route.fulfill({ response });
-        } catch { /* the page or its context closed while a poll was in flight: nothing is waiting for it */ }
+        } catch {
+          // The page or its context closed while a poll was in flight — or the transport failed: answer it as failed,
+          // never leave the page waiting on it (M-3329).
+          await route.abort("failed").catch(() => {});
+        }
       });
       const page = await ctx.newPage();
       const seen = collectErrors(page);

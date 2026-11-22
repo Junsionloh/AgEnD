@@ -232,7 +232,7 @@ export function createStubClient({ now = () => Date.now(), agents = () => [] } =
 export function createHubWebClient({ fetchImpl = (...a) => fetch(...a), readTimeoutMs = 120_000 } = {}) {
   // The factory override is for owned transports/rehearsals; the page uses the finite default.
   const readBudget = Number.isInteger(readTimeoutMs) && readTimeoutMs > 0 && readTimeoutMs <= 300_000 ? readTimeoutMs : 120_000;
-  let csrf = null, codeNotices = false, roomsLive = false, teamsLive = false, generation = 0;
+  let csrf = null, codeNotices = false, roomsLive = false, teamsLive = false, ownerRequestsLive = false, roomDiscoveryLive = false, generation = 0;
   const ended = new Set(), pendingReads = new Map(), waits = new Set(), readControllers = new Set();
   let readTail = Promise.resolve();
   const retired = () => ({ ok: false, status: 401, code: "unauthenticated" });
@@ -302,18 +302,24 @@ export function createHubWebClient({ fetchImpl = (...a) => fetch(...a), readTime
     let json = null;
     try { json = await r.json(); } catch { json = null; }
     if (method === "GET" && signal?.aborted) return unreachable();
-    if (r.status === 401 && mine === generation) { retireReads(); csrf = null; codeNotices = false; roomsLive = false; teamsLive = false; for (const fn of ended) { try { fn(); } catch { /* a listener's own failure */ } } }
+    if (r.status === 401 && mine === generation) { retireReads(); csrf = null; codeNotices = false; roomsLive = false; teamsLive = false; ownerRequestsLive = false; roomDiscoveryLive = false; for (const fn of ended) { try { fn(); } catch { /* a listener's own failure */ } } }
     if (!r.ok) return { ok: false, status: r.status, code: (json && typeof json.code === "string" && json.code) || "failed", retryAfter: Number(r.headers.get("Retry-After")) || 0,
       ...(method === "POST" && path === "/hub/v1/admin/enrolment-codes" && r.status === 429 && json?.code === "backpressure"
         && ["live-code-limit", "hourly-code-limit"].includes(json.reason) ? { reason: json.reason } : {}), ...roomRefusal(json) };
     return { ok: true, ...(json && typeof json === "object" ? json : {}) };
   }
   const id = (v) => encodeURIComponent(String(v));
+  const ownerRequestCall = async (scope, method, path, body) => {
+    if (!scope || scope !== csrf) return retired();
+    const mine = generation, result = await call(method, path, body);
+    return mine === generation && scope === csrf ? result : retired();
+  };
   // Track U2: a refused room write says what the person is told — 409 people-limit the room's would-be head count (the
   // deduplicated union, the creator and current members included) and the limit; 503 group-unavailable which group.
   const roomRefusal = (json) => json?.code === "people-limit" && Number.isSafeInteger(json.people)
     ? { people: json.people, limit: Number.isSafeInteger(json.limit) ? json.limit : 100 }
-    : json?.code === "group-unavailable" && typeof json.group === "string" ? { group: json.group } : {};
+    : json?.code === "group-unavailable" && typeof json.group === "string" ? { group: json.group }
+    : json?.code === "request-limit" && Number.isSafeInteger(json.resetsAt) && json.resetsAt > 0 && json.resetsAt <= 8.64e15 ? { resetsAt: json.resetsAt } : {};
   // One stream per tab (#1580): every live subscription shares one EventSource. A Hub with rooms carries the notices on
   // its rooms stream too (`notices` = the notice version); before that the notices have their own. Listeners are kept
   // per event name; the stream closes with its last listener, and a refused (CLOSED) stream tells every subscriber once.
@@ -361,10 +367,22 @@ export function createHubWebClient({ fetchImpl = (...a) => fetch(...a), readTime
     stub: false, web: true,
     /** Hear the session end (a 401 anywhere). @returns {() => void} */
     onSignedOut(fn) { ended.add(fn); return () => ended.delete(fn); },
-    async session() { const r = await call("GET", "/hub/v1/session"); if (r.ok) { csrf = r.signedIn ? r.csrf || null : null; codeNotices = r.signedIn === true && r.features?.includes("enrolment-code-v1") === true; roomsLive = r.signedIn === true && r.features?.includes(ROOMS_FEATURE) === true; teamsLive = r.signedIn === true && r.features?.includes(TEAMS_FEATURE) === true; } return r; },
-    async signIn(login, password) { retireReads(); teamsLive = false; const r = await call("POST", "/hub/v1/session", { login, password }); if (r.ok) { csrf = r.csrf || null; codeNotices = r.features?.includes("enrolment-code-v1") === true; roomsLive = r.features?.includes(ROOMS_FEATURE) === true; teamsLive = r.features?.includes(TEAMS_FEATURE) === true; } return r; },
-    async signOut() { retireReads(); const r = await call("DELETE", "/hub/v1/session"); csrf = null; codeNotices = false; roomsLive = false; teamsLive = false; return r; },
+    async session() { const r = await call("GET", "/hub/v1/session"); if (r.ok) { csrf = r.signedIn ? r.csrf || null : null; codeNotices = r.signedIn === true && r.features?.includes("enrolment-code-v1") === true; roomsLive = r.signedIn === true && r.features?.includes(ROOMS_FEATURE) === true; teamsLive = r.signedIn === true && r.features?.includes(TEAMS_FEATURE) === true; ownerRequestsLive = r.signedIn === true && r.features?.includes("room-owner-requests-v1") === true; roomDiscoveryLive = r.signedIn === true && r.features?.includes("room-agent-discovery-v1") === true; } return r; },
+    async signIn(login, password) { retireReads(); teamsLive = false; ownerRequestsLive = false; roomDiscoveryLive = false; const r = await call("POST", "/hub/v1/session", { login, password }); if (r.ok) { csrf = r.csrf || null; codeNotices = r.features?.includes("enrolment-code-v1") === true; roomsLive = r.features?.includes(ROOMS_FEATURE) === true; teamsLive = r.features?.includes(TEAMS_FEATURE) === true; ownerRequestsLive = r.features?.includes("room-owner-requests-v1") === true; roomDiscoveryLive = r.features?.includes("room-agent-discovery-v1") === true; } return r; },
+    async signOut() { retireReads(); const r = await call("DELETE", "/hub/v1/session"); csrf = null; codeNotices = false; roomsLive = false; teamsLive = false; ownerRequestsLive = false; roomDiscoveryLive = false; return r; },
     aiAppsScope() { return csrf; },
+    roomAgentRequestScope() { return csrf; },
+    requestRoomAgent(scope, roomId, input) { return ownerRequestCall(scope, "POST", "/hub/v1/rooms/" + id(roomId) + "/agent-requests", input); },
+    roomAgentRequests(scope, roomId, after) { return ownerRequestCall(scope, "GET", "/hub/v1/rooms/" + id(roomId) + "/agent-requests" + (after ? "?after=" + id(after) : "")); },
+    cancelRoomAgentRequest(scope, roomId, requestId) { return ownerRequestCall(scope, "DELETE", "/hub/v1/rooms/" + id(roomId) + "/agent-requests/" + id(requestId)); },
+    ownerRequestsLive() { return ownerRequestsLive; },
+    roomDiscoveryLive() { return roomDiscoveryLive; },
+    agentRoomDiscovery(scope, exposureId, input) { return ownerRequestCall(scope, input === undefined ? "GET" : "PUT", "/hub/v1/exposures/" + id(exposureId) + "/room-discovery", input); },
+    ownerAgentRequest(scope, requestId) { return ownerRequestCall(scope, "GET", "/hub/v1/agent-requests/" + id(requestId)); },
+    acceptOwnerAgentRequest(scope, requestId, input) { return ownerRequestCall(scope, "POST", "/hub/v1/agent-requests/" + id(requestId) + "/accept", input); },
+    declineOwnerAgentRequest(scope, requestId) { return ownerRequestCall(scope, "POST", "/hub/v1/agent-requests/" + id(requestId) + "/decline", {}); },
+    ownerAgentRequests(scope, after) { return ownerRequestCall(scope, "GET", "/hub/v1/agent-requests" + (after ? "?after=" + id(after) : "")); },
+    agentRequestSettings(scope, input) { return ownerRequestCall(scope, input === undefined ? "GET" : "PUT", "/hub/v1/me/agent-request-settings", input); },
     aiApps(scope) { return scope && scope === csrf ? call("GET", "/hub/v1/me/ai-apps") : Promise.resolve(retired()); },
     disconnectAiApp(scope, appId) { return scope && scope === csrf ? call("DELETE", `/hub/v1/me/ai-apps/${id(appId)}`) : Promise.resolve(retired()); },
     appConsent(scope, request) { return scope && scope === csrf ? call("GET", `/hub/v1/mcp/consent?${new URLSearchParams({request})}`) : Promise.resolve(retired()); },
@@ -443,7 +461,7 @@ export function createHubWebClient({ fetchImpl = (...a) => fetch(...a), readTime
      * server without rooms ignores the parameter (its answer is then normalised here).
      */
     async roomList() {
-      const r = await call("GET", "/hub/v1/rooms?v=2");
+      const r = await call("GET", "/hub/v1/rooms?v=2" + (ownerRequestsLive ? "&ownerRequests=1" : ""));
       if (!r.ok || roomsLive) return r;
       return { ...r, rooms: (Array.isArray(r.rooms) ? r.rooms : []).map(legacyRoom).filter(Boolean) };
     },
@@ -479,6 +497,10 @@ export function createHubWebClient({ fetchImpl = (...a) => fetch(...a), readTime
     },
     /** M-3127: add (`on`) or take back my reaction `emoji` on a group-room message → { reactions }. */
     reactRoomMessage(roomId, messageId, emoji, on) { return call("POST", `/hub/v1/rooms/${id(roomId)}/messages/${id(messageId)}/reactions`, { emoji: String(emoji), on: on === true }); },
+    /** M-3340: my own pins in a group room (nobody else's) → { pins: [{ messageId, pinnedAt, message }] }, newest first. */
+    roomPins(roomId) { return call("GET", `/hub/v1/rooms/${id(roomId)}/pins`); },
+    /** M-3340: pin (`on`) or unpin a group-room message for me only → { pins }. Past 50: the Hub refuses (pins-full). */
+    pinRoomMessage(roomId, messageId, on) { return call(on ? "PUT" : "DELETE", `/hub/v1/rooms/${id(roomId)}/pins/${id(messageId)}`); },
     markRoomRead(roomId, upTo) { return call("POST", `/hub/v1/rooms/${id(roomId)}/read`, { upTo }); },
     /**
      * The one live stream of everything this person may see (seam 1): `handlers[name](data)` for each of ROOM_EVENTS,
@@ -531,6 +553,7 @@ export function createHubWebClient({ fetchImpl = (...a) => fetch(...a), readTime
     roomCandidates(q, kind, signal) {
       const s = new URLSearchParams({ q: String(q ?? "") });
       if (kind) s.set("kind", kind);
+      if (kind === "agent" && roomDiscoveryLive) s.set("discovery", "1");
       return call("GET", `/hub/v1/rooms/candidates?${s}`, undefined, signal);
     },
     /**
