@@ -657,7 +657,10 @@ An instance's web chat can refer to a card, and the agent is handed it. Nothing 
   after a `tasks` stream event; until the answer arrives, or when the number is no card, the text stays text.
 - **The agent.** `POST /ui/send` reads the numbers in the typed text, reads those cards from the board *now*, and puts a block under
   the person's words in the message it delivers (`[Task cards this message refers to]`, a line per card as `task get` writes it,
-  and how to read one in full). Not for a guest, a line that starts with `/` (a command for the CLI, `/raw`'s exact paste), an instance
+  and how to read one in full). The last line is in the form *this* instance can use, on every runtime — a native (Windows) agent
+  included, which has the `task` tool: `task get M-n (detail: true)` for an MCP instance, `agend-agent task get M-n --detail` for
+  `agent_mode: cli`; an instance whose `tool_set` leaves `task` out (`minimal`, in either mode: the CLI is refused the same way) is
+  told it has no task tool, so it does not try one it would be refused (`chat-task-refs.ts`'s `taskReadWay`). Not for a guest, a line that starts with `/` (a command for the CLI, `/raw`'s exact paste), an instance
   whose task board is switched off (it is told nothing of the board: only the person's words go), or a card a hidden instance
   holds over the link; a sub task whose main task is hidden there does not name it (`sub task`, not `sub task of M-n`). The chat's own copy, the
   channel echo and the delivery receipt's "what was typed" stay the person's words. A number with no card adds nothing and fails

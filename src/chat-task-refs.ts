@@ -17,6 +17,9 @@
  */
 import { cardCode, type Card, type TaskBoard } from "./scheduler/task-board.js";
 import { cardLine, oneLine } from "./scheduler/task-board-text.js";
+import { isWindowsInstance } from "./native-instance-registry.js";
+import { mayUseTool, resolveToolSet } from "./tool-permissions.js";
+import type { InstanceConfig } from "./types.js";
 
 /** The most cards one message brings to the agent (more numbers than this are plain text). */
 export const TASK_REF_MAX = 10;
@@ -73,11 +76,28 @@ export const TASK_REF_HEADER = "[Task cards this message refers to]";
 export const TASK_REF_SEPARATOR = `\n\n${TASK_REF_HEADER}`;
 
 /**
+ * How an instance can read a whole card, for the line that ends the block (AGEND-333 D1): the hint names what THIS instance can
+ * actually use, whatever its runtime.
+ *  - `mcp`: the `task` tool (every MCP runtime, and a native Windows agent: a pane's tool call, an exec agent's native MCP — a
+ *    Windows instance's `agent_mode` is not what its agent talks through, so it is not read).
+ *  - `cli`: `agend-agent task get M-n --detail` (`agent_mode: cli`, which starts no MCP server).
+ *  - `none`: its `tool_set` leaves the `task` tool out (`minimal`). That holds in CLI mode too: `agend-agent task` is refused the same way
+ *    (agent-endpoint.ts), so neither form is offered — the block says so instead of naming a tool the instance would be refused.
+ */
+export type TaskReadWay = "mcp" | "cli" | "none";
+export function taskReadWay(config: Pick<Partial<InstanceConfig>, "runtime" | "agent_mode" | "tool_set" | "general_topic"> | undefined, name: string): TaskReadWay {
+  if (!mayUseTool(resolveToolSet(config, name), "task")) return "none";
+  if (isWindowsInstance(config)) return "mcp";
+  return config?.agent_mode === "cli" ? "cli" : "mcp";
+}
+
+/**
  * The block for the agent, or "" when there is no card: one line a card — "M-3 [in progress] Build the login API @dev-a",
  * and "sub task of M-1" for a sub task ("sub task" alone when its main task is one `hidden` says to leave out) — then how to
- * read a whole card. `hint: false` leaves that out (a runtime with no `task` tool). Text only; a title is cut to one line.
+ * read a whole card, in the form `read` says this instance can use (taskReadWay; the MCP tool's form when not given). Text only;
+ * a title is cut to one line.
  */
-export function taskRefBlock(board: Pick<TaskBoard, "findCard">, cards: readonly Card[], opts: { hint?: boolean; hidden?: (card: Card) => boolean } = {}): string {
+export function taskRefBlock(board: Pick<TaskBoard, "findCard">, cards: readonly Card[], opts: { read?: TaskReadWay; hidden?: (card: Card) => boolean } = {}): string {
   if (!cards.length) return "";
   const lines = cards.map((c) => {
     const line = cardLine({ ...c, title: oneLine(c.title, TITLE_MAX) });
@@ -86,7 +106,10 @@ export function taskRefBlock(board: Pick<TaskBoard, "findCard">, cards: readonly
     const main = c.parent ? board.findCard(c.parent) : undefined;
     return main && !(opts.hidden && opts.hidden(main)) ? `${line} (sub task of ${main.code})` : `${line} (sub task)`;
   });
-  if (opts.hint !== false) lines.push(`Read a card in full with the task tool: task get ${cards[0]!.code} (or agend-agent task get ${cards[0]!.code} --detail).`);
+  const code = cards[0]!.code, read = opts.read ?? "mcp";
+  if (read === "cli") lines.push(`Read a card in full with: agend-agent task get ${code} --detail`);
+  else if (read === "mcp") lines.push(`Read a card in full with the task tool: task get ${code} (detail: true).`);
+  else lines.push("You have no task tool (your tool set leaves it out), so these lines are all of the card you can read here; ask the person for more.");
   return `${TASK_REF_SEPARATOR}\n${lines.join("\n")}`;
 }
 

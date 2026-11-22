@@ -68,7 +68,7 @@ import { scheduleView } from "./web-schedules.js";
 import { DEFAULT_SCHEDULER_CONFIG } from "./scheduler/index.js";
 import type { Schedule, ScheduleRetry } from "./scheduler/types.js";
 import { CARD_PRIORITIES, CARD_SIZES, CARD_STATUSES, TaskBoardError, cardCode, type Actor as BoardActor, type TaskBoard } from "./scheduler/task-board.js";
-import { TASK_REF_SEPARATOR, cardsForRefs, taskRefBlock, taskRefCodes, taskRefView } from "./chat-task-refs.js";
+import { TASK_REF_SEPARATOR, cardsForRefs, taskReadWay, taskRefBlock, taskRefCodes, taskRefView } from "./chat-task-refs.js";
 import { readStatuslineModel, resolveInstanceContext } from "./topic-commands.js";
 import { z } from "zod";
 import { ONBOARDING_BACKENDS } from "./backend-signin-pending.js";
@@ -4812,7 +4812,7 @@ function handleSendMessage(req: IncomingMessage, res: ServerResponse, ctx: WebAp
       const taskBoard = guest || taskBoardOffIn(ctx.fleetConfig, instance) || /^\s*\//.test(typed) ? undefined : ctx.scheduler?.db.board;
       const { hidden: hiddenCard } = boardHiding(ctx, linkRestricted(req, new URL(req.url ?? "/", "http://localhost"), ctx));
       const refCards = taskBoard ? cardsForRefs(taskBoard, taskRefCodes(typed), hiddenCard) : [];
-      const refBlock = taskBoard && refCards.length ? taskRefBlock(taskBoard, refCards, { hint: !native, hidden: hiddenCard }) : "";
+      const refBlock = taskBoard && refCards.length ? taskRefBlock(taskBoard, refCards, { read: taskReadWay(ctx.fleetConfig?.instances[instance], instance), hidden: hiddenCard }) : "";
       const deliveredText = delivery.text + refBlock;
       // #1269: `/raw ` is pasted into the CLI with no [user:] envelope (the daemon's own check, on this exact text).
       // M-3278 (decision 7933bf90): the public link's admin session may do that too, as a local one may; anyone else

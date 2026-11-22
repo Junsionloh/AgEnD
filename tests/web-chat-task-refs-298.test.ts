@@ -26,7 +26,7 @@ const { FleetManager } = await import("../src/fleet-manager.js");
 const { WEB_CSRF_HEADER, WEB_SESSION_COOKIE } = await import("../src/web-auth.js");
 const { csrfTokenFor, tokenEpoch } = await import("../src/web-session.js");
 const { SchedulerDb } = await import("../src/scheduler/db.js");
-const { TASK_REF_HEADER, cardsForRefs, taskRefBlock, taskRefCodes } = await import("../src/chat-task-refs.js");
+const { TASK_REF_HEADER, cardsForRefs, taskReadWay, taskRefBlock, taskRefCodes } = await import("../src/chat-task-refs.js");
 const { formatHumanInboundMessage } = await import("../src/human-delivery-receipts.js");
 
 const ANN = { kind: "person", name: "Ann" } as const;
@@ -48,12 +48,17 @@ const session = (tier: "admin" | "guest", owner?: typeof ALICE) =>
 
 beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), "agend-298-fleet-"));
-  writeFileSync(join(dir, "fleet.yaml"), `health_port: 0\ninstances:\n  a:\n    working_directory: ${dir}\n    backend: claude-code\n  b:\n    working_directory: ${dir}\n    backend: claude-code\n    dashboard:\n      task_board: false\n`);
+  writeFileSync(join(dir, "fleet.yaml"), `health_port: 0\ninstances:\n  a:\n    working_directory: ${dir}\n    backend: claude-code\n  b:\n    working_directory: ${dir}\n    backend: claude-code\n    dashboard:\n      task_board: false\n  cli:\n    working_directory: ${dir}\n    backend: claude-code\n    agent_mode: cli\n  min:\n    working_directory: ${dir}\n    backend: claude-code\n    tool_set: minimal\n  mincli:\n    working_directory: ${dir}\n    backend: claude-code\n    tool_set: minimal\n    agent_mode: cli\n`);
   fm = new FleetManager(dir);
   const q = () => {}; fm.logger = { info: q, warn: q, error: q, debug: q, trace: q, fatal: q, child: () => fm.logger };
   fm.notifyFleetError = () => true; fm.loadConfig(join(dir, "fleet.yaml"));
   fm.lifecycle = { isPaused: () => false, hasWorkLease: () => false, daemons: new Map() };
   fm.getInstanceStatus = () => "running";
+  // A native Windows agent (D1): the entry is put in directly, as the registry would write it (a pane, and an exec agent whose config says `agent_mode: cli`).
+  const windows = { working_directory: dir, backend: "claude-code", runtime: "windows", native_agent_id: "0a1b2c3d-1111-4222-8333-444455556666", native_sandbox: "workspace-write" };
+  fm.fleetConfig.instances["win-pane"] = { ...fm.fleetConfig.instances.a, ...windows, native_adapter: "pane", agent_mode: "mcp" };
+  fm.fleetConfig.instances["win-exec"] = { ...fm.fleetConfig.instances.a, ...windows, native_adapter: "exec", agent_mode: "cli" };
+  fm.fleetConfig.instances["win-min"] = { ...fm.fleetConfig.instances.a, ...windows, native_adapter: "pane", tool_set: "minimal" };
   fm.initializeWebAuthTokens(); fm.startHealthServer(0);
   await vi.waitFor(() => expect(fm.getDashboardAccess().ready).toBe(true));
   port = (fm.healthServer.address() as { port: number }).port;
@@ -149,7 +154,7 @@ describe("POST /ui/send: the cards a message names go to the agent", () => {
       TASK_REF_HEADER,
       "M-1 [in progress] Build the login API @dev-a (main task)",
       "S-1 [to do] Write the tests across two lines (sub task of M-1)",
-      "Read a card in full with the task tool: task get M-1 (or agend-agent task get M-1 --detail).",
+      "Read a card in full with the task tool: task get M-1 (detail: true).",
     ].join("\n"));
     // What the person typed is what the receipt records; the meta is the web message's, as before.
     expect(bodies).toEqual(["please look at #M-1 and #S-1"]);
@@ -159,6 +164,47 @@ describe("POST /ui/send: the cards a message names go to the agent", () => {
     const wire = formatHumanInboundMessage(delivered[0].content, delivered[0].meta, "mcp");
     expect(wire).toContain(`please look at #M-1 and #S-1\n\n${TASK_REF_HEADER}\nM-1 [in progress]`);
     expect(wire.split("\n").filter((l) => l.startsWith("> "))).toEqual([]);
+  });
+  describe("the last line says how THIS instance reads a whole card (AGEND-333 D1)", () => {
+    // An exec agent's retry check reads its saved turns from the Windows runtime; none is saved here, so there is no earlier send to match.
+    beforeEach(() => { vi.spyOn(fm, "nativeInstanceRuntime").mockReturnValue({ get: () => null } as never); });
+    const hintOf = async (instance: string) => {
+      const { delivered } = delivering(instance);
+      const r = await send("see #M-1", { instance });
+      expect({ status: r.status, body: r.status === 200 ? "" : r.body }).toEqual({ status: 200, body: "" });
+      return String(delivered.at(-1).content).split("\n").at(-1)!;
+    };
+    const MCP = "Read a card in full with the task tool: task get M-1 (detail: true).";
+    const CLI = "Read a card in full with: agend-agent task get M-1 --detail";
+    it("an MCP instance gets the tool's form, a CLI-mode instance the command's: only the one it has", async () => {
+      expect(await hintOf("a")).toBe(MCP);
+      expect(await hintOf("cli")).toBe(CLI);
+    });
+    it("a native Windows agent gets it too (it has the task tool): a pane's, and an exec agent's whose config says agent_mode: cli", async () => {
+      expect(await hintOf("win-pane")).toBe(MCP);
+      expect(await hintOf("win-exec")).toBe(MCP);   // native MCP, not the agend-agent command: its agent_mode is not how it talks
+    });
+    it("minimal has no task tool, in either mode: no tool is named; the block still carries the card's lines", async () => {
+      const none = "You have no task tool (your tool set leaves it out), so these lines are all of the card you can read here; ask the person for more.";
+      for (const instance of ["min", "mincli", "win-min"]) {
+        const { delivered } = delivering(instance);
+        await send("see #M-1", { instance });
+        const content = String(delivered.at(-1).content);
+        expect(content).toContain("M-1 [in progress] Build the login API @dev-a (main task)");
+        expect(content.split("\n").at(-1)).toBe(none);
+        expect(content).not.toMatch(/task get|agend-agent/);
+      }
+    });
+    it("taskReadWay: the profile decides first, then the runtime, then agent_mode; nothing configured is MCP", () => {
+      expect(taskReadWay(undefined, "x")).toBe("mcp");
+      expect(taskReadWay({ agent_mode: "cli" }, "x")).toBe("cli");
+      expect(taskReadWay({ agent_mode: "cli", runtime: "windows" }, "x")).toBe("mcp");
+      expect(taskReadWay({ tool_set: "minimal" }, "x")).toBe("none");
+      expect(taskReadWay({ tool_set: "minimal", agent_mode: "cli" }, "x")).toBe("none");
+      expect(taskReadWay({ tool_set: "minimal", runtime: "windows" }, "x")).toBe("none");
+      expect(taskReadWay({ tool_set: "standard", agent_mode: "cli" }, "x")).toBe("cli");
+      expect(taskReadWay({}, "general")).toBe("mcp");
+    });
   });
   it("the chat keeps the person's words alone: the stream's copy and the stored row", async () => {
     delivering();
@@ -296,16 +342,16 @@ describe("the block and the reads behind it", () => {
   });
   it("taskRefBlock: a sub task whose main task is hidden does not name it", () => {
     const board = db.board, sub = cardsForRefs(board, ["S-1"]);
-    expect(taskRefBlock(board, sub, { hint: false })).toContain("S-1 [to do] Write the tests across two lines (sub task of M-1)");
-    const hidden = taskRefBlock(board, sub, { hint: false, hidden: (c) => c.code === "M-1" });
+    expect(taskRefBlock(board, sub, { read: "none" })).toContain("S-1 [to do] Write the tests across two lines (sub task of M-1)");
+    const hidden = taskRefBlock(board, sub, { read: "none", hidden: (c) => c.code === "M-1" });
     expect(hidden).toContain("S-1 [to do] Write the tests across two lines (sub task)");
     expect(hidden).not.toContain("M-1");
-    expect(taskRefBlock(board, sub, { hint: false, hidden: (c) => c.code === "S-1" })).toContain("(sub task of M-1)");   // the card itself is the caller's to leave out
+    expect(taskRefBlock(board, sub, { read: "none", hidden: (c) => c.code === "S-1" })).toContain("(sub task of M-1)");   // the card itself is the caller's to leave out
   });
   it("taskRefBlock: empty for no card; the hint can be left out", () => {
     const cards = cardsForRefs(db.board, ["M-1"]);
     expect(taskRefBlock(db.board, [])).toBe("");
-    expect(taskRefBlock(db.board, cards, { hint: false })).not.toContain("task get");
+    expect(taskRefBlock(db.board, cards, { read: "none" })).not.toContain("task get");
     expect(taskRefBlock(db.board, cards)).toContain("task get M-1");
   });
   it("suggest(): exact number first, live before finished, a keep() that hides is applied before the limit", () => {
