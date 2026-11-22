@@ -102,7 +102,9 @@ describe("#2299 the task board's looks", () => {
   });
 
   it("5. the CSS: columns fit from 1280 px, a phone's gutter and targets, the board's toasts above the tabs, two at most", () => {
-    expect(CSS).toMatch(/\.tb-columns \{ display: grid; grid-template-columns: repeat\(5, minmax\(176px, 1fr\)\)/);
+    // AGEND-316: columns are 272–360 px however many there are (the number is not fixed); more than fit scroll sideways.
+    expect(CSS).toMatch(/\.tb-columns \{ display: grid; grid-auto-flow: column; grid-auto-columns: minmax\(272px, 360px\)/);
+    expect(CSS).not.toMatch(/\.tb-columns \{[^}]*repeat\(5/);
     const phone = CSS.slice(CSS.indexOf("@media (max-width: 899px)"));
     expect(CSS).toMatch(/\n  \.col \{ padding: var\(--s-3\) var\(--s-4\) var\(--s-8\); \}/);
     expect(CSS).toMatch(/\.panel-head \.icon-btn \{ min-width: var\(--tap\); min-height: var\(--tap\); \}/);

@@ -393,16 +393,19 @@ describe("3g. a main task's tile says who works on it now, not only who owns it"
   it("the sub task in progress and its worker; else a blocked one; else the next one that can start", async () => {
     let t = await tile(board("claimed", [{ status: "claimed", assignee: "beta" }, { status: "open", assignee: "alpha" }]), "now1");
     expect(t.querySelector(".tb-tile-now").textContent).toBe("Working onS-1Review the API");
-    expect(t.querySelector(".tb-tile-foot .tb-who").textContent).toBe("beta");
-    expect(t.querySelector(".tb-tile-foot .tb-person").getAttribute("title")).toBe("Main task owner: alpha");
+    // AGEND-316: the foot's avatar is the card's own assignee (what the picker changes); who works on it now follows it.
+    expect(t.querySelector(".tb-tile-foot .tb-owner .tb-who").textContent).toBe("alpha");
+    expect(t.querySelector(".tb-tile-foot .tb-people .tb-who").textContent).toBe("beta");
     t = await tile(board("blocked", [{ status: "blocked", assignee: "beta" }]), "now2");
     expect(t.querySelector(".tb-now-label").textContent).toBe("Blocked");
     t = await tile(board("open", [{ status: "open", assignee: null, unmetDeps: [] }, { status: "open", assignee: "beta", unmetDeps: ["S-1"] }]), "now3");
     expect(t.querySelector(".tb-tile-now").textContent).toBe("NextS-1Review the API");
-    expect(t.querySelector(".tb-tile-foot .tb-who").textContent).toBe("Unassigned");
+    expect(t.querySelector(".tb-tile-foot .tb-owner .tb-who").textContent).toBe("alpha");
+    expect(t.querySelector(".tb-tile-foot .tb-people"), "the next sub task has nobody: nobody is added").toBeNull();
     t = await tile(board("review", [{ status: "done", assignee: "beta" }]), "now4");
     expect(t.querySelector(".tb-tile-now")).toBeNull();
-    expect(t.querySelector(".tb-tile-foot .tb-who").textContent).toBe("Waiting for you");
+    expect(t.querySelector(".tb-tile-status .tb-tile-waits").textContent, "AGEND-316: whom it waits for is the status row's").toBe("Waiting for you");
+    expect(t.querySelector(".tb-tile-foot .tb-owner .tb-who").textContent, "…and the foot keeps the owner").toBe("alpha");
   });
 });
 

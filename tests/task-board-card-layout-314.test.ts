@@ -401,11 +401,17 @@ describe("one invisible grid: label column, value column", () => {
       return r;
     };
     await mount(); await openCard("M-1");
+    for (const b of qa(".tl-more")) fire(b, "click");
+    await settle(4);
+    // AGEND-316: a history line is a thin row — a mark, the sentence (who, then what), the time; a progress note is a card.
     const lines = qa(".tl-line");
-    expect(lines.length).toBe(2);
-    for (const l of lines) expect([...l.children].map((c: any) => c.className.split(" ")[0].replace(/^icon.*/, "icon")).slice(1), "who, words, time").toEqual(["tl-who", "tl-text", "muted"]);
-    expect(lines.map((l) => text(l.querySelector(".tl-who")))).toEqual(["Ann", "alpha Agent"]);
-    expect(lines.map((l) => text(l.querySelector(".tl-text")))).toEqual(["opened it", "Endpoint done"]);
+    expect(lines.length, "the history line only: the progress note is a card").toBe(1);
+    expect([...lines[0].children].map((c: any) => c.className.split(" ")[0]), "mark, sentence, time").toEqual(["tl-mark", "tl-sentence", "muted"]);
+    expect(text(lines[0].querySelector(".tl-who"))).toBe("Ann");
+    expect(text(lines[0].querySelector(".tl-text"))).toBe("opened it");
+    const note = q(".tl-card.tl-log");
+    expect(text(note.querySelector(".tl-head")), "who, the agent's badge, what it is, when").toMatch(/^A alpha Agent Progress /);
+    expect(text(note.querySelector(".tl-body"))).toBe("Endpoint done");
   });
 });
 
@@ -437,13 +443,18 @@ describe("the timeline: what is said and done leads, the history is quiet", () =
     detailWith({ comments: [], logs: [{ id: 1, author: "alpha", authorKind: "instance", text: "Endpoint done", at: ago(10) }],
       history: [ev(1, "web-user", ago(4)), ev(2, "web-user", ago(3)), ev(3, "web-user", ago(2)), ev(4, "alpha", ago(1), "moved", { from: "open", to: "claimed", auto: true }, "instance")] });
     await mount(); await openCard("M-1");
+    expect(qa(".tl-line").length, "AGEND-316: the history is folded at first").toBe(0);
+    expect(qa(".tl-more").map((b) => text(b)), "the three equal lines are one line, so the run is two lines").toEqual(["2 activities"]);
+    for (const b of qa(".tl-more")) fire(b, "click");
+    await settle(4);
     const lines = qa(".tl-line");
-    const kind = (l: any) => (l.className.includes("tl-log") ? "log" : "event");
-    expect(lines.map(kind).sort(), "four history lines and a note: the three equal ones are one").toEqual(["event", "event", "log"]);
+    expect(lines.length, "four history lines: the three equal ones are one").toBe(2);
+    expect(qa(".tl-card.tl-log").length, "and the progress note is a card").toBe(1);
     const merged = lines.find((l) => l.querySelector(".tl-count"));
     expect(merged.querySelector(".tl-count").textContent).toBe("×3");
     expect(merged.querySelector(".tl-count").getAttribute("title")).toBe("The same, 3 times in a row");
-    expect(lines.filter((l) => l.className.includes("by-agent")).map(kind), "only the agent's progress note has the bar").toEqual(["log"]);
+    expect(qa(".tl-item").filter((l) => l.className.includes("by-agent")).map((l) => l.className.includes("tl-log") ? "log" : "event"), "only the agent's progress note is marked (a badge; no bar)").toEqual(["log"]);
+    expect(qa(".tp-activity .lbar").length, "no coloured bar on the stream").toBe(0);
     expect(qa(".tl-filter button").map((b) => text(b)), "the numbers are the lines each filter shows: four history entries, three of them one line").toEqual(["All", "Comments 0", "Progress 1", "History 2"]);
     fire(qa(".tl-filter button")[3], "click"); await settle(4);
     expect(qa(".tl-item").length, "History shows as many lines as its button says").toBe(2);

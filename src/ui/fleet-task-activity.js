@@ -13,9 +13,11 @@
 import { html, useEffect, useRef, useState } from "/assets/app-html.js";
 import { lang, t } from "/assets/app-i18n.js";
 import "/assets/chat-render.js";
+import "/assets/chat-strings.js";
 import { Icon } from "/assets/ui-icons.js";
-import { Who, relTime } from "./fleet-task-common.js";
+import { relTime } from "./fleet-task-common.js";
 import { AgentTag } from "./fleet-task-run.js";
+import { WhoCard } from "./fleet-task-owner.js";
 import { insertAtTrigger, triggerAt, withoutCode } from "./trigger-complete.js";
 
 export const TIMELINE_FILTERS = ["all", "comments", "log", "history"];
@@ -119,47 +121,176 @@ const commentHtml = (text) => {
   return r && typeof r.renderMarkdown === "function" ? { __html: r.renderMarkdown(text) } : null;
 };
 
-function Entry({ entry, describe }) {
-  const time = html`<time class="muted tl-time" dateTime=${entry.at} title=${fullTime(entry.at)}>${relTime(entry.at)}</time>`;
+/**
+ * The stream's items (pure: tests import it): what people and agents SAY — a comment, a progress note — is a card each; the
+ * system's lines (history) between two cards are a run, of any length, and a run is folded into one "› N activities" row at first
+ * (AGEND-316). `entries` are what the filter shows (a run of equal history lines already one line: `collapseEvents`); `group:
+ * false` (the History filter, which asks to see them) keeps every line on its own, open.
+ * Each item: { kind: "card", entry } | { kind: "run", key, entries, fold } — `fold`: the run starts closed.
+ */
+export function streamOf(entries, group = true) {
+  const out = [];
+  for (const entry of entries) {
+    if (entry.type !== "event") { out.push({ kind: "card", entry }); continue; }
+    const last = out[out.length - 1];
+    if (last && last.kind === "run") last.entries.push(entry);
+    else out.push({ kind: "run", key: `run-${entry.key}`, entries: [entry] });
+  }
+  for (const item of out) if (item.kind === "run") item.fold = group;
+  return out;
+}
+
+const timeOf = (entry) => html`<time class="muted tl-time" dateTime=${entry.at} title=${fullTime(entry.at)}>${relTime(entry.at)}</time>`;
+
+// ── A comment's text as the chat draws a message ─────────────
+
+/** The chat's copy: the clipboard, else a hidden text area (a plain-http page has no clipboard API). */
+async function copyText(text) {
+  try { if (navigator.clipboard && globalThis.isSecureContext) { await navigator.clipboard.writeText(text); return true; } } catch { /* fall back */ }
+  const ta = document.createElement("textarea"); ta.value = text; ta.setAttribute("readonly", ""); ta.className = "offscreen";
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand("copy"); } catch { ok = false; }
+  ta.remove();
+  return ok;
+}
+const storedWrap = () => { try { return localStorage.getItem("agend_code_wrap") === "1"; } catch { return false; } };
+
+/**
+ * Code blocks as the chat's thread draws them (chat-thread.js `decorateCode`, the same classes, so the same sheet styles them):
+ * a header with the language, Wrap and Copy, and a block of more than CODE_FOLD_LINES lines folded until opened. Built from nodes.
+ */
+export function decorateCode(root) {
+  if (!root || typeof root.querySelectorAll !== "function") return;
+  const doc = root.ownerDocument;
+  const R = globalThis.AgendChatRender;
+  const limit = R && Number.isFinite(R.CODE_FOLD_LINES) ? R.CODE_FOLD_LINES : 30;
+  const lineCount = R && typeof R.lineCount === "function" ? R.lineCount : (c) => String(c).split("\n").length;
+  for (const pre of root.querySelectorAll("pre")) {
+    if (pre.parentNode && pre.parentNode.classList && pre.parentNode.classList.contains("codeblock")) continue;
+    const box = doc.createElement("div"); box.className = "codeblock";
+    const head = doc.createElement("div"); head.className = "cb-head";
+    const lang = doc.createElement("span"); lang.className = "cb-lang"; lang.textContent = pre.dataset.lang || "text";
+    const wrap = doc.createElement("button"); wrap.type = "button"; wrap.className = "chip-btn"; wrap.dataset.act = "toggleWrap"; wrap.textContent = t("chat.wrap");
+    const copy = doc.createElement("button"); copy.type = "button"; copy.className = "chip-btn"; copy.dataset.act = "copyCode"; copy.textContent = t("chat.copy");
+    head.append(lang, wrap, copy);
+    pre.replaceWith(box); box.append(head, pre);
+    const lines = lineCount(pre.textContent);
+    if (lines > limit) {
+      box.classList.add("folded");
+      const more = doc.createElement("button"); more.type = "button"; more.className = "cb-more"; more.dataset.act = "toggleFold";
+      more.dataset.lines = String(lines); more.textContent = t("chat.showAll", lines);
+      box.append(more);
+    }
+  }
+}
+
+/** A click on one of a decorated block's buttons (Copy, Wrap, Show all), as the chat's thread answers it. */
+async function onCodeClick(e) {
+  const el = e.target && e.target.closest ? e.target.closest("[data-act]") : null;
+  if (!el) return;
+  const act = el.dataset.act;
+  if (act === "copyCode") {
+    const pre = el.closest(".codeblock") && el.closest(".codeblock").querySelector("pre");
+    if (!pre) return;
+    const ok = await copyText(pre.textContent);
+    const was = el.dataset.label || el.textContent; el.dataset.label = was;
+    el.textContent = t(ok ? "chat.copied" : "chat.copyFailed");
+    setTimeout(() => { el.textContent = was; }, 1200);
+  } else if (act === "toggleWrap") {
+    const stream = el.closest(".tl");
+    if (!stream) return;
+    const on = stream.classList.toggle("wrap-code");
+    try { localStorage.setItem("agend_code_wrap", on ? "1" : "0"); } catch { /* this page only */ }
+  } else if (act === "toggleFold") {
+    const box = el.closest(".codeblock");
+    if (!box) return;
+    const folded = box.classList.toggle("folded");
+    el.textContent = !folded ? t("chat.showLess") : t("chat.showAll", el.dataset.lines);
+  }
+}
+
+/** A comment's body: the chat's Markdown, its code blocks decorated as the chat's are. */
+function MdBody({ body }) {
+  const ref = useRef(null);
+  useEffect(() => { decorateCode(ref.current); });
+  return html`<div class="tl-body md" ref=${ref} onClick=${onCodeClick} dangerouslySetInnerHTML=${body}></div>`;
+}
+
+/**
+ * One entry. A comment and a progress note are each a card (the same: a head with the avatar — an instance's with its state
+ * dot —, the name, an "Agent" badge, a tag for what it is, and the time; the text under the name); a history line is a thin row
+ * with an icon (a status change's is the status's), the sentence and the time, no box. `who`: the board's cards and the project's
+ * lead, for the avatar's info card.
+ */
+function Entry({ entry, describe, who }) {
+  const time = timeOf(entry);
   const agent = entry.by === "instance";
-  // The shared straight bar (app.css `.lbar`) marks what an agent said or noted; its history lines stay quiet, without it.
-  const mark = agent && entry.type !== "event" ? " by-agent lbar" : "";
+  const mark = agent ? " by-agent" : "";
+  const kind = entry.by === "person" ? "person" : entry.by === "instance" ? "instance" : entry.by ? "none" : "";
+  const author = html`<${WhoCard} name=${entry.who} kind=${kind} presence=${agent} cards=${who && who.cards} lead=${who && who.lead} />`;
   if (entry.type === "comment") {
     const body = commentHtml(entry.text);
-    return html`<li class=${`tl-item tl-comment${entry.authorKind === "person" ? " person" : ""}${mark}`}>
-      <div class="tl-head"><${Who} name=${entry.who} />${agent ? html`<${AgentTag} />` : null}
+    return html`<li class=${`tl-item tl-card tl-comment${entry.authorKind === "person" ? " person" : ""}${mark}`}>
+      <div class="tl-head">${author}${agent ? html`<${AgentTag} />` : null}
         ${entry.kind === "reject" ? html`<span class="tb-tag st-blocked">${t("taskcard.rejectTag")}</span>` : null}
         ${entry.kind === "approve" ? html`<span class="tb-tag st-done">${t("taskcard.approveTag")}</span>` : null}
         ${time}</div>
-      ${body ? html`<div class="tl-body md" dangerouslySetInnerHTML=${body}></div>` : html`<div class="tl-body">${entry.text}</div>`}</li>`;
+      ${body ? html`<${MdBody} body=${body} />` : html`<div class="tl-body">${entry.text}</div>`}</li>`;
   }
   if (entry.type === "log") {
-    return html`<li class=${`tl-item tl-line tl-log${mark}`}><${Icon} name="check" size=${14} /><span class="tl-who"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null}</span><span class="tl-text">${entry.text}</span>${time}</li>`;
+    return html`<li class=${`tl-item tl-card tl-log${mark}`}>
+      <div class="tl-head">${author}${agent ? html`<${AgentTag} />` : null}<span class="tb-tag tl-kind" title=${t("taskcard.logTip")}>${t("taskcard.show.log")}</span>${time}</div>
+      <div class="tl-body">${entry.text}</div></li>`;
   }
-  return html`<li class=${`tl-item tl-line tl-event${mark}`}><span class="tb-dot" aria-hidden="true"></span><span class="tl-who"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null}</span><span class="tl-text">${describe(entry.ev)}${entry.count > 1 ? html` <span class="tl-count" title=${t("taskcard.repeated", entry.count)}>×${entry.count}</span>` : null}</span>${time}</li>`;
+  const to = entry.ev && entry.ev.type === "moved" && entry.ev.data ? entry.ev.data.to : null;
+  return html`<li class="tl-item tl-line tl-event"><span class="tl-mark" aria-hidden="true"><span class=${`tb-dot${to ? ` st-${to}` : ""}`}></span></span>
+    <span class="tl-sentence"><span class="tl-who"><b>${entry.who}</b>${agent ? html` <${AgentTag} />` : null}</span> <span class="tl-text">${describe(entry.ev)}${entry.count > 1 ? html` <span class="tl-count" title=${t("taskcard.repeated", entry.count)}>×${entry.count}</span>` : null}</span></span>${time}</li>`;
 }
 
-/** The merged timeline with its filter (all, comments, progress log, history). `describe(ev)` words a history event. */
-export function Timeline({ detail, describe }) {
+/** A run of system lines: one "› N activities" button that opens and closes them (the History filter's runs are always open, no button). */
+function Run({ run, describe, open, onToggle }) {
+  const n = run.entries.length;
+  return html`<li class="tl-run">
+    ${run.fold ? html`<button type="button" class="tl-more" aria-expanded=${open ? "true" : "false"} onClick=${onToggle}>
+      <span class="tl-mark" aria-hidden="true"><${Icon} name="chevron" size=${14} cls=${open ? "tb-chev open" : "tb-chev"} /></span><span>${n === 1 ? t("taskcard.activity1") : t("taskcard.activities", n)}</span></button>` : null}
+    ${open ? html`<ul class="tl-lines">${run.entries.map((e) => html`<${Entry} key=${e.key} entry=${e} describe=${describe} />`)}</ul>` : null}
+  </li>`;
+}
+
+/** The activity stream with its filter (all, comments, progress log, history). `describe(ev)` words a history event. */
+export function Timeline({ detail, describe, cards = [], lead = null }) {
   const [filter, setFilter] = useState("all");
+  const [toggled, setToggled] = useState({});
   const all = timelineOf(detail);
   // The number on a filter button is the number of lines the list shows for it: a run of equal history lines is one.
   const count = (f) => collapseEvents(timelineShown(all, f), describe).length;
   const shown = collapseEvents(timelineShown(all, filter), describe);
-  // A day change is a separator — only when the list spans more than one day (one day needs no heading).
+  // A day change is a separator — only when the stream spans more than one day (one day needs no heading); a run never crosses it.
   const days = new Set(shown.map((e) => dayKey(e.at)).filter(Boolean));
-  const rows = [];
+  const parts = [];
   let day = "";
   for (const e of shown) {
     const k = dayKey(e.at);
-    if (days.size > 1 && k && k !== day) rows.push(html`<li key=${`d${k}`} class="tl-day" role="presentation"><span>${dayLabel(e.at)}</span></li>`);
+    if (!parts.length || (days.size > 1 && k && k !== day)) parts.push({ day: days.size > 1 && k ? e.at : "", entries: [] });
     if (k) day = k;
-    rows.push(html`<${Entry} key=${e.key} entry=${e} describe=${describe} />`);
+    parts[parts.length - 1].entries.push(e);
   }
-  return html`<section class="tl" aria-label=${t("taskcard.activity")}>
+  const who = { cards, lead };
+  const rows = [];
+  for (const part of parts) {
+    if (part.day) rows.push(html`<li key=${`d${dayKey(part.day)}`} class="tl-day" role="presentation"><span>${dayLabel(part.day)}</span></li>`);
+    for (const item of streamOf(part.entries, filter === "all")) {
+      if (item.kind === "card") rows.push(html`<${Entry} key=${item.entry.key} entry=${item.entry} describe=${describe} who=${who} />`);
+      else {
+        const open = item.fold ? toggled[item.key] === true : true;
+        rows.push(html`<${Run} key=${item.key} run=${item} describe=${describe} open=${open} onToggle=${() => setToggled((cur) => ({ ...cur, [item.key]: !open }))} />`);
+      }
+    }
+  }
+  return html`<section class=${`tl${storedWrap() ? " wrap-code" : ""}`} aria-label=${t("taskcard.activity")}>
     <div class="tl-bar"><h3>${t("taskcard.activity")}</h3>
       <div class="tb-seg tl-filter" role="group" aria-label=${t("taskcard.activityShow")}>${TIMELINE_FILTERS.map((f) =>
-        html`<button key=${f} type="button" aria-pressed=${filter === f ? "true" : "false"} class=${`tb-seg-btn${filter === f ? " active" : ""}`} onClick=${() => setFilter(f)}>${t(`taskcard.show.${f}`)}${f === "all" ? "" : ` ${count(f)}`}</button>`)}</div></div>
+        html`<button key=${f} type="button" aria-pressed=${filter === f ? "true" : "false"} class=${`tb-seg-btn${filter === f ? " active" : ""}`} title=${f === "log" ? t("taskcard.logTip") : undefined} onClick=${() => setFilter(f)}>${t(`taskcard.show.${f}`)}${f === "all" ? "" : ` ${count(f)}`}</button>`)}</div></div>
     ${shown.length ? html`<ol class="tl-list">${rows}</ol>`
       : html`<p class="muted tl-none">${t(all.length ? "taskcard.nothingHere" : "taskcard.noActivity")}</p>`}
   </section>`;
