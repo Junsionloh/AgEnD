@@ -440,12 +440,18 @@ words) and the delivery outbox holds it until the instance can take it, across a
 gathering when the fleet stops is lost; the card keeps it (`mine`, the comments new to its assignee). Blocked cards
 with an instance dispatcher still wait for you on Home, marked as asked first.
 
-- **Told already (#2785 (c), widened by #2801).** News an instance made — an assignment, a block, an answer, a move to
-  review — is dropped when that instance messaged the one it concerns naming the card (or, for a sub task, its main
-  task) about it: for an assignment from up to 2 minutes before it (a delegate_task often comes first), for anything
-  else only from the change on (an earlier message did not tell what came after it). News not yet told that way waits
-  up to 2 minutes from the change for such a message (`TOLD_WINDOW_MS`), then goes. A cancel is told at once and never
-  folded; a person's change is told without waiting.
+- **No "told already" (AGEND-333 D4).** What an agent does to a card is told the way what a person does is: after the 10 s
+  gather, and nothing later. #2785 (c) dropped an assignment's line when its assigner had also messaged the assignee about
+  the card (29 of 31 such notices on the host, −12 s … +24 s apart: the same dispatch arrived twice), and #2801 widened
+  that to every change an instance makes, holding the notice up to 2 minutes (`TOLD_WINDOW_MS`) for such a message and
+  dropping it when one came. Both were cuts in notice volume. The owner decided (2026-11-23) that they were two things made
+  one: a message is what an agent says to someone, and an agent that wants to tell someone something @mentions them in a
+  comment; the card's change is the program's own notice, so it always goes and never waits for or yields to a message. It
+  covers every kind of news the rule covered — assignment, start, send-back, answer, block, review, progress for followers,
+  comments and mentions — and the machinery is removed (`foldToldNews`, `messagedAbout`, `toldWindowMs`, `namesCard`, the
+  outbox's `recentTextsFrom`). Kept: the gather merges a card's changes into one notice; a notice still waiting is
+  withdrawn when its card changed again (#2801, below); the loop guards' counts; nobody is told of what they did themselves.
+  A cancel and a person's change were never held and are still told after the gather only.
 - **Superseded (#2801).** A notice's outbox key ends with the cards it names (`:cards=<uuid>,…`). When a write changes
   a card's status or assignee (`BoardChange.changed`), a notice still waiting (queued or retrying, never begun) that
   names it is withdrawn once every card on it has changed since it was admitted (`TaskBoard.lastChangeAt`): `cancelled`,
@@ -456,14 +462,14 @@ with an instance dispatcher still wait for you on Home, marked as asked first.
 
 **The rule.** A comment is news: it wakes the card's assignee when someone else wrote it, and an `@<instance name>` in
 it wakes the instance named, whether or not the card is its own. Both go through the same `[Task board]` notice, the
-10 s gather, the outbox and the told-already rule as every other piece of news (Step 2). Confirmation notes still wake
+10 s gather and the outbox as every other piece of news (Step 2). Confirmation notes still wake
 nobody. **Why.** #2801 took the comment notice out to cut notice volume (163 a week, most of them repeats on busy cards:
 "a comment sends nothing"). The owner has since decided (AGEND-292, 2026-11-18) that the board should be a place where
 people and agents talk the way they do in Multica and Linear: a comment or an `@mention` reaches the one it is for, so
 the person can steer an agent from its card and agents can bring each other in, without a side message
 (`send_to_instance`) that names the card. What keeps it from the old noise: only the assignee and the instances named
 are told — never the dispatcher or everyone on the card; never the writer; never an assignee that already read the
-comment; a notice the writer already told by message is not repeated; and agent-to-agent wakes are capped (below).
+comment; and agent-to-agent wakes are capped (below).
 `defaults.task_board.comment_wakes: false` brings #2801's rule back as it was.
 
 **Who and when** (`TaskBoard.routeComment` at the write, `settleWakes` and `wakeHolds` at its end).
@@ -515,9 +521,8 @@ of cards they can touch, not by the guard. That is a deliberate trade: a global 
 on a busy fleet, and an agent that spends turns this way is also bounded by the board's other rules (one card in
 progress at a time, the dispatcher alerts of #3647). A fleet that wants none of it sets
 `defaults.task_board.comment_wakes: false`; a global or per-instance rate limit is a follow-up if upstream wants one.
-The 10 s gather and the 2-minute told-already rule apply as before; an agent's comment is not *held* for its writer's
-own message the way an assignment is, because a reply must not wait minutes — if the writer has already messaged the
-instance naming the card, the board does not repeat it.
+The 10 s gather applies as before, and nothing waits past it: an agent's comment is told after the gather like any other news,
+whether or not its writer also messaged the instance (AGEND-333 D4: there is no "told already" rule any more).
 
 **Compatibility.** Wakes are read from a write's events as it commits (Step 2), never from stored comments: opening a
 database from before this rule wakes nobody, and comments written before it are never told. No column or table is added by this rule
@@ -554,8 +559,8 @@ settling after a release without the board moved its sub tasks) tells nobody.
 
 **Not twice.** A dispatcher's own news outranks it: an instance told `decide` (blocked on a question for it) or `to_confirm`
 (a card waiting for its confirmation) is not also told `progress` for the same change. An instance that is dispatcher, watcher
-and leader hears once. Everything goes through the same 10 s gather, the delivery outbox, the withdrawals and the told-already
-rule as every other notice (an agent that also messaged the follower naming the card has told it).
+and leader hears once. Everything goes through the same 10 s gather, the delivery outbox and the withdrawals as every other notice (an agent that also
+messaged the follower naming the card has not told it in the board's place: the notice goes, AGEND-333 D4).
 
 **Loop guard.** A follower that is also an agent can change the card in answer (send it back, hand it on), which its other
 followers hear. Counting the progress changes agents (anything but a person) made on the card within 30 minutes, back to the last

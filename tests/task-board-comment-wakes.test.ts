@@ -481,7 +481,7 @@ describe("5. the notice", () => {
     expect(wakeMessage([wake({ texts: { comment: long } })])).toContain(`"${"x".repeat(160)}…"`);
   });
 
-  function waker(opts: { messagedAbout?: (from: string, to: string, codes: string[], since: number) => boolean } = {}) {
+  function waker() {
     const sent: Array<{ instance: string; message: string }> = [];
     const timers: Array<{ fn: () => void; live: boolean }> = [];
     const w = new TaskBoardWaker({
@@ -489,7 +489,6 @@ describe("5. the notice", () => {
       isInstance: (n) => INSTANCES.includes(n),
       holds: (x) => x,
       card: () => undefined,
-      ...(opts.messagedAbout ? { messagedAbout: opts.messagedAbout } : {}),
       log: () => {},
       timers: { set: (fn) => { const t = { fn, live: true }; timers.push(t); return t; }, clear: (h) => { (h as { live: boolean }).live = false; } },
     });
@@ -538,25 +537,17 @@ describe("5. the notice", () => {
     waker.stop();
   });
 
-  it("an agent's comment is sent with the window, not held for its writer's own message the way an assignment is", () => {
-    const { w, sent, fire } = waker({ messagedAbout: () => false });
+  it("an agent's comment is sent with the window, and so is an agent's assignment: nothing waits for its writer's own message (AGEND-333 D4)", () => {
+    const { w, sent, fire } = waker();
     w.note([wake({ by: { comment: "lead" } })]);
     fire();
     expect(sent.map((s) => s.instance)).toEqual(["dev-a"]);
-    // An assignment by the same writer waits (the existing rule, unchanged): nothing is sent yet.
-    const held = waker({ messagedAbout: () => false });
-    held.w.note([wake({ reasons: ["assigned"], by: { assigned: "lead" }, texts: {} })]);
-    held.fire();
-    expect(held.sent).toEqual([]);
-  });
-
-  it("an agent that also messaged the instance about the card has told it: the board does not repeat the comment", () => {
-    const asked: string[] = [];
-    const { w, sent, fire } = waker({ messagedAbout: (from, to, codes) => { asked.push(`${from}>${to}:${codes.join()}`); return true; } });
-    w.note([wake({ by: { comment: "lead" } })]);
-    fire();
-    expect(sent).toEqual([]);
-    expect(asked).toEqual(["lead>dev-a:M-4"]);
+    // An assignment by the same writer used to wait up to two minutes for a message of its own; it goes with the window now.
+    const assigned = waker();
+    assigned.w.note([wake({ reasons: ["assigned"], by: { assigned: "lead" }, texts: {} })]);
+    assigned.fire();
+    expect(assigned.sent.map((s) => s.instance)).toEqual(["dev-a"]);
+    expect(assigned.sent[0]!.message).toContain("assigned to you by lead");
   });
 
   it("a name that is not a fleet instance (a person), or an instance with the task board off, is not sent a notice", () => {

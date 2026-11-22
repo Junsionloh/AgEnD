@@ -192,7 +192,7 @@ import { processAttachments } from "./channel/attachment-handler.js";
 import { routeToolCall } from "./channel/tool-router.js";
 import { Scheduler } from "./scheduler/index.js";
 import { boardActivity, boardCardLimit, boardCommentWakesOn, boardLeader, boardProgressWakesOn, boardToolAction } from "./task-board-tool.js";
-import { TaskBoardWaker, namesCard } from "./task-board-waker.js";
+import { TaskBoardWaker } from "./task-board-waker.js";
 import { DispatcherLiveness, LIVENESS_STARTUP_GRACE_MS, livenessSettings, questionNotices, turnQuestion, type AssigneeFacts, type LivenessCard } from "./dispatcher-liveness.js";
 import { TaskBoardError, waitsForPerson, wrapUpGap, type Actor } from "./scheduler/task-board.js";
 import type { SchedulerDb } from "./scheduler/db.js";
@@ -24998,12 +24998,6 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       deliver: (instance, message, key) => this.admitTaskBoardNotice(instance, message, key),
       isInstance: (name) => this.fleetConfig?.instances?.[name] != null,
       boardOff: (name) => taskBoardOffIn(this.fleetConfig, name),
-      // #2785 (c), #2801: the maker's own message already told it; the board's line would repeat it.
-      messagedAbout: (from, to, codes, sinceMs) => {
-        const outbox = this.deliveryOutbox;
-        if (!outbox?.isOpen) return false;
-        return outbox.recentTextsFrom(to, from, new Date(sinceMs).toISOString()).some((text) => codes.some((code) => namesCard(text, code)));
-      },
       // #2801: a notice still waiting whose cards have all changed again is not delivered.
       withdraw: (prefix, stale, reason) => {
         const outbox = this.deliveryOutbox;

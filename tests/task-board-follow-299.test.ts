@@ -7,7 +7,7 @@
  *   2. The leader: a project's lead, else the board's (`defaults.task_board.leader`); not its own assignee; sub tasks.
  *   3. Watchers: who may set them, what is refused, a main task's follow its sub tasks, no new version, one wake each.
  *   4. The loop guard: agents changing one card back and forth tell nobody after a few changes; a person lifts it.
- *   5. The switch (`defaults.task_board.progress_wakes`) and the notice's words, delivery and told-already rule.
+ *   5. The switch (`defaults.task_board.progress_wakes`) and the notice's words and delivery.
  *   6. The `task` tool (watch / unwatch) and the dashboard's route.
  *   7. Compatibility: an upgrade tells nothing about the past; the watchers table is additive and goes with its card.
  *
@@ -567,18 +567,17 @@ describe("5. the switch, the notice and its delivery", () => {
     expect(lead.texts.progress).toBeUndefined();
   });
 
-  it("an agent that also messaged the follower about the card has told it: the board does not repeat it", () => {
+  it("an agent that also messaged the follower about the card does not stand in for the board's notice: the follower is told as it would be (AGEND-333 D4)", () => {
     const { board, heard } = rig();
     const c = card(board, LEAD, { assignee: "dev-a" });
     board.moveCard(DEV, c.code, "claimed");
     heard.splice(0);
-    const asked: string[] = [];
-    const { w, sent, advance } = waker(board, { messagedAbout: (from: string, to: string, codes: string[]) => { asked.push(`${from}>${to}:${codes.join()}`); return true; } });
+    const { w, sent, advance } = waker(board);
     board.moveCard(DEV, c.code, "done", { result: "r" });
     w.note(heard.splice(0));
-    advance(10_000);
-    expect(sent).toEqual([]);
-    expect(asked).toEqual([`dev-a>lead:${c.code}`]);
+    advance(10_000);                                   // the gather, nothing more
+    expect(sent.map((x) => x.instance)).toEqual(["lead"]);
+    expect(sent[0]!.message).toContain("finished by dev-a");
   });
 });
 
