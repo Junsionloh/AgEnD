@@ -91,7 +91,7 @@ function die(msg: string): never {
  * by name: task-board-tool.ts). Every field the tool has is a flag here, from ONE table, so a field cannot be left out for want of
  * a switch case; what an action may take is the fleet's to say (ACTION_FIELDS), not repeated here.
  *
- * A flag takes its value as the next word or as `--flag=value`; `--` ends the flags (a title or comment that starts with `--`).
+ * A flag takes its value as the next word or as `--flag=value`; `--` ends the flags (a title or comment that starts with `--name`).
  * Words that are not flags keep the positions they always had (`create "title" [description] [priority] [assignee]`, …).
  */
 const TASK_TEXT_FLAGS: Readonly<Record<string, string>> = {
@@ -117,14 +117,16 @@ function taskWords(words: string[]): { positional: string[]; flags: Record<strin
   for (let i = 0; i < words.length; i++) {
     const word = words[i]!;
     if (word === "--") { positional.push(...words.slice(i + 1)); break; }
-    if (!word.startsWith("--")) { positional.push(word); continue; }
+    // Only a word shaped like an option is one (`--name`, `--name=value`): a text that has always been a positional (`---`, `-- note`,
+    // `--Draft v2`) stays one. A word of that shape that is no option is a mistake, said at once, before any request.
+    if (!/^--[a-z][a-z0-9-]*(=|$)/.test(word)) { positional.push(word); continue; }
     const eq = word.indexOf("="), flag = eq > 0 ? word.slice(0, eq) : word;
     if (Object.hasOwn(TASK_BOOL_FLAGS, flag)) {
       if (eq > 0) die(`${flag} takes no value`);
       const [key, value] = TASK_BOOL_FLAGS[flag]!; flags[key] = value; continue;
     }
     const text = Object.hasOwn(TASK_TEXT_FLAGS, flag), list = Object.hasOwn(TASK_LIST_FLAGS, flag), int = Object.hasOwn(TASK_INT_FLAGS, flag), ints = Object.hasOwn(TASK_INTS_FLAGS, flag);
-    if (!text && !list && !int && !ints) die(`Unknown task option: ${flag}`);
+    if (!text && !list && !int && !ints) die(`Unknown task option: ${flag} (a text that starts with -- goes after a lone --)`);
     let value: string | undefined;
     if (eq > 0) value = word.slice(eq + 1);
     else { value = words[++i]; if (value === undefined) die(`Missing value for ${flag}`); }

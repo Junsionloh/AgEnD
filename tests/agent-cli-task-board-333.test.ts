@@ -162,12 +162,19 @@ describe("the command line sends the tool's own arguments (parity with ACTION_FI
     expect(await sent("comment", "M-3", "looks good")).toEqual({ action: "update", id: "M-3", comment: "looks good" });
     expect(await sent("create", "--", "--not a flag", "--nor this")).toEqual({ action: "create", title: "--not a flag", description: "--nor this" });
     expect(await sent("update", "M-3", "--comment=a=b")).toEqual({ action: "update", id: "M-3", comment: "a=b" });
+    // A text that was always a positional stays one: not shaped like an option.
+    expect(await sent("comment", "M-3", "--- summary ---")).toEqual({ action: "update", id: "M-3", comment: "--- summary ---" });
+    expect(await sent("comment", "M-3", "-- note")).toEqual({ action: "update", id: "M-3", comment: "-- note" });
+    expect(await sent("comment", "M-3", "--version-bump needed")).toEqual({ action: "update", id: "M-3", comment: "--version-bump needed" });   // one quoted text, not an option
+    expect(await sent("comment", "M-3", "--Draft v2")).toEqual({ action: "update", id: "M-3", comment: "--Draft v2" });
+    expect(await sent("create", "--- not a rule")).toEqual({ action: "create", title: "--- not a rule" });
   });
 });
 
 describe("a mistake in the command line fails before any request", () => {
   it.each([
     [["update", "M-1", "--bogus", "x"], "Unknown task option: --bogus"],
+    [["comment", "M-1", "--version-bump", "needed"], "Unknown task option: --version-bump"],
     [["update", "M-1", "--comment"], "Missing value for --comment"],
     [["update", "M-1", "--version", "two"], "--version takes a whole number"],
     [["update", "M-1", "--check", "1,x"], "--check takes a whole number"],
