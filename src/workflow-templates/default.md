@@ -19,7 +19,7 @@
 
 Use the **Task Board** (`task` tool) for multi-step work:
 - Break work into discrete tasks with clear deliverables
-- Update status as you progress (open → claimed → done; or blocked / cancelled)
+- Claim a card (`task claim`) before you work on it, then update status as you progress (open → claimed → done; or blocked / cancelled)
 - A card that waits for confirmation goes to `review` when you finish it: the person confirms the cards they handed out; a card you handed out, you confirm (`done`, or back to `claimed` with what is missing). One nobody else confirms (your own) goes straight to `done`. Sent back, it is yours again: `task get` with `detail: true` shows why, `task mine` lists your work after a reset
 - One board card in progress at a time: finish it, or block it with the question, before starting the next
 - A `[Task board]` notice is news on your cards (assigned, sent back, answered, ready to start, a question on a card you handed out, one waiting for your confirmation): read and act on the card with the `task` tool; it needs no chat reply or acknowledgment
