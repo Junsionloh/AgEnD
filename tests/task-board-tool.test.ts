@@ -77,16 +77,93 @@ describe("the task tool's board actions", () => {
     expect(await call("dev-b", { action: "move", id: "M-1", to: "done" })).toEqual({ error: "M-1 is waiting for the person's confirmation: only they finish it" });
   });
 
-  it("finishing without a result says which field takes it (a real agent put its summary in `comment`, twice)", async () => {
+  it("finishing with no words at all says which field takes the result (a real agent put its summary in `comment`, twice)", async () => {
     const { db, call } = fleet();
     db.board.createCards(ANN, { cards: [{ title: "Mine", assignee: "dev-a", dispatcher: { kind: "instance", name: "lead" } }] });
     expect(await call("dev-a", { action: "move", id: "M-1", to: "claimed" })).toBe("ok M-1 to do → in progress (v2)");
-    // The summary is in `comment`, which is not the result: the answer names the field, and nothing is written.
-    const refused = await call("dev-a", { action: "move", id: "M-1", to: "done", comment: "nothing changed; read it with task get" }) as { error: string };
-    expect(refused.error).toContain("`result` field");
-    expect(refused.error).toContain("which files changed and how it was checked");
-    expect(db.board.getCard("M-1").status).toBe("claimed");
+    // Neither a result nor a comment (a blank one is none): the answer names the field, and nothing is written.
+    for (const comment of [undefined, "   "]) {
+      const refused = await call("dev-a", { action: "move", id: "M-1", to: "done", ...(comment === undefined ? {} : { comment }) }) as { error: string };
+      expect(refused.error).toContain("`result` field");
+      expect(refused.error).toContain("which files changed and how it was checked");
+      expect(db.board.getCard("M-1").status).toBe("claimed");
+    }
     expect(await call("dev-a", { action: "move", id: "M-1", to: "done", result: "nothing changed; read it with task get" })).toBe("ok M-1 in progress → done (v3)");
+  });
+
+  describe("AGEND-337: a finishing move with words in `comment` and none in `result` takes them as the result", () => {
+    const comments = (db: SchedulerDb, ref: string) => db.board.detail(ref).comments.map((c) => c.text);
+    /** M-1 handed out by lead to dev-a, which waits for lead's confirmation, claimed and sent back once with an earlier result. */
+    function sentBack() {
+      const f = fleet();
+      f.db.board.createCards(ANN, { cards: [{ title: "Mine", assignee: "dev-a", dispatcher: { kind: "instance", name: "lead" }, needsReview: true }] });
+      return f;
+    }
+
+    it("first finish: the comment is the result, not also a comment, and the answer says so", async () => {
+      const { db, call } = sentBack();
+      await call("dev-a", { action: "move", id: "M-1", to: "claimed" });
+      const said = await call("dev-a", { action: "move", id: "M-1", to: "review", comment: "src/a.ts; tests pass" }) as string;
+      expect(said).toContain("ok M-1 in progress → waiting for confirmation");
+      expect(said).toContain("your comment was taken as the result");
+      expect(db.board.getCard("M-1").result).toBe("src/a.ts; tests pass");
+      expect(comments(db, "M-1")).toEqual([]);
+    });
+
+    it("resubmitted after a send-back with only a comment: the one who confirms sees the new summary, not the old one", async () => {
+      const { db, call } = sentBack();
+      await call("dev-a", { action: "move", id: "M-1", to: "claimed" });
+      await call("dev-a", { action: "move", id: "M-1", to: "review", result: "first round: src/a.ts" });
+      expect(db.board.getCard("M-1").result).toBe("first round: src/a.ts");
+      expect(await call("lead", { action: "move", id: "M-1", to: "claimed", reason: "check the second case too" })).toContain("ok M-1");
+      // The old result is still on the card (nothing clears it), so the refusal never fires: only the rule below keeps it from going stale.
+      expect(db.board.getCard("M-1").result).toBe("first round: src/a.ts");
+      await call("dev-a", { action: "move", id: "M-1", to: "review", comment: "second round: both cases checked in src/a.test.ts" });
+      expect(db.board.getCard("M-1").result).toBe("second round: both cases checked in src/a.test.ts");
+      expect(await call("lead", { action: "get", id: "M-1", detail: true })).toContain("result: second round: both cases checked in src/a.test.ts");
+    });
+
+    it("both given: the result is the result and the comment stays a comment", async () => {
+      const { db, call } = sentBack();
+      await call("dev-a", { action: "move", id: "M-1", to: "claimed" });
+      const said = await call("dev-a", { action: "move", id: "M-1", to: "review", result: "src/a.ts; tests pass", comment: "ping me if the cache is wrong" }) as string;
+      expect(said).not.toContain("taken as the result");
+      expect(db.board.getCard("M-1").result).toBe("src/a.ts; tests pass");
+      expect(comments(db, "M-1")).toEqual(["ping me if the cache is wrong"]);
+    });
+
+    it("counter-evidence: the confirmer's note, a person's note, a blank comment and other moves never become a result", async () => {
+      const { db, call } = sentBack();
+      await call("dev-a", { action: "move", id: "M-1", to: "claimed" });
+      await call("dev-a", { action: "move", id: "M-1", to: "review", result: "the assignee's summary" });
+      // The dispatcher confirms with a note: it is a comment, and the assignee's result is not overwritten.
+      expect(await call("lead", { action: "move", id: "M-1", to: "done", comment: "approved, thanks" })).toContain("ok M-1");
+      expect(db.board.getCard("M-1").status).toBe("done");
+      expect(db.board.getCard("M-1").result).toBe("the assignee's summary");
+      expect(comments(db, "M-1")).toEqual(["approved, thanks"]);
+      // A person moving the card with a note: the same.
+      db.board.createCards(ANN, { cards: [{ title: "Other", assignee: "dev-b" }] });
+      await call("dev-b", { action: "move", id: "M-2", to: "claimed" });
+      await call("dev-b", { action: "move", id: "M-2", to: "done", result: "summary two" });
+      db.board.moveCard(ANN, "M-2", "claimed", { reason: "again", comment: "a person's note" });
+      expect(db.board.getCard("M-2").result).toBe("summary two");
+      // Not a finishing move (blocked with a comment), and an agent that does not hold the card: nothing becomes a result.
+      db.board.createCards(ANN, { cards: [{ title: "Third", assignee: "dev-a" }] });
+      await call("dev-a", { action: "move", id: "M-3", to: "claimed" });
+      expect(await call("dev-a", { action: "move", id: "M-3", to: "blocked", reason: "who decides?", comment: "see the thread" })).toContain("ok M-3");
+      expect(db.board.getCard("M-3").result).toBe("");
+      expect(comments(db, "M-3")).toContain("see the thread");
+      db.board.createCards(ANN, { cards: [{ title: "Theirs", assignee: "dev-b" }] });
+      expect(await call("dev-a", { action: "move", id: "M-4", to: "done", comment: "mine now" })).toHaveProperty("error");   // refused: not its card
+      expect(db.board.getCard("M-4").result).toBe("");
+    });
+
+    it("the tool says so in its description", async () => {
+      const { TOOLS } = await import("../src/channel/mcp-tools.js");
+      const text = TOOLS.find((t) => t.name === "task")!.description;
+      expect(text).toContain("the summary of finished work goes in `result`, `comment` is a note for people");
+      expect(text).toContain("a finishing move with only a comment takes it as the result");
+    });
   });
 
   it("who handed it out, one card at a time, and what to fill in before its dispatcher confirms", async () => {
