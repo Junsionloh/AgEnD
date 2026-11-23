@@ -207,6 +207,20 @@ function checkLeadIsInstance(ctx: WebApiContext, lead: string | null | undefined
   }
 }
 
+/** AGEND-332: a project's (or the default) statuses as the person ordered and worded them; or "reset" to the built-in ones. The board checks the rest. */
+const WorkflowSaveSchema = z.union([
+  z.object({
+    statuses: z.array(z.object({
+      key: z.string().max(32),
+      name: z.string().max(256).optional(),
+      description: z.string().max(BOARD_TEXT).optional(),
+      color: z.string().max(32).optional(),
+      hideEmpty: z.boolean().optional(),
+    }).strict()).max(64),
+  }).strict(),
+  z.object({ reset: z.literal(true) }).strict(),
+]);
+
 const ProjectPatchSchema = z.object({
   name: z.string().max(256).optional(),
   description: z.string().max(BOARD_TEXT).optional(),
@@ -3967,7 +3981,7 @@ export function handleWebRequest(
 
 
   // M-3278: the old task list's writes are an admin session's too (a read-only session reads), on any listener.
-  if (method === "POST" && (path === "/ui/tasks" || /^\/ui\/tasks\/[^/]+$/.test(path)) && !path.startsWith("/ui/tasks/cards") && !path.startsWith("/ui/tasks/projects")
+  if (method === "POST" && (path === "/ui/tasks" || /^\/ui\/tasks\/[^/]+$/.test(path)) && !path.startsWith("/ui/tasks/cards") && !path.startsWith("/ui/tasks/projects") && path !== "/ui/tasks/workflow"
     && !adminAdmissionOf(req, url, ctx)) { json(res, 403, { error: "task_board_needs_an_admin_session", code: "forbidden", key: "needs_admin" }); return true; }
   if (method === "POST" && path === "/ui/tasks") {
     if (!ctx.scheduler) {
@@ -4000,7 +4014,7 @@ export function handleWebRequest(
   // ── Task board (scheduler/task-board.ts) ──────────────
   // Reads are the session's; every write is the signed-in person's, through the same rules an instance's tools use.
 
-  if (path === "/ui/tasks/board" || path === "/ui/tasks/search" || path === "/ui/tasks/refs" || path === "/ui/tasks/work" || path.startsWith("/ui/tasks/cards") || path.startsWith("/ui/tasks/projects")) {
+  if (path === "/ui/tasks/board" || path === "/ui/tasks/search" || path === "/ui/tasks/refs" || path === "/ui/tasks/work" || path === "/ui/tasks/workflow" || path.startsWith("/ui/tasks/cards") || path.startsWith("/ui/tasks/projects")) {
     const board = ctx.scheduler?.db.board;
     if (!board) { json(res, 503, { error: "The task board is not available", code: "unavailable", key: "unavailable" }); return true; }
     // M-3278 (decision 7933bf90): an admin session changes the board over the public link too, as itself (boardActor), and
@@ -4073,6 +4087,7 @@ export function handleWebRequest(
     };
     const card = /^\/ui\/tasks\/cards\/([^/]+)(?:\/(move|reorder|watchers))?$/.exec(path);
     const project = /^\/ui\/tasks\/projects\/(\d+)$/.exec(path);
+    const projectWorkflow = /^\/ui\/tasks\/projects\/(\d+)\/workflow$/.exec(path);
     try {
       const ref = card ? decodeURIComponent(card[1]!) : "";
       if (method === "GET" && path === "/ui/tasks/board") {
@@ -4096,7 +4111,7 @@ export function handleWebRequest(
         // #2355 review: the names a project's lead may be — the fleet's instances (a Classic-only room is not one); over the
         // public link, not a hidden one.
         const leads = Object.keys(ctx.fleetConfig?.instances ?? {}).filter((n) => !hiddenName(n)).sort();
-        const body = JSON.stringify({ rev, cards: board.views(cards, scope, ctx.dispatcherGone).map(unnumbered), projects, leads, boardOff, stats: board.projectStats(ctx.dispatcherGone) });
+        const body = JSON.stringify({ rev, cards: board.views(cards, scope, ctx.dispatcherGone).map(unnumbered), projects, leads, boardOff, stats: board.projectStats(ctx.dispatcherGone), workflows: board.workflows() });
         if (key) boardBodies.set(board, { key, body });
         jsonText(res, 200, body);
         return true;
@@ -4193,6 +4208,17 @@ export function handleWebRequest(
       }
       if (method === "POST" && path === "/ui/tasks/projects") {
         boardWrite(req, res, url, ctx, board, ProjectCreateSchema, (input, person) => { checkLeadIsInstance(ctx, input.leadInstance); return { project: board.createProject(person, input) }; });
+        return true;
+      }
+      // AGEND-332: the words, colours and order of a project's statuses (`/workflow`: the default workflow, for the cards in no
+      // project and the projects without their own). A signed-in person's, like every write here; the link's read-only session reads.
+      if (method === "POST" && (path === "/ui/tasks/workflow" || projectWorkflow)) {
+        const scope = projectWorkflow ? Number(projectWorkflow[1]) : null;
+        boardWrite(req, res, url, ctx, board, WorkflowSaveSchema, (body, person) => {
+          if ("reset" in body) { board.resetWorkflow(person, scope); return { workflows: board.workflows() }; }
+          board.setWorkflow(person, scope, body.statuses);
+          return { workflows: board.workflows() };
+        });
         return true;
       }
       if (method === "POST" && project) {

@@ -678,7 +678,7 @@ describe("6. compatibility", () => {
     waker.stop();
   });
 
-  it("the rule needs no new table or column: the board's schema is what it was (but for the watchers' table, AGEND-299)", () => {
+  it("the rule needs no new table or column: the board's schema is what it was (but for the watchers' table, AGEND-299, and the statuses' tables, AGEND-332)", () => {
     const path = join(tmp(), "scheduler.db");
     const r = rig(path);
     const c = card(r.board, LEAD, { assignee: "dev-a" });
@@ -689,7 +689,7 @@ describe("6. compatibility", () => {
       const cols = (t: string) => (raw.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((x) => x.name);
       expect(cols("task_entries")).toEqual(["id", "task_id", "kind", "author", "author_kind", "text", "at"]);
       const tables = (raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'task%' ORDER BY name").all() as Array<{ name: string }>).map((x) => x.name);
-      expect(tables).toEqual(["task_counters", "task_entries", "task_events", "task_liveness", "task_projects", "task_watchers", "tasks"]);
+      expect(tables).toEqual(["task_counters", "task_entries", "task_events", "task_liveness", "task_projects", "task_statuses", "task_watchers", "task_workflows", "tasks"]);
       // The event a comment leaves is the one it always left: its text, nothing about whom it woke.
       const ev = raw.prepare("SELECT data FROM task_events WHERE type = 'commented'").get() as { data: string };
       expect(JSON.parse(ev.data)).toEqual({ text: "@dev-b look" });

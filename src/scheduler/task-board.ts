@@ -15,6 +15,7 @@
 import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import { parseMentions } from "./task-board-mentions.js";
+import { DEFAULT_WORKFLOW, WorkflowInputError, checkWorkflow, cloneStatuses, readWorkflow, type WorkflowStatus } from "./task-board-workflow.js";
 
 export const CARD_STATUSES = ["open", "claimed", "blocked", "review", "done", "cancelled"] as const;
 export type CardStatus = (typeof CARD_STATUSES)[number];
@@ -765,11 +766,36 @@ export class TaskBoard {
         at          TEXT NOT NULL,
         PRIMARY KEY (task_id, instance)
       );
+      -- AGEND-332: a project's own words, colours and order for the six statuses (task-board-workflow.ts). No row anywhere
+      -- means the built-in workflow; a release before this one never reads these tables, nor task_projects.workflow_id.
+      CREATE TABLE IF NOT EXISTS task_workflows (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL DEFAULT '',
+        is_default  INTEGER NOT NULL DEFAULT 0,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_task_workflows_default ON task_workflows(is_default) WHERE is_default = 1;
+      CREATE TABLE IF NOT EXISTS task_statuses (
+        workflow_id INTEGER NOT NULL,
+        key         TEXT NOT NULL,
+        name        TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        category    TEXT NOT NULL,
+        color       TEXT NOT NULL,
+        sort        INTEGER NOT NULL,
+        hide_empty  INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (workflow_id, key)
+      );
     `);
     // #2352: a project's lead instance, added in place (null: its waiting cards' buttons stay in General).
     const projectCols = new Set((this.db.prepare("PRAGMA table_info(task_projects)").all() as Array<{ name: string }>).map((c) => c.name));
     if (!projectCols.has("lead_instance")) {
       try { this.db.exec("ALTER TABLE task_projects ADD COLUMN lead_instance TEXT"); } catch (err) { if (!/duplicate column/i.test(String(err))) throw err; }
+    }
+    // AGEND-332: the workflow a project uses (null: the default one), added in place.
+    if (!projectCols.has("workflow_id")) {
+      try { this.db.exec("ALTER TABLE task_projects ADD COLUMN workflow_id INTEGER"); } catch (err) { if (!/duplicate column/i.test(String(err))) throw err; }
     }
     // Every open (the CLI opens this file for each command) only reads: the write lock is taken only when a counter
     // is missing or a row needs a number. (CREATE … IF NOT EXISTS of what exists takes no lock; an INSERT does.)
@@ -864,6 +890,87 @@ export class TaskBoard {
     const clash = this.db.prepare("SELECT id FROM task_projects WHERE name = ?").get(name) as Row | undefined;
     if (clash && Number(clash.id) !== selfId) throw new TaskBoardError("invalid", `there is already a project named "${name}"`, "project_name_taken", [name]);
     return name;
+  }
+
+  // ── Workflows (AGEND-332) ───────────────────────────────
+
+  /**
+   * Every workflow the board has, for the page: the default one (`default`, and `defaultCustom`: whether somebody edited
+   * it; else it is the built-in one), and the own workflow of each project that has one, by project id. A project not
+   * listed uses the default. Read only — nothing is written until a person saves a workflow.
+   */
+  workflows(): { default: WorkflowStatus[]; defaultCustom: boolean; projects: Record<string, WorkflowStatus[]> } {
+    const rows = this.db.prepare("SELECT workflow_id, key, name, description, color, sort, hide_empty FROM task_statuses").all() as Array<{ workflow_id: number; key: string; name: string; description: string; color: string; sort: number; hide_empty: number }>;
+    const byWorkflow = new Map<number, typeof rows>();
+    for (const r of rows) byWorkflow.set(Number(r.workflow_id), [...(byWorkflow.get(Number(r.workflow_id)) ?? []), r]);
+    const def = this.db.prepare("SELECT id FROM task_workflows WHERE is_default = 1").get() as { id: number } | undefined;
+    const projects: Record<string, WorkflowStatus[]> = {};
+    for (const p of this.db.prepare("SELECT id, workflow_id FROM task_projects WHERE workflow_id IS NOT NULL").all() as Array<{ id: number; workflow_id: number }>) {
+      const own = byWorkflow.get(Number(p.workflow_id));
+      if (own) projects[String(p.id)] = readWorkflow(own);
+    }
+    return { default: def ? readWorkflow(byWorkflow.get(Number(def.id)) ?? []) : cloneStatuses(DEFAULT_WORKFLOW), defaultCustom: !!def, projects };
+  }
+
+  /** The workflow a project's cards read (null: cards in no project): its own, else the default. */
+  workflowOf(projectId: number | null): WorkflowStatus[] {
+    const all = this.workflows();
+    return (projectId !== null && all.projects[String(projectId)]) || all.default;
+  }
+
+  /**
+   * A person sets the workflow of a project (`projectId`), or of the default one (null: it covers the cards in no project
+   * and every project without a workflow of its own). The first save of a project gives it its own workflow; the six
+   * statuses come as the person ordered them. Only a person: it is how everyone's board reads. Nothing about a card
+   * changes — the statuses stay the six, and so do the rules.
+   */
+  setWorkflow(actor: Actor, projectId: number | null, statuses: unknown): WorkflowStatus[] {
+    this.personOnly(actor, "change the statuses");
+    let checked: WorkflowStatus[];
+    try { checked = checkWorkflow(statuses); } catch (err) {
+      if (err instanceof WorkflowInputError) throw new TaskBoardError(err.key === "too_long" ? "too_long" : "invalid", err.message, err.key, err.args);
+      throw err;
+    }
+    return this.tx(() => {
+      const now = this.nowIso();
+      let id: number | null;
+      if (projectId === null) {
+        id = (this.db.prepare("SELECT id FROM task_workflows WHERE is_default = 1").get() as { id: number } | undefined)?.id ?? null;
+        if (id === null) id = Number((this.db.prepare("INSERT INTO task_workflows (name, is_default, created_at, updated_at) VALUES ('', 1, ?, ?) RETURNING id").get(now, now) as { id: number }).id);
+      } else {
+        const project = this.getProject(projectId);
+        id = (this.db.prepare("SELECT workflow_id FROM task_projects WHERE id = ?").get(project.id) as { workflow_id: number | null }).workflow_id;
+        if (id === null || !this.db.prepare("SELECT 1 FROM task_workflows WHERE id = ?").get(id)) {
+          id = Number((this.db.prepare("INSERT INTO task_workflows (name, is_default, created_at, updated_at) VALUES (?, 0, ?, ?) RETURNING id").get(project.name, now, now) as { id: number }).id);
+          this.db.prepare("UPDATE task_projects SET workflow_id = ? WHERE id = ?").run(id, project.id);
+        }
+      }
+      this.db.prepare("DELETE FROM task_statuses WHERE workflow_id = ?").run(id);
+      const insert = this.db.prepare("INSERT INTO task_statuses (workflow_id, key, name, description, category, color, sort, hide_empty) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+      checked.forEach((s, i) => insert.run(id, s.key, s.name, s.description, s.key, s.color, i, s.hideEmpty ? 1 : 0));
+      this.db.prepare("UPDATE task_workflows SET updated_at = ? WHERE id = ?").run(now, id);
+      this.projectsChanged = true;
+      return checked;
+    });
+  }
+
+  /** A person puts a project's workflow (null: the default one) back to what it was before it was edited: the built-in one, or for a project the default's. */
+  resetWorkflow(actor: Actor, projectId: number | null): void {
+    this.personOnly(actor, "change the statuses");
+    this.tx(() => {
+      let id: number | null;
+      if (projectId === null) id = (this.db.prepare("SELECT id FROM task_workflows WHERE is_default = 1").get() as { id: number } | undefined)?.id ?? null;
+      else {
+        const project = this.getProject(projectId);
+        id = (this.db.prepare("SELECT workflow_id FROM task_projects WHERE id = ?").get(project.id) as { workflow_id: number | null }).workflow_id;
+        this.db.prepare("UPDATE task_projects SET workflow_id = NULL WHERE id = ?").run(project.id);
+      }
+      if (id !== null) {
+        this.db.prepare("DELETE FROM task_statuses WHERE workflow_id = ?").run(id);
+        this.db.prepare("DELETE FROM task_workflows WHERE id = ?").run(id);
+      }
+      this.projectsChanged = true;
+    });
   }
 
   /** A new main task's project: the one asked for (not archived), or none. */

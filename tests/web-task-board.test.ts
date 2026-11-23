@@ -1209,3 +1209,103 @@ describe("#2355 review: a click or a reply is judged by where the card routes NO
     expect(here(card.uuid)).toBe(false);
   });
 });
+
+describe("AGEND-332 a project's own words, colours and order for its statuses, through the routes", () => {
+  const six = (patch: Record<string, Record<string, unknown>> = {}, order = ["open", "claimed", "blocked", "review", "done", "cancelled"]) => order.map((key) => ({ key, ...patch[key] }));
+
+  it("the board read carries the workflows: the built-in default and no project's own until one is saved", async () => {
+    const h = rig();
+    const me = await h.signIn("admin");
+    await web(h, "/ui/tasks/projects", "POST", me, { name: "Game" });
+    const board = (await web(h, "/ui/tasks/board", "GET", me)).json();
+    expect(board.workflows.defaultCustom).toBe(false);
+    expect(board.workflows.projects).toEqual({});
+    expect(board.workflows.default.map((s: any) => [s.key, s.name, s.color, s.hideEmpty])).toEqual([
+      ["open", "", "gray", false], ["claimed", "", "blue", false], ["blocked", "", "red", false],
+      ["review", "", "yellow", false], ["done", "", "green", false], ["cancelled", "", "gray", false]]);
+  });
+
+  it("a signed-in person saves a project's statuses; the board read (at the new revision) has them; the cards are untouched", async () => {
+    const h = rig();
+    const me = await h.signIn("admin");
+    const id = (await web(h, "/ui/tasks/projects", "POST", me, { name: "Game" })).json().project.id;
+    await web(h, "/ui/tasks/cards", "POST", me, { kind: "main", project: id, title: "Build it", assignee: "dev-a" });
+    const rev = (await web(h, "/ui/tasks/board", "GET", me)).json().rev;
+    const saved = await web(h, `/ui/tasks/projects/${id}/workflow`, "POST", me, { statuses: six({ blocked: { name: "Stuck", color: "yellow", description: "Needs an answer" }, review: { hideEmpty: true } }, ["open", "claimed", "review", "blocked", "done", "cancelled"]) });
+    expect(saved.status).toBe(200);
+    expect(saved.json().workflows.projects[String(id)].map((s: any) => s.key)).toEqual(["open", "claimed", "review", "blocked", "done", "cancelled"]);
+    const again = await web(h, `/ui/tasks/board?rev=${rev}`, "GET", me);
+    expect(again.json().unchanged).toBeUndefined();
+    const board = again.json();
+    expect(board.workflows.projects[String(id)].find((s: any) => s.key === "blocked")).toEqual({ key: "blocked", name: "Stuck", description: "Needs an answer", color: "yellow", hideEmpty: false });
+    expect(board.workflows.default.map((s: any) => s.name)).toEqual(["", "", "", "", "", ""]);
+    expect(board.cards.find((c: any) => c.id === "M-1")).toMatchObject({ status: "open", assignee: "dev-a" });
+  });
+
+  it("the default workflow has its own route; reset puts it (and a project) back", async () => {
+    const h = rig();
+    const me = await h.signIn("admin");
+    const id = (await web(h, "/ui/tasks/projects", "POST", me, { name: "Game" })).json().project.id;
+    expect((await web(h, "/ui/tasks/workflow", "POST", me, { statuses: six({ open: { name: "Inbox" } }) })).status).toBe(200);
+    let board = (await web(h, "/ui/tasks/board", "GET", me)).json();
+    expect([board.workflows.defaultCustom, board.workflows.default[0].name]).toEqual([true, "Inbox"]);
+    await web(h, `/ui/tasks/projects/${id}/workflow`, "POST", me, { statuses: six({ open: { name: "Ideas" } }) });
+    expect((await web(h, `/ui/tasks/projects/${id}/workflow`, "POST", me, { reset: true })).status).toBe(200);
+    expect((await web(h, "/ui/tasks/workflow", "POST", me, { reset: true })).status).toBe(200);
+    board = (await web(h, "/ui/tasks/board", "GET", me)).json();
+    expect([board.workflows.defaultCustom, board.workflows.projects]).toEqual([false, {}]);
+  });
+
+  it("refusals name their rule and write nothing: a colour out of the palette, a column that may not hide, a name too long, a missing status, an unknown field, a missing project", async () => {
+    const h = rig();
+    const me = await h.signIn("admin");
+    const id = (await web(h, "/ui/tasks/projects", "POST", me, { name: "Game" })).json().project.id;
+    const at = `/ui/tasks/projects/${id}/workflow`;
+    const refused = async (body: unknown, path = at) => { const r = await web(h, path, "POST", me, body); return [r.status, r.json().key ?? r.json().code]; };
+    expect(await refused({ statuses: six({ open: { color: "#fff" } }) })).toEqual([400, "workflow_color"]);
+    expect(await refused({ statuses: six({ open: { hideEmpty: true } }) })).toEqual([400, "workflow_not_hideable"]);
+    expect(await refused({ statuses: six({ open: { name: "x".repeat(41) } }) })).toEqual([400, "too_long"]);
+    expect(await refused({ statuses: six({}, ["open", "claimed"]) })).toEqual([400, "workflow_status_missing"]);
+    expect(await refused({ statuses: six({ open: { name: "Go" }, done: { name: "go" } }) })).toEqual([400, "workflow_name_twice"]);
+    expect((await refused({ statuses: six(), extra: 1 }))[0]).toBe(400);
+    expect((await refused({ statuses: six({ open: { instructions: "x" } }) }))[0]).toBe(400);
+    expect(await refused({ statuses: six() }, "/ui/tasks/projects/999/workflow")).toEqual([404, "project_not_found"]);
+    expect((await web(h, "/ui/tasks/board", "GET", me)).json().workflows.projects).toEqual({});
+  });
+
+  it("the header token and an instance's reach cannot change statuses: a signed-in person only", async () => {
+    const h = rig();
+    const me = await h.signIn("admin");
+    const id = (await web(h, "/ui/tasks/projects", "POST", me, { name: "Game" })).json().project.id;
+    for (const path of [`/ui/tasks/projects/${id}/workflow`, "/ui/tasks/workflow"]) {
+      const r = await web(h, path, "POST", { token: TOKEN }, { statuses: six({ open: { name: "Sneaky" } }) });
+      expect([r.status, r.json().key]).toEqual([403, "signed_in_only"]);
+    }
+    expect(h.db.board.workflows()).toMatchObject({ defaultCustom: false, projects: {} });
+  });
+
+  it("over the public link: a read-only session reads the workflows and changes nothing; an admin session saves them as itself", async () => {
+    const db = scratchDb();
+    const game = db.board.createProject(ANN, { name: "Game" });
+    for (const local of [false, true]) {
+      const opts = { tier: "read" as const, ...(local ? { local: true } : {}) };
+      expect((await viaLink(db, "GET", "/ui/tasks/board", undefined, opts)).body.workflows.default).toHaveLength(6);
+      for (const path of [`/ui/tasks/projects/${game.id}/workflow`, "/ui/tasks/workflow"]) {
+        expect([path, local, (await viaLink(db, "POST", path, { statuses: six({ open: { name: "No" } }) }, opts)).status]).toEqual([path, local, 403]);
+      }
+    }
+    expect(db.board.workflows()).toMatchObject({ defaultCustom: false, projects: {} });
+    expect((await viaLink(db, "POST", `/ui/tasks/projects/${game.id}/workflow`, { statuses: six({ open: { name: "Backlog" } }) })).status).toBe(200);
+    expect(db.board.workflowOf(game.id)[0]!.name).toBe("Backlog");
+    expect(isPublicWebRoute("POST", "/ui/tasks/workflow")).toBe(true);
+    expect(isPublicWebRoute("POST", `/ui/tasks/projects/${game.id}/workflow`)).toBe(true);
+  });
+
+  it("the link's board read carries names, colours and meanings only — no instance's name is in a workflow", async () => {
+    const db = scratchDb();
+    const game = db.board.createProject(ANN, { name: "Game" });
+    db.board.setWorkflow(ANN, game.id, six({ blocked: { name: "Stuck", description: "Ask the lead" } }));
+    const read = (await viaLink(db, "GET", "/ui/tasks/board", undefined, { tier: "read" })).body.workflows;
+    for (const s of read.projects[String(game.id)]) expect(Object.keys(s).sort()).toEqual(["color", "description", "hideEmpty", "key", "name"]);
+  });
+});
