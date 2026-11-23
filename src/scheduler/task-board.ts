@@ -328,6 +328,8 @@ export interface Wake {
   by: Partial<Record<WakeReason, string>>;
   /** The words that came with a reason: a send-back's, an answer's, a comment's, a question's, a confirmation note. */
   texts: Partial<Record<WakeReason, string>>;
+  /** The reasons whose last writer was a person, not an instance (AGEND-339: a comment's notice tells the agent a person reads the card). */
+  byPerson?: Partial<Record<WakeReason, true>>;
   /**
    * Set by the waker, never the board: how many comments (or mentions) earlier than the one in `texts` it merged into
    * this wake while gathering — the notice quotes the last and says there are more.
@@ -2459,6 +2461,7 @@ export class TaskBoard {
       if (text) w.texts[reason] = text;
       if (news) w.news = news;
       w.by[reason] = by.name;
+      if (isPerson(by)) (w.byPerson ??= {})[reason] = true; else if (w.byPerson) delete w.byPerson[reason];
       out.set(key, w);
     };
     // The answer to a blocked question is the comment that came with it (#2801: a comment alone wakes nobody).

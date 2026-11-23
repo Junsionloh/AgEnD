@@ -483,6 +483,10 @@ comment; and agent-to-agent wakes are capped (below).
   off; whatever the card's state, finished too — it was asked for by name. It may comment on any card, so it can answer.
   A mentioned assignee gets one `mention`, not a `comment` as well. A *person* whose name is also an instance's name
   is not that instance: their `@name` wakes it (only an instance's own `@name` is ignored as a self-mention).
+- *What the notice says of the writer (AGEND-339).* When a *person* wrote the comment or the mention, the notice ends with "(a person reads the card; no
+  @ needed)": an agent that answered "@web-user" (the name in "web-user mentioned you") only got "no such instance, nobody was woken". An
+  instance's comment does not say it, since an `@` may rightly answer it; a script's neither. Several comments gathered in one window say it for the
+  last writer's kind (`Wake.byPerson`, kept per reason).
 - *Said, not refused.* The writer's notes (`task` tool answer; the dashboard's `said`) tell who will be woken
   (`comment_wakes`), and what was not: `mention_off` (task board off), `mention_unknown` (no such instance; at most three
   shown), `mention_cap`, `comment_chain` (below). Nothing is rejected: the comment is kept either way. The dashboard

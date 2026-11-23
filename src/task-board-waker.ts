@@ -64,6 +64,12 @@ const quote = (text: string | undefined) => (text ? `: "${oneLine(text, 160)}"` 
 /** A comment's words are the last of several gathered together: the others are on the card. */
 const earlierWords = (w: Wake) => (w.earlier ? ` (+${w.earlier} earlier comment${w.earlier === 1 ? "" : "s"}: task get ${w.code})` : "");
 
+/**
+ * AGEND-339: a person wrote the comment, so the reply goes on the card, not to an `@name` (an agent that answered "@web-user" was
+ * told that nobody was woken). Not said for an instance's comment, which an `@` may rightly answer.
+ */
+const personReads = (w: Wake, r: WakeReason) => (w.byPerson?.[r] ? " (a person reads the card; no @ needed)" : "");
+
 const FOLLOW_WHY: Record<string, string> = { dispatcher: "you handed it out", watcher: "you watch it", leader: "you lead its project" };
 
 /** What a follower is told: the card's new state, who made it, and the words with it; the card stays the assignee's. */
@@ -110,8 +116,8 @@ function say(w: Wake, r: WakeReason, card: Card | undefined, here = false): stri
       return `it is in review and nobody else confirms it — it is yours${gap ? `, though ${gapText(gap, card!.kind === "main")}` : ""}: check it, then move it to done`;
     }
     // Comments wake (docs/design/task-board.md, "Comments and mentions"): the words are in the notice; the reply goes on the card.
-    case "comment": return `new comment from ${by}${quote(w.texts.comment)}${earlierWords(w)} — reply on the card (task update, with a comment) only if it asks or needs something from you`;
-    case "mention": return `${by} mentioned you in a comment${quote(w.texts.mention)}${earlierWords(w)} — reply on the card (task update, with a comment) if it asks something of you; the card is not yours unless it says so`;
+    case "comment": return `new comment from ${by}${quote(w.texts.comment)}${earlierWords(w)} — reply on the card (task update, with a comment) only if it asks or needs something from you${personReads(w, r)}`;
+    case "mention": return `${by} mentioned you in a comment${quote(w.texts.mention)}${earlierWords(w)} — reply on the card (task update, with a comment) if it asks something of you; the card is not yours unless it says so${personReads(w, r)}`;
     // A follower (docs/design/task-board.md, "Following a card"): how the card moved on, who did it, with the words that came with it.
     case "progress": return progressLine(w, card);
     case "cancelled": return `cancelled by ${by}${w.texts.cancelled?.startsWith("with its main task") ? ` ${oneLine(w.texts.cancelled, 160)}` : quote(w.texts.cancelled)} — stop working on it`;
@@ -164,6 +170,13 @@ export function wakeMessage(wakes: Wake[], card: (uuid: string) => Card | undefi
   return `[Task board] ${items.length} things on your cards:\n${items.map((w) => `- ${line(w)}`).join("\n")}\nYour work: task mine`;
 }
 
+/** A merged wake's person flags: each reason takes the newer wake's word on who wrote it, else keeps the earlier. */
+function mergePerson(had: Wake, w: Wake): Partial<Record<WakeReason, true>> {
+  const out: Partial<Record<WakeReason, true>> = { ...had.byPerson };
+  for (const r of w.reasons) { if (w.byPerson?.[r]) out[r] = true; else delete out[r]; }
+  return out;
+}
+
 export class TaskBoardWaker {
   private readonly gathering = new Map<string, { wakes: Map<string, Wake>; timer: unknown }>();
   private stopped = false;
@@ -190,8 +203,8 @@ export class TaskBoardWaker {
       // A second comment on the card in the same window: the notice quotes the last and counts the ones before it.
       const earlier = (had?.earlier ?? 0) + (had && hasCommentNews(had) && hasCommentNews(w) ? 1 : 0);
       batch.wakes.set(w.uuid, had
-        ? { ...had, title: w.title, reasons: [...new Set([...had.reasons, ...w.reasons])], by: { ...had.by, ...w.by }, texts: { ...had.texts, ...w.texts }, ...(w.news ?? had.news ? { news: w.news ?? had.news } : {}), ...(earlier ? { earlier } : {}) }
-        : { ...w, reasons: [...w.reasons], by: { ...w.by }, texts: { ...w.texts }, ...(w.news ? { news: { ...w.news } } : {}) });
+        ? { ...had, title: w.title, reasons: [...new Set([...had.reasons, ...w.reasons])], by: { ...had.by, ...w.by }, texts: { ...had.texts, ...w.texts }, ...(had.byPerson || w.byPerson ? { byPerson: mergePerson(had, w) } : {}), ...(w.news ?? had.news ? { news: w.news ?? had.news } : {}), ...(earlier ? { earlier } : {}) }
+        : { ...w, reasons: [...w.reasons], by: { ...w.by }, texts: { ...w.texts }, ...(w.byPerson ? { byPerson: { ...w.byPerson } } : {}), ...(w.news ? { news: { ...w.news } } : {}) });
     }
   }
 

@@ -162,7 +162,7 @@ describe("in the fleet: a write's wakes reach the delivery outbox as AgEnD's not
     expect(more).toEqual([]);
     expect(row!.target_instance).toBe("dev-a");
     const payload = JSON.parse(row!.payload_json);
-    expect(payload.content).toBe('[Task board] M-1 "Leaderboard": assigned to you by lead; new comment from Ann: "weekly, not daily" — reply on the card (task update, with a comment) only if it asks or needs something from you. Read it with: task get M-1');
+    expect(payload.content).toBe('[Task board] M-1 "Leaderboard": assigned to you by lead; new comment from Ann: "weekly, not daily" — reply on the card (task update, with a comment) only if it asks or needs something from you (a person reads the card; no @ needed). Read it with: task get M-1');
     expect(payload.meta).toMatchObject({ user: "AgEnD", user_id: "agend-system", source: "agend-system" });
     fm.taskBoardWaker.stop();
     fm.deliveryOutbox?.close?.();
