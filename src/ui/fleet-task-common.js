@@ -13,7 +13,12 @@ import { sectionPath } from "/assets/app-route.js";
 
 register("tasks", {
   en: {
-    open: "To do", claimed: "In progress", blocked: "Blocked", review: "To confirm", done: "Done", cancelled: "Cancelled",
+    open: "To do", claimed: "In progress", blocked: "Blocked", review: "To confirm", done: "Done", cancelled: "Cancelled", nameN: "{0} {1}",
+    fieldname: "the name", fielddescription: "the description",
+    "err.workflow_invalid": "The statuses could not be read", "err.workflow_max": "A workflow has at most {0} statuses",
+    "err.workflow_status_unknown": "Unknown status “{0}”", "err.workflow_status_twice": "Status “{0}” is listed twice",
+    "err.workflow_status_missing": "A workflow lists every status; missing: {0}", "err.workflow_color": "“{0}” is not one of the colours",
+    "err.workflow_not_hideable": "The column “{0}” cannot be hidden", "err.workflow_name_twice": "Two statuses are named “{0}”",
     reviewYou: "Waiting for you", reviewBy: "Waiting for {0}", reviewByTip: "{0} confirms it, not you",
     main: "Main task", sub: "Sub task", urgent: "Urgent", high: "High", normal: "Normal", low: "Low",
     sizeS: "Small", sizeM: "Medium", sizeL: "Large", sizeNone: "Not sized",
@@ -96,7 +101,12 @@ register("tasks", {
     quickHint: "A title is enough — fill in the rest on the card.", moreOptions: "More options", createMore: "Project, assignee and priority",
   },
   "zh-TW": {
-    open: "待辦", claimed: "進行中", blocked: "卡住", review: "待確認", done: "完成", cancelled: "取消",
+    open: "待辦", claimed: "進行中", blocked: "卡住", review: "待確認", done: "完成", cancelled: "取消", nameN: "{0} {1}",
+    fieldname: "名稱", fielddescription: "說明",
+    "err.workflow_invalid": "讀不懂送出的狀態", "err.workflow_max": "每個工作流程最多 {0} 個狀態",
+    "err.workflow_status_unknown": "不認識的狀態「{0}」", "err.workflow_status_twice": "狀態「{0}」重複了",
+    "err.workflow_status_missing": "工作流程要列出每個狀態，缺：{0}", "err.workflow_color": "「{0}」不在可用的顏色裡",
+    "err.workflow_not_hideable": "「{0}」這一欄不能隱藏", "err.workflow_name_twice": "有兩個狀態都叫「{0}」",
     reviewYou: "等你確認", reviewBy: "等 {0} 確認", reviewByTip: "由 {0} 確認，不是你",
     main: "主任務", sub: "子任務", urgent: "緊急", high: "高", normal: "一般", low: "低",
     sizeS: "小", sizeM: "中", sizeL: "大", sizeNone: "未定",
@@ -183,6 +193,74 @@ export const COLUMNS = ["open", "claimed", "blocked", "review", "done"];
 export const NO_PROJECT = "none";
 const WEEK = 7 * 86_400_000;
 export const UNASSIGNED = "\u0000none";
+
+// ── Statuses as a project words them (AGEND-332) ───────────────
+// A project can give the six statuses its own names, colours and order (a workflow). The board read carries them
+// (`workflows`: the default one, and the own workflow of each project that has one); a card's status is shown through
+// them. They change only how a status LOOKS: a card's `status` is still one of the six and every rule reads that.
+
+/** The palette a status may take: names of the theme's own colours (`sc-<name>` in app.css), no free hex values. */
+export const STATUS_COLORS = ["gray", "blue", "green", "yellow", "red"];
+/** The colours the board has always drawn; a status in its own colour needs no class (the `st-<status>` rules draw it). */
+export const BUILT_IN_COLORS = { open: "gray", claimed: "blue", blocked: "red", review: "yellow", done: "green", cancelled: "gray" };
+/** The statuses whose empty column may be hidden (the server's HIDEABLE). */
+export const HIDEABLE = ["blocked", "review", "done"];
+export const STATUS_LIMITS = { name: 40, description: 300 };
+
+const builtInWorkflow = () => ["open", "claimed", "blocked", "review", "done", "cancelled"].map((key) => ({ key, name: "", description: "", color: BUILT_IN_COLORS[key], hideEmpty: false }));
+let flows = { default: builtInWorkflow(), defaultCustom: false, projects: {} };
+
+/** Takes the board read's `workflows` (missing or malformed: the built-in one, as before this existed). */
+export function setWorkflows(w) {
+  const KEYS = Object.keys(BUILT_IN_COLORS);
+  const text = (v) => (typeof v === "string" ? v : "");
+  // Each status once, as the host sent it, the palette's colours only; a status the list lacks is put after the others.
+  const list = (v) => {
+    const seen = new Set();
+    const l = (Array.isArray(v) ? v : []).filter((s) => s && KEYS.includes(s.key) && !seen.has(s.key) && seen.add(s.key))
+      .map((s) => ({ key: s.key, name: text(s.name), description: text(s.description), color: STATUS_COLORS.includes(s.color) ? s.color : BUILT_IN_COLORS[s.key], hideEmpty: s.hideEmpty === true }));
+    return l.length ? [...l, ...builtInWorkflow().filter((d) => !seen.has(d.key))] : null;
+  };
+  const projects = {};
+  if (w && w.projects && typeof w.projects === "object") for (const [id, v] of Object.entries(w.projects)) { const l = list(v); if (l) projects[id] = l; }
+  flows = { default: (w && list(w.default)) || builtInWorkflow(), defaultCustom: !!(w && w.defaultCustom), projects };
+}
+
+/** A card, a project id or NO_PROJECT → the key a workflow is looked up by. */
+const scopeKey = (scope) => (scope && typeof scope === "object" ? (scope.projectId === null || scope.projectId === undefined ? NO_PROJECT : scope.projectId) : scope);
+
+/** The statuses a project's cards are read through, in the order it set (its own workflow, else the default one). `scope`: a card, a project id, NO_PROJECT or nothing. */
+export function workflowOf(scope) {
+  const k = scopeKey(scope);
+  return (k !== undefined && k !== null && k !== NO_PROJECT && flows.projects[String(k)]) || flows.default;
+}
+/** Whether a project has a workflow of its own (else it reads the default). */
+export const hasOwnWorkflow = (id) => !!flows.projects[String(id)];
+/** Whether somebody edited the default workflow (else it is the built-in one). */
+export const defaultIsCustom = () => flows.defaultCustom;
+
+/** One status as `scope` words it: { key, name, description, color, hideEmpty }; name "" is the built-in word. */
+export function statusInfo(status, scope) {
+  return workflowOf(scope).find((s) => s.key === status) || { key: status, name: "", description: "", color: BUILT_IN_COLORS[status] || "gray", hideEmpty: false };
+}
+/** What `scope` calls a status: the name it was given, else the built-in word in the page's language. */
+export const statusName = (status, scope) => statusInfo(status, scope).name || t(`tasks.${status}`);
+/** What it means in `scope` (a tooltip), or "". */
+export const statusHint = (status, scope) => statusInfo(status, scope).description || "";
+/** The class that recolours what is drawn for a status (` sc-green`), or "" while it has the colour it always had. */
+export function statusColor(status, scope) {
+  const c = statusInfo(status, scope).color;
+  return c && c !== BUILT_IN_COLORS[status] && STATUS_COLORS.includes(c) ? ` sc-${c}` : "";
+}
+/** "3 blocked" on a project's tile and header: the page's own words, or "3 <the name the project gave the status>". */
+export function blockedFlagText(n, scope) {
+  const name = statusInfo("blocked", scope).name;
+  return name ? t("tasks.nameN", n, name) : t("tasks.blockedN", n);
+}
+/** The board's columns for `scope`, in its order (the cancelled status is not a column). */
+export const columnsOf = (scope) => workflowOf(scope).map((s) => s.key).filter((k) => k !== "cancelled" && COLUMNS.includes(k));
+/** Whether `scope` hides the empty column of a status. */
+export const hidesWhenEmpty = (status, scope) => statusInfo(status, scope).hideEmpty === true && HIDEABLE.includes(status);
 
 // ── Pure helpers (tests import these) ─────────────────────────
 
@@ -365,10 +443,10 @@ export async function boardCall(method, path, body) {
 }
 
 /** Statuses and field names among a refusal's or a note's values, in the page's words. */
-function word(key, arg, i) {
+function word(key, arg, i, scope) {
   if (typeof arg !== "string") return arg;
   if ((key === "too_long") && i === 0) { const w = t(`tasks.field${arg}`); return w === `tasks.field${arg}` ? arg : w; }
-  if (["open", "claimed", "blocked", "review", "done", "cancelled"].includes(arg) && ["already", "cannot_block", "back_to"].includes(key)) return t(`tasks.${arg}`);
+  if (["open", "claimed", "blocked", "review", "done", "cancelled"].includes(arg) && ["already", "cannot_block", "back_to"].includes(key)) return statusName(arg, scope);
   return arg;
 }
 
@@ -401,10 +479,10 @@ export function BoardOffNote({ names, textKey = "tasks.boardOffNote" }) {
 }
 
 /** A refusal in the page's language when the board named it (tasks.err.<key>), else the board's own sentence. */
-export function errorText(err) {
+export function errorText(err, scope) {
   if (err && err.key) {
     const key = `tasks.err.${err.key}`;
-    const said = t(key, ...(err.args || []).map((a, i) => word(err.key, a, i)));
+    const said = t(key, ...(err.args || []).map((a, i) => word(err.key, a, i, scope)));
     if (said !== key) return said;
   }
   return err && err.message ? err.message : String(err);
@@ -424,13 +502,15 @@ export const boardApi = {
   work: (instance) => boardCall("GET", `/ui/tasks/work${instance ? `?instance=${enc(instance)}` : ""}`),
   createProject: (name, description, leadInstance) => boardCall("POST", "/ui/tasks/projects", { name, description, ...(leadInstance ? { leadInstance } : {}) }),
   updateProject: (id, patch) => boardCall("POST", `/ui/tasks/projects/${id}`, patch),
+  /** AGEND-332: the words, colours and order of a project's statuses (`project` null: the default workflow); `statuses` null puts them back. */
+  setWorkflow: (project, statuses) => boardCall("POST", project === null ? "/ui/tasks/workflow" : `/ui/tasks/projects/${project}/workflow`, statuses === null ? { reset: true } : { statuses }),
 };
 
 /** The notes a write brings that a person wants to hear, in the page's language (the rest are for agents). */
 const PERSON_NOTES = new Set(["review_waiting", "back_to", "deps_done", "deps_unmet"]);
-export function notesForPeople(notes) {
+export function notesForPeople(notes, scope) {
   return (notes || []).filter((n) => n && typeof n === "object" && PERSON_NOTES.has(n.key))
-    .map((n) => t(`tasks.note.${n.key}`, ...(n.args || []).map((a, i) => word(n.key, a, i))));
+    .map((n) => t(`tasks.note.${n.key}`, ...(n.args || []).map((a, i) => word(n.key, a, i, scope))));
 }
 
 /** Over the temporary public link the board is read-only (its writes are refused there). */
@@ -517,7 +597,7 @@ export async function moveCard(card, to, extra = {}) {
   input.version = card.version;
   try {
     const r = await boardApi.move(card.id, to, input);
-    for (const n of notesForPeople(r.notes)) toast(n);
+    for (const n of notesForPeople(r.notes, card)) toast(n);
     return r;
   } catch (err) {
     // Someone changed the card meanwhile: what was typed is not lost — read the card again and offer to send it there.
@@ -525,12 +605,12 @@ export async function moveCard(card, to, extra = {}) {
       try {
         const { card: fresh } = await boardApi.card(card.id);
         const typed = input.reason || input.comment;
-        const again = await askText({ title: t("tasks.conflictAgain", card.id, t(`tasks.${fresh.status}`)), label: t("tasks.conflictLabel"), initial: typed, required: true, confirmLabel: t("tasks.sendAgain") });
+        const again = await askText({ title: t("tasks.conflictAgain", card.id, statusName(fresh.status, fresh)), label: t("tasks.conflictLabel"), initial: typed, required: true, confirmLabel: t("tasks.sendAgain") });
         if (again === null) return null;
         return moveCard(fresh, to, { ...extra, ...(input.reason ? { reason: again } : { comment: again }), again: true });
-      } catch (e) { toast(errorText(e), false); return null; }
+      } catch (e) { toast(errorText(e, card), false); return null; }
     }
-    toast(errorText(err), false);
+    toast(errorText(err, card), false);
     return null;
   }
 }
@@ -548,26 +628,27 @@ export async function answerBlocked(card) {
  * #2299: the bar is the percentage beside it — only done work fills it, so 0 % never looks full (a project whose only
  * card was blocked drew a full red bar). What waits for the person or is blocked is said by the card's chips.
  */
-export function ProgressBar({ progress, wide = false }) {
+export function ProgressBar({ progress, wide = false, scope }) {
   return html`<svg class=${`tb-bar${wide ? " wide" : ""}`} viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true" focusable="false">
     <rect class="tb-bar-track" width="100" height="6" />
-    ${barSegments(progress).filter((s) => s.k === "done").map((s) => html`<rect key=${s.k} class=${`tb-seg st-${s.k}`} x=${s.x} width=${s.w} height="6" />`)}</svg>`;
+    ${barSegments(progress).filter((s) => s.k === "done").map((s) => html`<rect key=${s.k} class=${`tb-seg st-${s.k}${statusColor(s.k, scope)}`} x=${s.x} width=${s.w} height="6" />`)}</svg>`;
 }
 
 /** #2080: whom a card in review waits for, in words: you, the agent that confirms it, or (neither known) "To confirm". */
 export function reviewLabel(card) {
   if (waitsForYou(card)) return t("tasks.reviewYou");
-  return card.confirmer ? t("tasks.reviewBy", card.confirmer) : t("tasks.review");
+  return card.confirmer ? t("tasks.reviewBy", card.confirmer) : statusName("review", card);
 }
 
 /**
  * A card's status. #2080: with the card, one in review says whom it waits for — the person ("Waiting for you") or the
  * agent that confirms it ("Waiting for atlas").
  */
-export function StatusPill({ status, card = null }) {
+export function StatusPill({ status, card = null, scope }) {
   const by = card && status === "review" && !waitsForYou(card) && card.confirmer ? card.confirmer : null;
-  const label = !card || status !== "review" ? t(`tasks.${status}`) : reviewLabel(card);
-  return html`<span class=${`tb-pill st-${status}${by ? " by-agent" : ""}`} title=${by ? t("tasks.reviewByTip", by) : null}>${label}</span>`;
+  const at = scope === undefined ? card : scope;
+  const label = !card || status !== "review" ? statusName(status, at) : reviewLabel(card);
+  return html`<span class=${`tb-pill st-${status}${statusColor(status, at)}${by ? " by-agent" : ""}`} title=${by ? t("tasks.reviewByTip", by) : statusHint(status, at) || null}>${label}</span>`;
 }
 
 /**

@@ -8,7 +8,7 @@
 import { html, useEffect, useLayoutEffect, useRef } from "/assets/app-html.js";
 import { t, register } from "/assets/app-i18n.js";
 import { Icon } from "/assets/ui-icons.js";
-import { COLUMNS, followsSubs, waitsForYou } from "./fleet-task-common.js";
+import { columnsOf, followsSubs, statusColor, statusName, waitsForYou } from "./fleet-task-common.js";
 
 register("taskmenu", {
   en: {
@@ -34,7 +34,7 @@ const PRIORITIES = ["urgent", "high", "normal", "low"];
 export function movesFor(card) {
   if (card.status === "cancelled") return [];
   const derived = followsSubs(card);
-  return COLUMNS.filter((to) => to !== card.status && (!derived || (card.status === "review" && (to === "done" || to === "claimed"))
+  return columnsOf(card).filter((to) => to !== card.status && (!derived || (card.status === "review" && (to === "done" || to === "claimed"))
     || (to === "blocked" && card.status !== "done") || (card.status === "blocked" && to === "claimed")));
 }
 
@@ -55,7 +55,7 @@ export function cardMenuItems(card, { writable, names, act }) {
     const moves = movesFor(card);
     if (moves.length) {
       items.push({ key: "h-move", heading: true, label: t("taskmenu.moveTo") });
-      for (const to of moves) items.push({ key: `move-${to}`, label: t(`tasks.${to}`), dot: to, onSelect: () => act({ kind: "move", to }) });
+      for (const to of moves) items.push({ key: `move-${to}`, label: statusName(to, card), dot: to, dotClass: statusColor(to, card).trim(), onSelect: () => act({ kind: "move", to }) });
     }
     if (card.status !== "done" && card.status !== "cancelled") {
       items.push({ key: "h-assignee", heading: true, label: t("taskmenu.assignee") });
@@ -160,7 +160,7 @@ export function CardMenu({ at, items, label, onClose }) {
         ? html`<button key=${item.key} type="button" role="menuitemradio" aria-checked=${item.checked ? "true" : "false"} class="menu-item menu-radio" onClick=${() => choose(item)}>
           <span class="menu-tick" aria-hidden="true">${item.checked ? html`<${Icon} name="check" size=${16} />` : null}</span><span>${item.label}</span></button>`
         : html`<button key=${item.key} type="button" role="menuitem" class=${`menu-item${item.danger ? " danger" : ""}`} onClick=${() => choose(item)}>
-          ${item.dot ? html`<span class=${`tb-dot st-${item.dot}`} aria-hidden="true"></span>` : item.icon ? html`<${Icon} name=${item.icon} size=${16} />` : null}<span>${item.label}</span></button>`)}
+          ${item.dot ? html`<span class=${`tb-dot st-${item.dot}${item.dotClass ? ` ${item.dotClass}` : ""}`} aria-hidden="true"></span>` : item.icon ? html`<${Icon} name=${item.icon} size=${16} />` : null}<span>${item.label}</span></button>`)}
   </div>`;
 }
 

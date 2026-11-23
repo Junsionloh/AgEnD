@@ -3271,6 +3271,23 @@ html.oo-immersive .p-fleet > .panel-body { z-index: 50; }
 .tb-seg.st-review { fill: var(--warn); }
 .tb-seg.st-claimed { fill: var(--accent); }
 .tb-seg.st-blocked { fill: var(--danger); }
+/* AGEND-332: a project's own colour for a status — the palette is the theme's colours by name (no free colours, no style
+   attribute). A status in the colour it always had carries no class; these come after the rules above so they win. */
+.tb-pill.sc-gray, .tb-tag.sc-gray, .tb-flag.sc-gray { background: var(--surface-2); color: var(--text-2); }
+.tb-pill.sc-blue, .tb-tag.sc-blue, .tb-flag.sc-blue { background: var(--accent-dim); color: var(--accent); }
+.tb-pill.sc-green, .tb-tag.sc-green, .tb-flag.sc-green { background: var(--ok-bg); color: var(--ok); }
+.tb-pill.sc-yellow, .tb-tag.sc-yellow, .tb-flag.sc-yellow { background: var(--warn-bg); color: var(--warn); }
+.tb-pill.sc-red, .tb-tag.sc-red, .tb-flag.sc-red { background: var(--danger-bg); color: var(--danger); }
+.tb-col.sc-gray > .tb-col-head > .tb-dot, .tb-dot.sc-gray { background: var(--text-3); }
+.tb-col.sc-blue > .tb-col-head > .tb-dot, .tb-dot.sc-blue { background: var(--accent); }
+.tb-col.sc-green > .tb-col-head > .tb-dot, .tb-dot.sc-green { background: var(--ok); }
+.tb-col.sc-yellow > .tb-col-head > .tb-dot, .tb-dot.sc-yellow { background: var(--warn); }
+.tb-col.sc-red > .tb-col-head > .tb-dot, .tb-dot.sc-red { background: var(--danger); }
+.tb-seg.sc-gray { fill: var(--text-3); }
+.tb-seg.sc-blue { fill: var(--accent); }
+.tb-seg.sc-green { fill: var(--ok); }
+.tb-seg.sc-yellow { fill: var(--warn); }
+.tb-seg.sc-red { fill: var(--danger); }
 .tb-pct { font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
 
 /* Home: what waits for the person, then the projects. */

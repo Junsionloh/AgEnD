@@ -11,7 +11,7 @@ import { Icon } from "/assets/ui-icons.js";
 import { Menu } from "/assets/ui-menu.js";
 import { RunMark, runOf } from "./fleet-task-run.js";
 import { OwnerChip } from "./fleet-task-owner.js";
-import { COLUMNS, ProgressBar, UNASSIGNED, Who, readStored, recentlyDone, relTime, reviewLabel, waitsForYou, waitsList, waitsOn, wrapUpText, writeStored } from "./fleet-task-common.js";
+import { COLUMNS, ProgressBar, UNASSIGNED, Who, columnsOf, readStored, recentlyDone, relTime, reviewLabel, statusColor, statusName, waitsForYou, waitsList, waitsOn, wrapUpText, writeStored } from "./fleet-task-common.js";
 import { assetUrl } from "/assets/asset-url.js";
 
 /** The task board's stylesheet, linked once (a tab opened before an upgrade has an app.css without these rules). */
@@ -228,18 +228,19 @@ export function orderRows(rows, order, byId = new Map(), dir = "asc") {
 }
 
 /** Rows in groups, in a fixed order: statuses as the board's columns, priorities from urgent, assignees by name (nobody last). */
-export function groupRows(rows, group) {
+export function groupRows(rows, group, scope) {
   if (group === "none") return rows.length ? [{ key: "all", rows }] : [];
-  const keys = group === "status" ? COLUMNS : group === "priority" ? PRIORITIES
+  const keys = group === "status" ? columnsOf(scope) : group === "priority" ? PRIORITIES
     : [...new Set(rows.map((r) => r.assignee).filter(Boolean))].sort((a, b) => a.localeCompare(b)).concat(NONE);
   return keys.map((key) => ({ key, rows: rows.filter((r) => valueOf(r, group) === key) })).filter((g) => g.rows.length);
 }
 
 /** A filter value in words: a status, a priority, a size, an assignee (nobody: "Unassigned"; not sized: "Not sized"). */
-export function valueWord(field, v) {
+export function valueWord(field, v, scope) {
   if (field === "waits") return t("taskview.waitsYou");
   if (v === NONE) return field === "size" ? t("tasks.sizeNone") : t("tasks.nobody");
-  if (field === "status" || field === "priority") return t(`tasks.${v}`);
+  if (field === "status") return statusName(v, scope);
+  if (field === "priority") return t(`tasks.${v}`);
   if (field === "size") return t(`tasks.size${v}`);
   return v;
 }
@@ -248,13 +249,13 @@ const listJoin = (words) => words.join(lang() === "zh-TW" ? "、" : ", ");
 // ── The header's Filter and Display, and the filters' chips ───────
 
 /** Filter: each field's values, ticked when its filter has them; a tick adds the value to (or takes it from) the filter. */
-export function FilterMenu({ cards, filters, onChange }) {
+export function FilterMenu({ cards, filters, onChange, scope }) {
   const items = [];
   for (const field of FILTER_FIELDS) {
     const f = filters.find((x) => x.field === field) || null;
     items.push({ key: `h-${field}`, heading: true, label: t(`taskview.field${field}`) });
     for (const v of fieldValues(field, cards, f)) {
-      items.push({ key: `${field}:${v}`, checkbox: true, checked: !!f && f.values.includes(v), label: valueWord(field, v), onSelect: () => onChange(toggleValue(filters, field, v)) });
+      items.push({ key: `${field}:${v}`, checkbox: true, checked: !!f && f.values.includes(v), label: valueWord(field, v, scope), onSelect: () => onChange(toggleValue(filters, field, v)) });
     }
   }
   return html`<${TextMenu} cls="tb-filter-menu" icon="filter" text=${t("taskview.filter")} tip=${t("taskview.filterTip")} active=${filters.length > 0} items=${items} />`;
@@ -299,29 +300,29 @@ export function SearchField({ value, onChange }) {
  * One row of controls under a project's header, Multica's way: the board / list switch, the search, Filter and Display,
  * then the filters in force as chips. The filters, the view and the display are kept on this device.
  */
-export function TaskToolbar({ cards, display, onDisplay, filters, onFilters, query, onQuery }) {
+export function TaskToolbar({ cards, display, onDisplay, filters, onFilters, query, onQuery, scope }) {
   return html`<div class="tb-view-bar">
     <${ViewToggle} display=${display} onChange=${onDisplay} />
     <${SearchField} value=${query} onChange=${onQuery} />
-    <${FilterMenu} cards=${cards} filters=${filters} onChange=${onFilters} />
+    <${FilterMenu} cards=${cards} filters=${filters} onChange=${onFilters} scope=${scope} />
     <${DisplayMenu} display=${display} onChange=${onDisplay} />
-    <${FilterBar} cards=${cards} filters=${filters} onChange=${onFilters} />
+    <${FilterBar} cards=${cards} filters=${filters} onChange=${onFilters} scope=${scope} />
   </div>`;
 }
 
 /** The filters in force, a chip each: its field, is / is not (a click switches), its values (a menu), and remove. */
-export function FilterBar({ cards, filters, onChange }) {
+export function FilterBar({ cards, filters, onChange, scope }) {
   if (!filters.length) return null;
   return html`<div class="tb-filters" role="group" aria-label=${t("taskview.filters")}>
     ${filters.map((f) => {
       const field = t(`taskview.field${f.field}`);
-      const shown = f.values.length <= 2 ? listJoin(f.values.map((v) => valueWord(f.field, v))) : t("taskview.nValues", f.values.length);
+      const shown = f.values.length <= 2 ? listJoin(f.values.map((v) => valueWord(f.field, v, scope))) : t("taskview.nValues", f.values.length);
       return html`<span key=${f.field} class=${`tb-chip${f.not ? " not" : ""}`}>
         <span class="tb-chip-field">${field}</span>
         <button type="button" class="tb-chip-op" title=${t("taskview.opTip")} aria-label=${`${field} ${f.not ? t("taskview.isNot") : t("taskview.is")} — ${t("taskview.opTip")}`}
           onClick=${() => onChange(filters.map((x) => (x === f ? { ...f, not: !f.not } : x)))}>${f.not ? t("taskview.isNot") : t("taskview.is")}</button>
         <${TextMenu} cls="tb-chip-menu" icon="" text=${shown} tip=${t("taskview.values", field)}
-          items=${fieldValues(f.field, cards, f).map((v) => ({ key: v, checkbox: true, checked: f.values.includes(v), label: valueWord(f.field, v), onSelect: () => onChange(toggleValue(filters, f.field, v)) }))} />
+          items=${fieldValues(f.field, cards, f).map((v) => ({ key: v, checkbox: true, checked: f.values.includes(v), label: valueWord(f.field, v, scope), onSelect: () => onChange(toggleValue(filters, f.field, v)) }))} />
         <button type="button" class="tb-chip-x" title=${t("taskview.remove")} aria-label=${`${t("taskview.remove")}: ${field}`} onClick=${() => onChange(filters.filter((x) => x !== f))}><${Icon} name="close" size=${14} /></button>
       </span>`;
     })}
@@ -334,20 +335,20 @@ export function FilterBar({ cards, filters, onChange }) {
 /** A main task's sub tasks, opened up under it (the board's tile and the list's row). */
 export function SubList({ subs, older = 0, onOpen }) {
   return html`<ul class="tb-subs" onClick=${(e) => e.stopPropagation()}>
-    ${subs.map((s) => html`<li key=${s.id}><button type="button" onClick=${() => onOpen(s.id)} title=${`${s.id} ${s.title} (${t(`tasks.${s.status}`)})`}>
-      <span class=${`tb-dot st-${s.status}`} aria-label=${t(`tasks.${s.status}`)}></span><span class="tb-code">${s.id}</span><span class="tb-sub-title">${s.title}</span>
+    ${subs.map((s) => html`<li key=${s.id}><button type="button" onClick=${() => onOpen(s.id)} title=${`${s.id} ${s.title} (${statusName(s.status, s)})`}>
+      <span class=${`tb-dot st-${s.status}${statusColor(s.status, s)}`} aria-label=${statusName(s.status, s)}></span><span class="tb-code">${s.id}</span><span class="tb-sub-title">${s.title}</span>
       ${s.assignee ? html`<span class="tb-who">${s.assignee}</span>` : null}</button>
       ${s.status === "blocked" && s.blockedReason ? html`<div class="tb-sub-blocked">${s.blockedReason}</div>` : null}</li>`)}
     ${older > 0 ? html`<li class="muted tb-sub-more">${t("tasks.olderSubs", older)}</li>` : null}
   </ul>`;
 }
 
-function groupHead(group, key) {
-  if (group === "status") return html`<span class=${`tb-dot st-${key}`}></span><span>${t(`tasks.${key}`)}</span>`;
+function groupHead(group, key, scope) {
+  if (group === "status") return html`<span class=${`tb-dot st-${key}${statusColor(key, scope)}`}></span><span>${statusName(key, scope)}</span>`;
   if (group === "assignee") return html`<${Who} name=${key === NONE ? null : key} empty=${t("tasks.nobody")} />`;
   return html`<span class=${`tb-tag p-${key}`}>${t(`tasks.${key}`)}</span>`;
 }
-const groupWord = (group, key) => (group === "assignee" ? (key === NONE ? t("tasks.nobody") : key) : t(`tasks.${key}`));
+const groupWord = (group, key, scope) => (group === "assignee" ? (key === NONE ? t("tasks.nobody") : key) : group === "status" ? statusName(key, scope) : t(`tasks.${key}`));
 const longTime = (iso) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleString(lang() === "zh-TW" ? "zh-TW" : "en") : ""; };
 
 // The groups a person folded away, remembered on this device, per project (by what heads them: "1/status:done",
@@ -391,17 +392,17 @@ function ListHead({ display, onDisplay, who }) {
 export function ListView({ rows, display, subsOf, byId, flashed, now, runs, expanded, onToggleSubs, onOpen, onMore, onOwner, cards = [], lead = null, writable = false, onDisplay, scope = "" }) {
   const [folded, setFolded] = useState(readCollapsed);
   const toggle = (id) => setFolded((cur) => { const next = new Set(cur); if (next.has(id)) next.delete(id); else next.add(id); writeCollapsed(next); return next; });
-  const groups = groupRows(orderRows(rows, display.order, byId, display.dir), display.group);
+  const groups = groupRows(orderRows(rows, display.order, byId, display.dir), display.group, scope);
   const who = display.group !== "assignee";
   return html`<div class="tb-list">
     <${ListHead} display=${display} onDisplay=${onDisplay} who=${who} />
     ${groups.map((g) => {
       const id = groupId(display.group, g.key, scope);
       const shut = display.group !== "none" && folded.has(id);
-      return html`<section key=${g.key} class=${`tb-group${shut ? " shut" : ""}`} aria-label=${display.group === "none" ? null : groupWord(display.group, g.key)}>
+      return html`<section key=${g.key} class=${`tb-group${shut ? " shut" : ""}`} aria-label=${display.group === "none" ? null : groupWord(display.group, g.key, scope)}>
         ${display.group === "none" ? null : html`<h3 class=${`tb-group-head g-${display.group}`}>
-          <button type="button" class="tb-group-toggle" aria-expanded=${shut ? "false" : "true"} title=${t(shut ? "taskview.expand" : "taskview.collapse", groupWord(display.group, g.key))}
-            onClick=${() => toggle(id)}><${Icon} name="chevron" size=${14} cls=${shut ? "tb-chev" : "tb-chev open"} />${groupHead(display.group, g.key)}<span class="tb-count">${g.rows.length}</span></button></h3>`}
+          <button type="button" class="tb-group-toggle" aria-expanded=${shut ? "false" : "true"} title=${t(shut ? "taskview.expand" : "taskview.collapse", groupWord(display.group, g.key, scope))}
+            onClick=${() => toggle(id)}><${Icon} name="chevron" size=${14} cls=${shut ? "tb-chev" : "tb-chev open"} />${groupHead(display.group, g.key, scope)}<span class="tb-count">${g.rows.length}</span></button></h3>`}
         ${shut ? null : html`<ul class="tb-rows">${g.rows.map((c) => {
           const subs = subsOf.get(c.id) || [];
           const lit = Math.max(flashed.get(c.id) || 0, ...(display.subs ? [] : subs.map((s) => flashed.get(s.id) || 0)));
@@ -425,7 +426,7 @@ function Row({ card, subs, main, flash, now, runs, subsAsRows, who, expanded, on
   const bar = hasSubs ? html`<${ProgressBar} progress=${progress} /><span>${t("tasks.subProgress", progress.done, progress.total)}</span>` : null;
   return html`<li class=${`tb-row st-${card.status}${card.kind === "sub" ? " is-sub" : ""}${flash ? " flash" : ""}${run && run.state === "working" && !run.shared ? " running" : ""}`} data-row=${card.id} onClick=${(e) => { if (e.target && e.target.closest && e.target.closest(".tb-owner-pop")) return; onOpen(card.id); }}>
     <div class="tb-row-line">
-      <span class=${`tb-dot st-${card.status}`} role="img" aria-label=${t(`tasks.${card.status}`)} title=${t(`tasks.${card.status}`)}></span>
+      <span class=${`tb-dot st-${card.status}${statusColor(card.status, card)}`} role="img" aria-label=${statusName(card.status, card)} title=${statusName(card.status, card)}></span>
       <span class="tb-code tb-row-code">${card.id}</span>
       ${main ? html`<span class="tb-row-main" title=${t("taskview.inMain", main.id, main.title)}>${main.id} ›</span>` : null}
       <span class="tb-row-text">
@@ -434,7 +435,7 @@ function Row({ card, subs, main, flash, now, runs, subsAsRows, who, expanded, on
         ${card.status === "blocked" && card.blockedReason ? html`<span class="tb-row-note">${card.blockedReason}</span>` : null}
       </span>
       <span class="tb-row-tags">
-        ${card.status === "review" ? html`<span class=${`tb-tag st-review${waitsForYou(card) ? " you" : ""}`}>${reviewLabel(card)}</span>` : null}
+        ${card.status === "review" ? html`<span class=${`tb-tag st-review${statusColor("review", card)}${waitsForYou(card) ? " you" : ""}`}>${reviewLabel(card)}</span>` : null}
         ${gap ? html`<span class="tb-tag wrapup" title=${t("tasks.wrapLine", gap)}>${t("tasks.wrapTag")}</span>` : null}
         ${card.size ? html`<span class="tb-size" title=${t("tasks.size")}>${t(`tasks.size${card.size}`)}</span>` : null}
       </span>

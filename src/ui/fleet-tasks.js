@@ -18,7 +18,7 @@ import { Empty, ErrorState, Skeleton } from "/assets/ui-states.js";
 import { Icon } from "/assets/ui-icons.js";
 import { Menu } from "/assets/ui-menu.js";
 import { toast } from "/assets/ui-toast.js";
-import { AskHost, BoardOffNote, COLUMNS, boardReadOnly, NO_PROJECT, ProgressBar, StatusPill, Who, answerBlocked, askText, boardApi, currentWork, dropNeighbours, errorText, followsSubs, moveCard, notesForPeople, onPublicLink, projectKey, projectStats, readStored, relTime, scrollBox, tileStatus, waitsForYou, waitsList, waitsOn, workersOf, wrapUpText, writeStored } from "./fleet-task-common.js";
+import { AskHost, BoardOffNote, boardReadOnly, NO_PROJECT, ProgressBar, StatusPill, Who, answerBlocked, askText, blockedFlagText, boardApi, columnsOf, currentWork, dropNeighbours, errorText, followsSubs, hidesWhenEmpty, moveCard, notesForPeople, onPublicLink, projectKey, projectStats, readStored, relTime, scrollBox, setWorkflows, statusColor, statusHint, statusName, tileStatus, waitsForYou, waitsList, waitsOn, workersOf, wrapUpText, writeStored } from "./fleet-task-common.js";
 import { CardPage, assigneeItems } from "./fleet-task-card.js";
 import { CardMenu, cardAt, cardMenuItems, pageOrder, stepsOf } from "./fleet-task-menu.js";
 import { ListView, SubList, TaskToolbar, doneShown, formatFilters, keepFilters, listRows, mainMatches, readDisplay, startFilters, writeDisplay } from "./fleet-task-view.js";
@@ -27,6 +27,7 @@ import { InstancesDrawer } from "./fleet-task-work.js";
 import { RunMark, inProgressBy, runOf, useRunContext } from "./fleet-task-run.js";
 import { OwnerChip, otherWorkers, quietInfo } from "./fleet-task-owner.js";
 import { InsightsDialog } from "./fleet-task-stats.js";
+import { WorkflowDialog } from "./fleet-task-workflow.js";
 
 const PROJECT_KEY = "agend_tasks_project";
 const QUERY_KEY = "agend_tasks_query";
@@ -92,6 +93,7 @@ export function TaskBoardTab({ lease }) {
         const d = await r.json();
         if (!lease.current() || mine !== seq.current || d.unchanged) return;
         shown.current = { rev: typeof d.rev === "number" ? d.rev : null, allDone };
+        setWorkflows(d.workflows);      // AGEND-332: before the page draws, so every status word and colour reads the same board
         setState({ data: d });
       } catch { if (lease.current() && mine === seq.current) setState((s) => (s && s.data ? s : { error: true })); }
     })();
@@ -200,7 +202,8 @@ export function TaskBoardTab({ lease }) {
     ? html`<${Home} cards=${cards} projects=${projects} stats=${stats} writable=${writable} onOpenProject=${setAt} onOpen=${openCard} onDialog=${setDialog} onInstances=${showInstances} reload=${reload} />`
     : html`<${ProjectBoard} project=${project} cards=${cards} stats=${stats} flashed=${flashed} display=${display} filters=${filters} query=${query} writable=${writable}
         onDisplay=${setDisplay} onFilters=${setFilters} onQuery=${setQuery} onBack=${() => setAt(null)} onMore=${openMenuFor} onOwner=${openOwnerMenu}
-        onOpen=${openCard} onCreate=${() => setDialog({ kind: "main", project: project === NO_PROJECT ? null : project.id })} onInstances=${showInstances} reload=${reload} />`;
+        onOpen=${openCard} onCreate=${() => setDialog({ kind: "main", project: project === NO_PROJECT ? null : project.id })} onInstances=${showInstances}
+        onStatuses=${() => setDialog({ kind: "workflow", project })} reload=${reload} />`;
 
   /** A right click on a card, or the keyboard's menu key on it (no pointer: the menu goes under the card). */
   function onMenu(e) {
@@ -297,6 +300,8 @@ export function TaskBoardTab({ lease }) {
     ${dialog && dialog.kind === "main" ? html`<${CreateMainDialog} projects=${projects} project=${dialog.project} boardOff=${boardOff} onClose=${() => setDialog(null)}
       onCreated=${(id) => { if (!lease.current()) return; setDialog(null); reload(); openCard(id); }} />` : null}
     ${dialog && dialog.kind === "instances" ? html`<${InstancesDrawer} tick=${tick} onClose=${() => setDialog(null)} onOpen=${(id) => { setDialog(null); openCard(id); }} />` : null}
+    ${dialog && dialog.kind === "workflow" ? html`<${WorkflowDialog} project=${dialog.project} onClose=${() => setDialog(null)}
+      onSaved=${() => { if (!lease.current()) return; setDialog(null); reload(); }} />` : null}
     ${dialog && dialog.kind === "project" ? html`<${ProjectDialog} project=${dialog.project} leads=${leads} onClose=${() => setDialog(null)}
       onSaved=${(p) => { if (!lease.current()) return; setDialog(null); reload(); if (!dialog.project) setAt(p.id); }} />` : null}
     <${AskHost} />
@@ -320,6 +325,7 @@ function Home({ cards, projects, stats, writable, onOpenProject, onOpen, onDialo
       <div class="tb-head-actions">
         <${SearchBox} onOpen=${onOpen} />
         <${InstancesButton} onClick=${onInstances} />
+        ${writable && !boardReadOnly() ? html`<button type="button" class="btn" title=${t("taskflow.defaultTip")} onClick=${() => onDialog({ kind: "workflow", project: NO_PROJECT })}><${Icon} name="sliders" size=${16} />${t("taskflow.default")}</button>` : null}
         ${writable ? html`<button type="button" class="btn btn-primary" onClick=${() => onDialog({ kind: "project", project: null })}><${Icon} name="plus" size=${16} />${t("tasks.newProject")}</button>` : null}</div>
     </div>
     <${Waiting} cards=${cards} writable=${writable} onOpen=${onOpen} reload=${reload} />
@@ -345,17 +351,18 @@ function ProjectTile({ project, stats, onOpen, onDialog, reload }) {
     <button type="button" class="tb-project-open" onClick=${onOpen}>
       <span class="tb-project-name">${name}</span>
       ${desc ? html`<span class="tb-project-desc">${desc}</span>` : null}
-      <span class="tb-project-pct" title=${t("tasks.percentTitle")}><span class="tb-pct">${stats.percent}%</span><${ProgressBar} progress=${stats.units} wide /></span>
+      <span class="tb-project-pct" title=${t("tasks.percentTitle")}><span class="tb-pct">${stats.percent}%</span><${ProgressBar} progress=${stats.units} scope=${project ? project.id : NO_PROJECT} wide /></span>
       <span class="tb-project-meta">
         <span>${stats.mains === 1 ? t("tasks.mainOne") : t("tasks.mainCount", stats.mains)}</span>
         ${stats.waiting ? html`<span class="tb-flag st-review">${t("tasks.waiting", stats.waiting)}</span>` : null}
-        ${stats.blocked ? html`<span class="tb-flag st-blocked">${t("tasks.blockedN", stats.blocked)}</span>` : null}
+        ${stats.blocked ? html`<span class=${`tb-flag st-blocked${statusColor("blocked", project ? project.id : NO_PROJECT)}`}>${blockedFlagText(stats.blocked, project ? project.id : NO_PROJECT)}</span>` : null}
         ${stats.lastActivity ? html`<span class="muted">${t("tasks.lastActivity", relTime(stats.lastActivity))}</span>` : null}
         ${project && project.leadInstance ? html`<span class="muted tb-project-lead-chip">${t("tasks.projectLeadChip", project.leadInstance)}</span>` : null}
       </span>
     </button>
     ${project && onDialog ? html`<${Menu} cls="tb-project-menu" items=${[
       { key: "edit", label: t("tasks.rename"), icon: "edit", onSelect: () => onDialog({ kind: "project", project }) },
+      ...(boardReadOnly() ? [] : [{ key: "statuses", label: t("taskflow.menu"), icon: "sliders", onSelect: () => onDialog({ kind: "workflow", project }) }]),
       project.archived
         ? { key: "restore", label: t("tasks.restore"), icon: "restart", onSelect: () => setArchived(false) }
         : { key: "archive", label: t("tasks.archive"), icon: "download", onSelect: () => setArchived(true) },
@@ -386,7 +393,7 @@ function Waiting({ cards, writable, onOpen, reload }) {
     <h3 class="tb-section-title"><${Icon} name="inbox" size=${16} />${t("tasks.waitingTitle")}</h3>
     <ul class="rows">${[...review, ...blocked].map((c) => html`<li key=${c.id} class="row-item tb-wait-row" data-wait=${c.id}>
       <div class="tb-wait-main">
-        <${StatusPill} status=${c.status} />
+        <${StatusPill} status=${c.status} scope=${c} />
         <button type="button" class="tb-wait-title" onClick=${() => onOpen(c.id)}><span class="tb-code">${c.id}</span> ${c.title}
           ${c.status === "blocked" && c.blockedReason ? html`<span class="tb-wait-reason">${c.blockedReason}</span>` : null}
           ${c.status === "review" && wrapUpText(c) ? html`<span class="tb-wait-reason wrapup">${t("tasks.wrapLine", wrapUpText(c))}</span>` : null}</button>
@@ -440,7 +447,7 @@ function SearchBox({ onOpen }) {
 
 // ── A project's board ─────────────────────────────────────
 
-function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filters, query, writable, onDisplay, onFilters, onQuery, onBack, onOpen, onMore, onOwner, onCreate, onInstances, reload }) {
+function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filters, query, writable, onDisplay, onFilters, onQuery, onBack, onOpen, onMore, onOwner, onCreate, onInstances, onStatuses, reload }) {
   const [expanded, setExpanded] = useState({});
   // A phone shows one status at a time: the one picked here, else the first that has cards (the person's own first).
   const [phoneStatus, setPhoneStatus] = useState(null);
@@ -469,7 +476,9 @@ function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filter
   const mains = live.filter((c) => doneShown(c, display.done, now) && mainMatches(c, subsOf.get(c.id), filters, query));
   const searching = filters.length > 0 || query.trim() !== "";
   // Finished cards hidden: no Done column (a card is still confirmed or finished from its dialog).
-  const columns = display.done === "hide" ? COLUMNS.filter((s) => s !== "done") : COLUMNS;
+  // The project's own order (AGEND-332); a status whose empty column it hides is not drawn until a card is in it.
+  const columns = columnsOf(key).filter((s) => (display.done !== "hide" || s !== "done")
+    && (!hidesWhenEmpty(s, key) || live.some((c) => c.status === s && (s !== "done" || doneShown(c, display.done, now)))));
   const current = columns.includes(phoneStatus) ? phoneStatus : ["review", "claimed", "blocked", "open", "done"].find((s) => columns.includes(s) && mains.some((c) => c.status === s)) || columns[0];
   const toggleSubs = (id) => setExpanded({ ...expanded, [id]: !expanded[id] });
   // Nothing left by a search says so, with the way out (the search is kept on the device, so a reload would show it again).
@@ -558,30 +567,31 @@ function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filter
         </div>
         ${project !== NO_PROJECT && project.description ? html`<p class="s-page-lead tb-head-lead">${project.description}</p>` : null}
         <div class="tb-stats" title=${t("tasks.percentTitle")}>
-          <span class="tb-pct">${stats.percent}%</span><${ProgressBar} progress=${stats.units} />
+          <span class="tb-pct">${stats.percent}%</span><${ProgressBar} progress=${stats.units} scope=${key} />
           <span class="muted">${stats.mains === 1 ? t("tasks.mainOne") : t("tasks.mainCount", stats.mains)}</span>
           ${stats.waiting ? html`<span class="tb-flag st-review">${t("tasks.waiting", stats.waiting)}</span>` : null}
-          ${stats.blocked ? html`<span class="tb-flag st-blocked">${t("tasks.blockedN", stats.blocked)}</span>` : null}
+          ${stats.blocked ? html`<span class=${`tb-flag st-blocked${statusColor("blocked", key)}`}>${blockedFlagText(stats.blocked, key)}</span>` : null}
           <button type="button" class="btn btn-ghost btn-sm tb-insights" title=${t("taskstats.buttonTip")} onClick=${() => setInsights(true)}><${Icon} name="chart" size=${16} />${t("taskstats.button")}</button>
         </div>
       </div>
       <div class="tb-head-actions">
         <${InstancesButton} onClick=${onInstances} />
+        ${boardReadOnly() ? null : html`<button type="button" class="btn" title=${t("taskflow.tip")} onClick=${onStatuses}><${Icon} name="sliders" size=${16} />${t("taskflow.button")}</button>`}
         ${archived || !writable ? null : html`<button type="button" class="btn btn-primary" onClick=${onCreate}><${Icon} name="plus" size=${16} />${t("tasks.newMain")}</button>`}
       </div>
     </div>
-    <${TaskToolbar} cards=${own} display=${display} onDisplay=${onDisplay} filters=${filters} onFilters=${onFilters} query=${query} onQuery=${onQuery} />
+    <${TaskToolbar} cards=${own} display=${display} onDisplay=${onDisplay} filters=${filters} onFilters=${onFilters} query=${query} onQuery=${onQuery} scope=${key} />
     ${display.view === "list" ? listBody() : mains.length === 0 && !drag ? empty()
     : html`${html`<div class="tb-seg tb-status-seg" role="group" aria-label=${t("taskview.statusTabs")}>${columns.map((status) =>
         html`<button key=${status} type="button" aria-pressed=${current === status ? "true" : "false"} class=${`tb-seg-btn${current === status ? " active" : ""}`}
-          onClick=${() => setPhoneStatus(status)}><span class=${`tb-dot st-${status}`} aria-hidden="true"></span>${t(`tasks.${status}`)} <span class="tb-count">${mains.filter((c) => c.status === status).length}</span></button>`)}</div>`}
+          onClick=${() => setPhoneStatus(status)}><span class=${`tb-dot st-${status}${statusColor(status, key)}`} aria-hidden="true"></span>${statusName(status, key)} <span class="tb-count">${mains.filter((c) => c.status === status).length}</span></button>`)}</div>`}
       <div class="tb-scroll"><div class="tb-columns">
       ${columns.map((status) => {
         const list = mains.filter((c) => c.status === status);
         const line = spot && spot.status === status ? spot.index : -1;
-        return html`<section key=${status} class=${`tb-col st-${status}${status === current ? " is-current" : ""}${drag ? " can-drop" : ""}${line >= 0 ? " over" : ""}`} aria-label=${t(`tasks.${status}`)}
+        return html`<section key=${status} class=${`tb-col st-${status}${statusColor(status, key)}${status === current ? " is-current" : ""}${drag ? " can-drop" : ""}${line >= 0 ? " over" : ""}`} aria-label=${statusName(status, key)}
           onDragOver=${(e) => over(e, status)} onDrop=${(e) => dropOn(e, status, list)}>
-          <h3 class="tb-col-head"><span class="tb-dot"></span>${t(`tasks.${status}`)}
+          <h3 class="tb-col-head" title=${statusHint(status, key) || undefined}><span class="tb-dot"></span>${statusName(status, key)}
             ${status === "done" ? html`<button type="button" class="tb-link" title=${t("tasks.toggleDone")} onClick=${() => onDisplay({ ...display, done: display.done === "all" ? "recent" : "all" })}>${display.done === "all" ? t("tasks.all") : t("tasks.recent")}</button>` : null}
             <span class="tb-count">${list.length}</span></h3>
           ${cellItems(list, drag ? drag.id : null, line, (card, dragging) => {
@@ -594,7 +604,7 @@ function ProjectBoard({ project, cards, stats: statsOf, flashed, display, filter
         </section>`;
       })}
     </div></div>`}
-    ${insights ? html`<${InsightsDialog} name=${project === NO_PROJECT ? t("tasks.noProject") : project.name} onClose=${() => setInsights(false)}
+    ${insights ? html`<${InsightsDialog} name=${project === NO_PROJECT ? t("tasks.noProject") : project.name} scope=${key} onClose=${() => setInsights(false)}
       cards=${insightCards()} />` : null}
   </div>`;
 }
@@ -674,7 +684,7 @@ function Tile({ card, dragging, flash, subs = [], runs, expanded, writable, card
           : html`<${NowLine} now=${status.now} />`)
         : status.kind === "next" ? html`<${NowLine} now=${status.now} />`
         : html`<button type="button" class="tb-tile-progress" aria-expanded=${expanded ? "true" : "false"} title=${toggleTitle} onClick=${toggle}>
-            <${ProgressBar} progress=${progress} wide />
+            <${ProgressBar} progress=${progress} scope=${card} wide />
             <span>${t("tasks.subProgress", progress.done, progress.total)}</span>
             ${progress.blocked ? html`<span class="tb-flag st-blocked"><${Icon} name="alert" size=${12} />${progress.blocked}</span>` : null}
             <${Icon} name="chevron" size=${14} cls=${expanded ? "tb-chev open" : "tb-chev"} />

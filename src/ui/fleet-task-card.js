@@ -15,7 +15,7 @@ import { Empty, Skeleton } from "/assets/ui-states.js";
 import { Icon } from "/assets/ui-icons.js";
 import { Menu } from "/assets/ui-menu.js";
 import { toast } from "/assets/ui-toast.js";
-import { ProgressBar, StatusPill, Who, answerBlocked, askText, boardApi, errorText, followsSubs, hiddenWaits, moveCard, notesForPeople, relTime, scrollBox, wrapUpText, COLUMNS } from "./fleet-task-common.js";
+import { ProgressBar, StatusPill, Who, answerBlocked, askText, boardApi, errorText, followsSubs, hiddenWaits, moveCard, notesForPeople, relTime, scrollBox, wrapUpText, columnsOf, statusColor, statusName } from "./fleet-task-common.js";
 import { StepButtons, movesFor } from "./fleet-task-menu.js";
 import { Checklist, EditableText, InlineTitle, PropChip, QuickAdd } from "./fleet-task-edit.js";
 import { Composer, Timeline } from "./fleet-task-activity.js";
@@ -99,11 +99,11 @@ const LIMIT = { title: 100, goal: 300, scope: 600, context: 1000, state: 500, re
 const PRIORITY_CHOICES = ["urgent", "high", "normal", "low"];
 
 /** One history line, without who and when. */
-export function describeEvent(ev) {
+export function describeEvent(ev, scope) {
   const d = ev.data || {};
   switch (ev.type) {
     case "created": return t("taskcard.evCreated");
-    case "moved": return `${t("taskcard.evMoved", t(`tasks.${d.from}`), t(`tasks.${d.to}`))}${d.auto ? t("taskcard.evAuto") : ""}${d.reason ? `: ${d.reason}` : ""}`;
+    case "moved": return `${t("taskcard.evMoved", statusName(d.from, scope), statusName(d.to, scope))}${d.auto ? t("taskcard.evAuto") : ""}${d.reason ? `: ${d.reason}` : ""}`;
     case "assigned": return t("taskcard.evAssigned", d.from || "—", d.to || "—");
     case "updated": return t("taskcard.evUpdated", Object.keys(d.changes || {}).map((k) => fieldName(k)).join(", "));
     case "commented": return t("taskcard.evCommented");
@@ -115,11 +115,11 @@ export function describeEvent(ev) {
  * A history line as the activity stream's thin row says it, without who and when (AGEND-316): a sentence the name leads —
  * "dev-a changed status from To do to In progress" — for a move and a change of assignee; every other line as `describeEvent`.
  */
-export function describeRow(ev) {
+export function describeRow(ev, scope) {
   const d = ev.data || {};
-  if (ev.type === "moved") return `${t("taskcard.rowMoved", t(`tasks.${d.from}`), t(`tasks.${d.to}`))}${d.auto ? t("taskcard.evAuto") : ""}${d.reason ? `: ${d.reason}` : ""}`;
+  if (ev.type === "moved") return `${t("taskcard.rowMoved", statusName(d.from, scope), statusName(d.to, scope))}${d.auto ? t("taskcard.evAuto") : ""}${d.reason ? `: ${d.reason}` : ""}`;
   if (ev.type === "assigned") return t("taskcard.rowAssigned", d.from || "—", d.to || "—");
-  return describeEvent(ev);
+  return describeEvent(ev, scope);
 }
 /**
  * A watcher change as the board wrote it (`data.watchers`: { added, removed }): "+ops, −dev-b" — the true minus sign, not a hyphen,
@@ -142,8 +142,8 @@ const fieldName = (k) => { const key = `taskcard.f${k[0].toUpperCase()}${k.slice
 export function statusItems(card, act) {
   if (card.status === "cancelled") return [];
   const allowed = movesFor(card);
-  return COLUMNS.map((to) => ({
-    key: to, label: t(`tasks.${to}`), checked: to === card.status, disabled: to !== card.status && !allowed.includes(to),
+  return columnsOf(card).map((to) => ({
+    key: to, label: statusName(to, card), checked: to === card.status, disabled: to !== card.status && !allowed.includes(to),
     title: to !== card.status && !allowed.includes(to) ? t("tasks.derivedMove") : undefined, onSelect: () => act(to),
   }));
 }
@@ -423,7 +423,7 @@ export function CardPage({ id, tick, projects, cards = [], boardOff = [], doing 
       </aside>
 
       <div class="tp-activity">
-        <${Timeline} detail=${detail} describe=${describeRow} cards=${cards} lead=${((projects || []).find((x) => x.id === card.projectId) || {}).leadInstance || null} />
+        <${Timeline} detail=${detail} describe=${(ev) => describeRow(ev, card)} cards=${cards} lead=${((projects || []).find((x) => x.id === card.projectId) || {}).leadInstance || null} />
         ${can ? html`<${Composer} names=${mentionNames} assignee=${card.assignee} placeholder=${card.assignee ? t("taskcard.commentTo", card.assignee) : t("taskcard.commentHint")}
           onSend=${(text) => run(() => boardApi.update(card.id, { comment: text }))} />` : null}
       </div>

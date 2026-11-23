@@ -6,7 +6,7 @@
 import { html, useState } from "/assets/app-html.js";
 import { t, register } from "/assets/app-i18n.js";
 import { Dialog } from "/assets/ui-dialog.js";
-import { COLUMNS, Who, readStored, writeStored } from "./fleet-task-common.js";
+import { COLUMNS, Who, readStored, statusColor, statusName, writeStored } from "./fleet-task-common.js";
 
 register("taskstats", {
   en: {
@@ -73,26 +73,28 @@ export function insight(cards, choice) {
 
 // ── The dialog ────────────────────────────────────────────
 
-const word = (field, v) => {
+const word = (field, v, scope) => {
   if (v === NONE) return field === "size" ? t("tasks.sizeNone") : t("tasks.nobody");
-  return field === "size" ? t(`tasks.size${v}`) : t(`tasks.${v}`);
+  return field === "size" ? t(`tasks.size${v}`) : field === "status" ? statusName(v, scope) : t(`tasks.${v}`);
 };
+/** A status's own colour on a bar or a legend key (AGEND-332): nothing for the other fields, nor for a status in its built-in colour. */
+const tint = (field, v, scope) => (field === "status" ? statusColor(v, scope) : "");
 
 /** One row's bar: its parts side by side, the longest row's total the full width. */
-function Bar({ row, parts, split, max }) {
+function Bar({ row, parts, split, max, scope }) {
   let x = 0;
   return html`<svg class="ts-bar" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true" focusable="false">
     <rect class="ts-track" width="100" height="10" />
     ${parts.map((p) => {
       const w = max ? (row.parts[p] / max) * 100 : 0;
-      const seg = w > 0 ? html`<rect key=${p} class=${`ts-seg ${split}-${p === NONE ? "none" : p}`} x=${x} width=${w} height="10" />` : null;
+      const seg = w > 0 ? html`<rect key=${p} class=${`ts-seg ${split}-${p === NONE ? "none" : p}${tint(split, p, scope)}`} x=${x} width=${w} height="10" />` : null;
       x += w;
       return seg;
     })}</svg>`;
 }
 
 /** Insights on a project's cards (those the board has): the choices, a bar per row, the numbers, a legend. */
-export function InsightsDialog({ name, cards, onClose }) {
+export function InsightsDialog({ name, cards, onClose, scope }) {
   const [choice, setRaw] = useState(readInsight);
   const set = (patch) => { const next = cleanInsight({ ...choice, ...patch }); setRaw(next); writeStored(KEY, JSON.stringify(next)); };
   const data = insight(cards, choice);
@@ -108,15 +110,15 @@ export function InsightsDialog({ name, cards, onClose }) {
       </div>
       ${data.rows.length === 0 ? html`<p class="muted">${t("taskstats.empty")}</p>` : html`
       <p class="ts-sum"><b>${t("taskstats.cards", data.total)}</b></p>
-      ${split === "none" ? null : html`<ul class="ts-legend" aria-hidden="true">${data.parts.map((p) => html`<li key=${p}><span class=${`ts-key ${split}-${p === NONE ? "none" : p}`}></span>${word(split, p)}</li>`)}</ul>`}
+      ${split === "none" ? null : html`<ul class="ts-legend" aria-hidden="true">${data.parts.map((p) => html`<li key=${p}><span class=${`ts-key ${split}-${p === NONE ? "none" : p}${tint(split, p, scope)}`}></span>${word(split, p, scope)}</li>`)}</ul>`}
       <div class="ts-scroll"><table class="ts-table">
         <caption class="sr-only">${t("taskstats.chart", t(`taskstats.field.${choice.rows}`), split === "none" ? t("taskstats.total") : t(`taskstats.field.${split}`))}</caption>
         <thead><tr><th scope="col">${t(`taskstats.field.${choice.rows}`)}</th><th scope="col" class="ts-n">${t("taskstats.total")}</th><th scope="col" class="ts-bar-col"></th>
-          ${split === "none" ? null : data.parts.map((p) => html`<th key=${p} scope="col" class="ts-n ts-part">${word(split, p)}</th>`)}</tr></thead>
+          ${split === "none" ? null : data.parts.map((p) => html`<th key=${p} scope="col" class="ts-n ts-part">${word(split, p, scope)}</th>`)}</tr></thead>
         <tbody>${data.rows.map((r) => html`<tr key=${r.key}>
-          <th scope="row">${choice.rows === "assignee" ? html`<${Who} name=${r.key === NONE ? null : r.key} empty=${t("tasks.nobody")} />` : word(choice.rows, r.key)}</th>
+          <th scope="row">${choice.rows === "assignee" ? html`<${Who} name=${r.key === NONE ? null : r.key} empty=${t("tasks.nobody")} />` : word(choice.rows, r.key, scope)}</th>
           <td class="ts-n ts-total">${r.total}</td>
-          <td class="ts-bar-col"><${Bar} row=${r} parts=${data.parts} split=${split} max=${data.max} /></td>
+          <td class="ts-bar-col"><${Bar} row=${r} parts=${data.parts} split=${split} max=${data.max} scope=${scope} /></td>
           ${split === "none" ? null : data.parts.map((p) => html`<td key=${p} class=${`ts-n ts-part${r.parts[p] ? "" : " zero"}`}>${r.parts[p]}</td>`)}</tr>`)}</tbody>
       </table></div>`}
       <p class="muted ts-note">${t("taskstats.note")}</p>

@@ -32,6 +32,12 @@
 .ts-seg.status-blocked, .ts-key.status-blocked, .ts-seg.priority-urgent, .ts-key.priority-urgent { fill: var(--danger); background: var(--danger); }
 .ts-seg.status-review, .ts-key.status-review, .ts-seg.priority-high, .ts-key.priority-high, .ts-seg.size-L, .ts-key.size-L { fill: var(--warn); background: var(--warn); }
 .ts-seg.status-done, .ts-key.status-done, .ts-seg.size-S, .ts-key.size-S { fill: var(--ok); background: var(--ok); }
+/* AGEND-332: a status in its project's own colour (see .sc-* in app.css) */
+.ts-seg.sc-gray, .ts-key.sc-gray { fill: var(--text-3); background: var(--text-3); }
+.ts-seg.sc-blue, .ts-key.sc-blue { fill: var(--accent); background: var(--accent); }
+.ts-seg.sc-green, .ts-key.sc-green { fill: var(--ok); background: var(--ok); }
+.ts-seg.sc-yellow, .ts-key.sc-yellow { fill: var(--warn); background: var(--warn); }
+.ts-seg.sc-red, .ts-key.sc-red { fill: var(--danger); background: var(--danger); }
 /* A phone keeps the bar and the total; the parts are in the legend's colours. */
 @media (max-width: 899px), (pointer: coarse) and (max-height: 500px) and (max-width: 1023px) { .ts-table .ts-part { display: none; } }
 
@@ -486,4 +492,29 @@ button.tb-owner-btn:hover { border-color: var(--border); background: var(--surfa
 }
 @media (prefers-reduced-motion: reduce) {
   .tr-mark.s-working .tr-dot, .tr-state.s-working .tr-dot { animation: none; }
+}
+
+/* AGEND-332: the Statuses dialog (fleet-task-workflow.js) — a row per status: its place, colour, name, meaning. */
+.tf { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; border: 0; padding: 0; margin: 0; }
+.tf-note { margin: 0; color: var(--text-2); font-size: var(--fs-sm); }
+.tf-error { color: var(--danger); }
+.tf-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+.tf-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s-3); padding: var(--s-3); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
+.tf-move { display: flex; flex-direction: column; justify-content: center; gap: var(--s-1); min-width: 28px; }
+.tf-body { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+.tf-main { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); }
+.tf-name { flex: 1 1 12em; min-width: 0; }
+.tf-desc { width: 100%; min-width: 0; font-size: var(--fs-sm); }
+.tf-cat { font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; }
+.tf-colors { display: inline-flex; gap: var(--s-1); }
+.tf-swatch { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 2px solid transparent; border-radius: 50%; background: none; cursor: pointer; }
+.tf-swatch:hover { background: var(--surface-2); }
+.tf-swatch[aria-checked="true"] { border-color: var(--text); }
+.tf-swatch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tf-swatch .tb-dot { width: 14px; height: 14px; }
+.tf-hint { margin: 0; font-size: var(--fs-xs); color: var(--text-3); }
+.tf-hide { align-self: flex-start; }
+@media (pointer: coarse) {
+  .tf-swatch { width: var(--tap); height: var(--tap); }
+  .tf-move .icon-btn { min-width: var(--tap); min-height: var(--tap); }
 }
