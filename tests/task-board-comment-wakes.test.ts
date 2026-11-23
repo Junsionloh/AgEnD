@@ -495,6 +495,52 @@ describe("5. the notice", () => {
     return { w, sent, fire: () => { for (const t of timers.splice(0)) if (t.live) t.fn(); } };
   }
 
+  describe("AGEND-339: the notice of a person's comment or mention says a person reads the card", () => {
+    const SAYS = "a person reads the card; no @ needed";
+    /** The notices the board's own rules produce for one write, as text per instance. */
+    function notices(board: TaskBoard, write: () => void): Map<string, string> {
+      const got: Wake[] = [];
+      const off = board.onChange((c) => got.push(...c.wakes));
+      try { write(); } finally { off(); }
+      return new Map([...new Set(got.map((w) => w.instance))].map((i) => [i, wakeMessage(got.filter((w) => w.instance === i), (u) => board.findCard(u))]));
+    }
+
+    it("a person's comment to the assignee and a person's @mention carry it", () => {
+      const { board } = rig();
+      const c = card(board, LEAD, { assignee: "dev-a" });
+      const comment = notices(board, () => board.updateCard(ANN, c.code, { comment: "how is it going?" }));
+      expect(comment.get("dev-a")).toContain('new comment from Ann: "how is it going?" — reply on the card (task update, with a comment) only if it asks or needs something from you (a person reads the card; no @ needed)');
+      const mention = notices(board, () => board.updateCard(ANN, c.code, { comment: "@dev-b can you take a look?" }));
+      expect(mention.get("dev-b")).toContain(`Ann mentioned you in a comment: "@dev-b can you take a look?" — reply on the card (task update, with a comment) if it asks something of you; the card is not yours unless it says so (${SAYS})`);
+    });
+
+    it("counter-evidence: an instance's comment or @mention, a script's, and the other notices do not say it", () => {
+      const { board } = rig();
+      const c = card(board, LEAD, { assignee: "dev-a" });
+      expect(notices(board, () => board.updateCard(LEAD, c.code, { comment: "status?" })).get("dev-a")).not.toContain(SAYS);
+      expect(notices(board, () => board.updateCard(DEV, c.code, { comment: "@dev-b please look" })).get("dev-b")).not.toContain(SAYS);
+      // A script (the web token) is not a person at a keyboard; the sentence is for a person's comment only.
+      expect(notices(board, () => board.updateCard(SCRIPT, c.code, { comment: "build finished" })).get("dev-a")).not.toContain(SAYS);
+      // Other news (an assignment by a person, a send-back) is not about replying to a comment.
+      const assigned = notices(board, () => board.updateCard(ANN, c.code, { assignee: "dev-b" }));
+      expect(assigned.get("dev-b")).toContain("assigned to you by Ann");
+      expect(assigned.get("dev-b")).not.toContain(SAYS);
+    });
+
+    it("gathered in one window the sentence follows the last writer: a person after an instance has it, an instance after a person does not", () => {
+      const { w, sent, fire } = waker();
+      w.note([wake({ by: { comment: "lead" }, texts: { comment: "first" } })]);
+      w.note([wake({ by: { comment: "Ann" }, byPerson: { comment: true }, texts: { comment: "second" } })]);
+      fire();
+      expect(sent[0]!.message).toContain(`new comment from Ann: "second" (+1 earlier comment: task get M-4) — reply on the card (task update, with a comment) only if it asks or needs something from you (${SAYS})`);
+      w.note([wake({ by: { comment: "Ann" }, byPerson: { comment: true }, texts: { comment: "first" } })]);
+      w.note([wake({ by: { comment: "lead" }, texts: { comment: "second" } })]);
+      fire();
+      expect(sent[1]!.message).toContain('new comment from lead: "second"');
+      expect(sent[1]!.message).not.toContain(SAYS);
+    });
+  });
+
   it("several comments gathered in one window: the notice quotes the last and counts the earlier ones; another card is its own", () => {
     const { w, sent, fire } = waker();
     w.note([wake({ by: { comment: "Ann" }, texts: { comment: "first" } })]);

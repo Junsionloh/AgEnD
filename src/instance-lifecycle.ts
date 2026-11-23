@@ -208,6 +208,8 @@ export function getUnsafeInstanceDaemonPidReason(pid: number, dataDir: string): 
 export interface CredentialHold { published(): void; release(): void; current(config: InstanceConfig): boolean; unknownEnd(ended: () => Promise<boolean>): void }
 
 export interface LifecycleContext {
+  /** AGEND-340: the sentence that says a signed-in account is not used by this agent, or null (account-hint.ts). */
+  accountHintText?(name: string): string | null;
   assertGeneralBindingStart?(name: string, config: InstanceConfig): void;
   /**
    * #3292 (review P1): the credential this start will launch on, held against Keep sign-in alive from before the CLI reads
@@ -896,8 +898,11 @@ export class InstanceLifecycle {
     const shared = profile
       ? "Credentials are shared per profile — one sign-in restores all of them; affected instances pause until then."
       : "Credentials are shared per backend — one re-login restores all of them; affected instances pause until then.";
+    // AGEND-340: the CLI is signed in under a named account this agent does not use: say so, beside the (default login) remedy.
+    let unused: string | null = null;
+    try { unused = profile ? null : this.ctx.accountHintText?.(name) ?? null; } catch { /* the notice goes without it */ }
     const dispatched = this.notifyIncident(notificationTarget, "auth_error",
-      `🔑 ${message}\n\nAffects ${scope}. ${shared} ${remedy}`);
+      `🔑 ${message}\n\nAffects ${scope}. ${shared} ${remedy}${unused ? `\n\n${unused}` : ""}`);
     // Only alongside an alert somebody actually saw: a button on its own, or one
     // trailing a suppressed alert, is a control with no explanation next to it. For a profile only where its login
     // runs from chat, and then the button carries the profile — the plain button signs the default login in.

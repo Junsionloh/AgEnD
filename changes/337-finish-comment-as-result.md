@@ -1,0 +1,4 @@
+---
+section: Changed
+---
+- **A finishing `task move` with words only in `comment` takes them as the result (AGEND-337).** An agent that moved its own card to review or done with its summary in `comment` and none in `result` was refused, or, when sending a card back for the second time, left the old result on the card for the one confirming it to read. Now, when the card's own assignee finishes it (to review or done, first time or again after a send-back) with a `comment` and no `result`, the comment is the result, as `agend-agent task move ID STATUS "text"` already does; the answer says so. With both given, each keeps its place. A confirmer's note, a person's note and every other move stay comments, and a send-back still does not clear the result. The tool's description says where the summary goes.

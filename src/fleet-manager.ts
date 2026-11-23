@@ -537,6 +537,7 @@ import { CHAT_PROFILE_LOGIN_BACKENDS, claudeStoreEnded, credentialHomeSpec, cred
 import { carryClaudeConversation, type CarryResult } from "./backend/claude-carry.js";
 import { classicProfile, mergeBackendOptions, profileKey, profileName, profileOf, readClassicBindings, readClassicBindingsStrict, type ClassicProfile } from "./classic-bindings.js";
 import { ACCOUNT_CLIS, PROFILE_CLIS, accountUsage, buildAccountsView, profilesOnDisk, type AccountUsage, type AccountsView } from "./accounts-view.js";
+import { accountHint, accountHintLabel, accountHintText, type AccountHint } from "./account-hint.js";
 import { accountFolderExists, addAccountProfile, removeAccountProfile, type AddResult, type RemoveResult } from "./accounts-profiles.js";
 import { signOutAccount, type SignOutResult } from "./accounts-signout.js";
 import { MachineAccounts, machineAgents, type MachineActor, type MachineAccountResult } from "./machine-accounts.js";
@@ -19562,6 +19563,31 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   /** #3715: update_instance_config's ClassicBot room account switch — the room's Settings save (#3691), from a tool. */
   switchClassicRoomProfile(name: string, backendOptions: unknown): Promise<ClassicProfileSwitch> {
     return switchClassicRoomProfile(this as unknown as import("./settings-api.js").SettingsApiContext, name, backendOptions);
+  }
+
+  /**
+   * AGEND-340: an agent that names no account while its CLI's default sign-in is signed out and a named account is signed in
+   * (account-hint.ts). Host agents of a CLI with credential profiles only; reads files and the sign-in list, never a CLI.
+   */
+  accountHintFor(name: string): AccountHint | null {
+    const inst = this.fleetConfig?.instances?.[name];
+    if (!inst || isWindowsInstance(inst)) return null;
+    const backend = this.backendNameForInstance(name);
+    if (!PROFILE_CLIS.has(backend)) return null;
+    return accountHint({
+      agent: { backend, profile: this.credentialProfileOf(name, backend) },
+      defaultState: this.backendSignInTargets().find(t => t.backend === backend && !t.profile)?.state,
+      profiles: () => profilesOnDisk(this.dataDir, backend).map(profile => {
+        let login: ReturnType<typeof credentialProfileLogin>["state"] = "unknown";
+        try { login = credentialProfileLogin(this.dataDir, backend, profile).state; } catch { /* unknown */ }
+        return { profile, state: (login === "logged-in" ? "usable" : login === "signed-out" ? "not_signed_in" : "unknown") as SignInTarget["state"] };
+      }),
+    });
+  }
+  /** The hint as one notice or toast line (English), or null. */
+  accountHintText(name: string): string | null {
+    const hint = this.accountHintFor(name);
+    return hint ? accountHintText(hint, name, accountHintLabel(hint.backend)) : null;
   }
 
   credentialProfileOf(name: string, backend: string): string | null {

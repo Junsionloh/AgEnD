@@ -69,6 +69,7 @@ import { DEFAULT_SCHEDULER_CONFIG } from "./scheduler/index.js";
 import type { Schedule, ScheduleRetry } from "./scheduler/types.js";
 import { CARD_PRIORITIES, CARD_SIZES, CARD_STATUSES, TaskBoardError, cardCode, type Actor as BoardActor, type TaskBoard } from "./scheduler/task-board.js";
 import { TASK_REF_SEPARATOR, cardsForRefs, taskReadWay, taskRefBlock, taskRefCodes, taskRefView } from "./chat-task-refs.js";
+import { accountHintLabel, type AccountHint } from "./account-hint.js";
 import { readStatuslineModel, resolveInstanceContext } from "./topic-commands.js";
 import { z } from "zod";
 import { ONBOARDING_BACKENDS } from "./backend-signin-pending.js";
@@ -500,6 +501,9 @@ export interface WebApiContext extends ClaudeCredentialApi {
   readonly daemons: Map<string, unknown>;
   /** #3212: the Accounts view (accounts-view.ts), for the local admin session only. */
   accountsView?(): Promise<unknown>;
+  /** AGEND-340: a signed-in account the agent does not use (account-hint.ts), and the same as one line of words. */
+  accountHintFor?(name: string): AccountHint | null;
+  accountHintText?(name: string): string | null;
   /** #3212 PR 2: + Add account / Remove (accounts-profiles.ts); `by` is the session's label, for the fleet log. */
   addAccountProfile?(backend: string, name: unknown, by: string, machine?: AccountMachine): AccountWriteResult | Promise<AccountWriteResult>;
   removeAccountProfile?(backend: string, name: unknown, confirm: unknown, by: string, machine?: AccountMachine, opts?: { cancelSignIn?: true }): Promise<AccountWriteResult & { keychainLeft?: true }>;
@@ -727,6 +731,11 @@ async function parseBody(req: IncomingMessage): Promise<Record<string, unknown>>
 const guestCommandsRunning = new Set<string>();
 
 /** Send JSON response. */
+/** AGEND-340: the line that says a signed-in account is not used by this agent, for a failed start (never throws; none when there is nothing to say). */
+function accountHintOf(ctx: WebApiContext, name: string): { hint?: string } {
+  try { const text = ctx.accountHintText?.(name); return text ? { hint: text } : {}; } catch { return {}; }
+}
+
 function json(res: ServerResponse, status: number, data: unknown): void {
   jsonText(res, status, JSON.stringify(data));
 }
@@ -2681,6 +2690,22 @@ export function handleWebRequest(
     return true;
   }
 
+  // AGEND-340: whether a signed-in account is going unused by this agent — the banner on its pages. The same admin-only gate as the
+  // Accounts view (it names the accounts); a guest, a token and a read-only session get nothing.
+  const accountHintMatch = method === "GET" ? /^\/ui\/account-hint\/([^/]+)$/.exec(path) : null;
+  if (accountHintMatch) {
+    res.setHeader("Cache-Control", "private, no-store");
+    const v = evaluateWebRequest(req as unknown as WebGateRequest, url, ctx.webToken ?? null, ctx.webSessions, { touch: false });
+    if (!(v.kind === "allow" && v.via === "session" && v.session.tier === "admin")) { json(res, 403, { error: "accounts_need_a_local_admin" }); return true; }
+    let name: string;
+    try { name = decodeURIComponent(accountHintMatch[1]!); } catch { json(res, 400, { error: "Bad instance name" }); return true; }
+    if (!ctx.fleetConfig?.instances || !Object.hasOwn(ctx.fleetConfig.instances, name)) { json(res, 404, { error: `Instance not found: ${name}` }); return true; }
+    let hint: AccountHint | null = null;
+    try { hint = ctx.accountHintFor?.(name) ?? null; } catch (err) { ctx.logger.error({ err: (err as Error).message, name }, "Account hint failed"); }
+    json(res, 200, { hint: hint ? { ...hint, label: accountHintLabel(hint.backend) } : null });
+    return true;
+  }
+
   // M-3283: one reply-linked file, for an admin session on any listener. No folder listing or gateway refusal.
   if (method === "GET" && path === "/ui/reply-preview") {
     res.setHeader("Cache-Control", "private, no-store"); res.setHeader("X-Content-Type-Options", "nosniff");
@@ -3781,7 +3806,7 @@ export function handleWebRequest(
         ctx.emitSseEvent("status", ctx.getUiStatus());
         if (!held) json(res, 200, { started: name });
       } catch (err) {
-        if (!held) json(res, 500, { error: (err as Error).message });
+        if (!held) json(res, 500, { error: (err as Error).message, ...accountHintOf(ctx, name) });
         else ctx.logger.error({ err, name }, "Held instance action failed");
       }
     })();
@@ -3911,7 +3936,7 @@ export function handleWebRequest(
         if (!held) json(res, 200, { restarted: name });
       } catch (err) {
         const status = (err as Error).message.includes("not found") ? 404 : 500;
-        if (!held) json(res, status, { error: (err as Error).message });
+        if (!held) json(res, status, { error: (err as Error).message, ...(status === 500 ? accountHintOf(ctx, name) : {}) });
         else ctx.logger.error({ err, name }, "Held instance action failed");
       }
     })();

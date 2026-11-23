@@ -26,6 +26,7 @@ import { Empty, ErrorState, Skeleton } from "/assets/ui-states.js";
 import { toast } from "/assets/ui-toast.js";
 import { confirmedWrite } from "./settings-confirm.js";
 import { LogRow, mergeSteps, timeline, collapse, tl } from "./log-row.js";
+import { AccountHint } from "./account-hint.js";
 // The step helpers live with the row (log-row.js, shared with the chat's timeline); the Log's own tests read them here.
 export { mergeSteps, timeline, collapse };
 
@@ -285,6 +286,7 @@ function LogView({ name, inst, navKey, exec, awaiting }) {
       <span class="grow"></span><span class="log-live" title=${tl("live")}><span class="dot running" aria-hidden="true"></span>${tl("live")}</span></div>` : null;
   return html`<div data-effect-panel="log" class="panel p-log">
     <${PanelHeader} title=${name} sub=${sub} pageControls=${{ navKey }} nav=${html`<${InstanceSwitch} name=${name} current="log" />`}><${HeaderTools} navKey=${navKey} /><${HeaderSlot} />${phone ? html`<${AgentSheetButton} name=${name} inst=${inst} current="log" navKey=${navKey} />` : null}</${PanelHeader}>
+    <${AccountHint} name=${name} inst=${inst} />
     ${tools}
     <div data-trust="panel-content" class="panel-body log-body" ref=${scroller} onScroll=${onScroll}><div class="col log-col">${content}</div></div>
   </div>`;

@@ -163,10 +163,17 @@ export function boardToolAction(db: SchedulerDb, instance: string, args: Record<
       // As the tool's `done`: finishing a card that waits for someone's confirmation hands it to them (review) — unless
       // the caller is the one who confirms it (#2434: an agent's card, by its dispatcher; nobody's, by its assignee).
       if (to === "done") { const held = board.findCard(id); if (held?.needsReview && held.status !== "review" && !board.confirms(held, actor)) to = "review"; }
-      const { card, from, notes } = board.moveCard(actor, id, to, {
-        reason: str(args.reason), result: str(args.result), comment: str(args.comment), version: int(args.version),
-      });
-      return writeText(card, notes, from);
+      // AGEND-337: an agent finishing its own card with words in `comment` and none in `result` (as `agend-agent task move ID
+      // STATUS "text"` does): the words are the result. Only the assignee's own finishing move: a dispatcher confirming with a note,
+      // or anyone moving a card they do not hold, keeps its comment a comment and never overwrites the assignee's result.
+      let result = str(args.result), comment = str(args.comment);
+      let promoted = false;
+      if (!result?.trim() && comment?.trim() && (to === "done" || to === "review") && actor.kind === "instance") {
+        const held = board.findCard(id);
+        if (held && held.assignee === instance && (held.status === "claimed" || held.status === "open")) { result = comment; comment = undefined; promoted = true; }
+      }
+      const { card, from, notes } = board.moveCard(actor, id, to, { reason: str(args.reason), result, comment, version: int(args.version) });
+      return writeText(card, promoted ? [...notes, "your comment was taken as the result (next time put it in `result`; `comment` is a note for people)"] : notes, from);
     }
     case "create": {
       if (!has(args, BOARD_CREATE)) return undefined;
