@@ -50,7 +50,7 @@ agend-agent task mine                             # Your work on the board (star
 agend-agent task get M-3 --detail                 # Full card, with comments new to you
 agend-agent task move M-3 STATUS ["text"] [--comment TXT] [--version N]   # claimed (from blocked: "the answer"); blocked "who must answer what"; review/done "result"
 agend-agent task update M-3 [STATUS [priority]] [--title T] [--description D] [--priority P] [--assignee A] [--scope S] [--context C] [--state S] [--log L] [--comment C] [--acceptance ITEM] [--check N,…] [--uncheck N,…] [--needs-review|--no-needs-review] [--size S|M|L] [--dispatcher NAME|none] [--project ID|none] [--depends-on ID,…] [--result R] [--version N]   # one write: all the flags together; --version N: the version you read, refused if the card moved on
-agend-agent task comment M-3 "text" [--version N]   # Comment on a card; @<instance> in it wakes that instance
+agend-agent task comment M-3 "text" [--version N]   # Comment on a card (Markdown: one list item or step per line); @<instance> in it wakes that instance
 agend-agent task projects                         # Projects (with their ids)
 agend-agent task create-project "name" ["description"]   # A project you may add cards to; renaming and archiving are a person's
 agend-agent task move-project PROJECT_ID M-3 [M-4…]      # Main tasks into (or, with none, out of) a project; each moves or is refused on its own

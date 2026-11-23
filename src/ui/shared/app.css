@@ -2348,6 +2348,8 @@ textarea.s-yaml { white-space: pre; overflow-x: auto; }
 /* AGEND-316: a project's page — the board and the list alike — fills the content area (the same side margins), so the columns
    and the list's title have the room. Home (the projects) keeps the Fleet page's width. */
 .col.col-wide:has(> .tb > .tb-board-page) { max-width: none; }
+/* AGEND-341: so does a card's page — the main column and the properties column share the whole content area, at any width. */
+.col.col-wide:has(> .tb > .tp) { max-width: none; }
 .org-head { flex-wrap: wrap; }
 .org-counts { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); list-style: none; }
 .org-count { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-xs); color: var(--text-2); white-space: nowrap; }

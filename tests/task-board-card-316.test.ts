@@ -1065,6 +1065,48 @@ describe("round 7: a comment is formatted as the instance chat's window formats 
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
   let mdSeen: string[] = [];
 
+  it("AGEND-341: a card's page fills the content area like the board — no max width on its column; the label, properties and main columns share it; prose stops at a measure", async () => {
+    seed([{ id: 1, author: "alpha", authorKind: "instance", text: "a comment", at: AT(20) }]);
+    await mount(); await open();
+    // The rule applies to this page: the card page is a direct child of `.tb`, which is a direct child of the Fleet column.
+    expect(q(".col.col-wide > .tb > .tp"), "the card page sits where the rule looks").toBeTruthy();
+    expect(rule(".col.col-wide:has(> .tb > .tp)"), "the card page").toMatch(/max-width: none/);
+    expect(rule(".col.col-wide:has(> .tb > .tb-board-page)"), "the board, as before").toMatch(/max-width: none/);
+    expect(rule(".col.col-wide"), "Home keeps the Fleet page's width").toMatch(/max-width: 1240px/);
+    // Columns: the properties column grows with the window (300 → 460px; 301px on a 1366px window, where it was 300), the main takes the rest.
+    expect(rule(".tp-grid")).toMatch(/grid-template-columns: minmax\(0, 1fr\) clamp\(300px, 22vw, 460px\)/);
+    expect(rule(".tp-grid")).not.toMatch(/ 300px;/);
+    expect(Math.round(1366 * 0.22), "22vw at 1366px is the old 300px, give or take one").toBeLessThanOrEqual(301);
+    // The label column grows 7rem → 10rem; the rows keep one label column and one value column.
+    expect(rules(".tp")).toMatch(/--tp-label: clamp\(7rem, 6vw, 10rem\)/);
+    expect(rule(".tp .tc-field, .tp .tp-subs")).toMatch(/grid-template-columns: var\(--tp-label\) minmax\(0, 1fr\)/);
+    // The line of prose stops at a measure; frames, the checklist, the sub tasks and the cards do not.
+    expect(rules(".tp")).toMatch(/--tp-measure: 72rem/);
+    expect(rule(".tp .tc-text, .tp .tl-body")).toBe(".tp .tc-text, .tp .tl-body { max-width: var(--tp-measure); }");
+    expect(CSS).not.toMatch(/\.tp-body \{[^}]*max-width/);
+    expect(CSS).not.toMatch(/\.tl-card \{[^}]*max-width/);
+    // The phone: one column (the narrow rule is after the wide one, so it wins) and the label above its value.
+    const phone = CSS.slice(CSS.indexOf("@media (max-width: 899px), (pointer: coarse)", CSS.indexOf(".tp-grid {")));
+    expect(phone).toMatch(/\.tp-grid \{ grid-template-columns: minmax\(0, 1fr\); grid-template-rows: none;/);
+    expect(phone).toMatch(/\.tp \.tc-field, \.tp \.tp-subs, \.tp-agent \.tc-field \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+  });
+  it("AGEND-342: a comment keeps its lines on the page — a step per line is a list (and single newlines are line breaks); one line stays one line", async () => {
+    const STEPS = "做法：\n1) 用 task get 讀完整張卡\n2) 用 task update 留一句進度\n3) 逐項勾選驗收";
+    const LINES = "步驟一：讀卡\n步驟二：寫進度\n步驟三：交回";
+    const ONE_LINE = "做法：1) 用 task get 讀完整張卡；2) 用 task update 留一句進度；3) 逐項勾選驗收";
+    seed([{ id: 1, author: "alpha", authorKind: "instance", text: STEPS, at: AT(40) }, { id: 2, author: "alpha", authorKind: "instance", text: LINES, at: AT(30) },
+      { id: 3, author: "alpha", authorKind: "instance", text: ONE_LINE, at: AT(20) }]);
+    await mount(); await open();
+    const [steps, lines, one] = qa(".tl-comment").map((c: any) => c.querySelector(".tl-body"));
+    expect(steps.querySelector("p").textContent, "the lead-in is its own paragraph").toBe("做法：");
+    expect([...steps.querySelectorAll("ol > li")].map((li: any) => li.textContent.trim()), "a step per line is a list item each").toEqual(["用 task get 讀完整張卡", "用 task update 留一句進度", "逐項勾選驗收"]);
+    expect(lines.querySelectorAll("br").length, "single newlines are line breaks, as in the chat").toBe(2);
+    expect(lines.querySelector("p").childNodes.map((n: any) => n.textContent).filter(Boolean)).toEqual(["步驟一：讀卡", "步驟二：寫進度", "步驟三：交回"]);
+    // The cause of the screenshot: with no newline in the text there is nothing to break — one paragraph, no list, no break.
+    expect(one.querySelectorAll("li").length).toBe(0);
+    expect(one.querySelectorAll("br").length).toBe(0);
+    expect(one.querySelectorAll("p").length).toBe(1);
+  });
   it("an agent's comment: heading, list (nested), table, a JSON block, inline code and a link, as the chat draws them", async () => {
     seed([{ id: 1, author: "alpha", authorKind: "instance", text: AGENT_MD, at: AT(30) }]);
     await mount(); await open();
