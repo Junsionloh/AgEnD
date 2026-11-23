@@ -2061,7 +2061,7 @@ export class TaskBoard {
         if (!this.activeSubs(card.uuid).every((k) => k.status === "done")) {
           throw new TaskBoardError("invalid", `${card.code} has unfinished sub tasks; it goes to review by itself when they are all done`);
         }
-        if (!card.result) throw new TaskBoardError("invalid", "resubmitting needs a result: what changed and how it was checked");
+        if (!card.result) throw new TaskBoardError("invalid", "resubmitting needs a result in the `result` field (a comment is not one): what changed and how it was checked");
         return;
       }
       throw new TaskBoardError("forbidden", `${card.code} has sub tasks; its status follows them — move its sub tasks along`);
@@ -2085,7 +2085,7 @@ export class TaskBoard {
     const open = this.children(card.uuid).filter((k) => !isFinished(k));
     if (open.length) throw new TaskBoardError("invalid", `${card.code} still has unfinished sub tasks: ${open.map((k) => k.code).join(", ")}`, "unfinished_subs", [card.code, open.map((k) => k.code).join(", ")]);
     if (!ai) return;
-    if (!card.result) throw new TaskBoardError("invalid", "finishing needs a result: which files changed and how it was checked");
+    if (!card.result) throw new TaskBoardError("invalid", "finishing needs a result in the `result` field (a comment is not one): which files changed and how it was checked");
     const unchecked = card.acceptance.map((a, i) => ({ ...a, n: i + 1 })).filter((a) => !a.done);
     if (unchecked.length && !reason) {
       throw new TaskBoardError("invalid", `${unchecked.length} acceptance item(s) unchecked (${unchecked.map((a) => a.n).join(", ")}); check them, or say why in the reason`);

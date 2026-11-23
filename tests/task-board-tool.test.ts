@@ -77,6 +77,18 @@ describe("the task tool's board actions", () => {
     expect(await call("dev-b", { action: "move", id: "M-1", to: "done" })).toEqual({ error: "M-1 is waiting for the person's confirmation: only they finish it" });
   });
 
+  it("finishing without a result says which field takes it (a real agent put its summary in `comment`, twice)", async () => {
+    const { db, call } = fleet();
+    db.board.createCards(ANN, { cards: [{ title: "Mine", assignee: "dev-a", dispatcher: { kind: "instance", name: "lead" } }] });
+    expect(await call("dev-a", { action: "move", id: "M-1", to: "claimed" })).toBe("ok M-1 to do → in progress (v2)");
+    // The summary is in `comment`, which is not the result: the answer names the field, and nothing is written.
+    const refused = await call("dev-a", { action: "move", id: "M-1", to: "done", comment: "nothing changed; read it with task get" }) as { error: string };
+    expect(refused.error).toContain("`result` field");
+    expect(refused.error).toContain("which files changed and how it was checked");
+    expect(db.board.getCard("M-1").status).toBe("claimed");
+    expect(await call("dev-a", { action: "move", id: "M-1", to: "done", result: "nothing changed; read it with task get" })).toBe("ok M-1 in progress → done (v3)");
+  });
+
   it("who handed it out, one card at a time, and what to fill in before its dispatcher confirms", async () => {
     const { db, call } = fleet();
     db.board.createProject(ANN, { name: "Game" });
