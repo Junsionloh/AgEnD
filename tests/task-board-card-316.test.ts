@@ -1065,6 +1065,23 @@ describe("round 7: a comment is formatted as the instance chat's window formats 
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
   let mdSeen: string[] = [];
 
+  it("AGEND-342: a comment keeps its lines on the page — a step per line is a list (and single newlines are line breaks); one line stays one line", async () => {
+    const STEPS = "做法：\n1) 用 task get 讀完整張卡\n2) 用 task update 留一句進度\n3) 逐項勾選驗收";
+    const LINES = "步驟一：讀卡\n步驟二：寫進度\n步驟三：交回";
+    const ONE_LINE = "做法：1) 用 task get 讀完整張卡；2) 用 task update 留一句進度；3) 逐項勾選驗收";
+    seed([{ id: 1, author: "alpha", authorKind: "instance", text: STEPS, at: AT(40) }, { id: 2, author: "alpha", authorKind: "instance", text: LINES, at: AT(30) },
+      { id: 3, author: "alpha", authorKind: "instance", text: ONE_LINE, at: AT(20) }]);
+    await mount(); await open();
+    const [steps, lines, one] = qa(".tl-comment").map((c: any) => c.querySelector(".tl-body"));
+    expect(steps.querySelector("p").textContent, "the lead-in is its own paragraph").toBe("做法：");
+    expect([...steps.querySelectorAll("ol > li")].map((li: any) => li.textContent.trim()), "a step per line is a list item each").toEqual(["用 task get 讀完整張卡", "用 task update 留一句進度", "逐項勾選驗收"]);
+    expect(lines.querySelectorAll("br").length, "single newlines are line breaks, as in the chat").toBe(2);
+    expect(lines.querySelector("p").childNodes.map((n: any) => n.textContent).filter(Boolean)).toEqual(["步驟一：讀卡", "步驟二：寫進度", "步驟三：交回"]);
+    // The cause of the screenshot: with no newline in the text there is nothing to break — one paragraph, no list, no break.
+    expect(one.querySelectorAll("li").length).toBe(0);
+    expect(one.querySelectorAll("br").length).toBe(0);
+    expect(one.querySelectorAll("p").length).toBe(1);
+  });
   it("an agent's comment: heading, list (nested), table, a JSON block, inline code and a link, as the chat draws them", async () => {
     seed([{ id: 1, author: "alpha", authorKind: "instance", text: AGENT_MD, at: AT(30) }]);
     await mount(); await open();
