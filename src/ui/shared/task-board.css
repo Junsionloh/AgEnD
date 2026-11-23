@@ -145,7 +145,7 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tp-crumbs { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1) var(--s-2); min-width: 0; font-size: var(--fs-sm); color: var(--text-2); }
 .tp-crumbs > .tp-crumb + .tp-crumb::before { content: "›"; margin-right: var(--s-2); color: var(--text-3); }
 .tp-crumb { overflow-wrap: anywhere; }
-.tp-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto auto 1fr; grid-template-areas: "head side" "body side" "activity side"; column-gap: var(--s-6); row-gap: var(--s-4); align-items: start; }
+.tp-grid { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 22vw, 460px); grid-template-rows: auto auto 1fr; grid-template-areas: "head side" "body side" "activity side"; column-gap: var(--s-6); row-gap: var(--s-4); align-items: start; }
 .tp-head { grid-area: head; display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
 .tp-body { grid-area: body; display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
 .tp-activity { grid-area: activity; display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
@@ -236,7 +236,12 @@ button.tb-row-progress:hover { background: var(--surface-2); }
    baseline. What a hover box or an edit box takes (its padding and border, --tp-inset) hangs out into the gutter on the left
    (a negative margin), so the TEXT is on the line, not the box. The side column does the same: a label column and a value
    column, a chip's text on the value column's edge. On a phone the label is above its value, the left edge the same. */
-.tp { --tp-label: 7rem; --tp-gap: var(--s-3); --tp-inset: calc(var(--s-2) + 1px); }
+.tp { --tp-label: clamp(7rem, 6vw, 10rem); --tp-gap: var(--s-3); --tp-inset: calc(var(--s-2) + 1px); --tp-measure: 72rem; }
+/* AGEND-341: the page fills the content area. What grows with the width: the label column (7rem up to 10rem), the properties column
+   (300px up to 460px, a share of the window) and the main column, which takes the rest. What does not: the length of a line of PROSE (a
+   field's text, a comment's words) stops at --tp-measure, so a long text never becomes one line across a wide screen; the frames,
+   the checklist, the sub tasks and the activity cards keep the full width. */
+.tp .tc-text, .tp .tl-body { max-width: var(--tp-measure); }
 .tp .tc-field, .tp .tp-subs { display: grid; grid-template-columns: var(--tp-label) minmax(0, 1fr); column-gap: var(--tp-gap); align-items: start; min-width: 0; }
 .tp .tc-field > h3, .tp .tp-subs > h3 { margin: 0; padding-top: var(--tp-inset); font-size: var(--fs-sm); line-height: var(--lh-sm); font-weight: var(--fw-regular); letter-spacing: 0; text-transform: none; color: var(--text-2); overflow-wrap: anywhere; }
 .tp .tc-field.tone-blocked > h3 { color: var(--danger); }
