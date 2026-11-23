@@ -40,6 +40,20 @@ Runner 自建唯一 scratch AGEND_HOME，依序執行三階段；每階段關閉
 
 回到新版也無法重建舊版儲存時丟掉的配置。若配置很重要，降版前請先備份 `web-offices.json`。
 
+## 專案自己的狀態（AGEND-332）
+
+每個專案可以替看板的六個狀態取自己的名稱、顏色和順序，也可以在「卡住」「待確認」「完成」沒有卡片時先把那一欄隱藏。這些設定存在兩張新表 `task_workflows`、`task_statuses`，和一個可為空的新欄位 `task_projects.workflow_id`；三者都在看板開啟時就地建立或補上，做法和 `task_watchers`、`lead_instance` 一樣。沒有任何 workflow 列的資料庫（每一個既有的都是）讀起來就是內建看板，開啟時不寫入任何東西。
+
+`tasks.status` 完全沒動：卡片仍是六個值之一，所以規則、統計、相依、保留天數和 task 工具讀到的都和以前一樣。沒有卡片被改寫，也沒有改變誰會被叫醒或被通知。
+
+| 情況 | 結果 |
+| --- | --- |
+| 舊版開啟並使用這個資料庫 | 它忽略這些表和欄位，照自己的名稱（待辦、進行中……）和順序顯示，每一欄都在。它的寫入（移動或領取卡片、新建 task）不會動到 workflow 的列；舊版建立的專案沒有 workflow（新版讀成預設）。 |
+| 回到有這個功能的版本 | 專案的名稱、顏色、順序和隱藏的欄位都和離開時一樣。由 `scripts/data-downgrade-phase.mjs` 對已發佈的 **2.3.3** 實測：先設定 workflow，舊版寫入看板，之後再讀一次。 |
+| 讀到別的版本寫的列 | 不認得的狀態略過，不認得的顏色退回該狀態自己的顏色，列裡缺的狀態放回內建的位置，所以看板不會因此讀不出來。 |
+
+降版前不需要做任何事。降版之後，要修改狀態得用有這個功能的版本：舊版沒有這個頁面。
+
 ## 設定頁的預設目錄（2.3.1 與 2.2.6）
 
 從 #2726 起，設定頁可以不填 agent 的工作目錄。這時 agent 會使用自己的工作區，而 fleet.yaml 會寫入完整路徑：`working_directory: <AGEND_HOME>/workspaces/<名稱>`。每個版本建立沒有指定目錄的 agent 時，寫入的都是同樣的形式。`scripts/check-setup-workdir-downgrade.mjs`（在 `data-downgrade.yml` 中）會照設定頁的方式寫出這份設定，「只用網頁」和接 bot 兩種都寫。接著檢查已發佈的 **2.3.1** 和 **2.2.6** 的驗證器接受這個檔案，而且它們的載入器讀到的是同一個資料夾。
@@ -50,7 +64,7 @@ Runner 自建唯一 scratch AGEND_HOME，依序執行三階段；每階段關閉
 | --- | --- | --- |
 | Delivery outbox | `user_version` **5 → 4 → 5**，不重建資料表。新 consumed/acknowledged 欄位保留；舊版新增列的新欄位為 NULL。Admission 去重不變；舊版重啟恢復只重排未 begin 的 claim，已 begin 保留 `reconciliation_pending`。Integrity/FK 通過。 | 四個 TEXT 欄位及 attention index 為 additive（[新版](https://github.com/songsid/AgEnD/blob/34828033a007f8ef3cb22f07a96d12eb6d314069/src/delivery-outbox.ts#L609)); [舊版直接寫 version 4](https://github.com/songsid/AgEnD/blob/7a8160a12ac4024bffc5165b5b6e03af851cacf2/src/delivery-outbox.ts#L561)。舊版不蒐集新的 consumption/ack evidence，也無 Needs you；version 數字本身不是 schema fence。 |
 | Scheduler／decision／task | 舊版可讀寫既有列與歷史，task completion 回新版仍可讀。未刪 schedule 的 retry 保留；舊版刪 schedule 會 cascade retry。Integrity/FK 通過。 | [Retry 表](https://github.com/songsid/AgEnD/blob/34828033a007f8ef3cb22f07a96d12eb6d314069/src/scheduler/db.ts#L99) 為 additive、帶 ON DELETE CASCADE。舊版不實作新的 usage-deferred retry；回新版時保留的 retry 可能再被評估。Probe 不跑 timer，不保證相同排程。 |
-| 任務板（#2246） | 舊版把任務板卡片當一般 task 讀（標題、狀態、負責人），寫入時只動舊欄位。回到新版後：舊版 claim 的子任務會帶動主任務狀態，留言保留，舊版新建的 task 會補上卡號。**舊版的 prune 不認得專案**：設 30 天會刪掉進行中專案裡已完成且夠舊的卡片（設 36500 天則保留），只留下它的留言與歷史；新版下一次 prune 會清掉這些殘留。AGEND-299 的 `task_watchers` 是只增不改的新表，舊版不會讀它：卡片的關注者在降版與再升版後都會保留；舊版 prune 刪掉卡片時會把它的關注者留下，新版下一次 prune 會清掉。 | 任務板的欄位與資料表都是 additive，開檔時補齊（[migrate](../src/scheduler/task-board.ts)、[prune](../src/scheduler/db.ts)）。舊版不執行任務板規則：它的 `task done` 會直接完成等待人確認的卡片（source audit），`review` 狀態也只會顯示成不認得的狀態。由 `scripts/data-downgrade-phase.mjs` 實測。 |
+| 任務板（#2246） | 舊版把任務板卡片當一般 task 讀（標題、狀態、負責人），寫入時只動舊欄位。回到新版後：舊版 claim 的子任務會帶動主任務狀態，留言保留，舊版新建的 task 會補上卡號。**舊版的 prune 不認得專案**：設 30 天會刪掉進行中專案裡已完成且夠舊的卡片（設 36500 天則保留），只留下它的留言與歷史；新版下一次 prune 會清掉這些殘留。AGEND-299 的 `task_watchers` 是只增不改的新表，舊版不會讀它：卡片的關注者在降版與再升版後都會保留；舊版 prune 刪掉卡片時會把它的關注者留下，新版下一次 prune 會清掉。AGEND-332 的 `task_workflows`、`task_statuses` 和 `task_projects.workflow_id` 同樣只增不改，舊版不會讀它們：專案自己的狀態名稱、顏色和順序在降版與再升版後都會保留（見下面「專案自己的狀態」）。 | 任務板的欄位與資料表都是 additive，開檔時補齊（[migrate](../src/scheduler/task-board.ts)、[prune](../src/scheduler/db.ts)）。舊版不執行任務板規則：它的 `task done` 會直接完成等待人確認的卡片（source audit），`review` 狀態也只會顯示成不認得的狀態。由 `scripts/data-downgrade-phase.mjs` 實測。 |
 | Event／activity／reaction | 舊版讀新事件、活動、消費 reaction，回新版可讀舊版新增事件。Integrity/FK 通過。 | [Store](https://github.com/songsid/AgEnD/blob/34828033a007f8ef3cb22f07a96d12eb6d314069/src/event-log.ts#L47) API/schema 相容；不測 transcript 或 live delivery。 |
 | Needs you | Live-message pointer 逐 byte 保留，回新版可讀；新建 hub 無 acknowledgement capability。 | [Pointer](https://github.com/songsid/AgEnD/blob/34828033a007f8ef3cb22f07a96d12eb6d314069/src/needs-you-hub.ts#L201) 非持久授權；[registry 在記憶體](https://github.com/songsid/AgEnD/blob/34828033a007f8ef3cb22f07a96d12eb6d314069/src/needs-you-hub.ts#L107)。2.1.12 無此 hub；既有聊天訊息／按鈕可能殘留，但舊版不能操作。 |
 | #1423 pending | 只在記憶體；close 不執行 effect，新 store 無 pending。 | [Store](https://github.com/songsid/AgEnD/blob/34828033a007f8ef3cb22f07a96d12eb6d314069/src/settings-confirmation.ts#L77)。未核准變更不轉移、不重播；在支援確認的版本重送。已提交設定仍在磁碟；舊 web handler 沒有新的 consent gate。 |

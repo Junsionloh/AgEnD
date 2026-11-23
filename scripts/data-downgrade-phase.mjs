@@ -183,7 +183,11 @@ if (phase === 'create') {
   checked('new task board: a project, a main task with a comment and a sub task, an aged finished card', () => {
     const person = { kind: 'person', name: 'scratch-person' };
     const board = scheduler.board;
-    board.createProject(person, { name: 'Scratch' });
+    const project = board.createProject(person, { name: 'Scratch' });
+    // AGEND-332: the project words its statuses its own way (task_workflows, task_statuses, task_projects.workflow_id: all additive).
+    const named = { blocked: 'Stuck', claimed: 'Building' }, colored = { done: 'red' };
+    board.setWorkflow(person, project.id, ['open', 'claimed', 'review', 'blocked', 'done', 'cancelled'].map(key => ({ key, name: named[key] ?? '', color: colored[key], hideEmpty: key === 'review' })));
+    state.workflowProject = project.id;
     const main = board.createCards(person, { project: 'Scratch', cards: [{ title: 'board main' }] }).cards[0];
     const sub = board.createCards(person, { cards: [{ parent: main.code, title: 'board sub', assignee: 'scratch-worker' }] }).cards[0];
     board.updateCard(person, main.code, { comment: 'kept across the downgrade' });
@@ -281,6 +285,17 @@ if (phase === 'create') {
   scheduler.claimTask(state.board.sub, 'scratch-old', {kind:'person',name:'scratch-person'});
   state.oldTask = scheduler.createTask({ title: 'created on old', created_by: 'scratch-old' }).id;
   checks.push('previous release reads board cards and preserves active-project history at both retention windows');
+  // AGEND-332: the previous release opened and wrote this file with the workflow tables and the project's workflow_id in it. It knows
+  // none of them (a card is still one of the six statuses to it), so they are as the current release left them.
+  checked('previous release leaves a project\'s workflow alone', () => {
+    const db = new Database(schedulerPath, { readonly: true });
+    try {
+      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM task_statuses').get().n, 6);
+      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM task_workflows').get().n, 1);
+      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM task_projects WHERE workflow_id IS NOT NULL').get().n, 1);
+      assert.equal(db.prepare("SELECT name FROM task_statuses WHERE key = 'blocked'").get().name, 'Stuck');
+    } finally { db.close(); }
+  });
   checked('old event/reaction read-write', () => {
     assert.deepEqual(events.query({ type: 'new-event' })[0].payload, { sentinel: 42 });
     assert.ok(events.listActivity().some(row => row.event === 'new-activity'));
@@ -368,6 +383,16 @@ if (phase === 'create') {
     assert.deepEqual(board.detail(main.code).comments.map(e => e.text), ['kept across the downgrade']);
     assert.equal(board.getCard(state.board.sub).assignee, 'scratch-old');
     assert.match(board.getCard(state.oldTask).code, /^M-\d+$/);
+  });
+  checked('a project\'s own statuses (names, colour, order, a hidden empty column) are back as they were; cards read as before', () => {
+    const board = scheduler.board;
+    const flow = board.workflowOf(state.workflowProject);
+    assert.deepEqual(flow.map(s => s.key), ['open', 'claimed', 'review', 'blocked', 'done', 'cancelled']);
+    assert.deepEqual(flow.map(s => s.name), ['', 'Building', '', 'Stuck', '', '']);
+    assert.equal(flow.find(s => s.key === 'done').color, 'red');
+    assert.equal(flow.find(s => s.key === 'review').hideEmpty, true);
+    assert.equal(board.workflows().defaultCustom, false);
+    assert.equal(board.getCard(state.board.main).status, 'claimed');
   });
   assert.ok(boardLeftovers(state.board.aged) > 0);
   assert.equal(await scheduler.pruneOldTasks(30), 0);
