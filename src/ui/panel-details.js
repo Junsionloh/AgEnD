@@ -34,6 +34,7 @@ import { InstanceBoardWork } from "./fleet-task-work.js";
 import { Icon } from "/assets/ui-icons.js";
 import { AgentCategoryNav, AgentPageHead, AgentSettingsPanels, agentKind, categoryFromSearch, useAgentSettings } from "./agent-details-settings.js";
 import { ContactPermissionsPanel } from "./contact-permissions.js";
+import { startFailureText } from "./account-hint.js";
 import "./agent-page-strings.js";
 import { pt } from "./agent-page-strings.js";
 
@@ -106,7 +107,7 @@ function DetailsView({ name, inst, navKey, exec, awaiting }) {
     let r;
     try { const res = await fetch(`/ui/${verb}/${encodeURIComponent(name)}`, { method: "POST", headers: { "Content-Type": "application/json" } }); r = await res.json(); }
     catch (err) { r = { error: err && err.message ? err.message : t("chat.disconnected") }; }
-    if (r && r.error) toast(r.error, false);
+    if (r && r.error) toast(startFailureText(r), false, r.hint ? { detail: true } : undefined);
     else if (r && r.held) toast(r.message);
     else toast(t(verb === "start" ? "chat.started" : verb === "stop" ? "chat.stoppedInst" : "chat.restarted", name));
   });

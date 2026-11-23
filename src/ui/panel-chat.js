@@ -1,5 +1,6 @@
 import { previewReplyFile, replyPreviewLabel } from "./reply-file-preview.js";
 import { NativePaneRecovery } from "./native-pane-recovery.js";
+import { AccountHint, startFailureText } from "./account-hint.js";
 import { GeneralLocation } from "./general-location.js";
 // #1408 step 1: the chat panel. Behind the session gate (/ui/js/), loaded by the app with a dynamic import in "full"
 // mode only. boot() runs once per page (the chat store must hear the stream from the first frame); <ChatPanel> mounts
@@ -123,7 +124,7 @@ export function chatAgentMenuItems({ name, inst, wide, pinCount = 0, onPins, onD
     let r;
     try { const res = await fetch(`/ui/${verb}/${encodeURIComponent(name)}`, { method: "POST", headers: { "Content-Type": "application/json" } }); r = await res.json(); }
     catch (err) { r = { error: err && err.message ? err.message : t("chat.disconnected") }; }
-    if (r && r.error) toast(r.error, false);
+    if (r && r.error) toast(startFailureText(r), false, r.hint ? { detail: true } : undefined);
     else if (r && r.held) toast(r.message);
     else toast(t(verb === "start" ? "chat.started" : verb === "stop" ? "chat.stoppedInst" : "chat.restarted", name));
   };
@@ -682,6 +683,7 @@ function ChatView({ name, inst, lease, navKey, exec, awaiting }) {
         <${AmbientMotionNote} name=${name} />
         ${inst.general_topic ? html`<${GeneralLocation} name=${name} attentionOnly=${true} />` : null}
         <${NativePaneRecovery} name=${name} inst=${inst} lease=${lease} />
+        <${AccountHint} name=${name} inst=${inst} />
         ${inst.native_blocked ? html`<div class="windows-agent-blocked" role="alert"><p>${t("chat.nativeBlocked")}</p><button type="button" class="btn" disabled=${recovering} onClick=${recoverNative}>${t("chat.nativeRecover")}</button></div>` : null}
         <${Thread} name=${name} bindings=${bindings} label=${inst.runtime === "windows" ? inst.display_name || name : name} th=${thread} />
         <${Dock} name=${name} inst=${inst} bindings=${bindings} ids=${ids} focused=${pane?.focused !== false} lease=${lease} exec=${exec} awaiting=${awaiting} workingLabel=${theme ? theme.workingLabel : undefined} />

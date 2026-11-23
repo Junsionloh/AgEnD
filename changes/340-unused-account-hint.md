@@ -1,0 +1,4 @@
+---
+section: Added
+---
+- **An agent that does not use the account you signed in says so (AGEND-340).** Signing a CLI in under Settings → Accounts keeps the login in a named profile that no agent uses until it is chosen. An agent that names no account, while its CLI's default sign-in is signed out and a named account is signed in, used to stop at the CLI's sign-in screen and pause with no word of why. Its chat and Log pages now say that the account is signed in and unused, with "Choose an account" (that agent's settings, where its account is chosen) and, when exactly one account is signed in, "Use <account>" — the same write Settings' Save makes, made only when you press it. The failed Start or Restart toast and the sign-in alert carry the same line. It never picks an account for the agent. It covers every CLI with named accounts (Claude Code, Codex, Grok, Antigravity, Kiro), and only for agents on this host.
