@@ -434,7 +434,12 @@ is plain text, a click on the words opens it. A progress `log` line stays one pl
 reads the whole card): a long content goes in a comment (4000 characters) or a file.
 
 **Reporting.** Written in the default workflow (Progress Tracking), the CLI reference, the `task-board` skill and, once, to an agent
-already running (`agent-whats-new`): a short Markdown `result`, the content itself as a comment, files with `attach`; never only a path.
+already running (`agent-whats-new`): a short Markdown `result`, the content as a comment written for the person (what it is, how to open it),
+and the finished file with `attach` — **not the working files**: usually one, at most three, never source, modules, config, logs or drafts; a
+web prototype is ONE `.html` with its CSS and JS inline (the source stays in the workspace or branch, linked in the comment); short text goes in
+the comment, a file is for what is too long or must be a file; the same file is not attached twice unless it changed. Never only a path.
+An agent once attached all six source files of a game with "run `python3 -m http.server`" as the explanation: a pile of parts. The answer to a
+write that attaches more than 3 files, or an `.html` beside `.js` / `.css`, carries one reminder line (`attachHint`); the write goes through.
 Not told by guessing: the fleet does not turn a path in an agent's text into a file (that would let one sentence of text point the fleet
 at any path). The answer to a write whose result, comment, state, log, goal, reason or scope names a path on the agent's machine (and
 brought no file) carries one note saying the person cannot open it and how to attach (`pathHint`).

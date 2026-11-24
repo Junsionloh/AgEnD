@@ -17,7 +17,7 @@ import { join } from "node:path";
 import { SchedulerDb } from "../src/scheduler/db.js";
 import type { Actor } from "../src/scheduler/task-board.js";
 import { PENDING_TTL_MS, TASK_FILE_LIMITS, TASK_FILE_PART_BYTES, TaskFileError, TaskFileStore } from "../src/scheduler/task-files.js";
-import { boardToolAction, pathHint, unsupportedFields } from "../src/task-board-tool.js";
+import { ATTACH_FILES_MAX, attachHint, boardToolAction, pathHint, unsupportedFields } from "../src/task-board-tool.js";
 import { releaseUploads, sendTaskWrite, stageAttachments, stageFile, wantsAttach, type TaskSend } from "../src/task-attach-client.js";
 import { cardText } from "../src/scheduler/task-board-text.js";
 
@@ -272,6 +272,40 @@ describe("3. the tool", () => {
     const g = await stageAs("dev-a", "x.html", Buffer.from("<p>x</p>"));
     expect(boardToolAction(db, "dev-a", { action: "update", id: "M-1", log: "step", uploads: [g] })).toMatch(/^ok M-1/);
     expect(db.board.attachments(db.board.getCard("M-1").uuid)).toHaveLength(2);
+  });
+
+  it("a pile of parts is only a reminder: more than 3 files in one write, or an .html with .js / .css beside it, is noted — the write goes through; one finished file is not", async () => {
+    const attach = async (names: string[], over: Record<string, unknown> = {}) => {
+      const card = db.board.createCards(ANN, { cards: [{ title: `Card for ${names.join("+")}`, assignee: "dev-a" }] }).cards[0]!;   // a card each: 20 files at most
+      const uploads = await Promise.all(names.map((n) => stageAs("dev-a", n, Buffer.from(`<!-- ${n} -->`))));
+      const answer = boardToolAction(db, "dev-a", { action: "attach", id: card.code, uploads, comment: "done", ...over })!;
+      expect(db.board.attachments(card.uuid).map((f) => f.name), "the write went through").toEqual(names);
+      return answer;
+    };
+    expect(ATTACH_FILES_MAX).toBe(3);
+    expect(await attach(["survivor.html"]), "one finished file").not.toMatch(/note:/);
+    expect(await attach(["design.md", "survivor.html", "screenshot.png"]), "three files, no parts").not.toMatch(/note:/);
+    const four = await attach(["a.md", "b.md", "c.md", "d.md"]);
+    expect(four).toMatch(/\nnote: 4 files attached\. Attach only the finished thing the person will open: usually one file, at most 3, never source, modules, config, logs or drafts\./);
+    expect(four).toMatch(/ONE \.html with its CSS and JS inline/);
+    expect(four).not.toMatch(/beside its/);
+    for (const parts of [["index.html", "game.js"], ["index.html", "style.css"], ["INDEX.HTM", "main.mjs", "a.md"], ["game.html", "game.js", "style.css"]]) {
+      const answer = await attach(parts);
+      expect(answer, parts.join("+")).toMatch(new RegExp(`\\nnote: ${parts.length} files attached \\(an \\.html beside its \\.js / \\.css\\)\\.`));
+    }
+    // A script or a stylesheet alone, or two other files beside a page, are not a pile of parts.
+    expect(await attach(["tool.js"])).not.toMatch(/note:/);
+    expect(await attach(["index.html", "design.md"])).not.toMatch(/note:/);
+    expect(await attach(["index.html", "data.json"])).not.toMatch(/note:/);
+    // Through update and move too (the same `uploads`); a write the board refuses says nothing of it (it threw).
+    const second = db.board.createCards(ANN, { cards: [{ title: "Second", assignee: "dev-a" }] }).cards[0]!;
+    const upd = boardToolAction(db, "dev-a", { action: "update", id: second.code, log: "step", uploads: await Promise.all(["x.html", "x.js"].map((n) => stageAs("dev-a", n, Buffer.from("x")))) })!;
+    expect(upd).toMatch(/note: 2 files attached \(an \.html beside its \.js \/ \.css\)/);
+    expect(attachHint([])).toBeNull();
+    expect(() => boardToolAction(db, "dev-a", { action: "attach", id: second.code, uploads: ["f".repeat(32)] })).toThrow(/no longer staged/);
+    // A path in the words beside files is not noted (the files came with it): only the reminder about the files is.
+    const both = await attach(["index.html", "app.js"], { comment: "see /data/workspaces/dev/index.html" });
+    expect(both.split("\n").filter((l) => l.startsWith("note:")).map((l) => l.slice(0, 40))).toEqual(["note: 2 files attached (an .html beside "]);
   });
 
   it("a path on the agent's machine in words the person reads: the answer says they cannot open it and how to attach; code, URLs and `context` are left alone", () => {

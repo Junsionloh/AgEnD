@@ -182,8 +182,29 @@ const WORDS_ACTIONS = new Set(["create", "update", "move", "attach", "done"]);
 export function boardToolAction(db: SchedulerDb, instance: string, args: Record<string, unknown>): string | undefined {
   const answer = onBoardAction(db, instance, args);
   if (typeof answer !== "string" || !WORDS_ACTIONS.has(String(args.action))) return answer;
-  const hint = pathHint(args);
-  return hint ? `${answer}\n${hint}` : answer;
+  // Notes after a write that went through (never a refusal): a path the person cannot open; files that are not the finished thing.
+  const notes = [pathHint(args), attachHint(attachedNames(db, args))].filter((n): n is string => !!n);
+  return notes.length ? `${answer}\n${notes.join("\n")}` : answer;
+}
+
+/** The names of the files this write put on the card (the last ones on it), or none when it brought none. */
+function attachedNames(db: SchedulerDb, args: Record<string, unknown>): string[] {
+  const ids = strs(args.uploads);
+  const card = ids?.length && typeof args.id === "string" ? db.board.findCard(args.id) : undefined;
+  return ids && card ? db.board.attachments(card.uuid).slice(-ids.length).map((f) => f.name) : [];
+}
+
+/**
+ * AGEND-354: an agent attached every source file of a game ("a pile of parts, not something to open"). Only a reminder — the write went
+ * through: more than 3 files in one write, or an `.html` with `.js` / `.css` beside it. The person wants the finished thing: one file,
+ * a web prototype as ONE `.html` (CSS and JS inline); the source stays in the agent's workspace or branch, linked in the comment.
+ */
+export const ATTACH_FILES_MAX = 3;
+export function attachHint(names: readonly string[]): string | null {
+  const parts = names.some((n) => /\.html?$/i.test(n)) && names.some((n) => /\.(?:m?js|cjs|css)$/i.test(n));
+  if (names.length <= ATTACH_FILES_MAX && !parts) return null;
+  return `note: ${names.length} files attached${parts ? " (an .html beside its .js / .css)" : ""}. Attach only the finished thing the person will open: usually one file, at most ${ATTACH_FILES_MAX}, `
+    + "never source, modules, config, logs or drafts. A web prototype is ONE .html with its CSS and JS inline; keep the source in your workspace or branch and link it in a comment.";
 }
 
 function onBoardAction(db: SchedulerDb, instance: string, args: Record<string, unknown>): string | undefined {
