@@ -1,0 +1,37 @@
+{
+  "role": "after",
+  "browser": "156.0.8078.4",
+  "card": "M-1",
+  "shots": [
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/desk-light-en-planner-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/desk-light-en-dev-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/desk-light-en-dev-card-preview-running.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/desk-light-zh-TW-planner-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/desk-light-zh-TW-dev-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/desk-dark-en-planner-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/desk-dark-en-dev-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/desk-dark-zh-TW-planner-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/desk-dark-zh-TW-dev-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/phone-light-en-planner-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/phone-light-en-dev-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/phone-light-zh-TW-planner-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/phone-light-zh-TW-dev-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/phone-dark-en-planner-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/phone-dark-en-dev-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/phone-dark-zh-TW-planner-card.png",
+    "/home/junsionloh/multica_workspaces/agend-bcac6942356a/agend-354-e6c666c1784e/workdir/shots-out/smoke-354-after/phone-dark-zh-TW-dev-card.png"
+  ],
+  "preview": {
+    "iframe": 1,
+    "sandbox": "allow-scripts",
+    "origin": "http://127.0.0.1:48561",
+    "dashboard": "http://127.0.0.1:48560",
+    "canvasInFrame": 1
+  },
+  "download": {
+    "status": 200,
+    "type": "application/octet-stream",
+    "disposition": "attachment; filename*=UTF-8''index.html",
+    "csp": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox"
+  }
+}
