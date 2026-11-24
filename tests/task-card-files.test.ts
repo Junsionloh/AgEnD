@@ -280,6 +280,13 @@ describe("3. the tool", () => {
     expect(note({ action: "update", result: "see ~/work/out/index.html" })).toMatch(/your result names a path/);
     expect(note({ action: "update", state: "built at C:\\Users\\me\\game\\index.html" })).toMatch(/your state names a path/);
     expect(note({ action: "update", log: "wrote /home/dev/out.txt" })).toMatch(/agend-agent task attach M-n <file>/);
+    // macOS's home directory is a home like /home: named too.
+    expect(note({ action: "update", comment: "the doc is /Users/x/doc.md" })).toMatch(/your comment names a path on your machine \(\/Users\/x\/doc\.md\)/);
+    expect(note({ action: "update", result: "設計文件：/Users/me/work/design.md（含 MVP）" })).toMatch(/your result names a path on your machine \(\/Users\/me\/work\/design\.md\)/);
+    expect(note({ action: "update", comment: "the doc is `/Users/x/doc.md`" }), "in code: deliberate").toBeNull();
+    expect(note({ action: "update", comment: "https://example.com/Users/x" }), "inside a URL").toBeNull();
+    expect(note({ action: "update", comment: "Users/x or the /Users folder" }), "no file below /Users").toBeNull();
+    for (const plain of ["/usr/bin", "/tmp/x", "run /usr/bin and /tmp/x"]) expect(note({ action: "update", comment: plain }), plain).toBeNull();
     expect(note({ action: "update", result: "see /data/workspaces/dev/index.html" })).toMatch(/your result names a path/);
     // Only where an agent's own files live. `/tmp`, `/usr`, `/etc`… in a sentence are ordinary prose, not a file it meant the person to open.
     for (const prose of ["wrote /tmp/out.txt", "the binary is /usr/bin/node", "see /etc/hosts and /var/log/x", "in /opt/app/run", "under /mnt/c/work", "at /root/x and /srv/www/y", "the /app/dist build", "/workspace/foo"]) {

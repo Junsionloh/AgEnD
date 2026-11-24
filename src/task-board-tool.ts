@@ -378,11 +378,11 @@ function onBoardAction(db: SchedulerDb, instance: string, args: Record<string, u
 /**
  * AGEND-354: a path on the agent's own machine, in words the person reads (a card's comment, result, state, log, goal),
  * is one they cannot open — the owner's planner wrote "設計文件路徑：/data/workspaces/…" and nothing else. Only where such files live
- * are named: `/data/…`, `/home/…`, `~/…` and drive paths (`C:\…`); `/tmp`, `/usr` and the like read as ordinary prose in a comment and are
+ * are named: `/data/…`, `/home/…`, `/Users/…` (macOS's home), `~/…` and drive paths (`C:\…`); `/tmp`, `/usr` and the like read as ordinary prose in a comment and are
  * left alone, and so is a path in code (a fence or backticks), being deliberate.
  * Deliberately only a note, never a read: a file is read only when the agent names it with `attach`.
  */
-const LOCAL_PATH = /(?<![\w.:/~-])((?:~\/|\/(?:data|home)\/)[^\s"'`)\]>\u3000-\u303f\uff00-\uffef]{2,}|[A-Za-z]:[\\/][^\s"'`)\]>\u3000-\u303f\uff00-\uffef]{2,})/;
+const LOCAL_PATH = /(?<![\w.:/~-])((?:~\/|\/(?:data|home|Users)\/)[^\s"'`)\]>\u3000-\u303f\uff00-\uffef]{2,}|[A-Za-z]:[\\/][^\s"'`)\]>\u3000-\u303f\uff00-\uffef]{2,})/;
 const WORD_FIELDS = ["comment", "result", "state", "log", "description", "reason", "scope"] as const;
 export function pathHint(args: Record<string, unknown>): string | null {
   if (strs(args.uploads)?.length || (Array.isArray(args.attach) && args.attach.length)) return null;
