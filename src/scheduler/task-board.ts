@@ -2728,6 +2728,9 @@ export class TaskBoard {
         }
         return r;
       }).immediate();
+      // Committed: the rows are there for good, so what undoes the file moves is forgotten — a failure from here on (a listener's
+      // work, reading the revision) must not move files back from under rows that stay.
+      this.undo = [];
       this.lastNotes = this.notes.map((n) => n.text);
       const touched = this.pending;
       const projects = this.projectsChanged;
@@ -2740,7 +2743,7 @@ export class TaskBoard {
       }
       return result;
     } catch (err) {
-      // The write failed after it moved files under a card: the rows are rolled back, so the files go back to staging.
+      // The write failed BEFORE it committed, after it moved files under a card: the rows are rolled back, so the files go back to staging.
       for (const back of this.undo.reverse()) { try { back(); } catch { /* the sweep removes it */ } }
       throw err;
     } finally {

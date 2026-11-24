@@ -58,11 +58,37 @@ export async function stageAttachments(args: Record<string, unknown>, ctx: Agent
   const uploads: string[] = [];
   for (const f of files) {
     const got = await stageFile(f.name, f.bytes, send);
-    if ("error" in got) return { ok: false, error: `attach: ${f.path.slice(0, 200)} — ${got.error}` };
+    if ("error" in got) {
+      await releaseUploads(uploads, send);         // the ones already staged are not wanted any more
+      return { ok: false, error: `attach: ${f.path.slice(0, 200)} — ${got.error}` };
+    }
     uploads.push(got.upload);
   }
   const { attach: _a, ...rest } = args;
   return { ok: true, args: { ...rest, uploads } };
+}
+
+/** Give staged files back to the fleet (`release`); never fails the caller — what is not released leaves after the wait. */
+export async function releaseUploads(uploads: readonly string[], send: TaskSend): Promise<void> {
+  if (!uploads.length) return;
+  try { await send({ action: "release", uploads: [...uploads] }); } catch { /* the fleet drops them after the wait */ }
+}
+
+/**
+ * The write an agent asked for, with the files it names: staged first (a failure there is `staging`, nothing was written), then the
+ * write itself with their ids — and when the fleet REFUSES the write the staged files are released, so a write tried again and again
+ * (a card at its limit, a stale `version`) never fills the instance's room for staged files. One path for both doors: the CLI and the daemon.
+ */
+export async function sendTaskWrite(args: Record<string, unknown>, ctx: AgentFileContext, send: TaskSend): Promise<{ staging: true; error: string } | { staging: false; answer: { result?: unknown; error?: string } }> {
+  let call = args;
+  if (wantsAttach(args)) {
+    const staged = await stageAttachments(args, ctx, send);
+    if (!staged.ok) return { staging: true, error: staged.error };
+    call = staged.args;
+  }
+  const answer = await send(call);
+  if (answer.error && Array.isArray(call.uploads)) await releaseUploads(call.uploads as string[], send);
+  return { staging: false, answer };
 }
 
 /** One file, whole or in parts, as the fleet's `upload` action takes it; the id it was staged under. */

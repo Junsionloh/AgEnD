@@ -407,7 +407,9 @@ files, all or nothing (a failure after the files moved puts them back to staging
   the agent's working directory, no symlink, not under AgEnD state, within 10 MiB), then staged on the fleet in parts (`action: "upload"`,
   an internal action; parts of 360 KiB, each answered before the next — the fleet IPC's line is 1 MiB, the agent endpoint's body
   512 KiB). The write then carries the staged ids as `uploads` in place of the paths: the fleet never opens a path an agent names, and a
-  raw `attach` that reaches it is refused with what to use.
+  raw `attach` that reaches it is refused with what to use. A write the fleet REFUSES (a card at its limit, a stale `version`) gives the
+  staged files back (`release`, internal too), so a write tried again and again never fills the instance's room of 20 staged files; what a
+  client that died never gave back leaves after 30 minutes.
 - *The fleet keeps.* `src/scheduler/task-files.ts`: `<AGEND_HOME>/task-files/<card uuid>/<id>` (0600 in a 0700 folder; the name on disk
   is the id), staged files in `task-files/pending/` for 30 minutes, held for their writer only. Limits (`src/task-file-limits.ts`):
   10 MiB a file, 20 files and 50 MiB a card, 10 files a write. The type is read from the bytes (`sniffUpload`, the chat's own): a picture,
@@ -419,7 +421,10 @@ files, all or nothing (a failure after the files moved puts them back to staging
 - *The page serves.* `GET /ui/tasks/files/<id>`: read with the card (any session that may read it); over the public link a hidden
   instance's card, its main task's sub task and a file a hidden instance wrote are "no such file", as an unknown id. Always a
   download — an image as an image, text as `text/plain`, everything else `application/octet-stream` with `attachment`, `nosniff`, the
-  sandboxing CSP and no caching; never HTML from the dashboard's origin. What the page shows of a file it reads on a click, as the chat
+  sandboxing CSP and no caching; never HTML from the dashboard's origin. The file is opened with `O_NOFOLLOW` (a symlink put where it
+  was is not followed) and must be a regular file of the size the table holds. Windows has no `O_NOFOLLOW` (Node leaves the constant
+  undefined, so the flag is 0 there): the `isFile` check on the opened descriptor and the size check stand alone — which is enough, as
+  nothing an agent can write is under `task-files/` (reserved in `agent-file-read.ts`; the fleet alone writes it). What the page shows of a file it reads on a click, as the chat
   does: a picture; Markdown through the chat's renderer; text, CSV, JSON, code as plain text; an `.html` file in the chat's sandboxed
   preview frame (the device must allow previews; not over the public link, except to an admin session there).
 

@@ -14,7 +14,7 @@ import { homedir } from "node:os";
 import { splitFlags } from "./cli-flags.js";
 import { agentTokenHeader } from "./agent-token-header.js";
 import { readAgentFile } from "./agent-file-read.js";
-import { stageAttachments, wantsAttach } from "./task-attach-client.js";
+import { sendTaskWrite, wantsAttach } from "./task-attach-client.js";
 import { listBundledSkills, readBundledSkill } from "./bundled-skills.js";
 import { ASSET_UPLOAD_MAX_BYTES, receivePreview, sendAssetInParts, THEME_ASSET_SLOTS, writePreview } from "./web-asset-parts.js";
 
@@ -522,19 +522,22 @@ async function main(): Promise<void> {
 
   try {
     // AGEND-354: files named by `attach` are read here and staged on the fleet first; the write then carries their ids.
+    let result: string;
     if (op === "task" && wantsAttach(args)) {
-      const staged = await stageAttachments(args, { workspace: process.cwd(), stateDir: DATA_DIR, instance: INSTANCE }, async (call) => {
-        const text = await post("task", call);
+      // The files are staged, the write sent with their ids, and the ones a refused write did not use given back (sendTaskWrite).
+      let written = "";
+      const sent = await sendTaskWrite(args, { workspace: process.cwd(), stateDir: DATA_DIR, instance: INSTANCE }, async (call) => {
+        const last = await post("task", call);
+        if (call.action !== "upload" && call.action !== "release") written = last;      // the write's own answer, as it always was printed
         try {
-          const parsed = JSON.parse(text) as unknown;
+          const parsed = JSON.parse(last) as unknown;
           if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && typeof (parsed as { error?: unknown }).error === "string") return { error: (parsed as { error: string }).error };
           return { result: parsed };
-        } catch { return { error: text.slice(0, 200) }; }
+        } catch { return { error: last.slice(0, 200) }; }
       });
-      if (!staged.ok) die(staged.error);
-      args = staged.args;
-    }
-    const result = await post(op, args);
+      if (sent.staging) die(sent.error);
+      result = written;
+    } else result = await post(op, args);
     // The task board answers in text (a card, your work): printed as text, not as one quoted JSON line.
     if (op === "task") {
       try {

@@ -187,6 +187,23 @@ export class TaskFileStore {
   }
 
   /**
+   * The staged files `instance` no longer wants — the write that was to use them was refused, or the client gave up half-way: gone at once,
+   * not after the wait, so a refused write tried again and again never fills the instance's room (MAX_STAGED_PER_INSTANCE). Another
+   * instance's, an unknown id and one already used are left as they are. Returns how many were dropped.
+   */
+  release(instance: string, ids: readonly string[]): number {
+    let dropped = 0;
+    for (const id of ids) {
+      const f = isFileId(id) ? this.staged.get(id) : undefined;
+      if (!f || f.instance !== instance) continue;
+      this.staged.delete(id);
+      try { unlinkSync(join(this.pendingDir(), id)); } catch { /* gone */ }
+      dropped++;
+    }
+    return dropped;
+  }
+
+  /**
    * The staged files `instance` names, checked — each one its own, finished, unused, not named twice — or an error that
    * says which. Nothing moves yet (`commit`), so a refusal later in the same write leaves them staged.
    */

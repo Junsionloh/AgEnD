@@ -53,7 +53,7 @@ export const ACTION_FIELDS: Readonly<Record<string, readonly string[]>> = {
  * staged under, in its place.
  */
 const FLEET_FIELD: Readonly<Record<string, string>> = { attach: "uploads" };
-const INTERNAL_ACTIONS: Readonly<Record<string, readonly string[]>> = { upload: ["name", "data_b64", "part"] };
+const INTERNAL_ACTIONS: Readonly<Record<string, readonly string[]>> = { upload: ["name", "data_b64", "part"], release: ["uploads"] };
 
 /** What to do instead, for the fields agents reach for most. */
 const INSTEAD: Readonly<Record<string, string>> = {
@@ -236,6 +236,11 @@ function onBoardAction(db: SchedulerDb, instance: string, args: Record<string, u
         throw err;
       }
     }
+    case "release": {
+      // The agent's side gives back what a refused write did not use (task-attach-client.ts), so retries do not fill its room.
+      const store = board.files();
+      return JSON.stringify({ released: store ? store.release(instance, strs(args.uploads) ?? []) : 0 });
+    }
     case "attach": {
       const uploads = strs(args.uploads);
       if (!uploads?.length) throw new TaskBoardError("invalid", "attach: name at least one file (attach: [\"./design.md\"]; agend-agent task attach M-3 ./design.md)");
@@ -372,11 +377,12 @@ function onBoardAction(db: SchedulerDb, instance: string, args: Record<string, u
 
 /**
  * AGEND-354: a path on the agent's own machine, in words the person reads (a card's comment, result, state, log, goal),
- * is one they cannot open — the owner's planner wrote "設計文件路徑：/data/workspaces/…" and nothing else. Posix paths under the
- * usual roots, `~/…`, and drive paths are named; a path in code (a fence or backticks) is left alone, being deliberate.
+ * is one they cannot open — the owner's planner wrote "設計文件路徑：/data/workspaces/…" and nothing else. Only where such files live
+ * are named: `/data/…`, `/home/…`, `~/…` and drive paths (`C:\…`); `/tmp`, `/usr` and the like read as ordinary prose in a comment and are
+ * left alone, and so is a path in code (a fence or backticks), being deliberate.
  * Deliberately only a note, never a read: a file is read only when the agent names it with `attach`.
  */
-const LOCAL_PATH = /(?<![\w.:/~-])((?:~\/|\/(?:data|home|Users|tmp|var|opt|mnt|srv|root|workspaces?|app|usr|etc|private|Volumes)\/)[^\s"'`)\]>\u3000-\u303f\uff00-\uffef]{2,}|[A-Za-z]:[\\/][^\s"'`)\]>\u3000-\u303f\uff00-\uffef]{2,})/;
+const LOCAL_PATH = /(?<![\w.:/~-])((?:~\/|\/(?:data|home)\/)[^\s"'`)\]>\u3000-\u303f\uff00-\uffef]{2,}|[A-Za-z]:[\\/][^\s"'`)\]>\u3000-\u303f\uff00-\uffef]{2,})/;
 const WORD_FIELDS = ["comment", "result", "state", "log", "description", "reason", "scope"] as const;
 export function pathHint(args: Record<string, unknown>): string | null {
   if (strs(args.uploads)?.length || (Array.isArray(args.attach) && args.attach.length)) return null;

@@ -317,6 +317,20 @@ describe("every action, through the real endpoint: the tool's rules", () => {
     expect(db.board.getCard(a).version).toBe(before);
   });
 
+  it("AGEND-354: a file a refused write did not use is given back to the fleet — the real client against the real endpoint; a write that went through keeps it on the card", async () => {
+    writeFileSync(join(root, "rel.md"), "# rel");
+    const a = await card("dev-a", "Files");
+    const store = db.board.files() as unknown as { staged: Map<string, unknown> };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const stale = await task("dev-a", "attach", a, "./rel.md", "--version", "99");
+      expect(stale.json.error, `attempt ${attempt}`).toBeTruthy();
+      expect(store.staged.size, "given back").toBe(0);
+    }
+    const ok = await task("dev-a", "attach", a, "./rel.md", "--comment", "here");
+    expect(ok.out).toMatch(/attached to M-\d+: rel\.md/);
+    expect(store.staged.size).toBe(0);
+    expect(db.board.attachments(db.board.getCard(a).uuid).map((f) => f.name)).toEqual(["rel.md"]);
+  });
   it("an instance without the task tool, or with the board off, is refused by the endpoint — the CLI is no way around it", async () => {
     const minimal = await task("min", "mine");
     expect(minimal.json.error).toMatch(/task/);

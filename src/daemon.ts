@@ -56,7 +56,7 @@ import { legacyTmuxSocket, tmuxSocket } from "./tmux-binary.js";
 import { migrateLegacyWindow, tagWindowId } from "./tmux-legacy.js";
 import { scopedFleetConfigEnvironment } from "./web-experimental.js";
 import { readAgentFile } from "./agent-file-read.js";
-import { stageAttachments, wantsAttach } from "./task-attach-client.js";
+import { sendTaskWrite } from "./task-attach-client.js";
 import { ASSET_UPLOAD_MAX_BYTES, receivePreview, sendAssetInParts, writePreview } from "./web-asset-parts.js";
 import { LOGIN_FLOWS } from "./login-flows.js";
 import { ProgressAccumulator, isSearchProgram, summarizeProgress } from "./tool-progress.js";
@@ -12846,14 +12846,8 @@ export class Daemon extends EventEmitter {
       // AGEND-354: files named in `attach` are read HERE, on the agent's side (its working directory, no symlink, size-capped),
       // and staged on the fleet in parts; the write itself then carries their ids. The fleet never opens a workspace path.
       void (async () => {
-        let call = args;
-        if (wantsAttach(args)) {
-          const staged = await stageAttachments(args, { workspace: this.config.working_directory, configuredWorkspace: this.config.working_directory, stateDir: getAgendHome(), instance: this.name }, askTask);
-          if (!staged.ok) { respond(null, staged.error); return; }
-          call = staged.args;
-        }
-        const answer = await askTask(call);
-        respond(answer.result, answer.error);
+        const sent = await sendTaskWrite(args, { workspace: this.config.working_directory, configuredWorkspace: this.config.working_directory, stateDir: getAgendHome(), instance: this.name }, askTask);
+        if (sent.staging) respond(null, sent.error); else respond(sent.answer.result, sent.answer.error);
       })().catch((err: unknown) => respond(null, `task failed: ${err instanceof Error ? err.message : "error"}`));
       return;
     }

@@ -2104,6 +2104,7 @@ async function serveCardFile(
     if (!found || !store || rules.hidden(found.card) || rules.hiddenName(found.file.author)) return miss();
     const on = store.pathOf(found.card.uuid, id);
     if (!on || on.size !== found.file.size) return miss();
+    // O_NOFOLLOW is undefined on Windows (the flag is then 0): there the isFile and size checks below stand alone (docs/design/task-board.md).
     const fh = await openFile(on.path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
     let bytes: Buffer;
     try {

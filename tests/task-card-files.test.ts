@@ -18,7 +18,7 @@ import { SchedulerDb } from "../src/scheduler/db.js";
 import type { Actor } from "../src/scheduler/task-board.js";
 import { PENDING_TTL_MS, TASK_FILE_LIMITS, TASK_FILE_PART_BYTES, TaskFileError, TaskFileStore } from "../src/scheduler/task-files.js";
 import { boardToolAction, pathHint, unsupportedFields } from "../src/task-board-tool.js";
-import { stageAttachments, stageFile, wantsAttach, type TaskSend } from "../src/task-attach-client.js";
+import { releaseUploads, sendTaskWrite, stageAttachments, stageFile, wantsAttach, type TaskSend } from "../src/task-attach-client.js";
 import { cardText } from "../src/scheduler/task-board-text.js";
 
 const ANN: Actor = { kind: "person", name: "Ann" };
@@ -188,6 +188,21 @@ describe("2. the board links them to the write's comment — all or nothing", ()
     expect(db.board.attachments(card.uuid)).toHaveLength(1);
   });
 
+  it("a failure AFTER the commit moves nothing back: the rows are there for good, so the files stay where they say", async () => {
+    const f = await stageAs("dev-a", "a.md", Buffer.from("# A"));
+    const card = db.board.getCard("M-1");
+    const board = db.board as unknown as { revision: () => number };
+    const real = board.revision;
+    board.revision = () => { throw new Error("late"); };           // read once the write has committed, to tell the listeners
+    expect(() => db.board.updateCard(DEV, "M-1", { comment: "x", attach: [f] })).toThrow("late");
+    board.revision = real;
+    expect(rows()).toHaveLength(1);                                // committed
+    expect(onDisk(card.uuid)).toEqual([f]);                        // …and its file is still under the card, not back in staging
+    expect(existsSync(join(filesDir(), "pending", f))).toBe(false);
+    expect(readFileSync(join(filesDir(), card.uuid, f), "utf8")).toBe("# A");
+    expect(db.board.attachments(card.uuid).map((x) => x.name)).toEqual(["a.md"]);
+  });
+
   it("the card as the dashboard and the agents read it: a count on the card, the files in the detail, the names in the card text", async () => {
     const f = await stageAs("dev-a", "design.md", Buffer.from("# D"));
     const card = db.board.getCard("M-1");
@@ -264,7 +279,12 @@ describe("3. the tool", () => {
     expect(note({ action: "move", comment: "設計文件路徑：/data/workspaces/planner/survivor-design.md（含 MVP）" })).toMatch(/names a path on your machine \(\/data\/workspaces\/planner\/survivor-design\.md\)/);
     expect(note({ action: "update", result: "see ~/work/out/index.html" })).toMatch(/your result names a path/);
     expect(note({ action: "update", state: "built at C:\\Users\\me\\game\\index.html" })).toMatch(/your state names a path/);
-    expect(note({ action: "update", log: "wrote /tmp/out.txt" })).toMatch(/agend-agent task attach M-n <file>/);
+    expect(note({ action: "update", log: "wrote /home/dev/out.txt" })).toMatch(/agend-agent task attach M-n <file>/);
+    expect(note({ action: "update", result: "see /data/workspaces/dev/index.html" })).toMatch(/your result names a path/);
+    // Only where an agent's own files live. `/tmp`, `/usr`, `/etc`… in a sentence are ordinary prose, not a file it meant the person to open.
+    for (const prose of ["wrote /tmp/out.txt", "the binary is /usr/bin/node", "see /etc/hosts and /var/log/x", "in /opt/app/run", "under /mnt/c/work", "at /root/x and /srv/www/y", "the /app/dist build", "/workspace/foo"]) {
+      expect(note({ action: "update", comment: prose }), prose).toBeNull();
+    }
     expect(note({ action: "update", comment: "Run `/usr/bin/foo --help` first" })).toBeNull();
     expect(note({ action: "update", comment: "```sh\ncat /data/x/y.md\n```" })).toBeNull();
     expect(note({ action: "update", comment: "open /ui/fleet?card=M-1 and https://example.com/data/x" })).toBeNull();
@@ -328,5 +348,83 @@ describe("4. the agent's side reads inside its own working directory and stages 
     writeFileSync(join(work, "a.md"), "a");
     const refusing: TaskSend = async () => ({ error: "the fleet is full" });
     expect(await stageAttachments({ action: "update", id: "M-1", attach: ["a.md"] }, ctx(), refusing)).toEqual({ ok: false, error: "attach: a.md — the fleet is full" });
+  });
+});
+
+describe("5. a refused write gives its staged files back — tried again and again, it never fills the room", () => {
+  let work: string;
+  const ctx = () => ({ workspace: work, stateDir: join(dir, "state"), instance: "dev-a" });
+  const staged = () => (db.board.files() as unknown as { staged: Map<string, unknown> }).staged.size;
+  const pending = () => { try { return readdirSync(join(filesDir(), "pending")).length; } catch { return 0; } };
+  beforeEach(() => { work = mkdtempSync(join(tmpdir(), "agend-task-files-work-")); for (let i = 0; i < 10; i++) writeFileSync(join(work, `f${i}.txt`), `file ${i}`); });
+  afterEach(() => { rmSync(work, { recursive: true, force: true }); });
+  const files = (n: number) => Array.from({ length: n }, (_, i) => `f${i}.txt`);
+
+  it("a write the card refuses (at its 20 files) five times in a row leaves nothing staged, and the next good write still goes through", async () => {
+    for (let batch = 0; batch < 2; batch++) {
+      const sent = await sendTaskWrite({ action: "update", id: "M-1", comment: `batch ${batch}`, attach: files(10) }, ctx(), sendAs("dev-a"));
+      expect(sent.staging, "fills the card").toBe(false);
+    }
+    expect(db.board.attachments(db.board.getCard("M-1").uuid)).toHaveLength(20);
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      const sent = await sendTaskWrite({ action: "update", id: "M-1", comment: "one more", attach: files(10) }, ctx(), sendAs("dev-a"));
+      expect(sent.staging).toBe(false);
+      expect(!sent.staging && sent.answer.error, `attempt ${attempt}`).toMatch(/at most 20 on a card/);
+      expect([attempt, staged(), pending()], "given back at once").toEqual([attempt, 0, 0]);
+    }
+    db.board.createCards(ANN, { cards: [{ title: "Next", assignee: "dev-a" }] });   // M-2
+    const ok = await sendTaskWrite({ action: "update", id: "M-2", comment: "fine", attach: files(10) }, ctx(), sendAs("dev-a"));
+    expect(!ok.staging && ok.answer.error).toBeUndefined();
+    expect(db.board.attachments(db.board.getCard("M-2").uuid)).toHaveLength(10);
+  });
+
+  it("without the release the room does fill — the control: the same refusals, files left staged, stop the third try", async () => {
+    const fleet = sendAs("dev-a");
+    const noRelease: TaskSend = async (call) => (call.action === "release" ? { result: JSON.stringify({ released: 0 }) } : fleet(call));
+    for (let batch = 0; batch < 2; batch++) await sendTaskWrite({ action: "update", id: "M-1", comment: `batch ${batch}`, attach: files(10) }, ctx(), noRelease);
+    await sendTaskWrite({ action: "update", id: "M-1", comment: "refused", attach: files(10) }, ctx(), noRelease);
+    await sendTaskWrite({ action: "update", id: "M-1", comment: "refused", attach: files(10) }, ctx(), noRelease);
+    const third = await sendTaskWrite({ action: "update", id: "M-1", comment: "refused", attach: files(5) }, ctx(), noRelease);
+    expect(third.staging && third.error, "the room is full").toMatch(/waiting for a comment already/);
+  });
+
+  it("a stale `version` and a refused move give them back too; one staged for a write that went through is not released", async () => {
+    const card = db.board.getCard("M-1");
+    const stale = await sendTaskWrite({ action: "update", id: "M-1", comment: "x", version: card.version + 5, attach: files(3) }, ctx(), sendAs("dev-a"));
+    expect(!stale.staging && stale.answer.error).toBeTruthy();
+    expect(staged()).toBe(0);
+    const good = await sendTaskWrite({ action: "update", id: "M-1", comment: "y", attach: files(2) }, ctx(), sendAs("dev-a"));
+    expect(!good.staging && good.answer.error).toBeUndefined();
+    expect(staged()).toBe(0);                                         // used, not staged any more
+    expect(db.board.attachments(card.uuid)).toHaveLength(2);
+  });
+
+  it("a failure half-way through staging gives back the files already staged", async () => {
+    const fleet = sendAs("dev-a");
+    let uploads = 0;
+    const failing: TaskSend = async (call) => (call.action === "upload" && ++uploads === 3 ? { error: "the fleet is full" } : fleet(call));
+    const out = await stageAttachments({ action: "update", id: "M-1", attach: files(4) }, ctx(), failing);
+    expect(out.ok).toBe(false);
+    expect(staged()).toBe(0);
+    expect(pending()).toBe(0);
+  });
+
+  it("`release` is the writer's own: another instance's, an unknown id and a file already on a card are left alone", async () => {
+    const store = db.board.files()!;
+    const mine = await stageAs("dev-a", "a.md", Buffer.from("a")), other = await stageAs("dev-b", "b.md", Buffer.from("b"));
+    const used = await stageAs("dev-a", "c.md", Buffer.from("c"));
+    db.board.updateCard(DEV, "M-1", { comment: "c", attach: [used] });
+    expect(store.release("dev-a", [mine, other, used, "f".repeat(32), "not-an-id"])).toBe(1);
+    expect(staged()).toBe(1);                                          // dev-b's
+    expect(existsSync(join(filesDir(), "pending", other))).toBe(true);
+    expect(existsSync(join(filesDir(), "pending", mine))).toBe(false);
+    expect(db.board.attachments(db.board.getCard("M-1").uuid).map((f) => f.id)).toEqual([used]);
+    // Through the tool, the internal action the agent's side uses; a bare board answers none released.
+    expect(JSON.parse(boardToolAction(db, "dev-b", { action: "release", uploads: [other] })!)).toEqual({ released: 1 });
+    expect(unsupportedFields({ action: "release", uploads: ["a".repeat(32)] })).toBeNull();
+    expect(unsupportedFields({ action: "release", id: "M-1" })).toMatch(/release does not take "id"/);
+    db.board.setFiles(null);
+    expect(JSON.parse(boardToolAction(db, "dev-a", { action: "release", uploads: [mine] })!)).toEqual({ released: 0 });
+    await releaseUploads([], async () => { throw new Error("never called"); });
   });
 });
