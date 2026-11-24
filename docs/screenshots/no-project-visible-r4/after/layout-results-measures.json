@@ -1,0 +1,7113 @@
+{
+ "smoke": "smoke-task-mobile-layout",
+ "cases": {
+  "desk-light-en": {
+   "homeHead": {
+    "title": {
+     "x": 280,
+     "y": 111.8,
+     "w": 91.2,
+     "h": 32.4
+    },
+    "agent": {
+     "x": 1081,
+     "y": 110,
+     "w": 122,
+     "h": 36
+    },
+    "add": {
+     "x": 1211,
+     "y": 110,
+     "w": 135,
+     "h": 36
+    },
+    "search": {
+     "x": 829,
+     "y": 110,
+     "w": 244,
+     "h": 36
+    }
+   },
+   "deskHomeButtonH": 36,
+   "head": {
+    "back": {
+     "x": 268,
+     "y": 111.2,
+     "w": 100,
+     "h": 30
+    },
+    "agent": {
+     "x": 1095,
+     "y": 110,
+     "w": 122,
+     "h": 36
+    },
+    "add": {
+     "x": 1225,
+     "y": 110,
+     "w": 121,
+     "h": 36
+    },
+    "name": {
+     "x": 380,
+     "y": 110,
+     "w": 66.1,
+     "h": 32.4
+    },
+    "insights": {
+     "x": 740,
+     "y": 183.2,
+     "w": 88,
+     "h": 26
+    },
+    "lead": {
+     "x": 280,
+     "y": 150.4,
+     "w": 363,
+     "h": 20.8
+    },
+    "pct": {
+     "x": 280,
+     "y": 184.2,
+     "w": 30,
+     "h": 24
+    },
+    "banner": {
+     "x": 622,
+     "y": 183.2,
+     "w": 110,
+     "h": 26
+    },
+    "board": {
+     "x": 282,
+     "y": 239.2,
+     "w": 63,
+     "h": 30
+    },
+    "list": {
+     "x": 347,
+     "y": 239.2,
+     "w": 45,
+     "h": 30
+    },
+    "filter": {
+     "x": 670,
+     "y": 239.2,
+     "w": 76,
+     "h": 30
+    },
+    "display": {
+     "x": 754,
+     "y": 239.2,
+     "w": 90,
+     "h": 30
+    },
+    "find": null
+   },
+   "bar": {
+    "x": 318,
+    "y": 193.1875,
+    "width": 96,
+    "height": 6
+   },
+   "deskColumns": 5,
+   "deskBtnH": {
+    "agent": 36,
+    "filter": 30
+   },
+   "deskCorners": {
+    "back": [
+     {
+      "ph": 28,
+      "inner": [
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ]
+      ]
+     }
+    ],
+    "agent": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "insights": [
+     {
+      "ph": 24,
+      "inner": [
+       [
+        12,
+        12
+       ],
+       [
+        12,
+        12
+       ],
+       [
+        12,
+        12
+       ],
+       [
+        12,
+        12
+       ]
+      ]
+     }
+    ],
+    "board": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "list": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "filter": [
+     {
+      "ph": 28,
+      "inner": [
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ]
+      ]
+     }
+    ],
+    "display": [
+     {
+      "ph": 28,
+      "inner": [
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ]
+      ]
+     }
+    ],
+    "field": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ]
+   },
+   "checks": {
+    "deskHomeHeadInARow": true,
+    "deskHomeStaysDense": true,
+    "homeNoSidewaysScroll": true,
+    "deskActionsAtTheRight": true,
+    "deskInsightsInTheStatsLine": true,
+    "deskSearchOpen": true,
+    "deskNoSearchToggle": true,
+    "deskNoPillRow": true,
+    "deskFiveFramedColumns": true,
+    "deskToolbarInARow": true,
+    "deskStaysDense": true,
+    "deskCornersAreRound": true,
+    "noSidewaysScroll": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "desk-light-zh-TW": {
+   "homeHead": {
+    "title": {
+     "x": 280,
+     "y": 69.8,
+     "w": 47,
+     "h": 32.4
+    },
+    "agent": {
+     "x": 1132,
+     "y": 68,
+     "w": 96,
+     "h": 36
+    },
+    "add": {
+     "x": 1236,
+     "y": 68,
+     "w": 110,
+     "h": 36
+    },
+    "search": {
+     "x": 880,
+     "y": 68,
+     "w": 244,
+     "h": 36
+    }
+   },
+   "deskHomeButtonH": 36,
+   "head": {
+    "back": {
+     "x": 268,
+     "y": 69.2,
+     "w": 74,
+     "h": 30
+    },
+    "agent": {
+     "x": 1145,
+     "y": 68,
+     "w": 96,
+     "h": 36
+    },
+    "add": {
+     "x": 1249,
+     "y": 68,
+     "w": 97,
+     "h": 36
+    },
+    "name": {
+     "x": 354,
+     "y": 68,
+     "w": 47,
+     "h": 32.4
+    },
+    "insights": {
+     "x": 665,
+     "y": 141.2,
+     "w": 66,
+     "h": 26
+    },
+    "lead": {
+     "x": 280,
+     "y": 108.4,
+     "w": 208,
+     "h": 20.8
+    },
+    "pct": {
+     "x": 280,
+     "y": 142.2,
+     "w": 30,
+     "h": 24
+    },
+    "banner": {
+     "x": 570,
+     "y": 141.2,
+     "w": 87,
+     "h": 26
+    },
+    "board": {
+     "x": 282,
+     "y": 197.2,
+     "w": 50,
+     "h": 30
+    },
+    "list": {
+     "x": 334,
+     "y": 197.2,
+     "w": 50,
+     "h": 30
+    },
+    "filter": {
+     "x": 662,
+     "y": 197.2,
+     "w": 70,
+     "h": 30
+    },
+    "display": {
+     "x": 740,
+     "y": 197.2,
+     "w": 70,
+     "h": 30
+    },
+    "find": null
+   },
+   "bar": {
+    "x": 318,
+    "y": 151.1875,
+    "width": 96,
+    "height": 6
+   },
+   "deskColumns": 5,
+   "deskBtnH": {
+    "agent": 36,
+    "filter": 30
+   },
+   "deskCorners": {
+    "back": [
+     {
+      "ph": 28,
+      "inner": [
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ]
+      ]
+     }
+    ],
+    "agent": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "insights": [
+     {
+      "ph": 24,
+      "inner": [
+       [
+        12,
+        12
+       ],
+       [
+        12,
+        12
+       ],
+       [
+        12,
+        12
+       ],
+       [
+        12,
+        12
+       ]
+      ]
+     }
+    ],
+    "board": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "list": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "filter": [
+     {
+      "ph": 28,
+      "inner": [
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ]
+      ]
+     }
+    ],
+    "display": [
+     {
+      "ph": 28,
+      "inner": [
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ]
+      ]
+     }
+    ],
+    "field": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ]
+   },
+   "checks": {
+    "deskHomeHeadInARow": true,
+    "deskHomeStaysDense": true,
+    "homeNoSidewaysScroll": true,
+    "deskActionsAtTheRight": true,
+    "deskInsightsInTheStatsLine": true,
+    "deskSearchOpen": true,
+    "deskNoSearchToggle": true,
+    "deskNoPillRow": true,
+    "deskFiveFramedColumns": true,
+    "deskToolbarInARow": true,
+    "deskStaysDense": true,
+    "deskCornersAreRound": true,
+    "noSidewaysScroll": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "desk-dark-en": {
+   "homeHead": {
+    "title": {
+     "x": 280,
+     "y": 111.8,
+     "w": 91.2,
+     "h": 32.4
+    },
+    "agent": {
+     "x": 1081,
+     "y": 110,
+     "w": 122,
+     "h": 36
+    },
+    "add": {
+     "x": 1211,
+     "y": 110,
+     "w": 135,
+     "h": 36
+    },
+    "search": {
+     "x": 829,
+     "y": 110,
+     "w": 244,
+     "h": 36
+    }
+   },
+   "deskHomeButtonH": 36,
+   "head": {
+    "back": {
+     "x": 268,
+     "y": 111.2,
+     "w": 100,
+     "h": 30
+    },
+    "agent": {
+     "x": 1095,
+     "y": 110,
+     "w": 122,
+     "h": 36
+    },
+    "add": {
+     "x": 1225,
+     "y": 110,
+     "w": 121,
+     "h": 36
+    },
+    "name": {
+     "x": 380,
+     "y": 110,
+     "w": 66.1,
+     "h": 32.4
+    },
+    "insights": {
+     "x": 740,
+     "y": 183.2,
+     "w": 88,
+     "h": 26
+    },
+    "lead": {
+     "x": 280,
+     "y": 150.4,
+     "w": 363,
+     "h": 20.8
+    },
+    "pct": {
+     "x": 280,
+     "y": 184.2,
+     "w": 30,
+     "h": 24
+    },
+    "banner": {
+     "x": 622,
+     "y": 183.2,
+     "w": 110,
+     "h": 26
+    },
+    "board": {
+     "x": 282,
+     "y": 239.2,
+     "w": 63,
+     "h": 30
+    },
+    "list": {
+     "x": 347,
+     "y": 239.2,
+     "w": 45,
+     "h": 30
+    },
+    "filter": {
+     "x": 670,
+     "y": 239.2,
+     "w": 76,
+     "h": 30
+    },
+    "display": {
+     "x": 754,
+     "y": 239.2,
+     "w": 90,
+     "h": 30
+    },
+    "find": null
+   },
+   "bar": {
+    "x": 318,
+    "y": 193.1875,
+    "width": 96,
+    "height": 6
+   },
+   "deskColumns": 5,
+   "deskBtnH": {
+    "agent": 36,
+    "filter": 30
+   },
+   "deskCorners": {
+    "back": [
+     {
+      "ph": 28,
+      "inner": [
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ]
+      ]
+     }
+    ],
+    "agent": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "insights": [
+     {
+      "ph": 24,
+      "inner": [
+       [
+        12,
+        12
+       ],
+       [
+        12,
+        12
+       ],
+       [
+        12,
+        12
+       ],
+       [
+        12,
+        12
+       ]
+      ]
+     }
+    ],
+    "board": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "list": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "filter": [
+     {
+      "ph": 28,
+      "inner": [
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ]
+      ]
+     }
+    ],
+    "display": [
+     {
+      "ph": 28,
+      "inner": [
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ]
+      ]
+     }
+    ],
+    "field": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ]
+   },
+   "checks": {
+    "deskHomeHeadInARow": true,
+    "deskHomeStaysDense": true,
+    "homeNoSidewaysScroll": true,
+    "deskActionsAtTheRight": true,
+    "deskInsightsInTheStatsLine": true,
+    "deskSearchOpen": true,
+    "deskNoSearchToggle": true,
+    "deskNoPillRow": true,
+    "deskFiveFramedColumns": true,
+    "deskToolbarInARow": true,
+    "deskStaysDense": true,
+    "deskCornersAreRound": true,
+    "noSidewaysScroll": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "desk-dark-zh-TW": {
+   "homeHead": {
+    "title": {
+     "x": 280,
+     "y": 69.8,
+     "w": 47,
+     "h": 32.4
+    },
+    "agent": {
+     "x": 1132,
+     "y": 68,
+     "w": 96,
+     "h": 36
+    },
+    "add": {
+     "x": 1236,
+     "y": 68,
+     "w": 110,
+     "h": 36
+    },
+    "search": {
+     "x": 880,
+     "y": 68,
+     "w": 244,
+     "h": 36
+    }
+   },
+   "deskHomeButtonH": 36,
+   "head": {
+    "back": {
+     "x": 268,
+     "y": 69.2,
+     "w": 74,
+     "h": 30
+    },
+    "agent": {
+     "x": 1145,
+     "y": 68,
+     "w": 96,
+     "h": 36
+    },
+    "add": {
+     "x": 1249,
+     "y": 68,
+     "w": 97,
+     "h": 36
+    },
+    "name": {
+     "x": 354,
+     "y": 68,
+     "w": 47,
+     "h": 32.4
+    },
+    "insights": {
+     "x": 665,
+     "y": 141.2,
+     "w": 66,
+     "h": 26
+    },
+    "lead": {
+     "x": 280,
+     "y": 108.4,
+     "w": 208,
+     "h": 20.8
+    },
+    "pct": {
+     "x": 280,
+     "y": 142.2,
+     "w": 30,
+     "h": 24
+    },
+    "banner": {
+     "x": 570,
+     "y": 141.2,
+     "w": 87,
+     "h": 26
+    },
+    "board": {
+     "x": 282,
+     "y": 197.2,
+     "w": 50,
+     "h": 30
+    },
+    "list": {
+     "x": 334,
+     "y": 197.2,
+     "w": 50,
+     "h": 30
+    },
+    "filter": {
+     "x": 662,
+     "y": 197.2,
+     "w": 70,
+     "h": 30
+    },
+    "display": {
+     "x": 740,
+     "y": 197.2,
+     "w": 70,
+     "h": 30
+    },
+    "find": null
+   },
+   "bar": {
+    "x": 318,
+    "y": 151.1875,
+    "width": 96,
+    "height": 6
+   },
+   "deskColumns": 5,
+   "deskBtnH": {
+    "agent": 36,
+    "filter": 30
+   },
+   "deskCorners": {
+    "back": [
+     {
+      "ph": 28,
+      "inner": [
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ]
+      ]
+     }
+    ],
+    "agent": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "insights": [
+     {
+      "ph": 24,
+      "inner": [
+       [
+        12,
+        12
+       ],
+       [
+        12,
+        12
+       ],
+       [
+        12,
+        12
+       ],
+       [
+        12,
+        12
+       ]
+      ]
+     }
+    ],
+    "board": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "list": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "filter": [
+     {
+      "ph": 28,
+      "inner": [
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ]
+      ]
+     }
+    ],
+    "display": [
+     {
+      "ph": 28,
+      "inner": [
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ],
+       [
+        14,
+        14
+       ]
+      ]
+     }
+    ],
+    "field": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ]
+   },
+   "checks": {
+    "deskHomeHeadInARow": true,
+    "deskHomeStaysDense": true,
+    "homeNoSidewaysScroll": true,
+    "deskActionsAtTheRight": true,
+    "deskInsightsInTheStatsLine": true,
+    "deskSearchOpen": true,
+    "deskNoSearchToggle": true,
+    "deskNoPillRow": true,
+    "deskFiveFramedColumns": true,
+    "deskToolbarInARow": true,
+    "deskStaysDense": true,
+    "deskCornersAreRound": true,
+    "noSidewaysScroll": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "phone-light-en": {
+   "homeHead": {
+    "title": {
+     "x": 16,
+     "y": 67.2,
+     "w": 86.5,
+     "h": 29.7
+    },
+    "agent": {
+     "x": 121,
+     "y": 60,
+     "w": 114,
+     "h": 44
+    },
+    "add": {
+     "x": 243,
+     "y": 60,
+     "w": 131,
+     "h": 44
+    },
+    "search": {
+     "x": 16,
+     "y": 108,
+     "w": 358,
+     "h": 44
+    }
+   },
+   "homeAgentDrawn": {
+    "w": 112,
+    "h": 36
+   },
+   "homeSearchDrawn": {
+    "w": 358,
+    "h": 36
+   },
+   "homeUnreached": [],
+   "waiting": {
+    "b": {
+     "confirm": {
+      "x": 97,
+      "y": 314,
+      "w": 122.5,
+      "h": 44
+     },
+     "back": {
+      "x": 227.5,
+      "y": 314,
+      "w": 117.5,
+      "h": 44
+     },
+     "row": {
+      "x": 29,
+      "y": 209,
+      "w": 332,
+      "h": 161
+     }
+    },
+    "oneLine": true,
+    "inside": true,
+    "cut": false,
+    "ok": true
+   },
+   "homeCorners": {
+    "agent": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "search": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ],
+    "pick": [
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     }
+    ]
+   },
+   "homeCornersBad": [],
+   "homeOverlaps": [],
+   "head": {
+    "back": {
+     "x": 4,
+     "y": 60,
+     "w": 104,
+     "h": 44
+    },
+    "agent": {
+     "x": 111,
+     "y": 60,
+     "w": 128,
+     "h": 44
+    },
+    "add": {
+     "x": 247,
+     "y": 60,
+     "w": 127,
+     "h": 44
+    },
+    "name": {
+     "x": 16,
+     "y": 113.2,
+     "w": 58.3,
+     "h": 29.7
+    },
+    "insights": {
+     "x": 271,
+     "y": 106,
+     "w": 103,
+     "h": 44
+    },
+    "lead": {
+     "x": 16,
+     "y": 152,
+     "w": 358,
+     "h": 44.8
+    },
+    "pct": {
+     "x": 16,
+     "y": 205.8,
+     "w": 33,
+     "h": 24
+    },
+    "banner": {
+     "x": 16,
+     "y": 242.8,
+     "w": 358,
+     "h": 44
+    },
+    "board": {
+     "x": 18,
+     "y": 293.8,
+     "w": 66,
+     "h": 44
+    },
+    "list": {
+     "x": 86,
+     "y": 293.8,
+     "w": 45,
+     "h": 44
+    },
+    "filter": {
+     "x": 150,
+     "y": 293.8,
+     "w": 79,
+     "h": 44
+    },
+    "display": {
+     "x": 237,
+     "y": 293.8,
+     "w": 95,
+     "h": 44
+    },
+    "find": {
+     "x": 335,
+     "y": 293.8,
+     "w": 44,
+     "h": 44
+    }
+   },
+   "bar": {
+    "x": 57,
+    "y": 214.78125,
+    "width": 109,
+    "height": 6
+   },
+   "progressLineEnd": 374,
+   "pills": 5,
+   "pillScroller": {
+    "sw": 633,
+    "cw": 390,
+    "left": 243,
+    "ox": "auto"
+   },
+   "activePill": "To confirm 1",
+   "emptyPills": 2,
+   "pillBoxes": [
+    {
+     "x": -227,
+     "y": 340.8,
+     "w": 98,
+     "h": 44
+    },
+    {
+     "x": -121,
+     "y": 340.8,
+     "w": 132,
+     "h": 44
+    },
+    {
+     "x": 19,
+     "y": 340.8,
+     "w": 112,
+     "h": 44
+    },
+    {
+     "x": 139,
+     "y": 340.8,
+     "w": 134,
+     "h": 44
+    },
+    {
+     "x": 281,
+     "y": 340.8,
+     "w": 93,
+     "h": 44
+    }
+   ],
+   "drawn": {
+    "agent": {
+     "w": 126,
+     "h": 36
+    },
+    "add": {
+     "w": 125,
+     "h": 36
+    },
+    "filter": {
+     "w": 77,
+     "h": 34
+    },
+    "find": {
+     "w": 34,
+     "h": 34
+    },
+    "pill": {
+     "w": 98,
+     "h": 32
+    },
+    "insights": {
+     "w": 101,
+     "h": 32
+    }
+   },
+   "overlaps": [],
+   "unreached": [],
+   "corners": {
+    "back": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "agent": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "insights": [
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     }
+    ],
+    "board": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "list": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "filter": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "display": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "find": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "pills": [
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     }
+    ]
+   },
+   "cornersBad": [],
+   "frame": {
+    "bg": "rgba(0, 0, 0, 0)",
+    "bw": "0px",
+    "bs": "dashed",
+    "bc": "rgba(0, 0, 0, 0)",
+    "pad": "0px",
+    "rad": "0px"
+   },
+   "tile": {
+    "x": 16,
+    "y": 388.8,
+    "w": 358,
+    "h": 151.6
+   },
+   "pageBox": {
+    "x": 16,
+    "y": 64,
+    "w": 358,
+    "h": 476.4
+   },
+   "pastTheEdge": [],
+   "field": {
+    "x": 16,
+    "y": 340.8,
+    "w": 358,
+    "h": 44
+   },
+   "openOverlaps": [],
+   "openUnreached": [],
+   "fieldCorners": {
+    "field": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ]
+   },
+   "findRing": {
+    "ring": {
+     "top": 5,
+     "bottom": 39,
+     "left": 5,
+     "right": 39,
+     "h": 34,
+     "w": 34,
+     "box": {
+      "h": 44,
+      "w": 44
+     }
+    },
+    "drawn": 34
+   },
+   "chip": {
+    "x": 16,
+    "y": 344.8,
+    "w": 200,
+    "h": 30
+   },
+   "filterRing": {
+    "ring": {
+     "top": 5,
+     "bottom": 39,
+     "left": 1,
+     "right": 78,
+     "h": 34,
+     "w": 77,
+     "box": {
+      "h": 44,
+      "w": 79
+     }
+    },
+    "drawn": 34
+   },
+   "focusRing": {
+    "onDisplay": true,
+    "ring": {
+     "top": 1,
+     "bottom": 43,
+     "left": -3,
+     "right": 98,
+     "h": 42,
+     "w": 101,
+     "box": {
+      "h": 44,
+      "w": 95
+     }
+    },
+    "drawn": 34
+   },
+   "pillFocusRing": {
+    "top": 3,
+    "bottom": 41,
+    "left": -3,
+    "right": 100,
+    "h": 38,
+    "w": 103,
+    "box": {
+     "h": 44,
+     "w": 97
+    }
+   },
+   "narrow": {
+    "back": {
+     "x": 4,
+     "y": 60,
+     "w": 104,
+     "h": 44
+    },
+    "agent": {
+     "x": 159,
+     "y": 60,
+     "w": 50,
+     "h": 44
+    },
+    "add": {
+     "x": 217,
+     "y": 60,
+     "w": 127,
+     "h": 44
+    },
+    "insights": {
+     "x": 241,
+     "y": 106,
+     "w": 103,
+     "h": 44
+    },
+    "banner": {
+     "x": 16,
+     "y": 242.8,
+     "w": 328,
+     "h": 44
+    },
+    "board": {
+     "x": 18,
+     "y": 293.8,
+     "w": 66,
+     "h": 44
+    },
+    "list": {
+     "x": 86,
+     "y": 293.8,
+     "w": 45,
+     "h": 44
+    },
+    "filter": {
+     "x": 120,
+     "y": 339.8,
+     "w": 79,
+     "h": 44
+    },
+    "display": {
+     "x": 207,
+     "y": 339.8,
+     "w": 95,
+     "h": 44
+    },
+    "find": {
+     "x": 305,
+     "y": 339.8,
+     "w": 44,
+     "h": 44
+    },
+    "pill0": {
+     "x": -227,
+     "y": 386.8,
+     "w": 98,
+     "h": 44
+    },
+    "tile": {
+     "x": 16,
+     "y": 434.8,
+     "w": 328,
+     "h": 151.6
+    }
+   },
+   "narrowOverlaps": [],
+   "narrowUnreached": [],
+   "narrowHome": {
+    "title": {
+     "x": 16,
+     "y": 67.2,
+     "w": 86.5,
+     "h": 29.7
+    },
+    "agent": {
+     "x": 165,
+     "y": 60,
+     "w": 44,
+     "h": 44
+    },
+    "add": {
+     "x": 213,
+     "y": 60,
+     "w": 131,
+     "h": 44
+    },
+    "search": {
+     "x": 16,
+     "y": 108,
+     "w": 328,
+     "h": 44
+    }
+   },
+   "narrowHomeOverlaps": [],
+   "narrowWaiting": {
+    "b": {
+     "confirm": {
+      "x": 97,
+      "y": 314,
+      "w": 107.5,
+      "h": 44
+     },
+     "back": {
+      "x": 212.5,
+      "y": 314,
+      "w": 102.5,
+      "h": 44
+     },
+     "row": {
+      "x": 29,
+      "y": 209,
+      "w": 302,
+      "h": 161
+     }
+    },
+    "oneLine": true,
+    "inside": true,
+    "cut": false,
+    "ok": true
+   },
+   "narrowHomeUnreached": [],
+   "waiting320": {
+    "b": {
+     "confirm": {
+      "x": 45,
+      "y": 370,
+      "w": 113.5,
+      "h": 44
+     },
+     "back": {
+      "x": 166.5,
+      "y": 370,
+      "w": 108.5,
+      "h": 44
+     },
+     "row": {
+      "x": 29,
+      "y": 209,
+      "w": 262,
+      "h": 217
+     }
+    },
+    "oneLine": true,
+    "inside": true,
+    "cut": false,
+    "ok": true
+   },
+   "tablet": {
+    "back": {
+     "x": 268,
+     "y": 114.2,
+     "w": 100,
+     "h": 44
+    },
+    "agent": {
+     "x": 753,
+     "y": 116,
+     "w": 122,
+     "h": 44
+    },
+    "add": {
+     "x": 883,
+     "y": 116,
+     "w": 121,
+     "h": 44
+    },
+    "insights": {
+     "x": 622,
+     "y": 184.2,
+     "w": 88,
+     "h": 44
+    },
+    "board": {
+     "x": 282,
+     "y": 299.2,
+     "w": 63,
+     "h": 44
+    },
+    "list": {
+     "x": 347,
+     "y": 299.2,
+     "w": 45,
+     "h": 44
+    },
+    "filter": {
+     "x": 670,
+     "y": 299.2,
+     "w": 76,
+     "h": 44
+    },
+    "display": {
+     "x": 754,
+     "y": 299.2,
+     "w": 90,
+     "h": 44
+    },
+    "find": {
+     "x": 402,
+     "y": 299.2,
+     "w": 260,
+     "h": 44
+    },
+    "scrollL": {
+     "x": 915,
+     "y": 299.2,
+     "w": 44,
+     "h": 44
+    },
+    "scrollR": {
+     "x": 959,
+     "y": 299.2,
+     "w": 44,
+     "h": 44
+    }
+   },
+   "tabletTaps": {
+    "back": true,
+    "agent": true,
+    "add": true,
+    "insights": true,
+    "board": true,
+    "list": true,
+    "filter": true,
+    "display": true,
+    "find": true,
+    "scrollL": true,
+    "scrollR": true
+   },
+   "tabletCorners": {
+    "back": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "agent": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "insights": [
+     {
+      "ph": 26,
+      "inner": [
+       [
+        13,
+        13
+       ],
+       [
+        13,
+        13
+       ],
+       [
+        13,
+        13
+       ],
+       [
+        13,
+        13
+       ]
+      ]
+     }
+    ],
+    "board": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "list": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "filter": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "display": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "scrollL": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "scrollR": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "field": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ]
+   },
+   "tabletCornersBad": [],
+   "tabletOverlaps": [],
+   "tabletUnreached": [],
+   "checks": {
+    "homeActionsInTitleRow": true,
+    "homeActionsAtTheRight": true,
+    "homeSearchUnderTheTitle": true,
+    "homeAgentTappable": true,
+    "homeAddTappable": true,
+    "homeSearchTappable": true,
+    "homeButtonsNotDrawnBigger": true,
+    "homeSearchNotDrawnBigger": true,
+    "homeNoOverlap": true,
+    "homeBoxesReachTheControl": true,
+    "waitingAnswersOneLine": true,
+    "homeCornersAreTheDesks": true,
+    "homeNoSidewaysScroll": true,
+    "headRowOne": true,
+    "headActionsAtTheRight": true,
+    "headRowTwo": true,
+    "insightsAtTheRight": true,
+    "nameUnderTheButtons": true,
+    "leadUnderTheName": true,
+    "progressUnderTheLead": true,
+    "barAcrossTheWidth": true,
+    "bannerOwnLine": true,
+    "toolbarOneRow": true,
+    "toolbarAtTheRight": true,
+    "toolbarUnderTheBanner": true,
+    "searchClosed": true,
+    "fivePills": true,
+    "pillsOneLine": true,
+    "pillsScrollSideways": true,
+    "pickedPillInView": true,
+    "emptyPillsDimmed": true,
+    "backTappable": true,
+    "agentTappable": true,
+    "addTappable": true,
+    "insightsTappable": true,
+    "bannerTappable": true,
+    "boardTappable": true,
+    "listTappable": true,
+    "filterTappable": true,
+    "displayTappable": true,
+    "findTappable": true,
+    "pillsTappable": true,
+    "controlsNotDrawnBigger": true,
+    "noTapBoxesOverlap": true,
+    "boxesReachTheControl": true,
+    "cornersAreTheDesks": true,
+    "noColumnFrame": true,
+    "tileFullWidth": true,
+    "noSidewaysScroll": true,
+    "boardNoSidewaysScroll": true,
+    "firstPillPicks": true,
+    "firstPillInView": true,
+    "emptyPillPicks": true,
+    "lastPillInView": true,
+    "pillRowScrollsByHand": true,
+    "searchOpens": true,
+    "searchFocused": true,
+    "findPressed": true,
+    "searchFullWidthUnderToolbar": true,
+    "searchTappable": true,
+    "openToolbarNoOverlap": true,
+    "openBoxesReachTheControl": true,
+    "searchNoSidewaysScroll": true,
+    "searchFilters": true,
+    "searchStaysWithWords": true,
+    "fieldCornerIsTheDesks": true,
+    "findRingIsThePaintedShape": true,
+    "findMarkedWithWords": true,
+    "searchOpenAfterReload": true,
+    "escapeOnEmptyCloses": true,
+    "listHasNoPillRow": true,
+    "listNoSidewaysScroll": true,
+    "filterMenuInScreen": true,
+    "displayMenuInScreen": true,
+    "chipUnderTheToolbar": true,
+    "chipNoSidewaysScroll": true,
+    "filterButtonMarked": true,
+    "filterRingIsThePaintedShape": true,
+    "filterRingClearOfTheGrownBorder": true,
+    "focusRingHugsThePaintedEdge": true,
+    "pillFocusRingHugsThePaintedEdge": true,
+    "insightsOpens": true,
+    "narrowNoTapBoxesOverlap": true,
+    "narrowBoxesReachTheControl": true,
+    "narrowTappable": true,
+    "narrowNoSidewaysScroll": true,
+    "narrowInsideTheScreen": true,
+    "narrowHomeNoOverlap": true,
+    "narrowWaitingAnswersOneLine": true,
+    "narrowHomeTappable": true,
+    "narrowHomeBoxesReachTheControl": true,
+    "narrowHomeOneRow": true,
+    "narrowHomeNoSidewaysScroll": true,
+    "narrowHomeInsideTheScreen": true,
+    "waitingAnswersOneLine320": true,
+    "home320NoSidewaysScroll": true,
+    "tabletKeepsTheDeskLayout": true,
+    "tabletTappable": true,
+    "tabletScrollButtonsThere": true,
+    "tabletCornersAreTheDesks": true,
+    "tabletNoTapBoxesOverlap": true,
+    "tabletBoxesReachTheControl": true,
+    "tabletNoSidewaysScroll": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "phone-light-zh-TW": {
+   "homeHead": {
+    "title": {
+     "x": 16,
+     "y": 67.2,
+     "w": 43.1,
+     "h": 29.7
+    },
+    "agent": {
+     "x": 181,
+     "y": 60,
+     "w": 85,
+     "h": 44
+    },
+    "add": {
+     "x": 274,
+     "y": 60,
+     "w": 100,
+     "h": 44
+    },
+    "search": {
+     "x": 16,
+     "y": 108,
+     "w": 358,
+     "h": 44
+    }
+   },
+   "homeAgentDrawn": {
+    "w": 83,
+    "h": 36
+   },
+   "homeSearchDrawn": {
+    "w": 358,
+    "h": 36
+   },
+   "homeUnreached": [],
+   "waiting": {
+    "b": {
+     "confirm": {
+      "x": 97,
+      "y": 259,
+      "w": 131,
+      "h": 44
+     },
+     "back": {
+      "x": 236,
+      "y": 259,
+      "w": 109,
+      "h": 44
+     },
+     "row": {
+      "x": 29,
+      "y": 209,
+      "w": 332,
+      "h": 106
+     }
+    },
+    "oneLine": true,
+    "inside": true,
+    "cut": false,
+    "ok": true
+   },
+   "homeCorners": {
+    "agent": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "search": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ],
+    "pick": [
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     }
+    ]
+   },
+   "homeCornersBad": [],
+   "homeOverlaps": [],
+   "head": {
+    "back": {
+     "x": 4,
+     "y": 60,
+     "w": 76,
+     "h": 44
+    },
+    "agent": {
+     "x": 167,
+     "y": 60,
+     "w": 99,
+     "h": 44
+    },
+    "add": {
+     "x": 274,
+     "y": 60,
+     "w": 100,
+     "h": 44
+    },
+    "name": {
+     "x": 16,
+     "y": 113.2,
+     "w": 43.1,
+     "h": 29.7
+    },
+    "insights": {
+     "x": 298,
+     "y": 106,
+     "w": 76,
+     "h": 44
+    },
+    "lead": {
+     "x": 16,
+     "y": 152,
+     "w": 358,
+     "h": 22.4
+    },
+    "pct": {
+     "x": 16,
+     "y": 183.4,
+     "w": 33,
+     "h": 24
+    },
+    "banner": {
+     "x": 16,
+     "y": 220.4,
+     "w": 358,
+     "h": 44
+    },
+    "board": {
+     "x": 18,
+     "y": 271.4,
+     "w": 52,
+     "h": 44
+    },
+    "list": {
+     "x": 72,
+     "y": 271.4,
+     "w": 52,
+     "h": 44
+    },
+    "filter": {
+     "x": 180,
+     "y": 271.4,
+     "w": 72,
+     "h": 44
+    },
+    "display": {
+     "x": 260,
+     "y": 271.4,
+     "w": 72,
+     "h": 44
+    },
+    "find": {
+     "x": 335,
+     "y": 271.4,
+     "w": 44,
+     "h": 44
+    }
+   },
+   "bar": {
+    "x": 57,
+    "y": 192.390625,
+    "width": 160,
+    "height": 6
+   },
+   "progressLineEnd": 374,
+   "pills": 5,
+   "pillScroller": {
+    "sw": 518,
+    "cw": 390,
+    "left": 128,
+    "ox": "auto"
+   },
+   "activePill": "待確認 1",
+   "emptyPills": 2,
+   "pillBoxes": [
+    {
+     "x": -112,
+     "y": 318.4,
+     "w": 86,
+     "h": 44
+    },
+    {
+     "x": -18,
+     "y": 318.4,
+     "w": 99,
+     "h": 44
+    },
+    {
+     "x": 89,
+     "y": 318.4,
+     "w": 85,
+     "h": 44
+    },
+    {
+     "x": 182,
+     "y": 318.4,
+     "w": 99,
+     "h": 44
+    },
+    {
+     "x": 289,
+     "y": 318.4,
+     "w": 85,
+     "h": 44
+    }
+   ],
+   "drawn": {
+    "agent": {
+     "w": 97,
+     "h": 36
+    },
+    "add": {
+     "w": 98,
+     "h": 36
+    },
+    "filter": {
+     "w": 70,
+     "h": 34
+    },
+    "find": {
+     "w": 34,
+     "h": 34
+    },
+    "pill": {
+     "w": 86,
+     "h": 32
+    },
+    "insights": {
+     "w": 74,
+     "h": 32
+    }
+   },
+   "overlaps": [],
+   "unreached": [],
+   "corners": {
+    "back": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "agent": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "insights": [
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     }
+    ],
+    "board": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "list": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "filter": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "display": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "find": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "pills": [
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     }
+    ]
+   },
+   "cornersBad": [],
+   "frame": {
+    "bg": "rgba(0, 0, 0, 0)",
+    "bw": "0px",
+    "bs": "dashed",
+    "bc": "rgba(0, 0, 0, 0)",
+    "pad": "0px",
+    "rad": "0px"
+   },
+   "tile": {
+    "x": 16,
+    "y": 366.4,
+    "w": 358,
+    "h": 151.6
+   },
+   "pageBox": {
+    "x": 16,
+    "y": 64,
+    "w": 358,
+    "h": 454
+   },
+   "pastTheEdge": [],
+   "field": {
+    "x": 16,
+    "y": 318.4,
+    "w": 358,
+    "h": 44
+   },
+   "openOverlaps": [],
+   "openUnreached": [],
+   "fieldCorners": {
+    "field": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ]
+   },
+   "findRing": {
+    "ring": {
+     "top": 5,
+     "bottom": 39,
+     "left": 5,
+     "right": 39,
+     "h": 34,
+     "w": 34,
+     "box": {
+      "h": 44,
+      "w": 44
+     }
+    },
+    "drawn": 34
+   },
+   "chip": {
+    "x": 16,
+    "y": 322.4,
+    "w": 184,
+    "h": 30
+   },
+   "filterRing": {
+    "ring": {
+     "top": 5,
+     "bottom": 39,
+     "left": 1,
+     "right": 71,
+     "h": 34,
+     "w": 70,
+     "box": {
+      "h": 44,
+      "w": 72
+     }
+    },
+    "drawn": 34
+   },
+   "focusRing": {
+    "onDisplay": true,
+    "ring": {
+     "top": 1,
+     "bottom": 43,
+     "left": -3,
+     "right": 75,
+     "h": 42,
+     "w": 78,
+     "box": {
+      "h": 44,
+      "w": 72
+     }
+    },
+    "drawn": 34
+   },
+   "pillFocusRing": {
+    "top": 3,
+    "bottom": 41,
+    "left": -3,
+    "right": 88,
+    "h": 38,
+    "w": 91,
+    "box": {
+     "h": 44,
+     "w": 85
+    }
+   },
+   "narrow": {
+    "back": {
+     "x": 4,
+     "y": 60,
+     "w": 76,
+     "h": 44
+    },
+    "agent": {
+     "x": 186,
+     "y": 60,
+     "w": 50,
+     "h": 44
+    },
+    "add": {
+     "x": 244,
+     "y": 60,
+     "w": 100,
+     "h": 44
+    },
+    "insights": {
+     "x": 268,
+     "y": 106,
+     "w": 76,
+     "h": 44
+    },
+    "banner": {
+     "x": 16,
+     "y": 220.4,
+     "w": 328,
+     "h": 44
+    },
+    "board": {
+     "x": 18,
+     "y": 271.4,
+     "w": 52,
+     "h": 44
+    },
+    "list": {
+     "x": 72,
+     "y": 271.4,
+     "w": 52,
+     "h": 44
+    },
+    "filter": {
+     "x": 150,
+     "y": 271.4,
+     "w": 72,
+     "h": 44
+    },
+    "display": {
+     "x": 230,
+     "y": 271.4,
+     "w": 72,
+     "h": 44
+    },
+    "find": {
+     "x": 305,
+     "y": 271.4,
+     "w": 44,
+     "h": 44
+    },
+    "pill0": {
+     "x": -112,
+     "y": 318.4,
+     "w": 86,
+     "h": 44
+    },
+    "tile": {
+     "x": 16,
+     "y": 366.4,
+     "w": 328,
+     "h": 151.6
+    }
+   },
+   "narrowOverlaps": [],
+   "narrowUnreached": [],
+   "narrowHome": {
+    "title": {
+     "x": 16,
+     "y": 67.2,
+     "w": 43.1,
+     "h": 29.7
+    },
+    "agent": {
+     "x": 196,
+     "y": 60,
+     "w": 44,
+     "h": 44
+    },
+    "add": {
+     "x": 244,
+     "y": 60,
+     "w": 100,
+     "h": 44
+    },
+    "search": {
+     "x": 16,
+     "y": 108,
+     "w": 328,
+     "h": 44
+    }
+   },
+   "narrowHomeOverlaps": [],
+   "narrowWaiting": {
+    "b": {
+     "confirm": {
+      "x": 97,
+      "y": 259,
+      "w": 116,
+      "h": 44
+     },
+     "back": {
+      "x": 221,
+      "y": 259,
+      "w": 94,
+      "h": 44
+     },
+     "row": {
+      "x": 29,
+      "y": 209,
+      "w": 302,
+      "h": 106
+     }
+    },
+    "oneLine": true,
+    "inside": true,
+    "cut": false,
+    "ok": true
+   },
+   "narrowHomeUnreached": [],
+   "waiting320": {
+    "b": {
+     "confirm": {
+      "x": 45,
+      "y": 291,
+      "w": 122,
+      "h": 44
+     },
+     "back": {
+      "x": 175,
+      "y": 291,
+      "w": 100,
+      "h": 44
+     },
+     "row": {
+      "x": 29,
+      "y": 209,
+      "w": 262,
+      "h": 138
+     }
+    },
+    "oneLine": true,
+    "inside": true,
+    "cut": false,
+    "ok": true
+   },
+   "tablet": {
+    "back": {
+     "x": 268,
+     "y": 114.2,
+     "w": 74,
+     "h": 44
+    },
+    "agent": {
+     "x": 803,
+     "y": 116,
+     "w": 96,
+     "h": 44
+    },
+    "add": {
+     "x": 907,
+     "y": 116,
+     "w": 97,
+     "h": 44
+    },
+    "insights": {
+     "x": 570,
+     "y": 184.2,
+     "w": 66,
+     "h": 44
+    },
+    "board": {
+     "x": 282,
+     "y": 299.2,
+     "w": 50,
+     "h": 44
+    },
+    "list": {
+     "x": 334,
+     "y": 299.2,
+     "w": 50,
+     "h": 44
+    },
+    "filter": {
+     "x": 662,
+     "y": 299.2,
+     "w": 70,
+     "h": 44
+    },
+    "display": {
+     "x": 740,
+     "y": 299.2,
+     "w": 70,
+     "h": 44
+    },
+    "find": {
+     "x": 394,
+     "y": 299.2,
+     "w": 260,
+     "h": 44
+    },
+    "scrollL": {
+     "x": 915,
+     "y": 299.2,
+     "w": 44,
+     "h": 44
+    },
+    "scrollR": {
+     "x": 959,
+     "y": 299.2,
+     "w": 44,
+     "h": 44
+    }
+   },
+   "tabletTaps": {
+    "back": true,
+    "agent": true,
+    "add": true,
+    "insights": true,
+    "board": true,
+    "list": true,
+    "filter": true,
+    "display": true,
+    "find": true,
+    "scrollL": true,
+    "scrollR": true
+   },
+   "tabletCorners": {
+    "back": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "agent": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "insights": [
+     {
+      "ph": 26,
+      "inner": [
+       [
+        13,
+        13
+       ],
+       [
+        13,
+        13
+       ],
+       [
+        13,
+        13
+       ],
+       [
+        13,
+        13
+       ]
+      ]
+     }
+    ],
+    "board": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "list": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "filter": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "display": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "scrollL": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "scrollR": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "field": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ]
+   },
+   "tabletCornersBad": [],
+   "tabletOverlaps": [],
+   "tabletUnreached": [],
+   "checks": {
+    "homeActionsInTitleRow": true,
+    "homeActionsAtTheRight": true,
+    "homeSearchUnderTheTitle": true,
+    "homeAgentTappable": true,
+    "homeAddTappable": true,
+    "homeSearchTappable": true,
+    "homeButtonsNotDrawnBigger": true,
+    "homeSearchNotDrawnBigger": true,
+    "homeNoOverlap": true,
+    "homeBoxesReachTheControl": true,
+    "waitingAnswersOneLine": true,
+    "homeCornersAreTheDesks": true,
+    "homeNoSidewaysScroll": true,
+    "headRowOne": true,
+    "headActionsAtTheRight": true,
+    "headRowTwo": true,
+    "insightsAtTheRight": true,
+    "nameUnderTheButtons": true,
+    "leadUnderTheName": true,
+    "progressUnderTheLead": true,
+    "barAcrossTheWidth": true,
+    "bannerOwnLine": true,
+    "toolbarOneRow": true,
+    "toolbarAtTheRight": true,
+    "toolbarUnderTheBanner": true,
+    "searchClosed": true,
+    "fivePills": true,
+    "pillsOneLine": true,
+    "pillsScrollSideways": true,
+    "pickedPillInView": true,
+    "emptyPillsDimmed": true,
+    "backTappable": true,
+    "agentTappable": true,
+    "addTappable": true,
+    "insightsTappable": true,
+    "bannerTappable": true,
+    "boardTappable": true,
+    "listTappable": true,
+    "filterTappable": true,
+    "displayTappable": true,
+    "findTappable": true,
+    "pillsTappable": true,
+    "controlsNotDrawnBigger": true,
+    "noTapBoxesOverlap": true,
+    "boxesReachTheControl": true,
+    "cornersAreTheDesks": true,
+    "noColumnFrame": true,
+    "tileFullWidth": true,
+    "noSidewaysScroll": true,
+    "boardNoSidewaysScroll": true,
+    "firstPillPicks": true,
+    "firstPillInView": true,
+    "emptyPillPicks": true,
+    "lastPillInView": true,
+    "pillRowScrollsByHand": true,
+    "searchOpens": true,
+    "searchFocused": true,
+    "findPressed": true,
+    "searchFullWidthUnderToolbar": true,
+    "searchTappable": true,
+    "openToolbarNoOverlap": true,
+    "openBoxesReachTheControl": true,
+    "searchNoSidewaysScroll": true,
+    "searchFilters": true,
+    "searchStaysWithWords": true,
+    "fieldCornerIsTheDesks": true,
+    "findRingIsThePaintedShape": true,
+    "findMarkedWithWords": true,
+    "searchOpenAfterReload": true,
+    "escapeOnEmptyCloses": true,
+    "listHasNoPillRow": true,
+    "listNoSidewaysScroll": true,
+    "filterMenuInScreen": true,
+    "displayMenuInScreen": true,
+    "chipUnderTheToolbar": true,
+    "chipNoSidewaysScroll": true,
+    "filterButtonMarked": true,
+    "filterRingIsThePaintedShape": true,
+    "filterRingClearOfTheGrownBorder": true,
+    "focusRingHugsThePaintedEdge": true,
+    "pillFocusRingHugsThePaintedEdge": true,
+    "insightsOpens": true,
+    "narrowNoTapBoxesOverlap": true,
+    "narrowBoxesReachTheControl": true,
+    "narrowTappable": true,
+    "narrowNoSidewaysScroll": true,
+    "narrowInsideTheScreen": true,
+    "narrowHomeNoOverlap": true,
+    "narrowWaitingAnswersOneLine": true,
+    "narrowHomeTappable": true,
+    "narrowHomeBoxesReachTheControl": true,
+    "narrowHomeOneRow": true,
+    "narrowHomeNoSidewaysScroll": true,
+    "narrowHomeInsideTheScreen": true,
+    "waitingAnswersOneLine320": true,
+    "home320NoSidewaysScroll": true,
+    "tabletKeepsTheDeskLayout": true,
+    "tabletTappable": true,
+    "tabletScrollButtonsThere": true,
+    "tabletCornersAreTheDesks": true,
+    "tabletNoTapBoxesOverlap": true,
+    "tabletBoxesReachTheControl": true,
+    "tabletNoSidewaysScroll": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "phone-dark-en": {
+   "homeHead": {
+    "title": {
+     "x": 16,
+     "y": 67.2,
+     "w": 86.5,
+     "h": 29.7
+    },
+    "agent": {
+     "x": 121,
+     "y": 60,
+     "w": 114,
+     "h": 44
+    },
+    "add": {
+     "x": 243,
+     "y": 60,
+     "w": 131,
+     "h": 44
+    },
+    "search": {
+     "x": 16,
+     "y": 108,
+     "w": 358,
+     "h": 44
+    }
+   },
+   "homeAgentDrawn": {
+    "w": 112,
+    "h": 36
+   },
+   "homeSearchDrawn": {
+    "w": 358,
+    "h": 36
+   },
+   "homeUnreached": [],
+   "waiting": {
+    "b": {
+     "confirm": {
+      "x": 97,
+      "y": 314,
+      "w": 122.5,
+      "h": 44
+     },
+     "back": {
+      "x": 227.5,
+      "y": 314,
+      "w": 117.5,
+      "h": 44
+     },
+     "row": {
+      "x": 29,
+      "y": 209,
+      "w": 332,
+      "h": 161
+     }
+    },
+    "oneLine": true,
+    "inside": true,
+    "cut": false,
+    "ok": true
+   },
+   "homeCorners": {
+    "agent": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "search": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ],
+    "pick": [
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     }
+    ]
+   },
+   "homeCornersBad": [],
+   "homeOverlaps": [],
+   "head": {
+    "back": {
+     "x": 4,
+     "y": 60,
+     "w": 104,
+     "h": 44
+    },
+    "agent": {
+     "x": 111,
+     "y": 60,
+     "w": 128,
+     "h": 44
+    },
+    "add": {
+     "x": 247,
+     "y": 60,
+     "w": 127,
+     "h": 44
+    },
+    "name": {
+     "x": 16,
+     "y": 113.2,
+     "w": 58.3,
+     "h": 29.7
+    },
+    "insights": {
+     "x": 271,
+     "y": 106,
+     "w": 103,
+     "h": 44
+    },
+    "lead": {
+     "x": 16,
+     "y": 152,
+     "w": 358,
+     "h": 44.8
+    },
+    "pct": {
+     "x": 16,
+     "y": 205.8,
+     "w": 33,
+     "h": 24
+    },
+    "banner": {
+     "x": 16,
+     "y": 242.8,
+     "w": 358,
+     "h": 44
+    },
+    "board": {
+     "x": 18,
+     "y": 293.8,
+     "w": 66,
+     "h": 44
+    },
+    "list": {
+     "x": 86,
+     "y": 293.8,
+     "w": 45,
+     "h": 44
+    },
+    "filter": {
+     "x": 150,
+     "y": 293.8,
+     "w": 79,
+     "h": 44
+    },
+    "display": {
+     "x": 237,
+     "y": 293.8,
+     "w": 95,
+     "h": 44
+    },
+    "find": {
+     "x": 335,
+     "y": 293.8,
+     "w": 44,
+     "h": 44
+    }
+   },
+   "bar": {
+    "x": 57,
+    "y": 214.78125,
+    "width": 109,
+    "height": 6
+   },
+   "progressLineEnd": 374,
+   "pills": 5,
+   "pillScroller": {
+    "sw": 633,
+    "cw": 390,
+    "left": 243,
+    "ox": "auto"
+   },
+   "activePill": "To confirm 1",
+   "emptyPills": 2,
+   "pillBoxes": [
+    {
+     "x": -227,
+     "y": 340.8,
+     "w": 98,
+     "h": 44
+    },
+    {
+     "x": -121,
+     "y": 340.8,
+     "w": 132,
+     "h": 44
+    },
+    {
+     "x": 19,
+     "y": 340.8,
+     "w": 112,
+     "h": 44
+    },
+    {
+     "x": 139,
+     "y": 340.8,
+     "w": 134,
+     "h": 44
+    },
+    {
+     "x": 281,
+     "y": 340.8,
+     "w": 93,
+     "h": 44
+    }
+   ],
+   "drawn": {
+    "agent": {
+     "w": 126,
+     "h": 36
+    },
+    "add": {
+     "w": 125,
+     "h": 36
+    },
+    "filter": {
+     "w": 77,
+     "h": 34
+    },
+    "find": {
+     "w": 34,
+     "h": 34
+    },
+    "pill": {
+     "w": 98,
+     "h": 32
+    },
+    "insights": {
+     "w": 101,
+     "h": 32
+    }
+   },
+   "overlaps": [],
+   "unreached": [],
+   "corners": {
+    "back": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "agent": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "insights": [
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     }
+    ],
+    "board": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "list": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "filter": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "display": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "find": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "pills": [
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     }
+    ]
+   },
+   "cornersBad": [],
+   "frame": {
+    "bg": "rgba(0, 0, 0, 0)",
+    "bw": "0px",
+    "bs": "dashed",
+    "bc": "rgba(0, 0, 0, 0)",
+    "pad": "0px",
+    "rad": "0px"
+   },
+   "tile": {
+    "x": 16,
+    "y": 388.8,
+    "w": 358,
+    "h": 151.6
+   },
+   "pageBox": {
+    "x": 16,
+    "y": 64,
+    "w": 358,
+    "h": 476.4
+   },
+   "pastTheEdge": [],
+   "field": {
+    "x": 16,
+    "y": 340.8,
+    "w": 358,
+    "h": 44
+   },
+   "openOverlaps": [],
+   "openUnreached": [],
+   "fieldCorners": {
+    "field": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ]
+   },
+   "findRing": {
+    "ring": {
+     "top": 5,
+     "bottom": 39,
+     "left": 5,
+     "right": 39,
+     "h": 34,
+     "w": 34,
+     "box": {
+      "h": 44,
+      "w": 44
+     }
+    },
+    "drawn": 34
+   },
+   "chip": {
+    "x": 16,
+    "y": 344.8,
+    "w": 200,
+    "h": 30
+   },
+   "filterRing": {
+    "ring": {
+     "top": 5,
+     "bottom": 39,
+     "left": 1,
+     "right": 78,
+     "h": 34,
+     "w": 77,
+     "box": {
+      "h": 44,
+      "w": 79
+     }
+    },
+    "drawn": 34
+   },
+   "focusRing": {
+    "onDisplay": true,
+    "ring": {
+     "top": 1,
+     "bottom": 43,
+     "left": -3,
+     "right": 98,
+     "h": 42,
+     "w": 101,
+     "box": {
+      "h": 44,
+      "w": 95
+     }
+    },
+    "drawn": 34
+   },
+   "pillFocusRing": {
+    "top": 3,
+    "bottom": 41,
+    "left": -3,
+    "right": 100,
+    "h": 38,
+    "w": 103,
+    "box": {
+     "h": 44,
+     "w": 97
+    }
+   },
+   "narrow": {
+    "back": {
+     "x": 4,
+     "y": 60,
+     "w": 104,
+     "h": 44
+    },
+    "agent": {
+     "x": 159,
+     "y": 60,
+     "w": 50,
+     "h": 44
+    },
+    "add": {
+     "x": 217,
+     "y": 60,
+     "w": 127,
+     "h": 44
+    },
+    "insights": {
+     "x": 241,
+     "y": 106,
+     "w": 103,
+     "h": 44
+    },
+    "banner": {
+     "x": 16,
+     "y": 242.8,
+     "w": 328,
+     "h": 44
+    },
+    "board": {
+     "x": 18,
+     "y": 293.8,
+     "w": 66,
+     "h": 44
+    },
+    "list": {
+     "x": 86,
+     "y": 293.8,
+     "w": 45,
+     "h": 44
+    },
+    "filter": {
+     "x": 120,
+     "y": 339.8,
+     "w": 79,
+     "h": 44
+    },
+    "display": {
+     "x": 207,
+     "y": 339.8,
+     "w": 95,
+     "h": 44
+    },
+    "find": {
+     "x": 305,
+     "y": 339.8,
+     "w": 44,
+     "h": 44
+    },
+    "pill0": {
+     "x": -227,
+     "y": 386.8,
+     "w": 98,
+     "h": 44
+    },
+    "tile": {
+     "x": 16,
+     "y": 434.8,
+     "w": 328,
+     "h": 151.6
+    }
+   },
+   "narrowOverlaps": [],
+   "narrowUnreached": [],
+   "narrowHome": {
+    "title": {
+     "x": 16,
+     "y": 67.2,
+     "w": 86.5,
+     "h": 29.7
+    },
+    "agent": {
+     "x": 165,
+     "y": 60,
+     "w": 44,
+     "h": 44
+    },
+    "add": {
+     "x": 213,
+     "y": 60,
+     "w": 131,
+     "h": 44
+    },
+    "search": {
+     "x": 16,
+     "y": 108,
+     "w": 328,
+     "h": 44
+    }
+   },
+   "narrowHomeOverlaps": [],
+   "narrowWaiting": {
+    "b": {
+     "confirm": {
+      "x": 97,
+      "y": 314,
+      "w": 107.5,
+      "h": 44
+     },
+     "back": {
+      "x": 212.5,
+      "y": 314,
+      "w": 102.5,
+      "h": 44
+     },
+     "row": {
+      "x": 29,
+      "y": 209,
+      "w": 302,
+      "h": 161
+     }
+    },
+    "oneLine": true,
+    "inside": true,
+    "cut": false,
+    "ok": true
+   },
+   "narrowHomeUnreached": [],
+   "waiting320": {
+    "b": {
+     "confirm": {
+      "x": 45,
+      "y": 370,
+      "w": 113.5,
+      "h": 44
+     },
+     "back": {
+      "x": 166.5,
+      "y": 370,
+      "w": 108.5,
+      "h": 44
+     },
+     "row": {
+      "x": 29,
+      "y": 209,
+      "w": 262,
+      "h": 217
+     }
+    },
+    "oneLine": true,
+    "inside": true,
+    "cut": false,
+    "ok": true
+   },
+   "tablet": {
+    "back": {
+     "x": 268,
+     "y": 114.2,
+     "w": 100,
+     "h": 44
+    },
+    "agent": {
+     "x": 753,
+     "y": 116,
+     "w": 122,
+     "h": 44
+    },
+    "add": {
+     "x": 883,
+     "y": 116,
+     "w": 121,
+     "h": 44
+    },
+    "insights": {
+     "x": 622,
+     "y": 184.2,
+     "w": 88,
+     "h": 44
+    },
+    "board": {
+     "x": 282,
+     "y": 299.2,
+     "w": 63,
+     "h": 44
+    },
+    "list": {
+     "x": 347,
+     "y": 299.2,
+     "w": 45,
+     "h": 44
+    },
+    "filter": {
+     "x": 670,
+     "y": 299.2,
+     "w": 76,
+     "h": 44
+    },
+    "display": {
+     "x": 754,
+     "y": 299.2,
+     "w": 90,
+     "h": 44
+    },
+    "find": {
+     "x": 402,
+     "y": 299.2,
+     "w": 260,
+     "h": 44
+    },
+    "scrollL": {
+     "x": 915,
+     "y": 299.2,
+     "w": 44,
+     "h": 44
+    },
+    "scrollR": {
+     "x": 959,
+     "y": 299.2,
+     "w": 44,
+     "h": 44
+    }
+   },
+   "tabletTaps": {
+    "back": true,
+    "agent": true,
+    "add": true,
+    "insights": true,
+    "board": true,
+    "list": true,
+    "filter": true,
+    "display": true,
+    "find": true,
+    "scrollL": true,
+    "scrollR": true
+   },
+   "tabletCorners": {
+    "back": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "agent": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "insights": [
+     {
+      "ph": 26,
+      "inner": [
+       [
+        13,
+        13
+       ],
+       [
+        13,
+        13
+       ],
+       [
+        13,
+        13
+       ],
+       [
+        13,
+        13
+       ]
+      ]
+     }
+    ],
+    "board": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "list": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "filter": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "display": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "scrollL": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "scrollR": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "field": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ]
+   },
+   "tabletCornersBad": [],
+   "tabletOverlaps": [],
+   "tabletUnreached": [],
+   "checks": {
+    "homeActionsInTitleRow": true,
+    "homeActionsAtTheRight": true,
+    "homeSearchUnderTheTitle": true,
+    "homeAgentTappable": true,
+    "homeAddTappable": true,
+    "homeSearchTappable": true,
+    "homeButtonsNotDrawnBigger": true,
+    "homeSearchNotDrawnBigger": true,
+    "homeNoOverlap": true,
+    "homeBoxesReachTheControl": true,
+    "waitingAnswersOneLine": true,
+    "homeCornersAreTheDesks": true,
+    "homeNoSidewaysScroll": true,
+    "headRowOne": true,
+    "headActionsAtTheRight": true,
+    "headRowTwo": true,
+    "insightsAtTheRight": true,
+    "nameUnderTheButtons": true,
+    "leadUnderTheName": true,
+    "progressUnderTheLead": true,
+    "barAcrossTheWidth": true,
+    "bannerOwnLine": true,
+    "toolbarOneRow": true,
+    "toolbarAtTheRight": true,
+    "toolbarUnderTheBanner": true,
+    "searchClosed": true,
+    "fivePills": true,
+    "pillsOneLine": true,
+    "pillsScrollSideways": true,
+    "pickedPillInView": true,
+    "emptyPillsDimmed": true,
+    "backTappable": true,
+    "agentTappable": true,
+    "addTappable": true,
+    "insightsTappable": true,
+    "bannerTappable": true,
+    "boardTappable": true,
+    "listTappable": true,
+    "filterTappable": true,
+    "displayTappable": true,
+    "findTappable": true,
+    "pillsTappable": true,
+    "controlsNotDrawnBigger": true,
+    "noTapBoxesOverlap": true,
+    "boxesReachTheControl": true,
+    "cornersAreTheDesks": true,
+    "noColumnFrame": true,
+    "tileFullWidth": true,
+    "noSidewaysScroll": true,
+    "boardNoSidewaysScroll": true,
+    "firstPillPicks": true,
+    "firstPillInView": true,
+    "emptyPillPicks": true,
+    "lastPillInView": true,
+    "pillRowScrollsByHand": true,
+    "searchOpens": true,
+    "searchFocused": true,
+    "findPressed": true,
+    "searchFullWidthUnderToolbar": true,
+    "searchTappable": true,
+    "openToolbarNoOverlap": true,
+    "openBoxesReachTheControl": true,
+    "searchNoSidewaysScroll": true,
+    "searchFilters": true,
+    "searchStaysWithWords": true,
+    "fieldCornerIsTheDesks": true,
+    "findRingIsThePaintedShape": true,
+    "findMarkedWithWords": true,
+    "searchOpenAfterReload": true,
+    "escapeOnEmptyCloses": true,
+    "listHasNoPillRow": true,
+    "listNoSidewaysScroll": true,
+    "filterMenuInScreen": true,
+    "displayMenuInScreen": true,
+    "chipUnderTheToolbar": true,
+    "chipNoSidewaysScroll": true,
+    "filterButtonMarked": true,
+    "filterRingIsThePaintedShape": true,
+    "filterRingClearOfTheGrownBorder": true,
+    "focusRingHugsThePaintedEdge": true,
+    "pillFocusRingHugsThePaintedEdge": true,
+    "insightsOpens": true,
+    "narrowNoTapBoxesOverlap": true,
+    "narrowBoxesReachTheControl": true,
+    "narrowTappable": true,
+    "narrowNoSidewaysScroll": true,
+    "narrowInsideTheScreen": true,
+    "narrowHomeNoOverlap": true,
+    "narrowWaitingAnswersOneLine": true,
+    "narrowHomeTappable": true,
+    "narrowHomeBoxesReachTheControl": true,
+    "narrowHomeOneRow": true,
+    "narrowHomeNoSidewaysScroll": true,
+    "narrowHomeInsideTheScreen": true,
+    "waitingAnswersOneLine320": true,
+    "home320NoSidewaysScroll": true,
+    "tabletKeepsTheDeskLayout": true,
+    "tabletTappable": true,
+    "tabletScrollButtonsThere": true,
+    "tabletCornersAreTheDesks": true,
+    "tabletNoTapBoxesOverlap": true,
+    "tabletBoxesReachTheControl": true,
+    "tabletNoSidewaysScroll": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "phone-dark-zh-TW": {
+   "homeHead": {
+    "title": {
+     "x": 16,
+     "y": 67.2,
+     "w": 43.1,
+     "h": 29.7
+    },
+    "agent": {
+     "x": 181,
+     "y": 60,
+     "w": 85,
+     "h": 44
+    },
+    "add": {
+     "x": 274,
+     "y": 60,
+     "w": 100,
+     "h": 44
+    },
+    "search": {
+     "x": 16,
+     "y": 108,
+     "w": 358,
+     "h": 44
+    }
+   },
+   "homeAgentDrawn": {
+    "w": 83,
+    "h": 36
+   },
+   "homeSearchDrawn": {
+    "w": 358,
+    "h": 36
+   },
+   "homeUnreached": [],
+   "waiting": {
+    "b": {
+     "confirm": {
+      "x": 97,
+      "y": 259,
+      "w": 131,
+      "h": 44
+     },
+     "back": {
+      "x": 236,
+      "y": 259,
+      "w": 109,
+      "h": 44
+     },
+     "row": {
+      "x": 29,
+      "y": 209,
+      "w": 332,
+      "h": 106
+     }
+    },
+    "oneLine": true,
+    "inside": true,
+    "cut": false,
+    "ok": true
+   },
+   "homeCorners": {
+    "agent": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "search": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ],
+    "pick": [
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     }
+    ]
+   },
+   "homeCornersBad": [],
+   "homeOverlaps": [],
+   "head": {
+    "back": {
+     "x": 4,
+     "y": 60,
+     "w": 76,
+     "h": 44
+    },
+    "agent": {
+     "x": 167,
+     "y": 60,
+     "w": 99,
+     "h": 44
+    },
+    "add": {
+     "x": 274,
+     "y": 60,
+     "w": 100,
+     "h": 44
+    },
+    "name": {
+     "x": 16,
+     "y": 113.2,
+     "w": 43.1,
+     "h": 29.7
+    },
+    "insights": {
+     "x": 298,
+     "y": 106,
+     "w": 76,
+     "h": 44
+    },
+    "lead": {
+     "x": 16,
+     "y": 152,
+     "w": 358,
+     "h": 22.4
+    },
+    "pct": {
+     "x": 16,
+     "y": 183.4,
+     "w": 33,
+     "h": 24
+    },
+    "banner": {
+     "x": 16,
+     "y": 220.4,
+     "w": 358,
+     "h": 44
+    },
+    "board": {
+     "x": 18,
+     "y": 271.4,
+     "w": 52,
+     "h": 44
+    },
+    "list": {
+     "x": 72,
+     "y": 271.4,
+     "w": 52,
+     "h": 44
+    },
+    "filter": {
+     "x": 180,
+     "y": 271.4,
+     "w": 72,
+     "h": 44
+    },
+    "display": {
+     "x": 260,
+     "y": 271.4,
+     "w": 72,
+     "h": 44
+    },
+    "find": {
+     "x": 335,
+     "y": 271.4,
+     "w": 44,
+     "h": 44
+    }
+   },
+   "bar": {
+    "x": 57,
+    "y": 192.390625,
+    "width": 160,
+    "height": 6
+   },
+   "progressLineEnd": 374,
+   "pills": 5,
+   "pillScroller": {
+    "sw": 518,
+    "cw": 390,
+    "left": 128,
+    "ox": "auto"
+   },
+   "activePill": "待確認 1",
+   "emptyPills": 2,
+   "pillBoxes": [
+    {
+     "x": -112,
+     "y": 318.4,
+     "w": 86,
+     "h": 44
+    },
+    {
+     "x": -18,
+     "y": 318.4,
+     "w": 99,
+     "h": 44
+    },
+    {
+     "x": 89,
+     "y": 318.4,
+     "w": 85,
+     "h": 44
+    },
+    {
+     "x": 182,
+     "y": 318.4,
+     "w": 99,
+     "h": 44
+    },
+    {
+     "x": 289,
+     "y": 318.4,
+     "w": 85,
+     "h": 44
+    }
+   ],
+   "drawn": {
+    "agent": {
+     "w": 97,
+     "h": 36
+    },
+    "add": {
+     "w": 98,
+     "h": 36
+    },
+    "filter": {
+     "w": 70,
+     "h": 34
+    },
+    "find": {
+     "w": 34,
+     "h": 34
+    },
+    "pill": {
+     "w": 86,
+     "h": 32
+    },
+    "insights": {
+     "w": 74,
+     "h": 32
+    }
+   },
+   "overlaps": [],
+   "unreached": [],
+   "corners": {
+    "back": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "agent": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "insights": [
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     }
+    ],
+    "board": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "list": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "filter": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "display": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "find": [
+     {
+      "ph": 34,
+      "inner": [
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ],
+       [
+        17,
+        17
+       ]
+      ]
+     }
+    ],
+    "pills": [
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     },
+     {
+      "ph": 32,
+      "inner": [
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ],
+       [
+        16,
+        16
+       ]
+      ]
+     }
+    ]
+   },
+   "cornersBad": [],
+   "frame": {
+    "bg": "rgba(0, 0, 0, 0)",
+    "bw": "0px",
+    "bs": "dashed",
+    "bc": "rgba(0, 0, 0, 0)",
+    "pad": "0px",
+    "rad": "0px"
+   },
+   "tile": {
+    "x": 16,
+    "y": 366.4,
+    "w": 358,
+    "h": 151.6
+   },
+   "pageBox": {
+    "x": 16,
+    "y": 64,
+    "w": 358,
+    "h": 454
+   },
+   "pastTheEdge": [],
+   "field": {
+    "x": 16,
+    "y": 318.4,
+    "w": 358,
+    "h": 44
+   },
+   "openOverlaps": [],
+   "openUnreached": [],
+   "fieldCorners": {
+    "field": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ]
+   },
+   "findRing": {
+    "ring": {
+     "top": 5,
+     "bottom": 39,
+     "left": 5,
+     "right": 39,
+     "h": 34,
+     "w": 34,
+     "box": {
+      "h": 44,
+      "w": 44
+     }
+    },
+    "drawn": 34
+   },
+   "chip": {
+    "x": 16,
+    "y": 322.4,
+    "w": 184,
+    "h": 30
+   },
+   "filterRing": {
+    "ring": {
+     "top": 5,
+     "bottom": 39,
+     "left": 1,
+     "right": 71,
+     "h": 34,
+     "w": 70,
+     "box": {
+      "h": 44,
+      "w": 72
+     }
+    },
+    "drawn": 34
+   },
+   "focusRing": {
+    "onDisplay": true,
+    "ring": {
+     "top": 1,
+     "bottom": 43,
+     "left": -3,
+     "right": 75,
+     "h": 42,
+     "w": 78,
+     "box": {
+      "h": 44,
+      "w": 72
+     }
+    },
+    "drawn": 34
+   },
+   "pillFocusRing": {
+    "top": 3,
+    "bottom": 41,
+    "left": -3,
+    "right": 88,
+    "h": 38,
+    "w": 91,
+    "box": {
+     "h": 44,
+     "w": 85
+    }
+   },
+   "narrow": {
+    "back": {
+     "x": 4,
+     "y": 60,
+     "w": 76,
+     "h": 44
+    },
+    "agent": {
+     "x": 186,
+     "y": 60,
+     "w": 50,
+     "h": 44
+    },
+    "add": {
+     "x": 244,
+     "y": 60,
+     "w": 100,
+     "h": 44
+    },
+    "insights": {
+     "x": 268,
+     "y": 106,
+     "w": 76,
+     "h": 44
+    },
+    "banner": {
+     "x": 16,
+     "y": 220.4,
+     "w": 328,
+     "h": 44
+    },
+    "board": {
+     "x": 18,
+     "y": 271.4,
+     "w": 52,
+     "h": 44
+    },
+    "list": {
+     "x": 72,
+     "y": 271.4,
+     "w": 52,
+     "h": 44
+    },
+    "filter": {
+     "x": 150,
+     "y": 271.4,
+     "w": 72,
+     "h": 44
+    },
+    "display": {
+     "x": 230,
+     "y": 271.4,
+     "w": 72,
+     "h": 44
+    },
+    "find": {
+     "x": 305,
+     "y": 271.4,
+     "w": 44,
+     "h": 44
+    },
+    "pill0": {
+     "x": -112,
+     "y": 318.4,
+     "w": 86,
+     "h": 44
+    },
+    "tile": {
+     "x": 16,
+     "y": 366.4,
+     "w": 328,
+     "h": 151.6
+    }
+   },
+   "narrowOverlaps": [],
+   "narrowUnreached": [],
+   "narrowHome": {
+    "title": {
+     "x": 16,
+     "y": 67.2,
+     "w": 43.1,
+     "h": 29.7
+    },
+    "agent": {
+     "x": 196,
+     "y": 60,
+     "w": 44,
+     "h": 44
+    },
+    "add": {
+     "x": 244,
+     "y": 60,
+     "w": 100,
+     "h": 44
+    },
+    "search": {
+     "x": 16,
+     "y": 108,
+     "w": 328,
+     "h": 44
+    }
+   },
+   "narrowHomeOverlaps": [],
+   "narrowWaiting": {
+    "b": {
+     "confirm": {
+      "x": 97,
+      "y": 259,
+      "w": 116,
+      "h": 44
+     },
+     "back": {
+      "x": 221,
+      "y": 259,
+      "w": 94,
+      "h": 44
+     },
+     "row": {
+      "x": 29,
+      "y": 209,
+      "w": 302,
+      "h": 106
+     }
+    },
+    "oneLine": true,
+    "inside": true,
+    "cut": false,
+    "ok": true
+   },
+   "narrowHomeUnreached": [],
+   "waiting320": {
+    "b": {
+     "confirm": {
+      "x": 45,
+      "y": 291,
+      "w": 122,
+      "h": 44
+     },
+     "back": {
+      "x": 175,
+      "y": 291,
+      "w": 100,
+      "h": 44
+     },
+     "row": {
+      "x": 29,
+      "y": 209,
+      "w": 262,
+      "h": 138
+     }
+    },
+    "oneLine": true,
+    "inside": true,
+    "cut": false,
+    "ok": true
+   },
+   "tablet": {
+    "back": {
+     "x": 268,
+     "y": 114.2,
+     "w": 74,
+     "h": 44
+    },
+    "agent": {
+     "x": 803,
+     "y": 116,
+     "w": 96,
+     "h": 44
+    },
+    "add": {
+     "x": 907,
+     "y": 116,
+     "w": 97,
+     "h": 44
+    },
+    "insights": {
+     "x": 570,
+     "y": 184.2,
+     "w": 66,
+     "h": 44
+    },
+    "board": {
+     "x": 282,
+     "y": 299.2,
+     "w": 50,
+     "h": 44
+    },
+    "list": {
+     "x": 334,
+     "y": 299.2,
+     "w": 50,
+     "h": 44
+    },
+    "filter": {
+     "x": 662,
+     "y": 299.2,
+     "w": 70,
+     "h": 44
+    },
+    "display": {
+     "x": 740,
+     "y": 299.2,
+     "w": 70,
+     "h": 44
+    },
+    "find": {
+     "x": 394,
+     "y": 299.2,
+     "w": 260,
+     "h": 44
+    },
+    "scrollL": {
+     "x": 915,
+     "y": 299.2,
+     "w": 44,
+     "h": 44
+    },
+    "scrollR": {
+     "x": 959,
+     "y": 299.2,
+     "w": 44,
+     "h": 44
+    }
+   },
+   "tabletTaps": {
+    "back": true,
+    "agent": true,
+    "add": true,
+    "insights": true,
+    "board": true,
+    "list": true,
+    "filter": true,
+    "display": true,
+    "find": true,
+    "scrollL": true,
+    "scrollR": true
+   },
+   "tabletCorners": {
+    "back": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "agent": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "add": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ],
+       [
+        18,
+        18
+       ]
+      ]
+     }
+    ],
+    "insights": [
+     {
+      "ph": 26,
+      "inner": [
+       [
+        13,
+        13
+       ],
+       [
+        13,
+        13
+       ],
+       [
+        13,
+        13
+       ],
+       [
+        13,
+        13
+       ]
+      ]
+     }
+    ],
+    "board": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "list": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "filter": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "display": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "scrollL": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "scrollR": [
+     {
+      "ph": 30,
+      "inner": [
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "field": [
+     {
+      "ph": 36,
+      "inner": [
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ],
+       [
+        8,
+        8
+       ]
+      ]
+     }
+    ]
+   },
+   "tabletCornersBad": [],
+   "tabletOverlaps": [],
+   "tabletUnreached": [],
+   "checks": {
+    "homeActionsInTitleRow": true,
+    "homeActionsAtTheRight": true,
+    "homeSearchUnderTheTitle": true,
+    "homeAgentTappable": true,
+    "homeAddTappable": true,
+    "homeSearchTappable": true,
+    "homeButtonsNotDrawnBigger": true,
+    "homeSearchNotDrawnBigger": true,
+    "homeNoOverlap": true,
+    "homeBoxesReachTheControl": true,
+    "waitingAnswersOneLine": true,
+    "homeCornersAreTheDesks": true,
+    "homeNoSidewaysScroll": true,
+    "headRowOne": true,
+    "headActionsAtTheRight": true,
+    "headRowTwo": true,
+    "insightsAtTheRight": true,
+    "nameUnderTheButtons": true,
+    "leadUnderTheName": true,
+    "progressUnderTheLead": true,
+    "barAcrossTheWidth": true,
+    "bannerOwnLine": true,
+    "toolbarOneRow": true,
+    "toolbarAtTheRight": true,
+    "toolbarUnderTheBanner": true,
+    "searchClosed": true,
+    "fivePills": true,
+    "pillsOneLine": true,
+    "pillsScrollSideways": true,
+    "pickedPillInView": true,
+    "emptyPillsDimmed": true,
+    "backTappable": true,
+    "agentTappable": true,
+    "addTappable": true,
+    "insightsTappable": true,
+    "bannerTappable": true,
+    "boardTappable": true,
+    "listTappable": true,
+    "filterTappable": true,
+    "displayTappable": true,
+    "findTappable": true,
+    "pillsTappable": true,
+    "controlsNotDrawnBigger": true,
+    "noTapBoxesOverlap": true,
+    "boxesReachTheControl": true,
+    "cornersAreTheDesks": true,
+    "noColumnFrame": true,
+    "tileFullWidth": true,
+    "noSidewaysScroll": true,
+    "boardNoSidewaysScroll": true,
+    "firstPillPicks": true,
+    "firstPillInView": true,
+    "emptyPillPicks": true,
+    "lastPillInView": true,
+    "pillRowScrollsByHand": true,
+    "searchOpens": true,
+    "searchFocused": true,
+    "findPressed": true,
+    "searchFullWidthUnderToolbar": true,
+    "searchTappable": true,
+    "openToolbarNoOverlap": true,
+    "openBoxesReachTheControl": true,
+    "searchNoSidewaysScroll": true,
+    "searchFilters": true,
+    "searchStaysWithWords": true,
+    "fieldCornerIsTheDesks": true,
+    "findRingIsThePaintedShape": true,
+    "findMarkedWithWords": true,
+    "searchOpenAfterReload": true,
+    "escapeOnEmptyCloses": true,
+    "listHasNoPillRow": true,
+    "listNoSidewaysScroll": true,
+    "filterMenuInScreen": true,
+    "displayMenuInScreen": true,
+    "chipUnderTheToolbar": true,
+    "chipNoSidewaysScroll": true,
+    "filterButtonMarked": true,
+    "filterRingIsThePaintedShape": true,
+    "filterRingClearOfTheGrownBorder": true,
+    "focusRingHugsThePaintedEdge": true,
+    "pillFocusRingHugsThePaintedEdge": true,
+    "insightsOpens": true,
+    "narrowNoTapBoxesOverlap": true,
+    "narrowBoxesReachTheControl": true,
+    "narrowTappable": true,
+    "narrowNoSidewaysScroll": true,
+    "narrowInsideTheScreen": true,
+    "narrowHomeNoOverlap": true,
+    "narrowWaitingAnswersOneLine": true,
+    "narrowHomeTappable": true,
+    "narrowHomeBoxesReachTheControl": true,
+    "narrowHomeOneRow": true,
+    "narrowHomeNoSidewaysScroll": true,
+    "narrowHomeInsideTheScreen": true,
+    "waitingAnswersOneLine320": true,
+    "home320NoSidewaysScroll": true,
+    "tabletKeepsTheDeskLayout": true,
+    "tabletTappable": true,
+    "tabletScrollButtonsThere": true,
+    "tabletCornersAreTheDesks": true,
+    "tabletNoTapBoxesOverlap": true,
+    "tabletBoxesReachTheControl": true,
+    "tabletNoSidewaysScroll": true
+   },
+   "errors": [],
+   "game": 1
+  }
+ }
+}
