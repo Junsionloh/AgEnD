@@ -240,13 +240,28 @@ describe("files on the card", () => {
     expect(qa(".tp-files .tf-html").length).toBe(0);
   });
 
+  it("a preview that no click can enable (no preview origin at this address, previews switched off) is said up front with no button; a device that only has not allowed them is asked on the click", async () => {
+    withFiles();
+    const stub = (availability: () => unknown) => { (globalThis as any).AgendPreview = { availability, start: vi.fn(), stop: vi.fn(), bannerAcked: () => true, banner: () => "b", bannerAckLabel: () => "ok", bannerAckTitle: () => "t", ackBanner() {} }; };
+    const html = () => qa(".tp-files .tf-html").find((el) => el.querySelector(".tf-actions") !== null)!;
+    stub(() => ({ ok: false, why: "server", reason: "Previews are not offered at https://x:8445: list this address in web.allowed_hosts, and set web.preview_origin." }));
+    await mount(); await open();
+    expect(html().querySelector(".btn-primary"), "no button to press").toBeNull();
+    expect(text(html().querySelector(".tf-note"))).toContain("web.preview_origin");
+    expect(qa(".tp-files a.tf-dl").length, "the download is there").toBe(4);
+    stub(() => ({ ok: false, why: "optin", reason: "Previews are off on this device." }));
+    await mount(); await open();
+    expect(html().querySelector(".btn-primary"), "an opt-in is asked on the click").toBeTruthy();
+    expect(text(html().querySelector(".tf-note"))).toBe("");
+  });
+
   it("a device that does not allow previews is told so instead of running anything; a file whose id is not the fleet's is not drawn at all", async () => {
     withFiles();
     DETAIL.attachments = [...FILES, file("not-an-id", "evil.md", "document", 1), file(ID.big, "x</a><b>.md", "document", 1)];
     (globalThis as any).AgendPreview = { availability: () => ({ ok: false, why: "never", reason: "Previews are switched off on this device for this session." }), start: vi.fn(), stop: vi.fn(), bannerAcked: () => true, banner: () => "b", bannerAckLabel: () => "ok", bannerAckTitle: () => "t", ackBanner() {} };
     await mount(); await open();
     const row = qa(".tp-files .tf-row").find((r) => text(r.querySelector(".tf-name")) === "index.html")!;
-    fire(row.querySelector(".tf-html .btn-primary"), "click"); await settle(10);
+    expect(row.querySelector(".tf-html .btn-primary"), "switched off for this session: no button").toBeNull();
     expect(text(row.querySelector(".tf-note"))).toBe("Previews are switched off on this device for this session.");
     expect(calls.filter((c) => c.path.startsWith("/ui/tasks/files/"))).toEqual([]);
     expect(qa(".tf-name").some((a) => a.textContent === "evil.md")).toBe(false);

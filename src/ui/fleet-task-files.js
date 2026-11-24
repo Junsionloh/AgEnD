@@ -94,6 +94,10 @@ function HtmlPreview({ f }) {
   useEffect(() => () => { try { if (P) P.stop(key, "stopped", ""); } catch { /* not running */ } }, [key]);
   if (!P || !htmlOffered()) return null;
   const going = state === "starting" || state === "running";
+  // A reason no click can change (the server offers no preview at this address, the page is behind a proxy that rewrites its Host, this
+  // session switched previews off) is said up front, with no button to press; only "this device has not allowed previews" is asked on the click.
+  const here = P.availability();
+  const blocked = !here.ok && here.why !== "optin" && !going;
   const ui = { state: (name, reason) => { setState(name === "starting" || name === "running" ? name : "idle"); if (name === "large") { setLarge(true); } setNote(reason || ""); } };
   async function run(anyway) {
     let a = P.availability();
@@ -117,9 +121,10 @@ function HtmlPreview({ f }) {
     <div class="tf-actions">
       ${going ? html`<button type="button" class="btn btn-sm" onClick=${() => P.stop(key, "stopped", "")}>${t("taskfiles.stop")}</button>`
         : large ? html`<button type="button" class="btn btn-sm" onClick=${() => void run(true)}>${t("taskfiles.anyway")}</button>`
+        : blocked ? null
         : html`<button type="button" class="btn btn-sm btn-primary" onClick=${() => void run(false)}><${Icon} name="play" size=${14} />${t("taskfiles.preview")}</button>`}
     </div>
-    <div class="pv-note tf-note" role="status">${note}</div>
+    <div class="pv-note tf-note" role="status">${note || (blocked ? here.reason : "")}</div>
     ${going && !P.bannerAcked() ? html`<div class="pv-banner" role="note"><span class="pv-banner-text">${P.banner()}</span>
       <button type="button" class="btn btn-sm btn-ghost pv-ack" title=${P.bannerAckTitle()} onClick=${() => { P.ackBanner(); setState((s) => s); }}>${P.bannerAckLabel()}</button></div>` : null}
     <div class="pv-holder tf-holder" ref=${holder}></div>
