@@ -63,7 +63,12 @@ function htmlOffered() {
   return d.publicLink !== "1" || d.linkMedia === "1";
 }
 
-const sizeText = (n) => (typeof n === "number" ? sizeLabel(n) : "");
+/** A file's size as the chat words it ("812 B", "12 KB", "1.4 MB"); the preview questions' own "MB" wording when that renderer is not there. */
+const sizeText = (n) => {
+  if (typeof n !== "number") return "";
+  const R = globalThis.AgendChatRender;
+  return R && typeof R.formatSize === "function" ? R.formatSize(n) : sizeLabel(n);
+};
 
 /** A text file's body: Markdown through the chat's renderer, anything else as plain text in a block; long ones folded. */
 function TextBody({ text, kind }) {
