@@ -43,9 +43,9 @@
     "h": 30
    },
    "titleAfter": "No project: 6 to file",
-   "linkText": "6 in No project →",
+   "linkText": "6 in No project\n→",
    "link": {
-    "w": 111,
+    "w": 110,
     "h": 26
    },
    "noProjectTitle": "No project",
@@ -116,9 +116,9 @@
     "h": 30
    },
    "titleAfter": "未分類：6 張待歸檔",
-   "linkText": "未分類 6 張 →",
+   "linkText": "未分類 6 張\n→",
    "link": {
-    "w": 88,
+    "w": 87,
     "h": 26
    },
    "noProjectTitle": "未分類",
@@ -189,9 +189,9 @@
     "h": 30
    },
    "titleAfter": "No project: 6 to file",
-   "linkText": "6 in No project →",
+   "linkText": "6 in No project\n→",
    "link": {
-    "w": 111,
+    "w": 110,
     "h": 26
    },
    "noProjectTitle": "No project",
@@ -262,9 +262,9 @@
     "h": 30
    },
    "titleAfter": "未分類：6 張待歸檔",
-   "linkText": "未分類 6 張 →",
+   "linkText": "未分類 6 張\n→",
    "link": {
-    "w": 88,
+    "w": 87,
     "h": 26
    },
    "noProjectTitle": "未分類",
@@ -320,24 +320,24 @@
    "title": "No project: 7 to file",
    "badge": "7 to file",
    "pick": {
-    "w": 300,
+    "w": 102,
     "h": 44
    },
    "shortTitle": {
     "text": "M-5\nFix checkout copy",
     "box": {
-     "w": 300,
-     "h": 44
+     "w": 324,
+     "h": 45
     }
    },
    "foot": {
-    "w": 81,
+    "w": 356,
     "h": 44
    },
    "titleAfter": "No project: 6 to file",
-   "linkText": "6 in No project →",
+   "linkText": "No project: 6 to file\nFile them\n→",
    "link": {
-    "w": 125,
+    "w": 358,
     "h": 44
    },
    "noProjectTitle": "No project",
@@ -352,6 +352,7 @@
     "listAboveProjects": true,
     "noSidewaysScroll": true,
     "pickerVisible": true,
+    "phoneRowLayout": true,
     "pickerTappable": true,
     "shortTitleTappable": true,
     "footTappable": true,
@@ -395,24 +396,24 @@
    "title": "未分類：7 張待歸檔",
    "badge": "7 張待歸檔",
    "pick": {
-    "w": 300,
+    "w": 90,
     "h": 44
    },
    "shortTitle": {
     "text": "M-8\n回覆退款客服信",
     "box": {
-     "w": 300,
-     "h": 44
+     "w": 324,
+     "h": 45
     }
    },
    "foot": {
-    "w": 92,
+    "w": 356,
     "h": 44
    },
    "titleAfter": "未分類：6 張待歸檔",
-   "linkText": "未分類 6 張 →",
+   "linkText": "未分類：6 張待歸檔\n前往歸檔\n→",
    "link": {
-    "w": 100,
+    "w": 358,
     "h": 44
    },
    "noProjectTitle": "未分類",
@@ -427,6 +428,7 @@
     "listAboveProjects": true,
     "noSidewaysScroll": true,
     "pickerVisible": true,
+    "phoneRowLayout": true,
     "pickerTappable": true,
     "shortTitleTappable": true,
     "footTappable": true,
@@ -470,24 +472,24 @@
    "title": "No project: 7 to file",
    "badge": "7 to file",
    "pick": {
-    "w": 300,
+    "w": 102,
     "h": 44
    },
    "shortTitle": {
     "text": "M-5\nFix checkout copy",
     "box": {
-     "w": 300,
-     "h": 44
+     "w": 324,
+     "h": 45
     }
    },
    "foot": {
-    "w": 81,
+    "w": 356,
     "h": 44
    },
    "titleAfter": "No project: 6 to file",
-   "linkText": "6 in No project →",
+   "linkText": "No project: 6 to file\nFile them\n→",
    "link": {
-    "w": 125,
+    "w": 358,
     "h": 44
    },
    "noProjectTitle": "No project",
@@ -502,6 +504,7 @@
     "listAboveProjects": true,
     "noSidewaysScroll": true,
     "pickerVisible": true,
+    "phoneRowLayout": true,
     "pickerTappable": true,
     "shortTitleTappable": true,
     "footTappable": true,
@@ -545,24 +548,24 @@
    "title": "未分類：7 張待歸檔",
    "badge": "7 張待歸檔",
    "pick": {
-    "w": 300,
+    "w": 90,
     "h": 44
    },
    "shortTitle": {
     "text": "M-8\n回覆退款客服信",
     "box": {
-     "w": 300,
-     "h": 44
+     "w": 324,
+     "h": 45
     }
    },
    "foot": {
-    "w": 92,
+    "w": 356,
     "h": 44
    },
    "titleAfter": "未分類：6 張待歸檔",
-   "linkText": "未分類 6 張 →",
+   "linkText": "未分類：6 張待歸檔\n前往歸檔\n→",
    "link": {
-    "w": 100,
+    "w": 358,
     "h": 44
    },
    "noProjectTitle": "未分類",
@@ -577,6 +580,7 @@
     "listAboveProjects": true,
     "noSidewaysScroll": true,
     "pickerVisible": true,
+    "phoneRowLayout": true,
     "pickerTappable": true,
     "shortTitleTappable": true,
     "footTappable": true,
