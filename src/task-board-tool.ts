@@ -16,14 +16,15 @@
 import { listOptions, pageRows } from "./agent-list-output.js";
 import type { SchedulerDb } from "./scheduler/db.js";
 import { CARD_PRIORITIES, CARD_SIZES, CARD_STATUSES, TaskBoardError, type Actor, type Card, type CardPatch, type CardPriority, type CardSize, type CardStatus, type DispatcherInput, type NewCard, type Project, type TaskBoard } from "./scheduler/task-board.js";
-import { cardLine, cardText, myWorkText, oneLine, projectsText, writeText } from "./scheduler/task-board-text.js";
+import { cardLine, cardText, myWorkText, oneLine, projectsText, sizeText, writeText } from "./scheduler/task-board-text.js";
 import { spanText } from "./dispatcher-liveness.js";
+import { TaskFileError } from "./scheduler/task-files.js";
 import { t } from "./locale.js";
 
 /** A `create` naming one of these opens a board card; without them it is the tool's plain task. */
 const BOARD_CREATE = ["project", "parent", "scope", "acceptance", "context", "needs_review", "size", "dispatcher"] as const;
 /** An `update` naming one of these edits the card on the board's terms; without them it is the tool's plain update. */
-const BOARD_UPDATE = ["title", "description", "scope", "context", "state", "acceptance", "check", "uncheck", "log", "comment", "needs_review", "size", "depends_on", "version", "dispatcher", "project"] as const;
+const BOARD_UPDATE = ["title", "description", "scope", "context", "state", "acceptance", "check", "uncheck", "log", "comment", "needs_review", "size", "depends_on", "version", "dispatcher", "project", "uploads"] as const;
 /**
  * The fields each action reads, through either door (this file and the plain task in fleet-manager.ts). Anything else
  * is refused by name before anything is written (#3195): a field the tool would ignore must never look like a saved
@@ -31,8 +32,10 @@ const BOARD_UPDATE = ["title", "description", "scope", "context", "state", "acce
  */
 export const ACTION_FIELDS: Readonly<Record<string, readonly string[]>> = {
   create: ["title", "description", "priority", "assignee", "depends_on", "project", "parent", "scope", "acceptance", "context", "needs_review", "size", "dispatcher"],
-  update: ["id", "title", "description", "priority", "assignee", "depends_on", "result", "status", "scope", "acceptance", "check", "uncheck", "context", "state", "log", "comment", "needs_review", "size", "dispatcher", "version", "project"],
-  move: ["id", "to", "status", "reason", "result", "comment", "version"],
+  update: ["id", "title", "description", "priority", "assignee", "depends_on", "result", "status", "scope", "acceptance", "check", "uncheck", "context", "state", "log", "comment", "needs_review", "size", "dispatcher", "version", "project", "attach"],
+  move: ["id", "to", "status", "reason", "result", "comment", "version", "attach"],
+  // AGEND-354: files on a card. `attach` (paths) is read on the agent's side (task-attach-client.ts); the fleet takes `uploads`.
+  attach: ["id", "attach", "comment", "version"],
   claim: ["id"],
   done: ["id", "result"],
   get: ["id", "detail"],
@@ -44,12 +47,24 @@ export const ACTION_FIELDS: Readonly<Record<string, readonly string[]>> = {
   watch: ["id", "watcher"],
   unwatch: ["id", "watcher"],
 };
+/**
+ * AGEND-354: the fleet never opens a path an agent names. `attach` (file paths) is read by the agent's own side, which stages
+ * the bytes (action `upload`, an internal action no agent is told of) and sends the write with `uploads`, the ids they were
+ * staged under, in its place.
+ */
+const FLEET_FIELD: Readonly<Record<string, string>> = { attach: "uploads" };
+const INTERNAL_ACTIONS: Readonly<Record<string, readonly string[]>> = { upload: ["name", "data_b64", "part"] };
+
 /** What to do instead, for the fields agents reach for most. */
 const INSTEAD: Readonly<Record<string, string>> = {
   "update.parent": "a card's parent cannot be changed",
   "update.to": "use action \"move\" to change a card's status",
   "update.reason": "use action \"move\", which takes the reason with the status",
   "done.comment": "use action \"move\" with to: \"done\" and a comment, or comment with action \"update\"",
+  // A path reaches the fleet only after the agent's own side has read the file (task-attach-client.ts); a caller that did not do that is out of date.
+  "update.attach": "files are read on your side — use `agend-agent task attach`, or the task tool's attach, of this release",
+  "move.attach": "files are read on your side — use `agend-agent task attach`, or the task tool's attach, of this release",
+  "attach.attach": "files are read on your side — use `agend-agent task attach`, or the task tool's attach, of this release",
 };
 
 /**
@@ -58,7 +73,8 @@ const INSTEAD: Readonly<Record<string, string>> = {
  */
 export function unsupportedFields(args: Record<string, unknown>): string | null {
   const action = typeof args.action === "string" ? args.action : "";
-  const allowed = Object.prototype.hasOwnProperty.call(ACTION_FIELDS, action) ? ACTION_FIELDS[action]! : null;
+  const allowed = Object.prototype.hasOwnProperty.call(INTERNAL_ACTIONS, action) ? INTERNAL_ACTIONS[action]!
+    : Object.prototype.hasOwnProperty.call(ACTION_FIELDS, action) ? ACTION_FIELDS[action]!.map((f) => FLEET_FIELD[f] ?? f) : null;
   if (!allowed) return null;
   const extra = Object.keys(args).filter((k) => k !== "action" && args[k] !== undefined && !allowed.includes(k));
   if (!extra.length) return null;
@@ -156,7 +172,21 @@ function createdText(board: Pick<TaskBoard, "getProject" | "listProjects">, card
   return `${head}\nIn ${where}${because}.\nTell the person: #${card.code} (opens the card) is in ${project ? `project ${project.name}` : "no project"}.${sort}`;
 }
 
+/** The writes whose words the person reads on the card (a path in them is one they cannot open). */
+const WORDS_ACTIONS = new Set(["create", "update", "move", "attach", "done"]);
+
+/**
+ * The board's own actions and fields; the answer to a write carries one more line when the words it wrote name a path on
+ * the agent's machine and brought no file (AGEND-354, pathHint).
+ */
 export function boardToolAction(db: SchedulerDb, instance: string, args: Record<string, unknown>): string | undefined {
+  const answer = onBoardAction(db, instance, args);
+  if (typeof answer !== "string" || !WORDS_ACTIONS.has(String(args.action))) return answer;
+  const hint = pathHint(args);
+  return hint ? `${answer}\n${hint}` : answer;
+}
+
+function onBoardAction(db: SchedulerDb, instance: string, args: Record<string, unknown>): string | undefined {
   // Before anything else, for every action and both doors: a field the action would not read is an error, not a no-op.
   const refused = unsupportedFields(args);
   if (refused) throw new TaskBoardError("invalid", refused);
@@ -197,6 +227,22 @@ export function boardToolAction(db: SchedulerDb, instance: string, args: Record<
       const notes = board.takeNotes().filter((n) => n !== "no change");
       return [`moved ${moved} of ${ids.length} to ${target}`, ...lines, ...notes].join("\n");
     }
+    case "upload": {
+      // AGEND-354: a part of a file the agent's own side read, staged until a write names it (scheduler/task-files.ts).
+      const store = board.files();
+      if (!store) throw new TaskBoardError("invalid", "attachments are not available here (the fleet's scheduler holds the card files)");
+      try { return JSON.stringify(store.receive(instance, { name: args.name, data_b64: args.data_b64, part: args.part })); } catch (err) {
+        if (err instanceof TaskFileError) throw new TaskBoardError("invalid", err.message);
+        throw err;
+      }
+    }
+    case "attach": {
+      const uploads = strs(args.uploads);
+      if (!uploads?.length) throw new TaskBoardError("invalid", "attach: name at least one file (attach: [\"./design.md\"]; agend-agent task attach M-3 ./design.md)");
+      const { card, notes } = board.updateCard(actor, need(args.id, "id"), { attach: uploads, comment: str(args.comment), version: int(args.version) });
+      const files = board.attachments(card.uuid).slice(-uploads.length);
+      return [writeText(card, notes.filter((n) => n !== "no change")), `attached to ${card.code}: ${files.map((f) => `${f.name} (${sizeText(f.size)})`).join(", ")}`].join("\n");
+    }
     case "watch":
     case "unwatch": {
       // Following a card (docs/design/task-board.md): a watcher hears when the card is finished, waits for confirmation,
@@ -213,7 +259,7 @@ export function boardToolAction(db: SchedulerDb, instance: string, args: Record<
       // the caller is the one who confirms it (#2434: an agent's card, by its dispatcher; nobody's, by its assignee).
       if (to === "done") { const held = board.findCard(id); if (held?.needsReview && held.status !== "review" && !board.confirms(held, actor)) to = "review"; }
       const { card, from, notes } = board.moveCard(actor, id, to, {
-        reason: str(args.reason), result: str(args.result), comment: str(args.comment), version: int(args.version),
+        reason: str(args.reason), result: str(args.result), comment: str(args.comment), version: int(args.version), attach: strs(args.uploads),
       });
       return writeText(card, notes, from);
     }
@@ -256,6 +302,7 @@ export function boardToolAction(db: SchedulerDb, instance: string, args: Record<
         uncheck: nums(args.uncheck),
         log: str(args.log),
         comment: str(args.comment),
+        attach: strs(args.uploads),
         needsReview: bool(args.needs_review),
         dispatcher: dispatcher(args.dispatcher),
         size: size(args.size),
@@ -321,6 +368,29 @@ export function boardToolAction(db: SchedulerDb, instance: string, args: Record<
     default:
       return undefined;
   }
+}
+
+/**
+ * AGEND-354: a path on the agent's own machine, in words the person reads (a card's comment, result, state, log, goal),
+ * is one they cannot open — the owner's planner wrote "設計文件路徑：/data/workspaces/…" and nothing else. Posix paths under the
+ * usual roots, `~/…`, and drive paths are named; a path in code (a fence or backticks) is left alone, being deliberate.
+ * Deliberately only a note, never a read: a file is read only when the agent names it with `attach`.
+ */
+const LOCAL_PATH = /(?<![\w.:/~-])((?:~\/|\/(?:data|home|Users|tmp|var|opt|mnt|srv|root|workspaces?|app|usr|etc|private|Volumes)\/)[^\s"'`)\]>\u3000-\u303f\uff00-\uffef]{2,}|[A-Za-z]:[\\/][^\s"'`)\]>\u3000-\u303f\uff00-\uffef]{2,})/;
+const WORD_FIELDS = ["comment", "result", "state", "log", "description", "reason", "scope"] as const;
+export function pathHint(args: Record<string, unknown>): string | null {
+  if (strs(args.uploads)?.length || (Array.isArray(args.attach) && args.attach.length)) return null;
+  for (const field of WORD_FIELDS) {
+    const v = args[field];
+    if (typeof v !== "string") continue;
+    const plain = v.replace(/```[\s\S]*?```/g, " ").replace(/`[^`\n]*`/g, " ");
+    const m = LOCAL_PATH.exec(plain);
+    if (m) {
+      return `note: your ${field} names a path on your machine (${oneLine(m[1]!, 80)}). The person cannot open it: paste the content into a comment (Markdown), and attach the file — `
+        + "`agend-agent task attach M-n <file>`, or `attach: [<file>]` on update / move (the task tool's attach).";
+    }
+  }
+  return null;
 }
 
 /** The activity log's line for a board action that changed work (as `created task:` / `claimed:` / `completed:` for plain tasks). */
