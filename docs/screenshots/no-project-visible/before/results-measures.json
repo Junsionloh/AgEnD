@@ -1,0 +1,221 @@
+{
+ "smoke": "smoke-task-board-sort",
+ "cases": {
+  "desk-light-en": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Instances",
+      "box": {
+       "w": 122,
+       "h": 36
+      }
+     },
+     {
+      "text": "New project",
+      "box": {
+       "w": 135,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 244,
+     "h": 36
+    }
+   },
+   "checks": {},
+   "errors": [],
+   "game": 1
+  },
+  "desk-light-zh-TW": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Agent",
+      "box": {
+       "w": 96,
+       "h": 36
+      }
+     },
+     {
+      "text": "新增專案",
+      "box": {
+       "w": 110,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 244,
+     "h": 36
+    }
+   },
+   "checks": {},
+   "errors": [],
+   "game": 1
+  },
+  "desk-dark-en": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Instances",
+      "box": {
+       "w": 122,
+       "h": 36
+      }
+     },
+     {
+      "text": "New project",
+      "box": {
+       "w": 135,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 244,
+     "h": 36
+    }
+   },
+   "checks": {},
+   "errors": [],
+   "game": 1
+  },
+  "desk-dark-zh-TW": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Agent",
+      "box": {
+       "w": 96,
+       "h": 36
+      }
+     },
+     {
+      "text": "新增專案",
+      "box": {
+       "w": 110,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 244,
+     "h": 36
+    }
+   },
+   "checks": {},
+   "errors": [],
+   "game": 1
+  },
+  "phone-light-en": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Instances",
+      "box": {
+       "w": 128,
+       "h": 36
+      }
+     },
+     {
+      "text": "New project",
+      "box": {
+       "w": 145,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 358,
+     "h": 36
+    }
+   },
+   "checks": {},
+   "errors": [],
+   "game": 1
+  },
+  "phone-light-zh-TW": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Agent",
+      "box": {
+       "w": 99,
+       "h": 36
+      }
+     },
+     {
+      "text": "新增專案",
+      "box": {
+       "w": 114,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 358,
+     "h": 36
+    }
+   },
+   "checks": {},
+   "errors": [],
+   "game": 1
+  },
+  "phone-dark-en": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Instances",
+      "box": {
+       "w": 128,
+       "h": 36
+      }
+     },
+     {
+      "text": "New project",
+      "box": {
+       "w": 145,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 358,
+     "h": 36
+    }
+   },
+   "checks": {},
+   "errors": [],
+   "game": 1
+  },
+  "phone-dark-zh-TW": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Agent",
+      "box": {
+       "w": 99,
+       "h": 36
+      }
+     },
+     {
+      "text": "新增專案",
+      "box": {
+       "w": 114,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 358,
+     "h": 36
+    }
+   },
+   "checks": {},
+   "errors": [],
+   "game": 1
+  }
+ }
+}

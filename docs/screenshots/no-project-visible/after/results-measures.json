@@ -1,0 +1,597 @@
+{
+ "smoke": "smoke-task-board-sort",
+ "cases": {
+  "desk-light-en": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Instances",
+      "box": {
+       "w": 122,
+       "h": 36
+      }
+     },
+     {
+      "text": "New project",
+      "box": {
+       "w": 135,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 244,
+     "h": 36
+    }
+   },
+   "rows": 5,
+   "title": "No project: 7 to file",
+   "badge": "7 to file",
+   "pick": {
+    "w": 140,
+    "h": 30
+   },
+   "shortTitle": {
+    "text": "M-5\nFix checkout copy",
+    "box": {
+     "w": 727,
+     "h": 25
+    }
+   },
+   "foot": {
+    "w": 77,
+    "h": 30
+   },
+   "titleAfter": "No project: 6 to file",
+   "linkText": "6 in No project →",
+   "link": {
+    "w": 111,
+    "h": 26
+   },
+   "noProjectTitle": "No project",
+   "checks": {
+    "listIsThere": true,
+    "fiveShown": true,
+    "titleHasCount": true,
+    "newestFirst": true,
+    "seeAll": true,
+    "tileFirst": true,
+    "badgeHasCount": true,
+    "listAboveProjects": true,
+    "noSidewaysScroll": true,
+    "pickerVisible": true,
+    "deskFootStaysDense": true,
+    "filedLeavesTheList": true,
+    "filedInTheServer": true,
+    "projectLink": true,
+    "deskLinkStaysDense": true,
+    "noToastOverTheBoard": true,
+    "opensNoProject": true,
+    "placeLead": true,
+    "noSidewaysScrollThere": true,
+    "cleanBoardHasNoList": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "desk-light-zh-TW": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Agent",
+      "box": {
+       "w": 96,
+       "h": 36
+      }
+     },
+     {
+      "text": "新增專案",
+      "box": {
+       "w": 110,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 244,
+     "h": 36
+    }
+   },
+   "rows": 5,
+   "title": "未分類：7 張待歸檔",
+   "badge": "7 張待歸檔",
+   "pick": {
+    "w": 140,
+    "h": 30
+   },
+   "shortTitle": {
+    "text": "M-8\n回覆退款客服信",
+    "box": {
+     "w": 743,
+     "h": 25
+    }
+   },
+   "foot": {
+    "w": 88,
+    "h": 30
+   },
+   "titleAfter": "未分類：6 張待歸檔",
+   "linkText": "未分類 6 張 →",
+   "link": {
+    "w": 88,
+    "h": 26
+   },
+   "noProjectTitle": "未分類",
+   "checks": {
+    "listIsThere": true,
+    "fiveShown": true,
+    "titleHasCount": true,
+    "newestFirst": true,
+    "seeAll": true,
+    "tileFirst": true,
+    "badgeHasCount": true,
+    "listAboveProjects": true,
+    "noSidewaysScroll": true,
+    "pickerVisible": true,
+    "deskFootStaysDense": true,
+    "filedLeavesTheList": true,
+    "filedInTheServer": true,
+    "projectLink": true,
+    "deskLinkStaysDense": true,
+    "noToastOverTheBoard": true,
+    "opensNoProject": true,
+    "placeLead": true,
+    "noSidewaysScrollThere": true,
+    "cleanBoardHasNoList": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "desk-dark-en": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Instances",
+      "box": {
+       "w": 122,
+       "h": 36
+      }
+     },
+     {
+      "text": "New project",
+      "box": {
+       "w": 135,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 244,
+     "h": 36
+    }
+   },
+   "rows": 5,
+   "title": "No project: 7 to file",
+   "badge": "7 to file",
+   "pick": {
+    "w": 140,
+    "h": 30
+   },
+   "shortTitle": {
+    "text": "M-5\nFix checkout copy",
+    "box": {
+     "w": 727,
+     "h": 25
+    }
+   },
+   "foot": {
+    "w": 77,
+    "h": 30
+   },
+   "titleAfter": "No project: 6 to file",
+   "linkText": "6 in No project →",
+   "link": {
+    "w": 111,
+    "h": 26
+   },
+   "noProjectTitle": "No project",
+   "checks": {
+    "listIsThere": true,
+    "fiveShown": true,
+    "titleHasCount": true,
+    "newestFirst": true,
+    "seeAll": true,
+    "tileFirst": true,
+    "badgeHasCount": true,
+    "listAboveProjects": true,
+    "noSidewaysScroll": true,
+    "pickerVisible": true,
+    "deskFootStaysDense": true,
+    "filedLeavesTheList": true,
+    "filedInTheServer": true,
+    "projectLink": true,
+    "deskLinkStaysDense": true,
+    "noToastOverTheBoard": true,
+    "opensNoProject": true,
+    "placeLead": true,
+    "noSidewaysScrollThere": true,
+    "cleanBoardHasNoList": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "desk-dark-zh-TW": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Agent",
+      "box": {
+       "w": 96,
+       "h": 36
+      }
+     },
+     {
+      "text": "新增專案",
+      "box": {
+       "w": 110,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 244,
+     "h": 36
+    }
+   },
+   "rows": 5,
+   "title": "未分類：7 張待歸檔",
+   "badge": "7 張待歸檔",
+   "pick": {
+    "w": 140,
+    "h": 30
+   },
+   "shortTitle": {
+    "text": "M-8\n回覆退款客服信",
+    "box": {
+     "w": 743,
+     "h": 25
+    }
+   },
+   "foot": {
+    "w": 88,
+    "h": 30
+   },
+   "titleAfter": "未分類：6 張待歸檔",
+   "linkText": "未分類 6 張 →",
+   "link": {
+    "w": 88,
+    "h": 26
+   },
+   "noProjectTitle": "未分類",
+   "checks": {
+    "listIsThere": true,
+    "fiveShown": true,
+    "titleHasCount": true,
+    "newestFirst": true,
+    "seeAll": true,
+    "tileFirst": true,
+    "badgeHasCount": true,
+    "listAboveProjects": true,
+    "noSidewaysScroll": true,
+    "pickerVisible": true,
+    "deskFootStaysDense": true,
+    "filedLeavesTheList": true,
+    "filedInTheServer": true,
+    "projectLink": true,
+    "deskLinkStaysDense": true,
+    "noToastOverTheBoard": true,
+    "opensNoProject": true,
+    "placeLead": true,
+    "noSidewaysScrollThere": true,
+    "cleanBoardHasNoList": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "phone-light-en": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Instances",
+      "box": {
+       "w": 128,
+       "h": 36
+      }
+     },
+     {
+      "text": "New project",
+      "box": {
+       "w": 145,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 358,
+     "h": 36
+    }
+   },
+   "rows": 5,
+   "title": "No project: 7 to file",
+   "badge": "7 to file",
+   "pick": {
+    "w": 300,
+    "h": 44
+   },
+   "shortTitle": {
+    "text": "M-5\nFix checkout copy",
+    "box": {
+     "w": 300,
+     "h": 44
+    }
+   },
+   "foot": {
+    "w": 81,
+    "h": 44
+   },
+   "titleAfter": "No project: 6 to file",
+   "linkText": "6 in No project →",
+   "link": {
+    "w": 125,
+    "h": 44
+   },
+   "noProjectTitle": "No project",
+   "checks": {
+    "listIsThere": true,
+    "fiveShown": true,
+    "titleHasCount": true,
+    "newestFirst": true,
+    "seeAll": true,
+    "tileFirst": true,
+    "badgeHasCount": true,
+    "listAboveProjects": true,
+    "noSidewaysScroll": true,
+    "pickerVisible": true,
+    "pickerTappable": true,
+    "shortTitleTappable": true,
+    "footTappable": true,
+    "filedLeavesTheList": true,
+    "filedInTheServer": true,
+    "projectLink": true,
+    "linkTappable": true,
+    "noToastOverTheBoard": true,
+    "opensNoProject": true,
+    "placeLead": true,
+    "noSidewaysScrollThere": true,
+    "cleanBoardHasNoList": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "phone-light-zh-TW": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Agent",
+      "box": {
+       "w": 99,
+       "h": 36
+      }
+     },
+     {
+      "text": "新增專案",
+      "box": {
+       "w": 114,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 358,
+     "h": 36
+    }
+   },
+   "rows": 5,
+   "title": "未分類：7 張待歸檔",
+   "badge": "7 張待歸檔",
+   "pick": {
+    "w": 300,
+    "h": 44
+   },
+   "shortTitle": {
+    "text": "M-8\n回覆退款客服信",
+    "box": {
+     "w": 300,
+     "h": 44
+    }
+   },
+   "foot": {
+    "w": 92,
+    "h": 44
+   },
+   "titleAfter": "未分類：6 張待歸檔",
+   "linkText": "未分類 6 張 →",
+   "link": {
+    "w": 100,
+    "h": 44
+   },
+   "noProjectTitle": "未分類",
+   "checks": {
+    "listIsThere": true,
+    "fiveShown": true,
+    "titleHasCount": true,
+    "newestFirst": true,
+    "seeAll": true,
+    "tileFirst": true,
+    "badgeHasCount": true,
+    "listAboveProjects": true,
+    "noSidewaysScroll": true,
+    "pickerVisible": true,
+    "pickerTappable": true,
+    "shortTitleTappable": true,
+    "footTappable": true,
+    "filedLeavesTheList": true,
+    "filedInTheServer": true,
+    "projectLink": true,
+    "linkTappable": true,
+    "noToastOverTheBoard": true,
+    "opensNoProject": true,
+    "placeLead": true,
+    "noSidewaysScrollThere": true,
+    "cleanBoardHasNoList": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "phone-dark-en": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Instances",
+      "box": {
+       "w": 128,
+       "h": 36
+      }
+     },
+     {
+      "text": "New project",
+      "box": {
+       "w": 145,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 358,
+     "h": 36
+    }
+   },
+   "rows": 5,
+   "title": "No project: 7 to file",
+   "badge": "7 to file",
+   "pick": {
+    "w": 300,
+    "h": 44
+   },
+   "shortTitle": {
+    "text": "M-5\nFix checkout copy",
+    "box": {
+     "w": 300,
+     "h": 44
+    }
+   },
+   "foot": {
+    "w": 81,
+    "h": 44
+   },
+   "titleAfter": "No project: 6 to file",
+   "linkText": "6 in No project →",
+   "link": {
+    "w": 125,
+    "h": 44
+   },
+   "noProjectTitle": "No project",
+   "checks": {
+    "listIsThere": true,
+    "fiveShown": true,
+    "titleHasCount": true,
+    "newestFirst": true,
+    "seeAll": true,
+    "tileFirst": true,
+    "badgeHasCount": true,
+    "listAboveProjects": true,
+    "noSidewaysScroll": true,
+    "pickerVisible": true,
+    "pickerTappable": true,
+    "shortTitleTappable": true,
+    "footTappable": true,
+    "filedLeavesTheList": true,
+    "filedInTheServer": true,
+    "projectLink": true,
+    "linkTappable": true,
+    "noToastOverTheBoard": true,
+    "opensNoProject": true,
+    "placeLead": true,
+    "noSidewaysScrollThere": true,
+    "cleanBoardHasNoList": true
+   },
+   "errors": [],
+   "game": 1
+  },
+  "phone-dark-zh-TW": {
+   "head": {
+    "buttons": [
+     {
+      "text": "Agent",
+      "box": {
+       "w": 99,
+       "h": 36
+      }
+     },
+     {
+      "text": "新增專案",
+      "box": {
+       "w": 114,
+       "h": 36
+      }
+     }
+    ],
+    "search": {
+     "w": 358,
+     "h": 36
+    }
+   },
+   "rows": 5,
+   "title": "未分類：7 張待歸檔",
+   "badge": "7 張待歸檔",
+   "pick": {
+    "w": 300,
+    "h": 44
+   },
+   "shortTitle": {
+    "text": "M-8\n回覆退款客服信",
+    "box": {
+     "w": 300,
+     "h": 44
+    }
+   },
+   "foot": {
+    "w": 92,
+    "h": 44
+   },
+   "titleAfter": "未分類：6 張待歸檔",
+   "linkText": "未分類 6 張 →",
+   "link": {
+    "w": 100,
+    "h": 44
+   },
+   "noProjectTitle": "未分類",
+   "checks": {
+    "listIsThere": true,
+    "fiveShown": true,
+    "titleHasCount": true,
+    "newestFirst": true,
+    "seeAll": true,
+    "tileFirst": true,
+    "badgeHasCount": true,
+    "listAboveProjects": true,
+    "noSidewaysScroll": true,
+    "pickerVisible": true,
+    "pickerTappable": true,
+    "shortTitleTappable": true,
+    "footTappable": true,
+    "filedLeavesTheList": true,
+    "filedInTheServer": true,
+    "projectLink": true,
+    "linkTappable": true,
+    "noToastOverTheBoard": true,
+    "opensNoProject": true,
+    "placeLead": true,
+    "noSidewaysScrollThere": true,
+    "cleanBoardHasNoList": true
+   },
+   "errors": [],
+   "game": 1
+  }
+ }
+}
