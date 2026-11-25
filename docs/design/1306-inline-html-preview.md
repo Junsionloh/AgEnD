@@ -137,6 +137,19 @@ and picks the preview origin:
 | any | set | `web.preview_origin` |
 | not loopback (tunnel, proxy, `hostname`, `allowed_hosts`) | not set | none — **disabled** |
 
+**Amendment — the page's own address.** The dashboard origin the page is at must be one the shim takes HTML from and
+that may frame it, exactly (§5.1). The config spells out some (the loopback names on the dashboard's port, and each
+non-loopback name as written); but the host guard does not compare ports (`web-host-guard.ts`), so a name it trusts is
+trusted at whatever port the dashboard is reached at — a tunnel on `:8445` for a name listed without a port. Asking
+the owner to list that address again was a defect, not a boundary. Now, when the `Host` of a `/ui` load names one the
+guard answers to (loopback, `hostname`, `web.allowed_hosts`) and a preview is otherwise offered for it, the listener
+**adopts** that exact `scheme://host[:port]` (`PreviewListener.adoptOrigin`): the shim's list and `frame-ancestors`
+include it from then on. What does not change: the preview origin must be another host name than the dashboard's
+(the validator, and `sameOrigin` at the point of use — also for the same name on another port, since cookies are not
+port-isolated); only exact origins are ever listed, never `'self'` or `*`; an address is adopted only when its name is
+the guard's, only once a preview is really offered for it, at most 16 at a time (the least recently loaded is dropped
+and returns on its next load), and not kept across a restart. `X-Forwarded-Host` is still never read.
+
 It hands the page `data-dashboard-origin`, `data-preview-origin` (empty when disabled) and `data-preview-boot`,
 and builds the `/ui` response's `frame-src` from the same preview origin (§5.2). `X-Forwarded-Host` is **never**
 read for this.

@@ -108,36 +108,60 @@ export function dashboardOriginFor(hostHeader: string | undefined, secure: boole
 }
 
 /**
+ * The words that say why a preview needs a host name of its own — shared by the three reasons that come to that
+ * (notListed, needOrigin, sameOrigin) and mirrored, in the page's language, by chat.pvServer_* (chat-strings.js). Only a
+ * different port is not enough: cookies are not port-isolated, so the preview must be at another host name. On the
+ * machine running AgEnD, localhost needs no setup.
+ */
+const OWN_HOST_NAME_HINT = "web.preview_origin must be an address on a different host name than the dashboard — only a different port does not work, because cookies are shared across ports. On the computer running AgEnD, open the dashboard as localhost (http://localhost:19280 by default): previews then need no setup.";
+
+/**
+ * What a listener offers `previewAvailability` for a page whose own address it has not listed: whether the page's name is
+ * one the host guard answers to (`adoptable` — no side effect), and remembering the address (`adoptOrigin`). See
+ * PreviewListener.
+ */
+export type OwnAddress = Pick<PreviewListener, "adoptable" | "adoptOrigin">;
+
+/**
  * For one /ui request: a loopback Host and no preview_origin → the same loopback name on the preview port;
  * preview_origin set → that; anything else (a tunnel, a proxy, `hostname`, `allowed_hosts`) → disabled.
  * Only Host is read; X-Forwarded-Host never is.
+ *
+ * `accepted` is the listener's origins: the page must be at one of them, exactly, or a frame would never render. A name
+ * the host guard already answers to, reached at an address the config did not spell out (a non-default port: the guard
+ * does not compare ports), is taken as the page's own address (`own`): it counts as listed, but is only remembered —
+ * adopted — once a preview is really offered for it, so a refused load leaves nothing behind.
  */
-export function previewAvailability(settings: PreviewSettings | null, hostHeader: string | undefined, secure: boolean, accepted?: readonly string[]): PreviewAvailability {
+export function previewAvailability(settings: PreviewSettings | null, hostHeader: string | undefined, secure: boolean, accepted?: readonly string[], own?: OwnAddress): PreviewAvailability {
   const dashboardOrigin = dashboardOriginFor(hostHeader, secure);
   const off = (code: PreviewOffCode, reason: string): PreviewAvailability => ({ dashboardOrigin, previewOrigin: null, reason, code });
   if (!settings || !settings.enabled) return off("fleetOff", "Previews are turned off for this fleet (web.preview: false).");
   if (!dashboardOrigin) return off("unchecked", "This address cannot be checked.");
   if (settings.port === null && !settings.origin) return off("noPort", "Previews have no port: set web.preview_port (health_port is the highest port).");
-  // The page must be at an origin the shim takes HTML from (and that may frame it) — exactly, or a frame would never
-  // render. A name in web.allowed_hosts served on a non-default port must be listed with that port.
-  if (accepted && !accepted.includes(dashboardOrigin)) return off("notListed", `Previews are not offered at ${dashboardOrigin}: list this address (with its port) in web.allowed_hosts, and set web.preview_origin.`);
+  const listed = !accepted || accepted.includes(dashboardOrigin);
+  if (!listed && !own?.adoptable(dashboardOrigin)) return off("notListed", `Previews are not offered at ${dashboardOrigin}: its host name is not one the dashboard answers to. List the name in web.allowed_hosts (its port need not be listed). ${OWN_HOST_NAME_HINT}`);
   let preview: string;
   if (settings.origin) preview = settings.origin;
   else {
     const host = hostnameOf(hostHeader!)!;
-    if (!LOOPBACK_HOST_NAMES.includes(host)) return off("needOrigin", "Previews need web.preview_origin when the dashboard is reached through a tunnel or proxy.");
+    if (!LOOPBACK_HOST_NAMES.includes(host)) return off("needOrigin", `Previews need web.preview_origin when the dashboard is not opened as localhost (this page is at ${dashboardOrigin}). ${OWN_HOST_NAME_HINT}`);
     preview = `http://${host}:${settings.port}`;
   }
   // An https page cannot frame an http preview (mixed content).
   if (dashboardOrigin.startsWith("https:") && preview.startsWith("http:")) return off("needHttps", "Previews need an https web.preview_origin when the dashboard is reached over https.");
-  if (preview === dashboardOrigin) return off("sameOrigin", "The preview origin cannot be the dashboard's own.");
+  // The same origin, or — for a configured preview_origin — the same host name on another port: a preview at the
+  // dashboard's own name would share its cookies. (The validator refuses such a preview_origin at start; this is the same
+  // rule at the point of use. The loopback default shares a name by design: its preview listener reads no cookie.)
+  if (preview === dashboardOrigin || settings.origin && hostnameOf(new URL(preview).host) === hostnameOf(hostHeader!)) return off("sameOrigin", `The preview address cannot be the dashboard's own (${dashboardOrigin}). ${OWN_HOST_NAME_HINT}`);
+  if (!listed) own!.adoptOrigin(dashboardOrigin);
   return { dashboardOrigin, previewOrigin: preview, reason: null, code: null };
 }
 
 /**
  * The exact dashboard origins a preview may be framed by, and accept HTML from (design §5.1): the loopback names on
  * the dashboard's port, plus — when a preview_origin is set — `https://<name>` for each name the dashboard answers to
- * besides loopback (`hostname`, `web.allowed_hosts`). Never 'self', never *.
+ * besides loopback (`hostname`, `web.allowed_hosts`). Never 'self', never *. These are the origins the config spells
+ * out; the listener adds the page's own address when a /ui load is at one the config did not (PreviewListener.adoptOrigin).
  */
 export function dashboardOrigins(settings: PreviewSettings, healthPort: number, config: HostGuardConfig | null | undefined): string[] {
   // As the browser writes location.origin: a default port is dropped (http://127.0.0.1:80 → http://127.0.0.1).
@@ -252,12 +276,35 @@ export function buildShim(bootId: string, origins: readonly string[]): string {
   return `<!doctype html><html><head><meta charset="utf-8"><title>Preview</title></head><body><script>${script}</script></body></html>`;
 }
 
+/**
+ * The most page addresses a listener adopts from /ui loads (PreviewListener.adoptOrigin). A fleet has a handful of
+ * addresses (a tunnel, a LAN name, an SSH forward); the bound only keeps the /frame header and the shim's list from
+ * growing without limit. When it is full the least recently loaded one is dropped — and comes back on its next load.
+ */
+export const MAX_ADOPTED_ORIGINS = 16;
+
 export interface PreviewListener {
   readonly server: Server;
   readonly bootId: string;
   readonly settings: PreviewSettings;
-  /** The dashboard origins the shim accepts HTML from and may be framed by. */
+  /**
+   * The dashboard origins the shim accepts HTML from and may be framed by: the ones the config spells out
+   * (dashboardOrigins), then the page addresses adopted from /ui loads. Always exact origins — never 'self', never *.
+   */
   readonly origins: readonly string[];
+  /**
+   * Whether `origin` (scheme://host[:port], as dashboardOriginFor writes it) is the page's own address under a name the
+   * host guard answers to — loopback, `hostname`, `web.allowed_hosts` — whatever its port: the guard does not compare
+   * ports, so a name it trusts is trusted on every port the dashboard is reached at. No side effect.
+   */
+  adoptable(origin: string): boolean;
+  /**
+   * Remember `origin` as a dashboard address: from then on the shim takes HTML from it and /frame lets it frame the
+   * preview, as if the config had listed it. Only for an `adoptable` origin (anything else is ignored); at most
+   * MAX_ADOPTED_ORIGINS, the least recently adopted dropped first. Not persisted: a restart relearns it from the next /ui
+   * load.
+   */
+  adoptOrigin(origin: string): void;
   close(): void;
 }
 
@@ -302,12 +349,23 @@ export function createPreviewListener(opts: {
   cdn?(): boolean;
 }): PreviewListener {
   const bootId = opts.bootId ?? randomBytes(16).toString("hex");
-  const origins = dashboardOrigins(opts.settings, opts.healthPort, opts.config);
+  const configured = dashboardOrigins(opts.settings, opts.healthPort, opts.config);
+  // The page addresses adopted from /ui loads, oldest first (a Set keeps insertion order; adopting again moves one last).
+  const adopted = new Set<string>();
+  const current = (): string[] => [...configured, ...adopted];
+  const adoptable = (origin: string): boolean => {
+    if (configured.includes(origin)) return false;   // listed already: nothing to adopt
+    // The exact text dashboardOriginFor writes, and a name the host guard answers to: the same names that let this request
+    // in, so the guard's list is the only one that decides which names may ever be adopted (just with any port).
+    const name = normalizeOrigin(origin) === origin ? hostnameOf(new URL(origin).host) : null;
+    return name !== null && allowedHostNames(opts.config).has(name);
+  };
   // Public-link origins may widen /frame; the CDN setting may change it. Built once per (origins, cdn).
   let built: { key: string; body: Buffer; headers: Record<string, string> } | null = null;
   const frameFor = (): { body: Buffer; headers: Record<string, string> } => {
-    const extra = (opts.extraOrigins?.() ?? []).filter(o => !origins.includes(o));
-    const all = [...origins, ...extra], cdn = opts.cdn?.() === true;
+    const known = current();
+    const extra = (opts.extraOrigins?.() ?? []).filter(o => !known.includes(o));
+    const all = [...known, ...extra], cdn = opts.cdn?.() === true;
     const key = `${cdn ? "cdn" : "-"} ${all.join(" ")}`;
     if (built?.key !== key) built = { key, ...previewFrameResponse(bootId, all, { cdn }) };
     return built;
@@ -331,5 +389,16 @@ export function createPreviewListener(opts: {
   const settings: PreviewSettings = { ...opts.settings };
   // A listener on port 0 learns its real port when it binds: that is the one a /ui load must be offered.
   server.on("listening", () => { const a = server.address(); if (a && typeof a === "object") settings.port = a.port; });
-  return { server, bootId, settings, origins, close: () => { server.close(); } };
+  return {
+    server, bootId, settings,
+    get origins() { return current(); },
+    adoptable,
+    adoptOrigin(origin: string) {
+      if (!adoptable(origin)) return;
+      adopted.delete(origin);
+      adopted.add(origin);
+      while (adopted.size > MAX_ADOPTED_ORIGINS) adopted.delete(adopted.values().next().value as string);
+    },
+    close: () => { server.close(); },
+  };
 }
