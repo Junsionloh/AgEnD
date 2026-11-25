@@ -1068,7 +1068,10 @@ use".
 (`health_port + 1`). Over SSH, forward that port too (`-L 19281:127.0.0.1:19281`). Through a proxy or tunnel the two
 names are kept apart: the **dashboard's** external name goes in `web.allowed_hosts`, and `web.preview_origin` must be
 a **different** host name, mapped to the preview port, that is neither the dashboard's `hostname` nor in
-`web.allowed_hosts` (the validator refuses a preview origin the dashboard answers to). "Something else answered on
+`web.allowed_hosts` (the validator refuses a preview origin the dashboard answers to) — a different port on the
+dashboard's own name does not work, because cookies are shared across ports. The dashboard's own address needs no
+listing with its port: a name already in `web.allowed_hosts` (or `hostname`) is taken at any port it is reached at.
+On the machine running AgEnD, `http://localhost:<health_port>` needs no setup. "Something else answered on
 the preview port": another program holds it — change `web.preview_port` (restart). If fleet.log says "Preview
 listener unavailable", the port could not be bound (older versions' cards then wrongly said previews were turned
 off).

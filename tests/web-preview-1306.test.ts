@@ -178,8 +178,12 @@ describe("the fleet runs it beside the web listener (scratch AGEND_HOME)", () =>
       const a = bodyAttrs(r.body);
       expect([a["data-dashboard-origin"], a["data-preview-origin"], a["data-preview-boot"]]).toEqual(["https://fleet.example.net", "", ""]);
       expect(a["data-preview-reason"]).toMatch(/web\.preview_origin/);
+      // The name is one the host guard answers to, so it is not "not listed": the missing piece is a preview_origin, and
+      // the words say it must be on a different host name (a port alone does not do), and that localhost needs nothing.
+      expect(a["data-preview-reason"]).toMatch(/different host name/);
+      expect(a["data-preview-reason"]).toMatch(/localhost/);
       // #1554: and the same reason as a code the page says in its own language.
-      expect(a["data-preview-reason-code"]).toBe("notListed");
+      expect(a["data-preview-reason-code"]).toBe("needOrigin");
     } finally { h.stop(); }
   });
 
@@ -549,7 +553,8 @@ describe("the page's origin and the shim's allow-list are the same exact strings
     const s: PreviewSettings = { enabled: true, port: 19281, origin: "https://p.example.net" };
     const list = dashboardOrigins(s, 19280, { web: { allowed_hosts: ["fleet.example.net:8443"] } });
     expect(previewAvailability(s, "fleet.example.net:8443", true, list).previewOrigin).toBe("https://p.example.net");
-    expect(previewAvailability(s, "fleet.example.net", true, list)).toMatchObject({ dashboardOrigin: "https://fleet.example.net", previewOrigin: null, reason: expect.stringMatching(/with its port/) });
+    // With no way to adopt an address, the list alone decides (a bare call, as before): the same name at another port is not on it.
+    expect(previewAvailability(s, "fleet.example.net", true, list)).toMatchObject({ dashboardOrigin: "https://fleet.example.net", previewOrigin: null, code: "notListed", reason: expect.stringMatching(/web\.allowed_hosts/) });
     expect(previewAvailability({ ...s, origin: null }, "127.0.0.1:80", false, dashboardOrigins({ ...s, origin: null }, 80, null)).dashboardOrigin).toBe("http://127.0.0.1");
     expect(previewAvailability({ ...s, origin: null }, "127.0.0.1:80", false, dashboardOrigins({ ...s, origin: null }, 80, null)).previewOrigin).toBe("http://127.0.0.1:19281");
   });

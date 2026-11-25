@@ -32450,7 +32450,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   /** For one /ui load: the preview origin it may frame, and the listener's boot id (see web-preview.ts). */
   previewForUi(hostHeader: string | undefined, secure: boolean): PreviewAvailability & { boot: string | null } {
     const listener = this.previewListening ? this.previewListener : null;
-    const decided = previewAvailability(listener ? listener.settings : null, hostHeader, secure, listener ? listener.origins : undefined);
+    const decided = previewAvailability(listener ? listener.settings : null, hostHeader, secure, listener ? listener.origins : undefined, listener ?? undefined);
     // Previews are on, but no listener answers: say why — its port could not be opened (the error, never "turned off"),
     // or it is not listening yet.
     if (!listener && this.fleetConfig?.web?.preview !== false) Object.assign(decided, this.previewNotListening());
