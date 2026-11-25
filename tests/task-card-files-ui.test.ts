@@ -210,7 +210,7 @@ describe("files on the card", () => {
   it("an .html file has Preview where the chat's sandbox is (this device allows it): the file is read and handed to the preview frame, never opened as a page", async () => {
     withFiles();
     FILE_BODIES.set(ID.html, "<!doctype html><canvas id=g></canvas><script>/* game */</script>");
-    const start = vi.fn((_key: string, _holder: any, _code: string, ui: any) => { ui.state("running", ""); return true; });
+    const start = vi.fn((_key: string, _holder: any, _code: string, ui: any, _opts?: unknown) => { ui.state("running", ""); return true; });
     const stop = vi.fn();
     (globalThis as any).AgendPreview = { availability: () => ({ ok: true }), start, stop, bannerAcked: () => true, banner: () => "b", bannerAckLabel: () => "ok", bannerAckTitle: () => "t", ackBanner() {} };
     await mount(); await open();
