@@ -497,11 +497,13 @@ button.tb-owner-btn:hover { border-color: var(--border); background: var(--surfa
 .tc-md.tl-body { padding: var(--s-2); }
 .tf-md.tl-body { padding: var(--s-2) var(--s-3); }
 .tc-md.tl-body { cursor: text; }
+/* The Edit button: on the desk it sits at the field's top right, shown on hover or focus, with room reserved for it so it never covers text;
+   on a touch screen it is always there and a 44px box; on a phone it is a row of its own under the text (nothing to cover). */
 .tc-md-wrap { position: relative; min-width: 0; }
 .tc-md-edit { position: absolute; top: 2px; right: 2px; opacity: 0; }
 .tc-md-wrap:hover .tc-md-edit, .tc-md-edit:focus-visible { opacity: 1; }
-.tp .tc-md-wrap .tc-text { padding-right: var(--s-6, 48px); }
-@media (pointer: coarse) { .tc-md-edit { opacity: 1; } }
+.tp .tc-md-wrap .tc-text { padding-right: calc(var(--s-8) + var(--s-4)); }
+@media (pointer: coarse) { .tc-md-edit { opacity: 1; min-width: var(--tap); min-height: var(--tap); } }
 
 /* Files on a card (fleet-task-files.js): under the comment they came with, and together in the card's Files field. One row each — the
    name (the download), the size, who and when, the Download button — then what the page can show of it: the picture, the text, the preview. */
@@ -525,7 +527,13 @@ button.tb-owner-btn:hover { border-color: var(--border); background: var(--surfa
 .tf-count { margin-left: var(--s-1); font-weight: var(--fw-regular); color: var(--text-3); }
 .tf-html, .tf-text { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
 .tf-holder { margin-top: 0; }
+/* A running preview has a place of its own: a frame that fills a box of fixed height (a page that lays itself out by the window's height — a
+   canvas game — has no height of its own to report, and the automatic height left it a strip of 40px). A page taller than the box scrolls. */
+.tf-holder:not(:empty) { display: flex; flex-direction: column; height: min(75vh, 640px); min-height: 260px; }
 @media (max-width: 899px), (pointer: coarse) and (max-height: 500px) and (max-width: 1023px) {
   .tl-files { margin-left: 0; }
-  .tf-dl { min-height: var(--tap); }
+  .tf-dl, .tf-actions .btn, .tf-more { min-height: var(--tap); }
+  .tc-md-wrap { display: flex; flex-direction: column; }
+  .tp .tc-md-wrap .tc-text { padding-right: var(--s-2); }
+  .tc-md-edit { position: static; opacity: 1; align-self: flex-start; min-width: var(--tap); min-height: var(--tap); }
 }

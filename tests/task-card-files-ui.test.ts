@@ -7,6 +7,8 @@
  *    Markdown / text open in place (read once, capped, never run), an .html file has Preview only where the chat would offer it.
  *  - the board's tiles show a paperclip with the count; both languages say it; no style attribute anywhere (the CSP).
  */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { page, settle, h, type AppPage } from "./helpers/app-harness.js";
 import { fire } from "./helpers/mini-dom.js";
@@ -219,6 +221,7 @@ describe("files on the card", () => {
     expect(start).toHaveBeenCalledTimes(1);
     expect(start.mock.calls[0]![0]).toBe(`taskfile:${ID.html}`);
     expect(start.mock.calls[0]![2]).toBe("<!doctype html><canvas id=g></canvas><script>/* game */</script>");
+    expect(start.mock.calls[0]![4], "fills a box of its own, not the automatic strip").toEqual({ fill: true });
     expect(text(row.querySelector(".tf-html .btn:not(.btn-primary)")), "running: Stop").toBe("Stop");
   });
 
@@ -290,5 +293,28 @@ describe("files on the card", () => {
     expect(["a.html", "A.HTM"].map((n) => kind(n))).toEqual(["html", "html"]);
     expect(["a.zip", "a.mp4", "a.mp3", "a", "a.exe"].map((n) => kind(n))).toEqual([null, null, null, null, null]);
     expect(kind("a.md", "document", "not-an-id")).toBeNull();
+  });
+});
+
+describe("the sheet: nothing covers text, every control is a 44px box on a phone, a running preview has a box of its own", () => {
+  const css = readFileSync(fileURLToPath(new URL("../src/ui/shared/task-board.css", import.meta.url)), "utf8");
+  const PHONE = "@media (max-width: 899px), (pointer: coarse) and (max-height: 500px) and (max-width: 1023px) {";
+  /** The body of every phone block (the canonical query), joined. */
+  const phone = [...css.matchAll(/@media \(max-width: 899px\), \(pointer: coarse\) and \(max-height: 500px\) and \(max-width: 1023px\) \{([\s\S]*?)\n\}/g)].map((m) => m[1]).join("\n");
+  const decl = (sel: string, from: string) => { const m = new RegExp(`(?:^|\\n)\\s*${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{([^}]*)\\}`).exec(from); return m ? m[1]!.replace(/\s+/g, " ").trim() : null; };
+
+  it("the Edit button: beside the text on the desk with room reserved for it, a row under the text on a phone, a 44px box on any touch screen", () => {
+    expect(css).toContain(PHONE);
+    expect(decl(".tc-md-edit", css)).toMatch(/position: absolute/);
+    expect(decl(".tp .tc-md-wrap .tc-text", css), "room for the button: the text stops before it").toMatch(/padding-right: calc\(var\(--s-8\) \+ var\(--s-4\)\)/);
+    expect(decl(".tc-md-edit", phone), "a phone: not over the text").toMatch(/position: static.*opacity: 1.*min-height: var\(--tap\)/);
+    expect(decl(".tc-md-wrap", phone)).toMatch(/display: flex; flex-direction: column/);
+    expect(decl(".tp .tc-md-wrap .tc-text", phone), "the room reserved on the desk is given back").toMatch(/padding-right: var\(--s-2\)/);
+    expect(css).toMatch(/@media \(pointer: coarse\) \{ \.tc-md-edit \{ opacity: 1; min-width: var\(--tap\); min-height: var\(--tap\); \} \}/);
+  });
+
+  it("the file row's controls are 44px boxes on a phone; the card's preview has a fixed box, not the automatic strip", () => {
+    expect(decl(".tf-dl, .tf-actions .btn, .tf-more", phone)).toMatch(/min-height: var\(--tap\)/);
+    expect(decl(".tf-holder:not(:empty)", css)).toMatch(/display: flex; flex-direction: column; height: min\(75vh, 640px\); min-height: 260px/);
   });
 });

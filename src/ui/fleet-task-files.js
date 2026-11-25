@@ -115,7 +115,8 @@ function HtmlPreview({ f }) {
       return;
     }
     setNote("");
-    P.start(key, holder.current, r.code, ui, anyway ? { anyway: true } : undefined);
+    // `fill`: the frame fills the holder's box (fleet-task-files in task-board.css gives it a fixed height), not the strip a page that lays itself out by the window's height reports.
+    P.start(key, holder.current, r.code, ui, { fill: true, ...(anyway ? { anyway: true } : {}) });
   }
   return html`<div class="tf-html">
     <div class="tf-actions">
