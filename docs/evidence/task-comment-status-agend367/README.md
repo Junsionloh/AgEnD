@@ -6,7 +6,7 @@ Captures of the real web app and task board (`scripts/manual/smoke-fixture`) wit
 REPO=<checkout> PW_DIR=<checkout> CHROME=<chrome> OUT=<dir> PHASE=before|after npx tsx scripts/manual/task-comment-status-agend367/capture.mts
 ```
 
-`before` is AGEND-365's branch (`ccdaa2200`, fork PR #107) with the same comments written the same way; it has no status line, dot, strip or number. `after` is this branch.
+`before` is AGEND-365's branch (`7318b906e`, fork PR #107) with the same comments written the same way; it has no status line, dot, strip or number. `after` is this branch.
 
 **The fixture.** One card, "Serve the weekly leaderboard", assigned to `general` (the fleet's own waker hands the comments to a real delivery outbox; the script moves one row on to *delivered + consumed*, as a running agent's transcript does, and sets each instance's state as the status frames say it: `general` working, `fleet-lead` offline, `core-dev` with the task board off). Comments, in order: the viewer's question, answered by `general` (so *replied*, and the answer is **unread**); a comment to `general` that also `@`-names `core-dev` (*working…* and *not woken: its task board is off*); a comment to `fleet-lead` (*offline — gets this when it is back*); and a comment that has just been sent (*Sent to general*).
 

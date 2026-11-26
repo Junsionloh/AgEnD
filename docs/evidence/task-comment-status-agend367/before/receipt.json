@@ -1,6 +1,6 @@
 {
   "phase": "before",
-  "sourceHead": "ccdaa2200a6656aca0a2aab109e84aa965d1a4f4",
+  "sourceHead": "7318b906ecfb4999ebd836c77a655ccd33596a22",
   "dirty": [],
   "checks": [
     {
@@ -47,7 +47,7 @@
     },
     {
       "path": "desk-light-zh-TW-1-board.png",
-      "sha256": "912e0eba8b11f956ae9b07e59d433fb2e367f7a5ebf9d168a460896ac21abd06"
+      "sha256": "08785ca71160b4dabdafd4b82d8b10bfa6ed963cb25586840a80a8367b18354b"
     },
     {
       "path": "desk-light-zh-TW-2-card.png",
@@ -75,7 +75,7 @@
     },
     {
       "path": "phone-light-en-2-card.png",
-      "sha256": "666af7ac3be7120b41bc847c961e21311becc21d3eb2968a9091e97462a9c47d"
+      "sha256": "ece5f5c8d980cdb2ed461357735192976814151d135339219498641b5cb78648"
     },
     {
       "path": "phone-light-zh-TW-1-board.png",
@@ -83,7 +83,7 @@
     },
     {
       "path": "phone-light-zh-TW-2-card.png",
-      "sha256": "f59ace2cf05c712346b7eaa132ff3ab7b2350dcdaf48876be8d7dc18f4621fe4"
+      "sha256": "2a9ac790a6af8abf4079b2cf0891e72fd5f6276760f5f00e704474546c33b840"
     },
     {
       "path": "phone-dark-en-1-board.png",
@@ -91,7 +91,7 @@
     },
     {
       "path": "phone-dark-en-2-card.png",
-      "sha256": "2fce50606672f2b069eb38e18fac2c9037f357868839c273f650c9113ba3d43a"
+      "sha256": "c2355e356e0f1242e9900da6382f9bbdc45a55441ba148ee3ba36fdca8b73821"
     },
     {
       "path": "phone-dark-zh-TW-1-board.png",
@@ -99,7 +99,7 @@
     },
     {
       "path": "phone-dark-zh-TW-2-card.png",
-      "sha256": "86365fb6a238f325a493fecd5e7db7ce0d24c65832626d87cfff3602d64407bf"
+      "sha256": "3dc50694569c29c214b73a56d3d2c242bd06d3c6218f444a85574d570e109f11"
     }
   ],
   "viewer": {

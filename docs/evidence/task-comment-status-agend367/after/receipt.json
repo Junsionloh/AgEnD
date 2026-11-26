@@ -1,6 +1,6 @@
 {
   "phase": "after",
-  "sourceHead": "31dbaec500bd5639e059d3116aea7cdd0fa32e3c",
+  "sourceHead": "5bf5e2301dbead64d63bfbf8b552997a3e27e731",
   "dirty": [],
   "checks": [
     {
@@ -399,11 +399,11 @@
     },
     {
       "path": "desk-dark-zh-TW-1-board.png",
-      "sha256": "362d96ba499f2c23a6405e633bf263d47ac3b9d31f1069b61dfad653c242c883"
+      "sha256": "694825f56a3e1bfa19f4835b50852b391cc7f001ef05ae7c00b7e497da124169"
     },
     {
       "path": "desk-dark-zh-TW-2-card.png",
-      "sha256": "27712a736cb9644ac0f47d10227c5406ec490bca01880171700e994af2ef5f63"
+      "sha256": "284ab42866a55865e68af1178f7daad5cbefc41ab56bfc9de7eb15be9c26c527"
     },
     {
       "path": "phone-light-en-1-board.png",
