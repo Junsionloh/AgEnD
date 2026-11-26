@@ -1,0 +1,202 @@
+{
+  "phase": "before",
+  "sourceHead": "f76b84aafdce7db2fca54afa4bc8a51b9fb87fe9",
+  "dirty": [],
+  "checks": [
+    {
+      "name": "desk-light-en: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: nothing under the sub tasks, the block is the one quiet line",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: nothing under the sub tasks, the block is the one quiet line",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: nothing under the sub tasks, the block is the one quiet line",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: nothing under the sub tasks, the block is the one quiet line",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: nothing under the sub tasks, the block is the one quiet line",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: nothing under the sub tasks, the block is the one quiet line",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: nothing under the sub tasks, the block is the one quiet line",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: nothing under the sub tasks, the block is the one quiet line",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: no page errors",
+      "ok": true
+    }
+  ],
+  "pictures": [
+    {
+      "path": "desk-light-en-1-board.png",
+      "sha256": "ac361695d3913af7e9a2241e92b02939785d24374181e2ea6024477ad7e10169"
+    },
+    {
+      "path": "desk-light-en-2-card-running.png",
+      "sha256": "ab73e09b4308d7d84ae9d0bd05a1e7989a871a23c13dfc0f66d4f92eda6a04a1"
+    },
+    {
+      "path": "desk-light-en-3-card-handoff.png",
+      "sha256": "f6cdadbeee7e93562a52939cc82ebe0acffbdeb92e53adb1f3857ff5e361b95d"
+    },
+    {
+      "path": "desk-light-zh-TW-1-board.png",
+      "sha256": "87cea5f356778627abf4341a28d33c3607c9477680d4c2b21aa794f4bfa51a73"
+    },
+    {
+      "path": "desk-light-zh-TW-2-card-running.png",
+      "sha256": "5d9b618cdd471b38f332e9dbabe1512aeeddc9f91f567c13b63160773a2713d9"
+    },
+    {
+      "path": "desk-light-zh-TW-3-card-handoff.png",
+      "sha256": "129e36df8ffc652ef13210ed44e36af9540f49bbd1d7f01ce453b3c7ad970a2b"
+    },
+    {
+      "path": "desk-dark-en-1-board.png",
+      "sha256": "97213e2648a55afcfdb1ff6d072ebbcaa1078e834971a5a110a80dfd64d23675"
+    },
+    {
+      "path": "desk-dark-en-2-card-running.png",
+      "sha256": "0bc72f2a9edcf6fb9701ba160d8393a708e3f9947665416357ad4acb04cbc85e"
+    },
+    {
+      "path": "desk-dark-en-3-card-handoff.png",
+      "sha256": "31a186ea108b556f444c8ff270c09fa221636bdb198a94997d2b41fca391dcc9"
+    },
+    {
+      "path": "desk-dark-zh-TW-1-board.png",
+      "sha256": "6636b9b12e740240a47164ae8fe292851518ac2451543f3924207eed046dddfc"
+    },
+    {
+      "path": "desk-dark-zh-TW-2-card-running.png",
+      "sha256": "10b34f077a568ce9b413a75a7ab8b71d15e24f769616da34dbc79b4fb93c09b2"
+    },
+    {
+      "path": "desk-dark-zh-TW-3-card-handoff.png",
+      "sha256": "4034d8a64f352332607f67ea63c974468173d2355b51ad4eb06c1c0c4872fcd0"
+    },
+    {
+      "path": "phone-light-en-1-board.png",
+      "sha256": "a49c6e38f9eb232e72c240a116f1b7d6bba6150a7810c030399ca0d6bf385c48"
+    },
+    {
+      "path": "phone-light-en-2-card-running.png",
+      "sha256": "cc8a797210bbe94c37705bcd8b401d2d5a73fc6914bbc5c97cee21cbaf12cdbf"
+    },
+    {
+      "path": "phone-light-en-3-card-handoff.png",
+      "sha256": "580c09229b95cf8de3b5b6bbe408d408d81986943cf3d22e5248fa268f43ac0a"
+    },
+    {
+      "path": "phone-light-zh-TW-1-board.png",
+      "sha256": "5918f56a47c3238444180e8f06cf541def98926ad9cec21a75e1ce073c58c4ef"
+    },
+    {
+      "path": "phone-light-zh-TW-2-card-running.png",
+      "sha256": "8d0c0b91bd004be61f43e92594c079ef014b4501eaeb21bcc8fddd88f7eb276b"
+    },
+    {
+      "path": "phone-light-zh-TW-3-card-handoff.png",
+      "sha256": "a5bbe3bf20c2fe717fc0a58eacf8b94e66a67ee8332995c46712268bd1412b20"
+    },
+    {
+      "path": "phone-dark-en-1-board.png",
+      "sha256": "8cc013f6b23ebbd84e12f6b3f909420cd909b1d8fcad3f37f356ff6dab616cb3"
+    },
+    {
+      "path": "phone-dark-en-2-card-running.png",
+      "sha256": "789e6e01f8656c0df6bf4646b7c78ada98b5b308edf7f62eb92bdc574637bab6"
+    },
+    {
+      "path": "phone-dark-en-3-card-handoff.png",
+      "sha256": "626becddb082d6421981c14de8a1cd54b3d84d4b43162ded9f7813d4a6d60861"
+    },
+    {
+      "path": "phone-dark-zh-TW-1-board.png",
+      "sha256": "d031362cb4acde4165e14feda445aba789c6781580be108cd1b4fa5abe92dcfd"
+    },
+    {
+      "path": "phone-dark-zh-TW-2-card-running.png",
+      "sha256": "09ac5312548415490d40945e959ef01158955aece33821b98f3c85718817bb6c"
+    },
+    {
+      "path": "phone-dark-zh-TW-3-card-handoff.png",
+      "sha256": "75f5ce3d66a6494547a71fe0f14324525b91e87ff6be851e97ff00c1c1bc8fe4"
+    }
+  ],
+  "summary": "24/24"
+}

@@ -1,0 +1,498 @@
+{
+  "phase": "after",
+  "sourceHead": "cc208e3f892ce200476a64eaf8d08dc46ca939bc",
+  "dirty": [],
+  "checks": [
+    {
+      "name": "S-2's handoff to game-dev carries the outbox's key",
+      "ok": true
+    },
+    {
+      "name": "S-2 of the other plan is queued for the offline instance",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: steps are offered (an admin session)",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: S-2's row says what its agent is doing (a turning ring and the step)",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: S-3's row says it waits for S-2",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: S-1 (done) has no line",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the Agent activity block lists S-2's agent, not \"the work is in its sub tasks\"",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: \"Running\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the activity has the handoff row, settled by S-2 starting",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: S-2's row says the next agent is offline and gets it when it is back",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the block lists the hand-over",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the handoff row names who has the baton, and says it is offline",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: steps are offered (an admin session)",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: S-2's row says what its agent is doing (a turning ring and the step)",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: S-3's row says it waits for S-2",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: S-1 (done) has no line",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the Agent activity block lists S-2's agent, not \"the work is in its sub tasks\"",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: \"Running\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the activity has the handoff row, settled by S-2 starting",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: S-2's row says the next agent is offline and gets it when it is back",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the block lists the hand-over",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the handoff row names who has the baton, and says it is offline",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: steps are offered (an admin session)",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: S-2's row says what its agent is doing (a turning ring and the step)",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: S-3's row says it waits for S-2",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: S-1 (done) has no line",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the Agent activity block lists S-2's agent, not \"the work is in its sub tasks\"",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: \"Running\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the activity has the handoff row, settled by S-2 starting",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: S-2's row says the next agent is offline and gets it when it is back",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the block lists the hand-over",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the handoff row names who has the baton, and says it is offline",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: steps are offered (an admin session)",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: S-2's row says what its agent is doing (a turning ring and the step)",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: S-3's row says it waits for S-2",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: S-1 (done) has no line",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the Agent activity block lists S-2's agent, not \"the work is in its sub tasks\"",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: \"Running\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the activity has the handoff row, settled by S-2 starting",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: S-2's row says the next agent is offline and gets it when it is back",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the block lists the hand-over",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the handoff row names who has the baton, and says it is offline",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: steps are offered (an admin session)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: S-2's row says what its agent is doing (a turning ring and the step)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: S-3's row says it waits for S-2",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: S-1 (done) has no line",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the Agent activity block lists S-2's agent, not \"the work is in its sub tasks\"",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: \"Running\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the activity has the handoff row, settled by S-2 starting",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: S-2's row says the next agent is offline and gets it when it is back",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the block lists the hand-over",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the handoff row names who has the baton, and says it is offline",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: steps are offered (an admin session)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: S-2's row says what its agent is doing (a turning ring and the step)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: S-3's row says it waits for S-2",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: S-1 (done) has no line",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the Agent activity block lists S-2's agent, not \"the work is in its sub tasks\"",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: \"Running\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the activity has the handoff row, settled by S-2 starting",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: S-2's row says the next agent is offline and gets it when it is back",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the block lists the hand-over",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the handoff row names who has the baton, and says it is offline",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: steps are offered (an admin session)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: S-2's row says what its agent is doing (a turning ring and the step)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: S-3's row says it waits for S-2",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: S-1 (done) has no line",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the Agent activity block lists S-2's agent, not \"the work is in its sub tasks\"",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: \"Running\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the activity has the handoff row, settled by S-2 starting",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: S-2's row says the next agent is offline and gets it when it is back",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the block lists the hand-over",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the handoff row names who has the baton, and says it is offline",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the main task's tile is Running while its sub task's agent is (as before)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: steps are offered (an admin session)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: S-2's row says what its agent is doing (a turning ring and the step)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: S-3's row says it waits for S-2",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: S-1 (done) has no line",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the Agent activity block lists S-2's agent, not \"the work is in its sub tasks\"",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: \"Running\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the activity has the handoff row, settled by S-2 starting",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: S-2's row says the next agent is offline and gets it when it is back",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the block lists the hand-over",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the handoff row names who has the baton, and says it is offline",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: no page errors",
+      "ok": true
+    }
+  ],
+  "pictures": [
+    {
+      "path": "desk-light-en-1-board.png",
+      "sha256": "4596da0437caf9f9bb54816d62d2ba69fe2a18d3eb0afb59e7fcc7ce59d5b2f2"
+    },
+    {
+      "path": "desk-light-en-2-card-running.png",
+      "sha256": "520bb293ad7b539268b6993a7205d68d4357e69ee21e64301609c3fdd3d2f29c"
+    },
+    {
+      "path": "desk-light-en-3-card-handoff.png",
+      "sha256": "6954c58bda1b81a80b7d8180e26c891f7494ed7ac429205ffc162195fffec9ca"
+    },
+    {
+      "path": "desk-light-zh-TW-1-board.png",
+      "sha256": "09c33db8ef494cf9d83693a1802c878392b013cba0a0d07f4cf25bb03e0d17e1"
+    },
+    {
+      "path": "desk-light-zh-TW-2-card-running.png",
+      "sha256": "3b48fc50aee5cb497cc1fd306d7a87d9c14135a62196c403bbde45f5c58cc18a"
+    },
+    {
+      "path": "desk-light-zh-TW-3-card-handoff.png",
+      "sha256": "98ce4bb8d6f20e9ee8130e6f7f304f1d2ce370f5ea844cf9425d7c8cb285571e"
+    },
+    {
+      "path": "desk-dark-en-1-board.png",
+      "sha256": "97213e2648a55afcfdb1ff6d072ebbcaa1078e834971a5a110a80dfd64d23675"
+    },
+    {
+      "path": "desk-dark-en-2-card-running.png",
+      "sha256": "a8433bf30f6300f94fc62d7ba8f6483b5d8d72f1de333b17be2cef6e54f6e2fd"
+    },
+    {
+      "path": "desk-dark-en-3-card-handoff.png",
+      "sha256": "4d3cb99aa304dad9b34718139eb1f6b786a847a9a457ca61471dfa6623a8bbb6"
+    },
+    {
+      "path": "desk-dark-zh-TW-1-board.png",
+      "sha256": "44a4def92100ce32ec4f04f471fd9563d66d6315f3104f078f84a017228913c4"
+    },
+    {
+      "path": "desk-dark-zh-TW-2-card-running.png",
+      "sha256": "e555508e4af9b922207754449cd1317d212522f8e206c0634a1e8cf01b870660"
+    },
+    {
+      "path": "desk-dark-zh-TW-3-card-handoff.png",
+      "sha256": "bec1628351432d855192af59652aa1e3a1ea55b98a60ac6ccf4f46f6f082597c"
+    },
+    {
+      "path": "phone-light-en-1-board.png",
+      "sha256": "a49c6e38f9eb232e72c240a116f1b7d6bba6150a7810c030399ca0d6bf385c48"
+    },
+    {
+      "path": "phone-light-en-2-card-running.png",
+      "sha256": "36e66aa585f3a01574297fc8649a9c67256c1555a8e7ada8f5d9fa5f6e29f35d"
+    },
+    {
+      "path": "phone-light-en-3-card-handoff.png",
+      "sha256": "6515c76e48ab363d547fb3f6dd0b0f383f6d9d9390e40c03bdd3c48536385e12"
+    },
+    {
+      "path": "phone-light-zh-TW-1-board.png",
+      "sha256": "5918f56a47c3238444180e8f06cf541def98926ad9cec21a75e1ce073c58c4ef"
+    },
+    {
+      "path": "phone-light-zh-TW-2-card-running.png",
+      "sha256": "549daa20054fd0f905f481517d2b40935cbf99763c6dd85dfe90fa3cd5042f4a"
+    },
+    {
+      "path": "phone-light-zh-TW-3-card-handoff.png",
+      "sha256": "91f5df2dfc84ec3987ac70533d9861c34e13dda5bdeef54485fad87051fb04e8"
+    },
+    {
+      "path": "phone-dark-en-1-board.png",
+      "sha256": "8cc013f6b23ebbd84e12f6b3f909420cd909b1d8fcad3f37f356ff6dab616cb3"
+    },
+    {
+      "path": "phone-dark-en-2-card-running.png",
+      "sha256": "e68ffd7db516bd6022200fbb59406413df2f179c44289d8eacdd5a77f3c2b602"
+    },
+    {
+      "path": "phone-dark-en-3-card-handoff.png",
+      "sha256": "4ba32f781e90618ed94912ad214fb9d3fcde7f5a6c51ea83cfa8a1e215bf04bc"
+    },
+    {
+      "path": "phone-dark-zh-TW-1-board.png",
+      "sha256": "d031362cb4acde4165e14feda445aba789c6781580be108cd1b4fa5abe92dcfd"
+    },
+    {
+      "path": "phone-dark-zh-TW-2-card-running.png",
+      "sha256": "d391aaa72e2b5d68a775fa414c17c3b74b9868c732263eef55d4f2791dd7b37f"
+    },
+    {
+      "path": "phone-dark-zh-TW-3-card-handoff.png",
+      "sha256": "9a348e91f24702e7ad18422515a5f6f666d94e537cdcc839121f44d7f9caf5bb"
+    }
+  ],
+  "summary": "98/98"
+}
