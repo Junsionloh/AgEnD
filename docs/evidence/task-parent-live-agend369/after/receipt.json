@@ -1,6 +1,6 @@
 {
   "phase": "after",
-  "sourceHead": "4d6bba91f9a1a44a8477411f76921b2dcf494745",
+  "sourceHead": "9416fc235236fe0e3081ded06bf8a2d99cd7ef4c",
   "dirty": [],
   "checks": [
     {
@@ -823,7 +823,7 @@
   "pictures": [
     {
       "path": "desk-light-en-1-board.png",
-      "sha256": "a3d7c650dfd82ca6556bcd44e33ed63530ee894017d880ce628bcbcb965e1bb0"
+      "sha256": "fc7af23a4445e64a49e7e776fe056dd94d7ffc0e437611fb45c14b54b7065c10"
     },
     {
       "path": "desk-light-en-2-card-running.png",
@@ -843,7 +843,7 @@
     },
     {
       "path": "desk-light-zh-TW-1-board.png",
-      "sha256": "7124f9220ef28d53b9adf640f76bb95029d2e26a3002ec015d0e2017eb9e327d"
+      "sha256": "f1d6cf442a5900240b5960951893c5b0976a219d528e58ba323374ae8673efe8"
     },
     {
       "path": "desk-light-zh-TW-2-card-running.png",
@@ -851,19 +851,19 @@
     },
     {
       "path": "desk-light-zh-TW-3-card-handoff.png",
-      "sha256": "0bf492cb2720410c1434d93c7636f17f99e2e01687d5daf1e41a2cb9f020851a"
+      "sha256": "03cc6182c6c66dae76935f314bdc098c9df9dcd4cd3865587cfec1a75ca73ef2"
     },
     {
       "path": "desk-light-zh-TW-4-card-unclaimed.png",
-      "sha256": "90a35b2d0e39e34b9cd9d84b0e09addf5d7db6352d8b1649a04a7470c2639318"
+      "sha256": "fc6255fe256e81c451a7b42c6648d6252afd5c7eaee70b184234ab857740f6aa"
     },
     {
       "path": "desk-light-zh-TW-5-card-unclaimed-late.png",
-      "sha256": "5586737d5b10730daea9fa66b543717cb2afbcfb05b03b196907a5aeec5ae798"
+      "sha256": "b297f10e63676c3d1c6ad4d49ea83a17db9ace3ecd62924175c8e2454f9b2b60"
     },
     {
       "path": "desk-dark-en-1-board.png",
-      "sha256": "55dbb2175c0bca1f3aa33abd379ba316fbe5d31c09cb3f3184b881f2957f294c"
+      "sha256": "dfb9060e6ae15abba46441ca5d55ea76a7dd1bfbb82d8784d69035998de105a8"
     },
     {
       "path": "desk-dark-en-2-card-running.png",
@@ -883,7 +883,7 @@
     },
     {
       "path": "desk-dark-zh-TW-1-board.png",
-      "sha256": "242ba4b7ea25ccfdcbb032c32ef61c78cb9c43eedf15a59941029ce4106cc3a2"
+      "sha256": "990b87d5a9d2ff80e118c73fc34041daa80059ebcede2dab4ff6b8646c27221d"
     },
     {
       "path": "desk-dark-zh-TW-2-card-running.png",
