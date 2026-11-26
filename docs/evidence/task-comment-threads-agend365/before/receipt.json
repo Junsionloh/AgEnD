@@ -1,0 +1,140 @@
+{
+  "phase": "before",
+  "sourceHead": "846da8c0acc1998b25270a0f9c02a90201226431",
+  "dirty": [],
+  "checks": [
+    {
+      "name": "desk-light-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: no page errors",
+      "ok": true
+    }
+  ],
+  "pictures": [
+    {
+      "path": "desk-light-en-1-stream.png",
+      "sha256": "ba14b651561516f825dd6447a375317f6a7d89e0f72254afec64bed822f803c8"
+    },
+    {
+      "path": "desk-light-zh-TW-1-stream.png",
+      "sha256": "8a1e0a802f921ecbc881d2ef5cc80f9a755b277fbfcc412dfcaba0f38ed6ec1a"
+    },
+    {
+      "path": "desk-dark-en-1-stream.png",
+      "sha256": "a52ef1a4ac9c17f51d1409d607fb7860decdf931a651f9fc39a4bb2b28122840"
+    },
+    {
+      "path": "desk-dark-zh-TW-1-stream.png",
+      "sha256": "ec83fcadf2afff09f2027e03cefbcf46abda4c7bb17d8019c35af8d494165488"
+    },
+    {
+      "path": "phone-light-en-1-stream.png",
+      "sha256": "63699d1fc4d28dc2d6cf1d08323bbe9853f0cd2afdf568ed32695f0a68838f17"
+    },
+    {
+      "path": "phone-light-zh-TW-1-stream.png",
+      "sha256": "7ac15a5ec30749a205bdcc2cb43797485d28f38802b5dfd500a79fdd94e2aab6"
+    },
+    {
+      "path": "phone-dark-en-1-stream.png",
+      "sha256": "4cfdad36a22ef6acf853addd7c1e81b1436354e181d151a2291b77c93df6a544"
+    },
+    {
+      "path": "phone-dark-zh-TW-1-stream.png",
+      "sha256": "805fd96aa76db5457bae51d07db762f021c7b47360526fd7a0465ee6b15e4314"
+    }
+  ],
+  "viewer": null,
+  "comments": [
+    {
+      "id": 1,
+      "by": "web-user",
+      "parentId": null,
+      "edited": false,
+      "deleted": false,
+      "resolved": false,
+      "reactions": []
+    },
+    {
+      "id": 2,
+      "by": "general",
+      "parentId": null,
+      "edited": false,
+      "deleted": false,
+      "resolved": false,
+      "reactions": []
+    },
+    {
+      "id": 3,
+      "by": "web-user",
+      "parentId": null,
+      "edited": false,
+      "deleted": false,
+      "resolved": false,
+      "reactions": []
+    },
+    {
+      "id": 4,
+      "by": "general",
+      "parentId": null,
+      "edited": false,
+      "deleted": false,
+      "resolved": false,
+      "reactions": []
+    },
+    {
+      "id": 5,
+      "by": "web-user",
+      "parentId": null,
+      "edited": false,
+      "deleted": false,
+      "resolved": false,
+      "reactions": []
+    },
+    {
+      "id": 6,
+      "by": "fleet-lead",
+      "parentId": null,
+      "edited": false,
+      "deleted": false,
+      "resolved": false,
+      "reactions": []
+    },
+    {
+      "id": 7,
+      "by": "general",
+      "parentId": null,
+      "edited": false,
+      "deleted": false,
+      "resolved": false,
+      "reactions": []
+    }
+  ],
+  "summary": "8/8"
+}

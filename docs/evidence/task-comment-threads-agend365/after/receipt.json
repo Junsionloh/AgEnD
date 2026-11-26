@@ -1,0 +1,563 @@
+{
+  "phase": "after",
+  "sourceHead": "902de0cdacd051b86bc85cb77ad755e558663e4d",
+  "dirty": [],
+  "checks": [
+    {
+      "name": "desk-light-en: each comment has its tools (reaction button and \u22ef)",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: replies are drawn under their thread's first comment (the resolved thread's are folded away)",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: a resolved thread is one line",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: a deleted comment is a line",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: a reaction's count is drawn in the page's font, not the emoji font",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the viewer's own reaction is pressed",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the box starts at the assignee: \"general \u00b7 starts when sent\"",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the menu offers reply, reaction, edit, resolve, copy, copy link, delete",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: Esc closes the menu",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: a reply's chip starts as the author of the comment it answers",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the chip lists the assignee and the other agents, and \"No agent notified\"",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: each comment has its tools (reaction button and \u22ef)",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: replies are drawn under their thread's first comment (the resolved thread's are folded away)",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: a resolved thread is one line",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: a deleted comment is a line",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: a reaction's count is drawn in the page's font, not the emoji font",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the viewer's own reaction is pressed",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the box starts at the assignee: \"general \u00b7 starts when sent\"",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the menu offers reply, reaction, edit, resolve, copy, copy link, delete",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: Esc closes the menu",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: a reply's chip starts as the author of the comment it answers",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the chip lists the assignee and the other agents, and \"No agent notified\"",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: each comment has its tools (reaction button and \u22ef)",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: replies are drawn under their thread's first comment (the resolved thread's are folded away)",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: a resolved thread is one line",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: a deleted comment is a line",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: a reaction's count is drawn in the page's font, not the emoji font",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the viewer's own reaction is pressed",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the box starts at the assignee: \"general \u00b7 starts when sent\"",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the menu offers reply, reaction, edit, resolve, copy, copy link, delete",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: Esc closes the menu",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: a reply's chip starts as the author of the comment it answers",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the chip lists the assignee and the other agents, and \"No agent notified\"",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: each comment has its tools (reaction button and \u22ef)",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: replies are drawn under their thread's first comment (the resolved thread's are folded away)",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: a resolved thread is one line",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: a deleted comment is a line",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: a reaction's count is drawn in the page's font, not the emoji font",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the viewer's own reaction is pressed",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the box starts at the assignee: \"general \u00b7 starts when sent\"",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the menu offers reply, reaction, edit, resolve, copy, copy link, delete",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: Esc closes the menu",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: a reply's chip starts as the author of the comment it answers",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the chip lists the assignee and the other agents, and \"No agent notified\"",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: each comment has its tools (reaction button and \u22ef)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: replies are drawn under their thread's first comment (the resolved thread's are folded away)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: a resolved thread is one line",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: a deleted comment is a line",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: a reaction's count is drawn in the page's font, not the emoji font",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the viewer's own reaction is pressed",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the box starts at the assignee: \"general \u00b7 starts when sent\"",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the menu offers reply, reaction, edit, resolve, copy, copy link, delete",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: Esc closes the menu",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: a reply's chip starts as the author of the comment it answers",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the chip lists the assignee and the other agents, and \"No agent notified\"",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: each comment has its tools (reaction button and \u22ef)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: replies are drawn under their thread's first comment (the resolved thread's are folded away)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: a resolved thread is one line",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: a deleted comment is a line",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: a reaction's count is drawn in the page's font, not the emoji font",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the viewer's own reaction is pressed",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the box starts at the assignee: \"general \u00b7 starts when sent\"",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the menu offers reply, reaction, edit, resolve, copy, copy link, delete",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: Esc closes the menu",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: a reply's chip starts as the author of the comment it answers",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the chip lists the assignee and the other agents, and \"No agent notified\"",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: each comment has its tools (reaction button and \u22ef)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: replies are drawn under their thread's first comment (the resolved thread's are folded away)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: a resolved thread is one line",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: a deleted comment is a line",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: a reaction's count is drawn in the page's font, not the emoji font",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the viewer's own reaction is pressed",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the box starts at the assignee: \"general \u00b7 starts when sent\"",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the menu offers reply, reaction, edit, resolve, copy, copy link, delete",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: Esc closes the menu",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: a reply's chip starts as the author of the comment it answers",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the chip lists the assignee and the other agents, and \"No agent notified\"",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: each comment has its tools (reaction button and \u22ef)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: replies are drawn under their thread's first comment (the resolved thread's are folded away)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: a resolved thread is one line",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: a deleted comment is a line",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: a reaction's count is drawn in the page's font, not the emoji font",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the viewer's own reaction is pressed",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the box starts at the assignee: \"general \u00b7 starts when sent\"",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the menu offers reply, reaction, edit, resolve, copy, copy link, delete",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: Esc closes the menu",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: a reply's chip starts as the author of the comment it answers",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the chip lists the assignee and the other agents, and \"No agent notified\"",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: no page errors",
+      "ok": true
+    }
+  ],
+  "pictures": [
+    {
+      "path": "desk-light-en-2-menu.png",
+      "sha256": "2879bc4a4742d980c073dee80d7fbe20bea8cef824cdf0ae94e4c16a6ad34608"
+    },
+    {
+      "path": "desk-light-en-3-reply.png",
+      "sha256": "e9e4af50686486e6698cd098ec2febf96608996e3c8e30489a8b4af5c5d166ac"
+    },
+    {
+      "path": "desk-light-en-1-stream.png",
+      "sha256": "c78adcc091e287b8779cf4cee89e5e5becb5a914c0b62614657823dc730c72d7"
+    },
+    {
+      "path": "desk-light-zh-TW-2-menu.png",
+      "sha256": "2d174730970960d37160c6f7b730f724c8c68eb86721e1c1e5ede3ba3f9238d3"
+    },
+    {
+      "path": "desk-light-zh-TW-3-reply.png",
+      "sha256": "5d849bfd62dec254616ce1be7c9de3acc83fb92f0d236e8820f7e36e5b5bb311"
+    },
+    {
+      "path": "desk-light-zh-TW-1-stream.png",
+      "sha256": "40a1d6ba1cb9ad99ab2a2d4de1c18ca1a271ecf2e68654afa110feca83d5f411"
+    },
+    {
+      "path": "desk-dark-en-2-menu.png",
+      "sha256": "24982ba322a01c4a533a50d58078ab0e7aa48624e69d1831019bd43a6bea9e0a"
+    },
+    {
+      "path": "desk-dark-en-3-reply.png",
+      "sha256": "9e3901e1362925e8d517f0ed86698162cd80535bc64a3c102c3b1d60416a0f43"
+    },
+    {
+      "path": "desk-dark-en-1-stream.png",
+      "sha256": "7897e965087938d26d36f1355ce2b3acbd5bd2b0a50510348c67e3d160611a78"
+    },
+    {
+      "path": "desk-dark-zh-TW-2-menu.png",
+      "sha256": "06cf33074bdee0c6a3821f8d868b4f1274c032db894885db0bfb11c98ca4105d"
+    },
+    {
+      "path": "desk-dark-zh-TW-3-reply.png",
+      "sha256": "b6d767ae7f0f1e3b2aeee1ff361274713648df2f0ae40b75266139aa6a213c69"
+    },
+    {
+      "path": "desk-dark-zh-TW-1-stream.png",
+      "sha256": "645bd747a9c54f9591c691e1a3c1ef994bb6bc9b20be2b26435944cf4191f3b1"
+    },
+    {
+      "path": "phone-light-en-2-menu.png",
+      "sha256": "7bc04448d6a96ee3b3167a85996f29f1a6fe2060c5d4e47482a62c75693fa2b0"
+    },
+    {
+      "path": "phone-light-en-3-reply.png",
+      "sha256": "7f83b13ee506364e1cf161a07ab39da6af76b6cdcab2f9bffafd2c433ec85d48"
+    },
+    {
+      "path": "phone-light-en-1-stream.png",
+      "sha256": "dc010315f27e32489d2fdd261692ef0364669464d4b36fb360d04577fe8d4ec6"
+    },
+    {
+      "path": "phone-light-zh-TW-2-menu.png",
+      "sha256": "593cc3e8dffb363945b66c71733188d86e727f75b7e401d45be31a936ef6624f"
+    },
+    {
+      "path": "phone-light-zh-TW-3-reply.png",
+      "sha256": "fbe2f931c5126f94c0a51066d53526b746856a401332bee1fcb47436e299a60c"
+    },
+    {
+      "path": "phone-light-zh-TW-1-stream.png",
+      "sha256": "3dec858e456a914ce761f6ab42381d201abc1b03d0ee6f1705d3c6e0a6129bcd"
+    },
+    {
+      "path": "phone-dark-en-2-menu.png",
+      "sha256": "1d256d90c5cd3563426654a4711c57b116eb96c3dc618451102fbbbbb5d56992"
+    },
+    {
+      "path": "phone-dark-en-3-reply.png",
+      "sha256": "be9dfa774fecdc8c04adc50614c24e4ee0abbcac30c1f960f9750f699d08f0f5"
+    },
+    {
+      "path": "phone-dark-en-1-stream.png",
+      "sha256": "2dbe007574eac18ee4836eaa6733047f5197e5f559b6b95193a1974826c480ed"
+    },
+    {
+      "path": "phone-dark-zh-TW-2-menu.png",
+      "sha256": "bbe9e6a44cbe53d3eee3f349c2351bc658165efeabb5d15e3b778ff9277e32fa"
+    },
+    {
+      "path": "phone-dark-zh-TW-3-reply.png",
+      "sha256": "2edce05e56c4d678947316b3f3710cfaaf8d694eee2def22aab4948f4a0a76b9"
+    },
+    {
+      "path": "phone-dark-zh-TW-1-stream.png",
+      "sha256": "2d4a48bf5db5839302687332bd1756c41524aa6ddbd12d3b51635b96d28ee34e"
+    }
+  ],
+  "viewer": {
+    "name": "web-user"
+  },
+  "comments": [
+    {
+      "id": 1,
+      "by": "web-user",
+      "parentId": null,
+      "edited": false,
+      "deleted": false,
+      "resolved": false,
+      "reactions": [
+        "\ud83d\udc40\u00d71"
+      ]
+    },
+    {
+      "id": 2,
+      "by": "general",
+      "parentId": 1,
+      "edited": false,
+      "deleted": false,
+      "resolved": false,
+      "reactions": []
+    },
+    {
+      "id": 3,
+      "by": "web-user",
+      "parentId": 2,
+      "edited": true,
+      "deleted": false,
+      "resolved": false,
+      "reactions": []
+    },
+    {
+      "id": 4,
+      "by": "general",
+      "parentId": null,
+      "edited": false,
+      "deleted": false,
+      "resolved": false,
+      "reactions": [
+        "\ud83d\udc4d\u00d72",
+        "\ud83c\udf89\u00d71"
+      ]
+    },
+    {
+      "id": 5,
+      "by": "web-user",
+      "parentId": null,
+      "edited": false,
+      "deleted": true,
+      "resolved": false,
+      "reactions": []
+    },
+    {
+      "id": 6,
+      "by": "fleet-lead",
+      "parentId": null,
+      "edited": false,
+      "deleted": false,
+      "resolved": true,
+      "reactions": []
+    },
+    {
+      "id": 7,
+      "by": "general",
+      "parentId": 6,
+      "edited": false,
+      "deleted": false,
+      "resolved": false,
+      "reactions": []
+    }
+  ],
+  "summary": "96/96"
+}
