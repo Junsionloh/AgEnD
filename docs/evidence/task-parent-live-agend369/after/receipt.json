@@ -1,6 +1,6 @@
 {
   "phase": "after",
-  "sourceHead": "c9716e20b113a63b7f5f556016ef32b49daed686",
+  "sourceHead": "4d6bba91f9a1a44a8477411f76921b2dcf494745",
   "dirty": [],
   "checks": [
     {
@@ -823,7 +823,7 @@
   "pictures": [
     {
       "path": "desk-light-en-1-board.png",
-      "sha256": "fc7af23a4445e64a49e7e776fe056dd94d7ffc0e437611fb45c14b54b7065c10"
+      "sha256": "a3d7c650dfd82ca6556bcd44e33ed63530ee894017d880ce628bcbcb965e1bb0"
     },
     {
       "path": "desk-light-en-2-card-running.png",
@@ -843,7 +843,7 @@
     },
     {
       "path": "desk-light-zh-TW-1-board.png",
-      "sha256": "806e78a3c80f78868cbfe44ffeee0cf6c34947c866378f7bcd14c2fbe69d202f"
+      "sha256": "7124f9220ef28d53b9adf640f76bb95029d2e26a3002ec015d0e2017eb9e327d"
     },
     {
       "path": "desk-light-zh-TW-2-card-running.png",
@@ -851,19 +851,19 @@
     },
     {
       "path": "desk-light-zh-TW-3-card-handoff.png",
-      "sha256": "26d46dff7988b87fe8c6e6e8bd316d1632dae8fa8bc1fcdd984e87f33b1ba686"
+      "sha256": "0bf492cb2720410c1434d93c7636f17f99e2e01687d5daf1e41a2cb9f020851a"
     },
     {
       "path": "desk-light-zh-TW-4-card-unclaimed.png",
-      "sha256": "ab34c311df132540595f0a8ecd6f0635ecd02d41345ff96fcc230f47eebfdc52"
+      "sha256": "90a35b2d0e39e34b9cd9d84b0e09addf5d7db6352d8b1649a04a7470c2639318"
     },
     {
       "path": "desk-light-zh-TW-5-card-unclaimed-late.png",
-      "sha256": "b297f10e63676c3d1c6ad4d49ea83a17db9ace3ecd62924175c8e2454f9b2b60"
+      "sha256": "5586737d5b10730daea9fa66b543717cb2afbcfb05b03b196907a5aeec5ae798"
     },
     {
       "path": "desk-dark-en-1-board.png",
-      "sha256": "dfb9060e6ae15abba46441ca5d55ea76a7dd1bfbb82d8784d69035998de105a8"
+      "sha256": "55dbb2175c0bca1f3aa33abd379ba316fbe5d31c09cb3f3184b881f2957f294c"
     },
     {
       "path": "desk-dark-en-2-card-running.png",
@@ -883,7 +883,7 @@
     },
     {
       "path": "desk-dark-zh-TW-1-board.png",
-      "sha256": "990b87d5a9d2ff80e118c73fc34041daa80059ebcede2dab4ff6b8646c27221d"
+      "sha256": "242ba4b7ea25ccfdcbb032c32ef61c78cb9c43eedf15a59941029ce4106cc3a2"
     },
     {
       "path": "desk-dark-zh-TW-2-card-running.png",
@@ -907,19 +907,19 @@
     },
     {
       "path": "phone-light-en-2-card-running.png",
-      "sha256": "4b460133928959ad5ca1a29a13c8080b394e5fb75b6d5c0f0f2f83754c0727da"
+      "sha256": "135f349e076040ecbcca492e315155c50a5fa17aae6f12318d4cfcd8c9ae2f4a"
     },
     {
       "path": "phone-light-en-3-card-handoff.png",
-      "sha256": "b1b48699312ce9221df47bca3a3983ae33eb86a8b5697545d4111fc7eebb2e86"
+      "sha256": "18416de542c61e4659728c3b32b0b672ba99e25c8c8f9dff05494281639adfe0"
     },
     {
       "path": "phone-light-en-4-card-unclaimed.png",
-      "sha256": "18a49ea07aebba8182a2765f0eb32d7c52f6c0f3d499f484dbb050872b92081a"
+      "sha256": "270c01612330c1665609498f86d5b72aa98d92dee82b70b812574949dde5da6f"
     },
     {
       "path": "phone-light-en-5-card-unclaimed-late.png",
-      "sha256": "f03d70df4305b0fce5481ab8708c1df580fbbab9135dc5351e4f5383c26606b9"
+      "sha256": "4f438374434864c1bbfc4b693911b45c1afd3c982fddc270ecaa5d8a6c1ee5e3"
     },
     {
       "path": "phone-light-zh-TW-1-board.png",
@@ -927,7 +927,7 @@
     },
     {
       "path": "phone-light-zh-TW-2-card-running.png",
-      "sha256": "819457627b9938cb110a65be338a8150c12d319f809b0c8408acc4210ae2c46b"
+      "sha256": "12318efec167a5ed562209c4f0374c94b4b4b1281b635f4d1b07354c5f3bf826"
     },
     {
       "path": "phone-light-zh-TW-3-card-handoff.png",
@@ -935,11 +935,11 @@
     },
     {
       "path": "phone-light-zh-TW-4-card-unclaimed.png",
-      "sha256": "03997f7f4b88f9ae9765439175d1f7822a455906571083a011e8212cd8704da3"
+      "sha256": "7141cf501b5f3530988fc7e2fe2abaf2a7defa2395460a5cfd6a107e898f1700"
     },
     {
       "path": "phone-light-zh-TW-5-card-unclaimed-late.png",
-      "sha256": "f11d6b59eb1447e852f4b1ada3848d3076c045f0dc58efdae2dddccf974b7050"
+      "sha256": "77a675fcf08246c1529862a14963e0e7c81c7d84de999e818477e4d7ec68c138"
     },
     {
       "path": "phone-dark-en-1-board.png",
@@ -947,19 +947,19 @@
     },
     {
       "path": "phone-dark-en-2-card-running.png",
-      "sha256": "8536305b4a3510b02adbb9bfdc850d17feef7131fe1b68927c457df34e382c1e"
+      "sha256": "b0911e2af61e5bb9a6fd14608a5c3effd8f6f2ad03baa3b2f9c948b42ff6ac39"
     },
     {
       "path": "phone-dark-en-3-card-handoff.png",
-      "sha256": "23d6886ba98e5209f0e0e87fae3be19a821f3e8a9ca4ef09ac40786d246a3ef1"
+      "sha256": "ec3ec99912dbdebfd7bcb895e06e440a43ed39bc0ad12c7cc6c2f0f854fae38e"
     },
     {
       "path": "phone-dark-en-4-card-unclaimed.png",
-      "sha256": "f9791865d6898a59cd0c20d2c81742efe62761f06b9d57a354e4f77c2f15e20c"
+      "sha256": "47adc196d2c9fda036d363df5bfec6843943f66347e3f0edfbb2f7fdcf9d4140"
     },
     {
       "path": "phone-dark-en-5-card-unclaimed-late.png",
-      "sha256": "8deefa2af4d73ea90e44705603c1299d9df93cc7a06512e348094a5d93fbcb38"
+      "sha256": "e142ecb92d07ac6fefaa63ff51d7988d861d570233c7feab474f5a0f63e3dc46"
     },
     {
       "path": "phone-dark-zh-TW-1-board.png",
@@ -967,7 +967,7 @@
     },
     {
       "path": "phone-dark-zh-TW-2-card-running.png",
-      "sha256": "b297090ef56dfdebd67525cda61cf5f19b4f0cf051d94f9e57a6ae2a3cce8808"
+      "sha256": "2629c0900df964903b520d00b077488a4973004407a17b08f13d2b1d012c7c6d"
     },
     {
       "path": "phone-dark-zh-TW-3-card-handoff.png",
@@ -975,11 +975,11 @@
     },
     {
       "path": "phone-dark-zh-TW-4-card-unclaimed.png",
-      "sha256": "d24447c278698fc517860e063bf857ca27281356c6174cc452816bcf97515ac6"
+      "sha256": "fc9f0c851bedd18709274005c646b39c63db3903b4d1f9aa8853b0e4c9c2c28a"
     },
     {
       "path": "phone-dark-zh-TW-5-card-unclaimed-late.png",
-      "sha256": "a3770d36c9c3e5819082199850df4efdb33883a0ca98ae6193ffa84987c13110"
+      "sha256": "35fad3a1b2d196d98825ecfc98491d8da06af4b2dc1e6a54585a306627cb1059"
     }
   ],
   "summary": "204/204"
