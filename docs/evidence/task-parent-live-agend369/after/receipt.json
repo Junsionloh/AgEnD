@@ -1,6 +1,6 @@
 {
   "phase": "after",
-  "sourceHead": "cc208e3f892ce200476a64eaf8d08dc46ca939bc",
+  "sourceHead": "c2af4c082a03e42b89b019b87fd0eea36f6fc557",
   "dirty": [],
   "checks": [
     {
@@ -399,7 +399,7 @@
   "pictures": [
     {
       "path": "desk-light-en-1-board.png",
-      "sha256": "4596da0437caf9f9bb54816d62d2ba69fe2a18d3eb0afb59e7fcc7ce59d5b2f2"
+      "sha256": "8679465abd4888736ee71dda31c481949996f24f8c07dd69d1abcd9d7d499033"
     },
     {
       "path": "desk-light-en-2-card-running.png",
@@ -411,7 +411,7 @@
     },
     {
       "path": "desk-light-zh-TW-1-board.png",
-      "sha256": "09c33db8ef494cf9d83693a1802c878392b013cba0a0d07f4cf25bb03e0d17e1"
+      "sha256": "87cea5f356778627abf4341a28d33c3607c9477680d4c2b21aa794f4bfa51a73"
     },
     {
       "path": "desk-light-zh-TW-2-card-running.png",
@@ -423,7 +423,7 @@
     },
     {
       "path": "desk-dark-en-1-board.png",
-      "sha256": "97213e2648a55afcfdb1ff6d072ebbcaa1078e834971a5a110a80dfd64d23675"
+      "sha256": "d3666c1ee1c68f1974737fae1658036d966a44d4a3c42b788dfda9f898a0ae31"
     },
     {
       "path": "desk-dark-en-2-card-running.png",
@@ -431,11 +431,11 @@
     },
     {
       "path": "desk-dark-en-3-card-handoff.png",
-      "sha256": "4d3cb99aa304dad9b34718139eb1f6b786a847a9a457ca61471dfa6623a8bbb6"
+      "sha256": "fc3c0e69cdf635c2508f9ac5a90f9db381615e322052133d9f2790770037b176"
     },
     {
       "path": "desk-dark-zh-TW-1-board.png",
-      "sha256": "44a4def92100ce32ec4f04f471fd9563d66d6315f3104f078f84a017228913c4"
+      "sha256": "6636b9b12e740240a47164ae8fe292851518ac2451543f3924207eed046dddfc"
     },
     {
       "path": "desk-dark-zh-TW-2-card-running.png",
