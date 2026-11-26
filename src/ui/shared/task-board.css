@@ -708,7 +708,10 @@ button.tb-owner-btn:hover { border-color: var(--border); background: var(--surfa
 .tl-baton > .tl-line .tl-mark { color: var(--accent); }
 .tl-baton .tf-wakes { margin-top: 2px; padding-left: calc(var(--s-4) + 20px + var(--s-2)); }
 @media (max-width: 899px), (pointer: coarse) and (max-height: 500px) and (max-width: 1023px) {
-  .tp-subs .tc-children .tc-child-line { grid-column: 3; }
+  /* No tooltip on a phone: the line wraps instead of being cut. */
+  .tp-subs .tc-children .tc-child-line { grid-column: 3; align-items: flex-start; }
+  .tp-subs .tc-children .tc-child-line > svg, .tp-subs .tc-children .tc-child-line > .tf-spin { margin-top: 3px; }
+  .tc-child-line .tf-text { white-space: normal; overflow-wrap: anywhere; }
   .tl-baton .tf-wakes { padding-left: calc(var(--s-3) + 20px + var(--s-2)); }
 }
 
