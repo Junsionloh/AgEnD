@@ -55,9 +55,10 @@ export interface TaskBoardWakerDeps {
   /**
    * What became of the news about a card for an instance as it went out — the comment status (docs/design/task-board.md, "Comment
    * status"): handed to delivery under `key` (the outbox's), or not sent (`skip` says why). Told for every card's news that carries
-   * a comment's words; the board marks the comments it concerns. Absent: nobody keeps it.
+   * a comment's words (`kind: "words"`, the default) or tells the instance its card can be started (`kind: "handoff"`, docs/design/task-board.md,
+   * "Handoffs"); the board marks the comments, or the handoffs, it concerns. Absent: nobody keeps it.
    */
-  settled?(event: { uuid: string; instance: string; key?: string; skip?: WakeSkip }): void;
+  settled?(event: { uuid: string; instance: string; kind?: "words" | "handoff"; key?: string; skip?: WakeSkip }): void;
   log(level: "info" | "warn", message: string, extra?: Record<string, unknown>): void;
   gatherMs?: number;
   timers?: { set(fn: () => void, ms: number): unknown; clear(handle: unknown): void };
@@ -78,6 +79,8 @@ const isCommentNews = (r: WakeReason) => r === "comment" || r === "mention";
 /** News whose words are a comment's: those two, and a dispatcher's answer to a blocked question (the comment that came with it). */
 const carriesWords = (r: WakeReason) => isCommentNews(r) || r === "answered" || r === "answer_kept";
 const hasCommentNews = (w: Wake) => w.reasons.some(isCommentNews);
+/** News that hands the card to the instance to start: everything it waited for is done, or it was given to it while it could start. */
+const isHandoff = (r: WakeReason) => r === "ready" || r === "assigned";
 
 const quote = (text: string | undefined) => (text ? `: "${oneLine(text, 160)}"` : "");
 /** A reply says which comment it answers (its number and author, as `task get` shows them) and what that one said. */
@@ -315,10 +318,17 @@ export class TaskBoardWaker {
     return out;
   }
 
-  /** Tells the board what became of a card's news for `instance` (settled), never failing the send. */
-  private settle(instance: string, w: Wake, what: { key?: string; skip?: WakeSkip }): void {
-    if (!w.reasons.some(carriesWords)) return;
-    try { this.deps.settled?.({ uuid: w.uuid, instance, ...what }); } catch (err) { this.deps.log("warn", "Task board could not record what became of a comment's news", { instance, code: w.code, err: (err as Error).message }); }
+  /**
+   * Tells the board what became of a card's news for `instance` (settled), never failing the send: once for the comments it carried the words
+   * of, and once for the handoff it carried (`only` limits it to one of them, for news only part of which could not go).
+   */
+  private settle(instance: string, w: Wake, what: { key?: string; skip?: WakeSkip }, only?: "words" | "handoff"): void {
+    const kinds: Array<"words" | "handoff"> = [];
+    if ((!only || only === "words") && w.reasons.some(carriesWords)) kinds.push("words");
+    if ((!only || only === "handoff") && w.reasons.some(isHandoff)) kinds.push("handoff");
+    for (const kind of kinds) {
+      try { this.deps.settled?.({ uuid: w.uuid, instance, kind, ...what }); } catch (err) { this.deps.log("warn", "Task board could not record what became of a card's news", { instance, code: w.code, kind, err: (err as Error).message }); }
+    }
   }
 
   private flush(instance: string): void {
@@ -335,10 +345,12 @@ export class TaskBoardWaker {
     for (const gathered of batch.wakes.values()) {
       const held = this.deps.holds(gathered);
       if (!held) { this.settle(instance, gathered, { skip: "not_waiting" }); continue; }
+      // The card started (or was given away) while the news gathered: the handoff no longer stands, whatever else of the news does.
+      if (gathered.reasons.some(isHandoff) && !held.reasons.some(isHandoff)) this.settle(instance, gathered, { skip: "not_waiting" }, "handoff");
       const reach = this.contactHolds(instance, held);
-      if (!reach) { this.settle(instance, held, { skip: "contact_held" }); continue; }
+      if (!reach) { this.settle(instance, held, { skip: "contact_held" }, "words"); continue; }
       // The words are left out when their writer may not reach the instance; the card's own news still goes.
-      if (held.reasons.some(carriesWords) && !reach.reasons.some(carriesWords)) this.settle(instance, held, { skip: "contact_held" });
+      if (held.reasons.some(carriesWords) && !reach.reasons.some(carriesWords)) this.settle(instance, held, { skip: "contact_held" }, "words");
       wakes.push(reach);
     }
     if (!wakes.length) return;

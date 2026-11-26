@@ -198,9 +198,10 @@ function useFeed(name, on, busy) {
  * card, work that lives in its sub tasks, or just that nothing is written. `run`: this card's `runOf`, if any — an assignee
  * that has the card in progress and is idle says so (the one thing it can know).
  */
-export function handoffNote(card, { derived = false, run = null } = {}) {
+export function handoffNote(card, { derived = false, run = null, baton = "" } = {}) {
   if (run && run.state === "idle") return t("taskrun.idleNote", run.instance);
-  if (card.status === "open") return card.assignee ? t("taskrun.waiting", card.assignee) : t("taskrun.waitingNobody");
+  // `baton`: where the card stands in the hand-over (waits for S-1, handed to dev, dev read it…) — fleet-task-flow.js's line for it.
+  if (card.status === "open") return baton || (card.assignee ? t("taskrun.waiting", card.assignee) : t("taskrun.waitingNobody"));
   return derived ? t("taskrun.viaSubs") : t("taskrun.nothingYet");
 }
 
@@ -211,9 +212,11 @@ export function handoffNote(card, { derived = false, run = null } = {}) {
  * conversation stays). With a state or result, or while the assignee is working, it opens up: who, their state, the way to their
  * conversation, the live steps (an admin, tool progress on), then the fields (`shown`) and the buttons for the empty ones.
  * `doing`: `inProgressBy` of the board. `derived`: a main task that follows its sub tasks has no agent of its own (its sub
- * tasks' pages do), whatever its assignee field says.
+ * tasks' pages do), whatever its assignee field says — what they are doing is `flow` (fleet-task-flow.js's `FlowLines`, drawn when
+ * `flowOn`: a sub task is running, waiting for the person, handed on…), and without it the block is the one quiet line. `baton`: a card
+ * that waits to start says where the hand-over stands, in words (`handoffNote`).
  */
-export function AgentRun({ card, detail, doing, derived = false, shown = [], adders = [] }) {
+export function AgentRun({ card, detail, doing, derived = false, shown = [], adders = [], flow = null, flowOn = false, baton = "" }) {
   const store = useStore(appStore);            // one card's page: one subscription
   useStore(activityPrefs);
   const name = !derived && card.assignee ? card.assignee : null;
@@ -224,11 +227,11 @@ export function AgentRun({ card, detail, doing, derived = false, shown = [], add
   useFeed(name, offered, live);
   const chat = it ? html`<a class="btn btn-sm tr-open" href=${chatPath(name)} title=${t("taskrun.openChatTip", name)}><${Icon} name="chat" size=${14} />${t("taskrun.openChat")}</a>` : null;
   const extras = adders.length ? html`<span class="tp-adders">${adders}</span>` : null;
-  if (!live && !shown.length) {
+  if (!live && !shown.length && !flowOn) {
     return html`<section class="tr-run tp-agent is-strip" aria-label=${t("taskrun.title")}>
       <span class="tp-agent-icon" aria-hidden="true"><${Icon} name="bot" size=${16} /></span>
       <span class="tr-title">${t("taskrun.title")}</span>
-      <span class="tp-agent-note">${handoffNote(card, { derived, run })}</span>
+      <span class="tp-agent-note">${handoffNote(card, { derived, run, baton })}</span>
       <span class="tb-grow"></span>${extras}${chat}
     </section>`;
   }
@@ -246,6 +249,7 @@ export function AgentRun({ card, detail, doing, derived = false, shown = [], add
       <span class="tb-grow"></span>
       ${chat}
     </div>
+    ${flowOn ? flow : null}
     ${run && run.state === "idle" ? html`<p class="muted tr-note">${t("taskrun.idleNote", name)}</p>` : null}
     ${run && run.shared ? html`<p class="muted tr-note">${t("taskrun.sharedNote", name, run.shared)}</p>` : null}
     ${group ? html`<${ActivityBlock} group=${group} ctx=${activityDrawCtx(name)} />` : null}

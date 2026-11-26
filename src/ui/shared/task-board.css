@@ -681,6 +681,37 @@ button.tb-owner-btn:hover { border-color: var(--border); background: var(--surfa
   .tr-mark.s-working .tr-dot, .tr-state.s-working .tr-dot { animation: none; }
 }
 
+/* ── live state and handoffs on a main task (fleet-task-flow.js) ───────────────────────────────────────── */
+/* The line under a sub task: a turning ring (the shared `.out-spin`, still with reduced motion) and what it is doing now, or an icon and where
+   the hand-over stands. It sits in the row's grid under the title (the row is one button: it opens the card). Colours are the page's tokens. */
+.tc-child-line { grid-column: 3 / -1; display: flex; align-items: center; gap: var(--s-1); min-width: 0; padding-bottom: 2px; font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--text-2); }
+.tc-child-line > svg, .tf-item > svg { flex: none; }
+.tf-item { display: flex; align-items: center; gap: var(--s-2); min-width: 0; font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--text-2); }
+.tf-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-spin { flex: none; }
+.tf-busy { color: var(--accent); }
+.tf-ok, .tf-done { color: var(--ok); }
+.tf-bad { color: var(--danger); }
+.tf-warn { color: var(--warn); }
+.tf-muted { color: var(--text-3); }
+.tf-wait { color: var(--text-2); }
+.tc-child-line.tf-k-running .tf-text { font-weight: var(--fw-semibold); }
+/* The main task's "Agent activity": one line per sub task that has something going on, its number at the end (it opens that sub task). */
+.tf-lines { display: flex; flex-direction: column; gap: var(--s-1); margin: 0; padding: 0; list-style: none; }
+.tf-item .tf-text { flex: 0 1 auto; }
+.tf-item .tf-card { flex: none; margin-left: auto; }
+.tf-item.tf-k-running .tf-text { font-weight: var(--fw-semibold); }
+.tf-more { font-size: var(--fs-xs); }
+/* A handoff in the activity stream: a thin row like the history's, but never folded away, its sentence in the text colour, where it stands under it. */
+.tl-baton { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.tl-baton > .tl-line { color: var(--text); }
+.tl-baton > .tl-line .tl-mark { color: var(--accent); }
+.tl-baton .tf-wakes { margin-top: 2px; padding-left: calc(var(--s-4) + 20px + var(--s-2)); }
+@media (max-width: 899px), (pointer: coarse) and (max-height: 500px) and (max-width: 1023px) {
+  .tp-subs .tc-children .tc-child-line { grid-column: 3; }
+  .tl-baton .tf-wakes { padding-left: calc(var(--s-3) + 20px + var(--s-2)); }
+}
+
 /* M-3668: the Done column's "Show 20 more" under its newest cards; this week's count beside its title; the Archive's filter. */
 .tb-done-more { display: block; margin: var(--s-2) auto; }
 /* #4428 capture check: under the Done column's head, not in it (a narrow head squeezed its title to 「完 / 成」). */

@@ -377,8 +377,9 @@ describe("a card's page: Agent activity", () => {
     (globalThis as any).history.replaceState(null, "", "/ui/fleet");
     await mount();
     await openCard("M-2");
-    expect(q(".tr-run").className, "its sub tasks' pages have the agent").toContain("is-strip");
-    expect(text(q(".tp-agent-note"))).toBe("The work is in its sub tasks: each one's agent updates its own card");
+    // A main task has no agent of its own: its block lists what its sub tasks' agents are doing (S-2's beta is idle here), and has no conversation link.
+    expect(q(".tr-run").className, "its sub tasks' pages have the agent").not.toContain("is-strip");
+    expect(text(q(".tr-run .tf-lines"))).toBe("beta · idle S-2");
     expect(q("a.tr-open")).toBeNull();
     app.applyStatus({ uptime: 1, instances: [{ name: "beta", status: "running", state: "idle", execution_state: "idle" }] });
     (globalThis as any).history.replaceState(null, "", "/ui/fleet");

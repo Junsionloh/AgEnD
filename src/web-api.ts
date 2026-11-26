@@ -70,7 +70,7 @@ import { CreateInstanceArgs, CreateScheduleArgs, UpdateScheduleArgs, validateArg
 import { scheduleView } from "./web-schedules.js";
 import { DEFAULT_SCHEDULER_CONFIG } from "./scheduler/index.js";
 import type { Schedule, ScheduleRetry } from "./scheduler/types.js";
-import { CARD_PRIORITIES, CARD_SIZES, CARD_STATUSES, MAX_RECIPIENTS, TaskBoardError, archiveAfterDays, cardCode, type Actor as BoardActor, type Entry as BoardEntry, type EntryWake, type MutationResult, type TaskBoard, type WakeSkip } from "./scheduler/task-board.js";
+import { CARD_PRIORITIES, CARD_SIZES, CARD_STATUSES, MAX_RECIPIENTS, TaskBoardError, archiveAfterDays, cardCode, type Actor as BoardActor, type Entry as BoardEntry, type EntryWake, type Handoff, type HandoffWhy, type MutationResult, type TaskBoard, type WakeSkip } from "./scheduler/task-board.js";
 import { TASK_REF_SEPARATOR, cardsForRefs, taskReadWay, taskRefBlock, taskRefCodes, taskRefView } from "./chat-task-refs.js";
 import { readStatuslineModel, resolveInstanceContext } from "./topic-commands.js";
 import { z } from "zod";
@@ -2244,21 +2244,50 @@ function withWakeViews<E extends { id: number; deleted?: unknown }>(comments: E[
   });
 }
 
+/** How far one notice got, from what the board kept (`key` / `skip`, when it was routed) and what the delivery outbox says of it. */
+function noticeState(w: { at: string; key?: string; skip?: WakeSkip }, progress: ReadonlyMap<string, import("./delivery-outbox.js").NoticeProgress>, now: number): Pick<WakeView, "state" | "skip" | "readAt"> {
+  if (w.skip) return { state: "skipped", skip: w.skip };
+  if (!w.key) return now - Date.parse(w.at) > WAKE_LOST_MS ? { state: "skipped", skip: "lost" } : { state: "sending" };
+  const p = progress.get(w.key);
+  if (!p) return { state: "unknown" };
+  switch (p.state) {
+    case "delivered": return p.consumedAt ? { state: "read", readAt: p.consumedAt } : { state: "delivered" };
+    case "failed": return { state: "failed" };
+    case "uncertain": return { state: "uncertain" };
+    case "cancelled": return { state: "withdrawn" };
+    default: return { state: "queued" };
+  }
+}
+
 export function wakeViews(wakes: ReadonlyArray<EntryWake>, progress: ReadonlyMap<string, import("./delivery-outbox.js").NoticeProgress>, now: number): WakeView[] {
-  return wakes.map((w): WakeView => {
-    const base = { to: w.to, why: w.why, at: w.at };
-    if (w.skip) return { ...base, state: "skipped", skip: w.skip };
-    if (!w.key) return now - Date.parse(w.at) > WAKE_LOST_MS ? { ...base, state: "skipped", skip: "lost" } : { ...base, state: "sending" };
-    const p = progress.get(w.key);
-    if (!p) return { ...base, state: "unknown" };
-    switch (p.state) {
-      case "delivered": return p.consumedAt ? { ...base, state: "read", readAt: p.consumedAt } : { ...base, state: "delivered" };
-      case "failed": return { ...base, state: "failed" };
-      case "uncertain": return { ...base, state: "uncertain" };
-      case "cancelled": return { ...base, state: "withdrawn" };
-      default: return { ...base, state: "queued" };
-    }
-  });
+  return wakes.map((w): WakeView => ({ to: w.to, why: w.why, at: w.at, ...noticeState(w, progress, now) }));
+}
+
+/**
+ * A card handed to the instance that works it next, as the card page shows it (docs/design/task-board.md, "Handoffs"): the card, the
+ * instance, why (`ready`: everything it waited for is done; `assigned`), the card whose finishing readied it, when — and how far the notice
+ * got, in `wakeViews`' words (`state`, `skip`, `readAt`). No key, no delivery id, no text of the notice.
+ */
+export interface HandoffView extends Pick<WakeView, "state" | "skip" | "readAt" | "at" | "to"> {
+  /** The handoff's own number (the page's key for it), not a card's. */
+  id: number;
+  card: string;
+  why: HandoffWhy;
+  after: string | null;
+}
+
+export function handoffViews(list: ReadonlyArray<Handoff>, progress: ReadonlyMap<string, import("./delivery-outbox.js").NoticeProgress>, now: number): HandoffView[] {
+  return list.map((h): HandoffView => ({ id: h.id, card: h.card, to: h.to, why: h.why, after: h.after, at: h.at, ...noticeState(h, progress, now) }));
+}
+
+/** A card's handoffs (its own and, for a main task, those of its sub tasks) with how far each notice got — for a session that can write, never of an instance kept out of sight. */
+function withHandoffViews(board: TaskBoard, ref: string, children: ReadonlyArray<{ id: string }>, ctx: WebApiContext, hiddenName: (n: string) => boolean): HandoffView[] {
+  const uuids = [ref, ...children.map((c) => c.id)].flatMap((r) => { const c = board.findCard(r); return c ? [c.uuid] : []; });
+  const list = board.handoffsOf(uuids).filter((h) => !hiddenName(h.to));
+  if (!list.length) return [];
+  const keys = list.flatMap((h) => (h.key ? [h.key] : []));
+  const progress = keys.length ? ctx.taskWakeProgress?.(keys) ?? new Map() : new Map();
+  return handoffViews(list, progress, Date.now());
 }
 
 function boardError(res: ServerResponse, err: unknown): void {
@@ -4296,6 +4325,8 @@ export function handleWebRequest(
       comments: threadsShown(d.comments.filter((e) => !hiddenName(e.author)), hiddenName),
       logs: d.logs.filter((e) => !hiddenName(e.author)),
       history: d.history.filter((e) => !hiddenName(e.actor) && !mentionsHidden(e.data)).flatMap((e) => unnumberedEvent(e) ?? []),
+      // A sub task kept out of sight has no moves here, nor does one a hidden instance made.
+      subEvents: d.subEvents.filter((e) => !hiddenCode(e.card) && !hiddenName(e.actor) && !mentionsHidden(e.data)),
     };
     const card = /^\/ui\/tasks\/cards\/([^/]+)(?:\/(move|reorder|watchers))?$/.exec(path);
     const comment = /^\/ui\/tasks\/cards\/([^/]+)\/comments\/(\d{1,12})\/(edit|react|resolve|delete)$/.exec(path);
@@ -4431,7 +4462,9 @@ export function handleWebRequest(
         const withStatus = viewer ? withWakeViews(read.comments, board.entryWakes(ref), ctx, hiddenName) : read.comments;
         // Each comment says whether it is the viewer's (two people who are both "web-user" are told apart by their key, not their name).
         const mine = viewer && viewer.kind === "person" ? board.commentsWrittenBy(ref, viewer) : null;
-        json(res, 200, { ...read, comments: mine ? withStatus.map((e) => ({ ...e, mine: mine.has(e.id) })) : withStatus, ...(mine ? { viewer: { name: viewer!.name, kind: viewer!.kind } } : {}),
+        // The handoffs, like the comment status, only to a session that can write (the delivery's state is the writer's feedback).
+        const handoffs = viewer ? withHandoffViews(board, ref, read.children, ctx, hiddenName) : [];
+        json(res, 200, { ...read, comments: mine ? withStatus.map((e) => ({ ...e, mine: mine.has(e.id) })) : withStatus, ...(mine ? { viewer: { name: viewer!.name, kind: viewer!.kind } } : {}), ...(handoffs.length ? { handoffs } : {}),
           ...(board.isArchived(found, archiveDays) ? { archived: true, archiveAfterDays: archiveDays } : {}) });
         return true;
       }

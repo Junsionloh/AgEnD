@@ -239,9 +239,9 @@ describe("the sub tasks: rows on the page's grid", () => {
     expect(text(subs.querySelector("h3"))).toBe("Sub tasks");
     expect(text(subs.querySelector(".tp-subs-count"))).toBe("1 / 2");
     expect(subs.querySelector("svg.tb-bar"), "the shared progress bar").toBeTruthy();
-    expect(qa(".tp-subs .tc-children li").map((li) => text(li))).toEqual(["Done S-1 Price list alpha", "To do S-2 Checkout beta"]);
-    expect(qa(".tp-subs .tc-children button").map((b) => [...b.children].map((c: any) => c.className.split(" ")[0])), "a row's columns: status, number, title, who")
-      .toEqual([["tb-pill", "tb-code", "tc-child-title", "tb-who"], ["tb-pill", "tb-code", "tc-child-title", "tb-who"]]);
+    expect(qa(".tp-subs .tc-children li").map((li) => text(li))).toEqual(["Done S-1 Price list alpha", "To do S-2 Checkout beta Ready — beta has not started it yet"]);
+    expect(qa(".tp-subs .tc-children button").map((b) => [...b.children].map((c: any) => c.className.split(" ")[0])), "a row's columns: status, number, title, who — and, when there is something going on, its line")
+      .toEqual([["tb-pill", "tb-code", "tc-child-title", "tb-who"], ["tb-pill", "tb-code", "tc-child-title", "tb-who", "tc-child-line"]]);
     const body = subs.querySelector(".tc-field-body");
     const last = body.children[body.children.length - 1];
     expect(last.className).toBe("tc-quick-add");
