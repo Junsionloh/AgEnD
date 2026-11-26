@@ -16,7 +16,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 vi.mock("../src/logger.js", () => ({ createLogger: () => ({ info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn(), child() { return this; } }) }));
-import { handleWebRequest } from "../src/web-api.js";
+import { handleWebRequest, withHandoffViews } from "../src/web-api.js";
 import { WebSessionStore, csrfTokenFor, tokenEpoch } from "../src/web-session.js";
 import { SchedulerDb } from "../src/scheduler/db.js";
 import { Scheduler } from "../src/scheduler/index.js";
@@ -122,6 +122,19 @@ describe("1. the card read carries handoffs for a session that can write", () =>
     db.board.moveCard(DEV_A, sub.code, "done", { result: "ok" });
     expect((await read(db, main.code, local)).handoffs.map((h: any) => h.to).sort()).toEqual(["dev-a", "spy"]);
     expect((await read(db, main.code, {})).handoffs.map((h: any) => h.to).sort()).toEqual(["dev-a", "spy"]);
+  });
+
+  it("the card whose finishing readied a handoff is numbered only if the viewer may see it: one kept out of sight reads as none", () => {
+    const db = scratchDb();
+    const { main, s1, s2 } = seed(db);
+    const ctx = { taskWakeProgress: () => new Map() } as never;
+    const children = [{ id: s1.code }, { id: s2.code }];
+    const ready = (hiddenCode: (c: string) => boolean) => withHandoffViews(db.board, main.code, children, ctx, () => false, hiddenCode).find((h) => h.card === s2.code)!;
+    expect(ready(() => false).after, "visible: named").toBe(s1.code);
+    expect(ready((c) => c === s1.code), "S-1 kept out of sight: not named").toMatchObject({ card: s2.code, why: "ready", after: null });
+    expect(ready((c) => c === "M-99").after, "another hidden card changes nothing").toBe(s1.code);
+    expect(JSON.stringify(withHandoffViews(db.board, main.code, children, ctx, () => false, (c) => c === s1.code).find((h) => h.card === s2.code))).not.toContain(s1.code);
+    expect(withHandoffViews(db.board, main.code, children, ctx, () => false).find((h) => h.card === s2.code)!.after, "without the rule (as the tests above call it): as stored").toBe(s1.code);
   });
 
   it("carries no key, delivery id or notice text", async () => {

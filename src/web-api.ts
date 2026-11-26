@@ -2280,10 +2280,14 @@ export function handoffViews(list: ReadonlyArray<Handoff>, progress: ReadonlyMap
   return list.map((h): HandoffView => ({ id: h.id, card: h.card, to: h.to, why: h.why, after: h.after, at: h.at, ...noticeState(h, progress, now) }));
 }
 
-/** A card's handoffs (its own and, for a main task, those of its sub tasks) with how far each notice got — for a session that can write, never of an instance kept out of sight. */
-function withHandoffViews(board: TaskBoard, ref: string, children: ReadonlyArray<{ id: string }>, ctx: WebApiContext, hiddenName: (n: string) => boolean): HandoffView[] {
+/**
+ * A card's handoffs (its own and, for a main task, those of its sub tasks) with how far each notice got — for a session that can write, never of an
+ * instance kept out of sight; the card whose finishing readied one (`after`) is numbered only if the viewer may see it (`hiddenCode`: a card kept out of
+ * sight reads as none, and the page says "S-2 can start" instead of "S-1 done").
+ */
+export function withHandoffViews(board: TaskBoard, ref: string, children: ReadonlyArray<{ id: string }>, ctx: WebApiContext, hiddenName: (n: string) => boolean, hiddenCode: (code: string) => boolean = () => false): HandoffView[] {
   const uuids = [ref, ...children.map((c) => c.id)].flatMap((r) => { const c = board.findCard(r); return c ? [c.uuid] : []; });
-  const list = board.handoffsOf(uuids).filter((h) => !hiddenName(h.to));
+  const list = board.handoffsOf(uuids).filter((h) => !hiddenName(h.to)).map((h) => (h.after && hiddenCode(h.after) ? { ...h, after: null } : h));
   if (!list.length) return [];
   const keys = list.flatMap((h) => (h.key ? [h.key] : []));
   const progress = keys.length ? ctx.taskWakeProgress?.(keys) ?? new Map() : new Map();
@@ -4463,7 +4467,7 @@ export function handleWebRequest(
         // Each comment says whether it is the viewer's (two people who are both "web-user" are told apart by their key, not their name).
         const mine = viewer && viewer.kind === "person" ? board.commentsWrittenBy(ref, viewer) : null;
         // The handoffs, like the comment status, only to a session that can write (the delivery's state is the writer's feedback).
-        const handoffs = viewer ? withHandoffViews(board, ref, read.children, ctx, hiddenName) : [];
+        const handoffs = viewer ? withHandoffViews(board, ref, read.children, ctx, hiddenName, hiddenCode) : [];
         json(res, 200, { ...read, comments: mine ? withStatus.map((e) => ({ ...e, mine: mine.has(e.id) })) : withStatus, ...(mine ? { viewer: { name: viewer!.name, kind: viewer!.kind } } : {}), ...(handoffs.length ? { handoffs } : {}),
           ...(board.isArchived(found, archiveDays) ? { archived: true, archiveAfterDays: archiveDays } : {}) });
         return true;

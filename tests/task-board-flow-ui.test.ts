@@ -207,7 +207,10 @@ describe("1. what a line says", () => {
     const states0 = states({ dev: "idle" });
     const ready = { id: 1, card: "S-2", to: "dev", why: "ready", after: "S-1", at: ago(MIN), state: "read" };
     expect(flow.batonOf(ready, states0, null)).toEqual({ lead: "S-1 done → handed to dev to start S-2", status: { tone: "ok", text: "dev read it — waiting for it to start" } });
-    expect(flow.batonOf(ready, states0, ago(30_000)).status).toEqual({ tone: "done", text: "dev started S-2" });
+    expect(flow.batonOf(ready, states0, { at: ago(30_000), by: "dev" }).status).toEqual({ tone: "done", text: "dev started S-2" });
+    // Someone else moved it (a person, another instance): the page does not say the baton-holder did.
+    expect(flow.batonOf(ready, states0, { at: ago(30_000), by: "Ann" }).status).toEqual({ tone: "done", text: "S-2 started" });
+    expect(flow.batonOf(ready, states0, { at: ago(30_000), by: "" }).status.text, "an older event with no actor").toBe("S-2 started");
     expect(flow.batonOf({ ...ready, why: "assigned", after: null }, states0, null).lead).toBe("S-2 handed to dev");
     expect(flow.batonOf({ ...ready, after: null }, states0, null).lead).toBe("S-2 can start → handed to dev");
     expect(flow.batonOf({ ...ready, state: "unknown" }, states0, null).status).toBeNull();
@@ -216,10 +219,11 @@ describe("1. what a line says", () => {
   it("startedAfter: the card's move to in progress at or after the handoff — a sub task's from the main task's events, its own from its history", () => {
     const h1 = { card: "S-2", at: ago(10 * MIN) };
     const d = { card: { id: "M-2" }, subEvents: [mv(1, "S-2", "dev", "open", "claimed", 20 * MIN), mv(2, "S-2", "dev", "open", "claimed", 5 * MIN), mv(3, "S-3", "qa", "open", "claimed", MIN)], history: [] };
-    expect(flow.startedAfter(h1, d)).toBe(d.subEvents[1]!.at);
-    expect(flow.startedAfter({ card: "S-3", at: ago(10 * MIN) }, d)).toBe(d.subEvents[2]!.at);
+    expect(flow.startedAfter(h1, d)).toEqual({ at: d.subEvents[1]!.at, by: "dev" });
+    expect(flow.startedAfter({ card: "S-3", at: ago(10 * MIN) }, d)).toEqual({ at: d.subEvents[2]!.at, by: "qa" });
     expect(flow.startedAfter({ card: "S-2", at: ago(MIN) }, d)).toBeNull();
-    expect(flow.startedAfter({ card: "S-2", at: ago(10 * MIN) }, { card: { id: "S-2" }, subEvents: [], history: [{ type: "moved", at: ago(4 * MIN), data: { to: "claimed" } }] })).toBeTruthy();
+    expect(flow.startedAfter({ card: "S-2", at: ago(10 * MIN) }, { card: { id: "S-2" }, subEvents: [], history: [{ type: "moved", actor: "Ann", at: ago(4 * MIN), data: { to: "claimed" } }] }), "its own history names who moved it")
+      .toMatchObject({ by: "Ann" });
   });
 
   it("which handoffs are still on their way, and the names to read the state of", () => {
@@ -428,6 +432,24 @@ describe("3. the main task's activity", () => {
     expect(lines.some((l) => l!.includes("game-dev") && l!.includes("S-2 · changed status from To do to In progress"))).toBe(true);
   });
 
+  it("the card started by someone other than the instance it was handed to (a person, another instance): the row says it started, not who", async () => {
+    plan({ status: "claimed", unmetDeps: [] });
+    const byPerson = { ...mv(3, "S-2", "Ann", "open", "claimed", 3 * MIN), actorKind: "person" };
+    setDetails({ main: { subEvents: [events()[1]!, byPerson], handoffs: [ho("S-2", "game-dev", "read", { at: ago(9 * MIN) })] } });
+    await open();
+    expect(text(q(".tl-baton .tl-wake"))).toBe("S-2 started");
+    setDetails({ main: { subEvents: [events()[1]!, mv(3, "S-2", "game-dev", "open", "claimed", 3 * MIN)], handoffs: [ho("S-2", "game-dev", "read", { at: ago(9 * MIN) })] } });
+    await open();
+    expect(text(q(".tl-baton .tl-wake")), "the instance it was handed to started it: it is named").toBe("game-dev started S-2");
+  });
+
+  it("a hand-over that names no predecessor (a card kept out of sight, or none) reads \"S-2 can start\", not \"S-1 done\"", async () => {
+    plan({ status: "open", unmetDeps: [] }, { status: "open", unmetDeps: ["S-2"] });
+    setDetails({ main: { handoffs: [ho("S-2", "game-dev", "read", { after: null })], subEvents: [] } });
+    await open();
+    expect(text(q(".tl-baton .tl-sentence"))).toBe("S-2 can start → handed to game-dev");
+  });
+
   it("not started yet: the handoff row says where it stands, and follows the instance's state", async () => {
     handedState("queued");
     fleetIs({ ...EVERYONE, "game-dev": "stopped" });
@@ -521,7 +543,7 @@ describe("4. live", () => {
 describe("5. both languages", () => {
   it("every string the lines use is in English and Traditional Chinese, with the same holes", () => {
     const keys = ["running", "needs", "stuck", "idle", "busyN", "busyTip", "runningTip", "waitsFor", "readyNobody", "readyFor", "blocked", "blockedOn", "sending", "queued", "offline", "paused", "delivered",
-      "read", "working", "failed", "uncertain", "withdrawn", "skip.board_off", "skip.not_taken", "skip.lost", "skip.other", "handedAfter", "handedReady", "handedAssigned", "started", "handoffLabel", "linesLabel", "openCard", "more"]
+      "read", "working", "failed", "uncertain", "withdrawn", "skip.board_off", "skip.not_taken", "skip.lost", "skip.other", "handedAfter", "handedReady", "handedAssigned", "started", "startedNeutral", "handoffLabel", "linesLabel", "openCard", "more"]
       .map((k) => `taskflow.${k}`);
     const holes = (s: string) => [...new Set(s.match(/\{\d\}/g) ?? [])].sort().join();
     for (const key of keys) {

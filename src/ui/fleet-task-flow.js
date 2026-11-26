@@ -32,7 +32,7 @@ register("taskflow", {
     failed: "Could not hand it to {0}", uncertain: "Not sure {0} got it", withdrawn: "The notice to {0} was withdrawn: the card changed again, and {0} hears its new state",
     "skip.board_off": "{0}'s task board is off, so it was not told", "skip.not_taken": "The notice to {0} could not be queued", "skip.lost": "The notice to {0} was lost (AgEnD restarted before it was sent)",
     "skip.other": "{0} was not told",
-    handedAfter: "{0} done → handed to {1} to start {2}", handedReady: "{2} can start → handed to {1}", handedAssigned: "{2} handed to {1}", started: "{0} started {1}",
+    handedAfter: "{0} done → handed to {1} to start {2}", handedReady: "{2} can start → handed to {1}", handedAssigned: "{2} handed to {1}", started: "{0} started {1}", startedNeutral: "{0} started",
     handoffLabel: "A sub task handed on", linesLabel: "What the sub tasks are doing", openCard: "Open {0}", more: "+{0} more", tipWorking: "{0} · {1}",
   },
   "zh-TW": {
@@ -44,7 +44,7 @@ register("taskflow", {
     failed: "沒有送達 {0}", uncertain: "無法確認 {0} 是否收到", withdrawn: "給 {0} 的通知已撤回：卡片又有變動，{0} 會從新的通知得知最新狀態",
     "skip.board_off": "{0} 的任務板是關閉的，沒有通知它", "skip.not_taken": "給 {0} 的通知沒能排入傳送", "skip.lost": "給 {0} 的通知遺失了（送出前 AgEnD 重新啟動）",
     "skip.other": "沒有通知 {0}",
-    handedAfter: "{0} 完成 → 已交給 {1} 開始 {2}", handedReady: "{2} 可以開始 → 已交給 {1}", handedAssigned: "已把 {2} 交給 {1}", started: "{0} 已開始 {1}",
+    handedAfter: "{0} 完成 → 已交給 {1} 開始 {2}", handedReady: "{2} 可以開始 → 已交給 {1}", handedAssigned: "已把 {2} 交給 {1}", started: "{0} 已開始 {1}", startedNeutral: "{0} 已開始",
     handoffLabel: "子任務的交接", linesLabel: "各子任務目前的狀況", openCard: "開啟 {0}", more: "還有 {0} 項", tipWorking: "{0} · {1}",
   },
 });
@@ -61,7 +61,7 @@ const SKIP_WORDS = new Set(["board_off", "not_taken", "lost"]);
 /** A card's newest handoff to its current assignee (the page's `handoffs`), or null — an older one to someone else is not the baton now. */
 export function latestHandoff(handoffs, card) {
   let found = null;
-  for (const h of handoffs || []) if (h && h.card === card.id && h.to === card.assignee && (!found || h.id > found.id || (h.id === found.id && h.at >= found.at))) found = h;
+  for (const h of handoffs || []) if (h && h.card === card.id && h.to === card.assignee && (!found || h.id > found.id)) found = h;
   return found;
 }
 
@@ -130,24 +130,28 @@ export function mainLines(subs, ctx, max = 4) {
   return { lines: pick.slice(0, max).map(({ card, line }) => ({ card, line })), more: Math.max(0, pick.length - max) };
 }
 
-/** When a handoff was followed by its card starting: the card's move to in progress at or after it (a sub task's, from the main task's sub events; its own, from its history). */
+/**
+ * How a handoff was followed by its card starting: the card's move to in progress at or after it (a sub task's, from the main task's sub events; its own,
+ * from its history) — `{ at, by }`, `by` the one who moved it (the instance it was handed to, or someone else) — or null.
+ */
 export function startedAfter(h, detail) {
   const at = Date.parse(h.at) || 0;
   const moves = [];
-  for (const e of (detail && detail.subEvents) || []) if (e.card === h.card) moves.push({ at: e.at, to: e.data && e.data.to });
-  if (detail && detail.card && detail.card.id === h.card) for (const e of detail.history || []) if (e.type === "moved") moves.push({ at: e.at, to: e.data && e.data.to });
+  for (const e of (detail && detail.subEvents) || []) if (e.card === h.card) moves.push({ at: e.at, by: e.actor, to: e.data && e.data.to });
+  if (detail && detail.card && detail.card.id === h.card) for (const e of detail.history || []) if (e.type === "moved") moves.push({ at: e.at, by: e.actor, to: e.data && e.data.to });
   const hit = moves.filter((m) => m.to === "claimed" && (Date.parse(m.at) || 0) >= at - 1000).sort((a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0))[0];
-  return hit ? hit.at : null;
+  return hit ? { at: hit.at, by: hit.by || "" } : null;
 }
 
 /**
  * A handoff as the activity stream says it (pure: tests import it): the sentence — "S-1 done → handed to dev to start S-2" — and, under it,
- * where it stands: the card started (`done`), or what `handoffText` says. `started`: when it started, from `startedAfter`.
+ * where it stands: the card started (`done`) — "dev started S-2", or just "S-2 started" when someone other than the instance it was handed to moved it
+ * (a person, another instance: the page does not say the baton-holder did what it did not) — or what `handoffText` says. `started`: `startedAfter`'s.
  */
 export function batonOf(h, states, started) {
   const lead = h.why === "assigned" ? t("taskflow.handedAssigned", "", h.to, h.card)
     : h.after ? t("taskflow.handedAfter", h.after, h.to, h.card) : t("taskflow.handedReady", "", h.to, h.card);
-  const status = started ? { tone: "done", text: t("taskflow.started", h.to, h.card) } : handoffText(h, states);
+  const status = started ? { tone: "done", text: started.by === h.to ? t("taskflow.started", h.to, h.card) : t("taskflow.startedNeutral", h.card) } : handoffText(h, states);
   return { lead, status };
 }
 
