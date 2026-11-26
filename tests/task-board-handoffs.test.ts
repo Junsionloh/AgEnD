@@ -155,6 +155,43 @@ describe("1. what the board keeps", () => {
   });
 });
 
+describe("1b. `handedAt`: what a page may take as 'the board told its assignee about this card'", () => {
+  const viewOf = (r: Rig, code: string) => r.board.view(r.board.getCard(code));
+
+  it("an open card has it once the board handed it to its current assignee — the newest hand-over; none before, none for a card that is not open", () => {
+    const r = rig();
+    const { s1, s2 } = plan(r);
+    expect("handedAt" in viewOf(r, s2.code), "it still waits for S-1: nothing was handed").toBe(false);
+    finish(r, DEV_A, s1.code);
+    const row = rowsOf(r, s2)[0]!;
+    expect(viewOf(r, s2.code).handedAt).toBe(row.at);
+    expect("handedAt" in viewOf(r, s1.code), "a finished card").toBe(false);
+    r.board.moveCard(DEV_B, s2.code, "claimed", {});
+    expect("handedAt" in viewOf(r, s2.code), "in progress: not for an open card's inference").toBe(false);
+  });
+
+  it("only the current assignee's hand-overs count: reassigned, the new one's; to a name that is no instance (never told), none", () => {
+    const r = rig();
+    const { s1, s2 } = plan(r);
+    finish(r, DEV_A, s1.code);
+    r.board.updateCard(ANN, s2.code, { assignee: "lead" });
+    const rows = rowsOf(r, s2);
+    expect(rows.map((h) => h.to)).toEqual(["dev-b", "lead"]);
+    expect(viewOf(r, s2.code).handedAt, "the one handed to lead").toBe(rows.find((h) => h.to === "lead")!.at);
+    r.board.updateCard(ANN, s2.code, { assignee: "ghost" });
+    expect("handedAt" in viewOf(r, s2.code), "ghost was never told").toBe(false);
+  });
+
+  it("the board read carries it on every open card, from one statement (the same answer card by card and all at once)", () => {
+    const r = rig();
+    const { main, s1, s2 } = plan(r);
+    finish(r, DEV_A, s1.code);
+    const all = r.board.views(r.board.boardCards());
+    expect(Object.fromEntries(all.filter((v) => v.handedAt).map((v) => [v.id, v.handedAt]))).toEqual({ [s2.code]: rowsOf(r, s2)[0]!.at });
+    expect(r.board.view(r.board.getCard(main.code)).handedAt, "the main task, open or not, has no hand-over of its own here").toBeUndefined();
+  });
+});
+
 describe("2. what the waker settles", () => {
   it("the handoff takes the key of the notice that carried it; the notice says S-2 can start", () => {
     const r = rig();

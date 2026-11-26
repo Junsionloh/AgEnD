@@ -147,6 +147,21 @@ describe("1. the card read carries handoffs for a session that can write", () =>
   });
 });
 
+describe("1b. the board read says when an open card was handed to its assignee", () => {
+  it("`handedAt` on the card, for any session that reads the board (a time, no more: nothing of the notice's delivery)", async () => {
+    const db = scratchDb();
+    const { s2 } = seed(db);
+    for (const opts of [local, { tier: "read" as const, local: true as const }, { tier: "read" as const }]) {
+      const res = await call(db, "GET", "/ui/tasks/board", opts);
+      expect(res.status).toBe(200);
+      const view = res.body.cards.find((c: any) => c.id === s2.code);
+      expect(view.handedAt).toBe(db.board.handoffsOf([s2.uuid])[0]!.at);
+      expect(Object.keys(view).filter((k) => /key|delivery|notice/i.test(k))).toEqual([]);
+    }
+    expect(JSON.stringify((await call(db, "GET", "/ui/tasks/board", local)).body.cards.filter((c: any) => c.status !== "open").map((c: any) => c.handedAt))).not.toMatch(/\d{4}-/);
+  });
+});
+
 describe("2. the sub task moves are every session's, with the link's hiding", () => {
   it("a read-only session reads them (they are the card's own history, as a main task's history is)", async () => {
     const db = scratchDb();

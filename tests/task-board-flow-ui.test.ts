@@ -543,8 +543,9 @@ describe("4. live", () => {
 
 describe("4b. working on a card it has not claimed (the owner's survivor-dev: twelve tools, six minutes, S-11 still To do)", () => {
   const states = (o: Record<string, string>) => new Map(Object.entries(o));
-  const sc = (id: string, status: string, assignee: string | null, extra: Record<string, unknown> = {}) => card({ kind: "sub", id, status, assignee, ...extra });
-  const ctx = (st: Record<string, string>, cards: any[], over: Record<string, unknown> = {}) => ({ handoffs: [], states: states(st), doing: run.inProgressBy(cards), ready: run.readyOpenBy(cards), live: () => "", now: NOW, ...over });
+  // An open card the board handed to its assignee a minute ago has `handedAt` (the server's: only a card it told the assignee about).
+  const sc = (id: string, status: string, assignee: string | null, extra: Record<string, unknown> = {}) => card({ kind: "sub", id, status, assignee, ...(status === "open" ? { handedAt: ago(MIN) } : {}), ...extra });
+  const ctx = (st: Record<string, string>, cards: any[], over: Record<string, unknown> = {}) => ({ handoffs: [], states: states(st), doing: run.inProgressBy(cards), ready: run.readyOpenBy(cards), live: () => "", now: NOW, workStart: new Map(), ...over });
 
   it("readyOpenBy: the open cards an instance could start, by name — not a claimed one, not one that waits (one it cannot see too), not a main task that follows its sub tasks", () => {
     const cards = [sc("S-1", "open", "dev"), sc("S-2", "open", "dev", { unmetDeps: ["S-1"] }), sc("S-3", "open", "ops", { hiddenUnmet: 1 }), sc("S-4", "claimed", "ops"), sc("S-5", "open", null),
@@ -580,12 +581,13 @@ describe("4b. working on a card it has not claimed (the owner's survivor-dev: tw
   });
 
   it("subLine: a running line with the step and 'not claimed yet'; flagged once it has gone on; only while the notice reached it", () => {
-    const cards = [sc("S-11", "open", "dev", { updatedAt: ago(HOUR) })];
+    const cards = [sc("S-11", "open", "dev", { updatedAt: ago(HOUR), handedAt: ago(10_000) })];
     const line = (over: Record<string, unknown> = {}, st: Record<string, string> = { dev: "working" }) => { const l = flow.subLine(cards[0], ctx(st, cards, over)); return l ? [l.kind, l.tone, l.text, !!l.spin, !!l.unclaimed] : null; };
     const read = (at: number, state = "read", extra: Record<string, unknown> = {}) => ({ handoffs: [{ id: 1, card: "S-11", to: "dev", state, at: ago(at), ...extra }] });
     expect(line(read(10_000))).toEqual(["running", "busy", "dev · Running (not claimed yet)", true, true]);
     expect(line({ ...read(10_000), live: () => "Run python3 survivor.html" })).toEqual(["running", "busy", "dev · Run python3 survivor.html (not claimed yet)", true, true]);
-    const late = flow.subLine(cards[0], ctx({ dev: "working" }, cards, read(5 * MIN)));
+    const gone = [sc("S-11", "open", "dev", { updatedAt: ago(HOUR), handedAt: ago(5 * MIN) })];
+    const late = flow.subLine(gone[0], ctx({ dev: "working" }, gone, read(5 * MIN)));
     expect([late.tone, late.text, late.late]).toEqual(["warn", "dev · Running (still not claimed)", true]);
     expect(late.tip).toContain("Ask it to claim it");
     expect(line(read(10_000, "delivered"))![0], "delivered is enough").toBe("running");
@@ -604,8 +606,67 @@ describe("4b. working on a card it has not claimed (the owner's survivor-dev: tw
     expect(flow.subLine(one[0], ctx({ dev: "working" }, one))).toMatchObject({ kind: "ready" });
   });
 
+  it("an agent that is only chatting (no hand-over of this card, or work that began before it) is not on the card: nothing is shown as running", () => {
+    const handed = [sc("S-11", "open", "dev")];                                      // handed a minute ago
+    const never = [sc("S-11", "open", "dev", { handedAt: undefined })];              // the board never told it about this card
+    expect(run.runUnclaimed(never[0], ctx({ dev: "working" }, never)), "no hand-over: not evidence").toBeNull();
+    expect(run.runOf(never[0], ctx({ dev: "working" }, never))).toBeNull();
+    expect(flow.subLine(never[0], ctx({ dev: "working" }, never, { handoffs: [{ id: 1, card: "S-11", to: "dev", state: "read", at: ago(MIN) }] })), "the notice's state, not 'running'")
+      .toMatchObject({ kind: "handed", text: "dev read it — waiting for it to start" });
+    expect(flow.subLine(never[0], ctx({ dev: "working" }, never))).toMatchObject({ kind: "ready" });
+    const began = (ms: number | undefined) => ctx({ dev: "working" }, handed, { workStart: new Map(ms === undefined ? [] : [["dev", ms]]) });
+    expect(run.runUnclaimed(handed[0], began(NOW - 20 * MIN)), "it was at work twenty minutes before the card was handed over: that is something else").toBeNull();
+    expect(run.runUnclaimed(handed[0], began(NOW - 5 * MIN)), "or five minutes before").toBeNull();
+    expect(run.runUnclaimed(handed[0], began(NOW - 30_000)), "it began after the hand-over (a minute ago)").toMatchObject({ unclaimed: true });
+    expect(run.runUnclaimed(handed[0], began(NOW - MIN - 5_000)), "a few seconds' clock slack").toMatchObject({ unclaimed: true });
+    expect(run.runUnclaimed(handed[0], began(undefined)), "this page did not see it begin: it cannot say, and does not hold it against the card").toMatchObject({ unclaimed: true });
+    expect(run.runUnclaimed(sc("S-11", "open", "dev", { handedAt: "not a time" }), ctx({ dev: "working" }, handed))).toBeNull();
+  });
+
+  it("the page's own observation: it saw the instance start working (idle, then working) — or it was working when first seen and nothing is known", () => {
+    const store = (state: string) => ({ instances: [{ name: "obs", status: "running", state }], exec: { obs: state }, awaiting: {} });
+    run.forgetWorkStarts();
+    run.instanceStates(store("working"), ["obs"]);
+    expect(run.workStartOf("obs"), "first seen already working").toBeUndefined();
+    run.instanceStates(store("idle"), ["obs"]);
+    run.instanceStates(store("working"), ["obs"]);
+    const at = run.workStartOf("obs");
+    expect(at).toBeGreaterThan(Date.now() - 5_000);
+    run.instanceStates(store("working"), ["obs"]);
+    expect(run.workStartOf("obs"), "still the same start").toBe(at);
+    run.instanceStates(store("idle"), ["obs"]);
+    expect(run.workStartOf("obs"), "it stopped: no start").toBeUndefined();
+    run.forgetWorkStarts();
+  });
+
+  it("the board: an agent that is only chatting does not light up its main task's tile or row; one handed the card does", async () => {
+    plan({ status: "open", unmetDeps: [], assignee: "game-dev", handedAt: undefined }, { status: "open", unmetDeps: ["S-2"] });
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await p.unmount();
+    (globalThis as any).localStorage.setItem("agend_tasks_project", "1");
+    await p.mount(h(fleet.FleetPanel, { route: { panel: "fleet", tab: "tasks" }, navKey: `fleet:tasks|flow-${++mounts}|en` }));
+    await settle(8);
+    expect(q('[data-tile="M-2"]').className, "chatting, nothing handed: no light").not.toContain("running");
+    expect(q('[data-tile="M-2"] .tr-mark')).toBeNull();
+    plan({ status: "open", unmetDeps: [], assignee: "game-dev", handedAt: ago(10_000) }, { status: "open", unmetDeps: ["S-2"] });
+    await p.unmount();
+    await p.mount(h(fleet.FleetPanel, { route: { panel: "fleet", tab: "tasks" }, navKey: `fleet:tasks|flow-${++mounts}|en` }));
+    await settle(8);
+    expect(q('[data-tile="M-2"]').className, "handed the card, working, nothing in progress").toContain("running");
+    expect(text(q('[data-tile="M-2"] .tr-mark'))).toBe("Running · not claimed");
+  });
+
+  it("the card page of a card the board never handed it: the notice's state, not 'running' — the agent may just be chatting", async () => {
+    unclaimed({ handedAt: undefined });
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await open();
+    expect(lineOf("S-2")).toBe("game-dev read it — waiting for it to start");
+    expect(q(".tp-idrow .tr-mark")).toBeNull();
+    expect(q(".tf-lines .out-spin")).toBeNull();
+  });
+
   const unclaimed = (over: Record<string, unknown> = {}, at = 10_000) => {
-    plan({ status: "open", unmetDeps: [], assignee: "game-dev", updatedAt: ago(HOUR), ...over }, { status: "open", unmetDeps: ["S-2"] });
+    plan({ status: "open", unmetDeps: [], assignee: "game-dev", updatedAt: ago(HOUR), handedAt: ago(at), ...over }, { status: "open", unmetDeps: ["S-2"] });
     setDetails({ main: { handoffs: [ho("S-2", "game-dev", "read", { at: ago(at) })], subEvents: [mv(1, "S-1", "game-designer", "claimed", "done", 10 * MIN)] } });
   };
 
@@ -676,6 +737,30 @@ describe("4b. working on a card it has not claimed (the owner's survivor-dev: tw
     expect(q(".tl-baton .tl-wake").className).toContain("wk-warn");
     expect(rowOf("S-2")!.querySelector(".tc-child-line").getAttribute("title")).toContain("Ask it to claim it");
     expect(calls.filter((c) => c.method === "POST"), "nothing moved the card").toEqual([]);
+  });
+
+  it("a 'not claimed yet' line turns into the flagged one by itself — a 30 s clock runs only while such a line is on the page", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    vi.setSystemTime(NOW);
+    unclaimed({ handedAt: new Date(NOW - 60_000).toISOString() }, 60_000);
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await open();
+    expect(lineOf("S-2"), "a minute: not yet").toBe("game-dev · Running (not claimed yet)");
+    const withClock = vi.getTimerCount();
+    await vi.advanceTimersByTimeAsync(30_000); await settle(6);
+    expect(lineOf("S-2"), "90 s on the dot: not past it yet").toBe("game-dev · Running (not claimed yet)");
+    await vi.advanceTimersByTimeAsync(31_000); await settle(6);
+    expect(lineOf("S-2"), "past 90 s: flagged on the next look, with no store change and no click").toBe("game-dev · Running (still not claimed)");
+    expect(rowOf("S-2")!.querySelector(".tc-child-line").className).toContain("tf-warn");
+    expect(q(".tl-baton .tl-wake").className).toContain("wk-warn");
+    const flagged = vi.getTimerCount();
+    expect(flagged, "flagged: nothing left to turn, the clocks are gone").toBeLessThan(withClock);
+    // A claimed card has no such line: no clock of its own.
+    plan({ status: "claimed", unmetDeps: [], assignee: "game-dev" }, { status: "open", unmetDeps: ["S-2"] });
+    setDetails({ main: { handoffs: [], subEvents: [] } });
+    await open();
+    expect(lineOf("S-2")).toBe("game-dev · Running");
+    expect(vi.getTimerCount(), "a plain running line needs no clock of its own").toBeLessThanOrEqual(flagged);
   });
 
   it("after it claims: the plain running line (no 'not claimed'), the same ring; when it stops: the notice's state, no contradiction", async () => {

@@ -13,7 +13,7 @@
 // continuing session, so "working" says it is busy, not that it is on this very card); the hand-over's delivery is what the card read carries
 // (`handoffs`, only for a session that can write, never of an instance kept out of sight); the steps are the chat's own feed, held only while
 // a sub task is running and the viewer is an admin whose agent has `tool_progress` on — otherwise the state alone. No style attribute (the CSP).
-import { html, useEffect } from "/assets/app-html.js";
+import { html, useEffect, useState } from "/assets/app-html.js";
 import { t, register } from "/assets/app-i18n.js";
 import { appStore, createStore, useStore } from "/assets/app-store.js";
 import { Icon } from "/assets/ui-icons.js";
@@ -76,6 +76,20 @@ export function handoffAllows(h) {
 
 /** An instance that has been working this long on a card it has not claimed is flagged: asked to claim, or the person moves it. */
 export const UNCLAIMED_GRACE_MS = 90_000;
+/** While a "not claimed yet" line is on the page it is looked at again this often, so it turns into the flagged one without waiting for the store to change. */
+export const CLOCK_MS = 30_000;
+
+/** Redraws the caller every `ms` while `on` — no timer at all otherwise. */
+function useClock(on, ms = CLOCK_MS) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!on) return undefined;
+    const handle = setInterval(() => tick((n) => n + 1), ms);
+    return () => clearInterval(handle);
+  }, [on, ms]);
+}
+/** Whether a line says "not claimed yet" and may still turn into the flagged one. */
+const turning = (line) => !!line && line.kind === "running" && !!line.unclaimed && !line.late;
 
 /**
  * A handoff in words: `{ tone, text, tip? }`, or null when there is nothing to say (the card no longer waited on it, the delivery has no
@@ -124,7 +138,7 @@ export function subLine(card, ctx) {
   // claim it. A running line, with the step, marked "not claimed" — and flagged once it has gone on a while.
   if (handoffAllows(latest) && runUnclaimed(card, ctx)) {
     const doing = (ctx.live && ctx.live(who)) || "";
-    const since = Math.max(Date.parse(latest && latest.at) || 0, Date.parse(card.updatedAt) || 0);
+    const since = Math.max(Date.parse(latest && latest.at) || 0, Date.parse(card.handedAt) || 0, Date.parse(card.updatedAt) || 0);
     const late = since > 0 && (ctx.now || Date.now()) - since > UNCLAIMED_GRACE_MS;
     return { kind: "running", tone: late ? "warn" : "busy", who, spin: true, unclaimed: true, late,
       text: `${who} · ${doing || t("taskflow.running")} (${t(late ? "taskflow.unclaimedLate" : "taskflow.unclaimed")})`,
@@ -266,10 +280,12 @@ export function SubRows({ children, handoffs, doing, ready = null, onOpen }) {
   useStore(appStore);
   useStore(liveFeeds);
   const ctx = flowContext(children, handoffs, doing, ready);
+  const lines = children.map((c) => subLine(c, ctx));
+  useClock(lines.some(turning));
   return html`<${FeedWatch} names=${watchedNames(children, ctx)} />
-    <ul class="tc-children">${children.map((c) => html`<li key=${c.id}><button type="button" onClick=${() => onOpen(c.id)}>
+    <ul class="tc-children">${children.map((c, i) => html`<li key=${c.id}><button type="button" onClick=${() => onOpen(c.id)}>
       <${StatusPill} status=${c.status} card=${c} /><span class="tb-code">${c.id}</span><span class="tc-child-title">${c.title}</span><span class="tb-who">${c.assignee || ""}</span>
-      <${SubLine} line=${subLine(c, ctx)} /></button></li>`)}</ul>`;
+      <${SubLine} line=${lines[i]} /></button></li>`)}</ul>`;
 }
 
 /** The main task's "Agent activity" lines: one per sub task that has something going on, the sub task's number opens it. */
@@ -277,6 +293,7 @@ export function FlowLines({ subs, handoffs, doing, ready = null, onOpen }) {
   useStore(liveFeeds);
   const ctx = flowContext(subs, handoffs, doing, ready);
   const { lines, more } = mainLines(subs, ctx);
+  useClock(lines.some((x) => turning(x.line)));
   if (!lines.length) return null;
   return html`<ul class="tf-lines" aria-label=${t("taskflow.linesLabel")}>${lines.map(({ card, line }) => html`<li key=${card.id} class=${`tf-item tf-${line.tone} tf-k-${line.kind}`} title=${line.tip || line.text}>
     <${LineBody} line=${line} /><button type="button" class="tb-link tb-code tf-card" title=${t("taskflow.openCard", card.id)} onClick=${() => onOpen(card.id)}>${card.id}</button></li>`)}
@@ -290,6 +307,7 @@ export const hasFlow = (subs, handoffs, doing, ready = null) => mainLines(subs, 
 export function BatonEntry({ entry, states, runFor = null }) {
   useStore(liveFeeds);                           // the step line moves with the feed: only this row redraws, not the stream
   const run = runFor ? runFor(entry) : null;
+  useClock(turning(run));
   const { lead, status: handed } = batonOf(entry.h, states, entry.started);
   // The card is still open but its agent is running on it (not claimed): the row says so, with the step, instead of where the notice stands.
   const status = !entry.started && run ? { tone: run.tone, text: run.text, tip: run.tip, spin: true } : handed;

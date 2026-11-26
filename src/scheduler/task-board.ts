@@ -359,6 +359,12 @@ export interface CardView {
   /** Comments by others its assignee has not acted on yet. */
   newCommentCount: number;
   lastComment: { author: string; authorKind: Actor["kind"]; at: string } | null;
+  /**
+   * An open card only, and only when the board handed it to its current assignee (a `task_handoffs` row, "Handoffs"): when it did (ISO, the newest).
+   * What lets a page say an assignee that is working is probably on this card (docs/design/task-board.md, "Working before the claim"): a card the
+   * board never told it about is not evidence. Present only with a value.
+   */
+  handedAt?: string;
 }
 
 export type EntryKind = "log" | "comment" | "reject" | "approve";
@@ -1406,6 +1412,10 @@ export class TaskBoard {
          ON e.task_id = t.id AND e.id > t.seen_entry_id AND e.kind IN ('comment', 'reject') AND e.deleted_at IS NULL AND e.author IS NOT t.assignee${eBy.sql}
        GROUP BY t.id`,
     ).all(...eBy.args) as Array<{ id: string; n: number }>).map((r) => [r.id, r.n]));
+    // `handedAt`: for the open cards among these, when the board last told their current assignee the card could start (one statement for all).
+    const handed = new Map((this.db.prepare(
+      `SELECT h.task_id AS id, MAX(h.at) AS at FROM task_handoffs h JOIN tasks t ON t.id = h.task_id AND t.assignee = h.instance WHERE t.status = 'open' GROUP BY h.task_id`,
+    ).all() as Array<{ id: string; at: string }>).map((r) => [r.id, r.at]));
     const code = (uuid: string) => all.get(uuid)?.code ?? uuid.slice(0, 8);
     /** unmetDeps(), on the light rows: own dependencies not done, then the main task's, each once. */
     const unmet = (deps: string[], parent: string | null, seen = new Set<string>()): string[] => {
@@ -1453,6 +1463,7 @@ export class TaskBoard {
         attachmentCount: files.get(card.uuid) ?? 0,
         newCommentCount: unseen.get(card.uuid) ?? 0,
         lastComment: c ? { author: c.author, authorKind: c.author_kind, at: c.at } : null,
+        ...(card.status === "open" && handed.has(card.uuid) ? { handedAt: handed.get(card.uuid)! } : {}),
       };
     });
   }

@@ -91,26 +91,52 @@ export function instanceStates(store, names) {
   const instances = (store && store.instances) || [];
   for (const name of names) {
     const it = instances.find((i) => i.name === name);
-    if (it) out.set(name, dotState(it, ((store && store.exec) || {})[name], ((store && store.awaiting) || {})[name]));
+    if (it) { const state = dotState(it, ((store && store.exec) || {})[name], ((store && store.awaiting) || {})[name]); out.set(name, state); noteState(name, state); }
   }
   return out;
 }
 
+// When THIS page saw an instance start working (it was not working, then it was): `runUnclaimed` does not take work that began before a card was
+// handed over for work on it (a chat, another job). Nothing is stored or sent: a page opened while the instance is already working has no start
+// (undefined: it cannot say, and does not hold that against the card). Updated wherever a state is read.
+const lastSeen = new Map();
+const workStarts = new Map();
+function noteState(name, state) {
+  const was = lastSeen.get(name);
+  lastSeen.set(name, state);
+  if (state !== "working") workStarts.delete(name);
+  else if (was !== undefined && was !== "working" && !workStarts.has(name)) workStarts.set(name, Date.now());
+}
+/** Tests only: what this page has seen of the instances' states. */
+export function forgetWorkStarts() { lastSeen.clear(); workStarts.clear(); }
+/** When this page saw `name` start working (epoch ms), or undefined. */
+export const workStartOf = (name) => workStarts.get(name);
+
+/** A working instance began before the card was handed to it this long ago (clock slack) is not taken to be on that card. */
+const HAND_SLACK_MS = 10_000;
+
 /**
- * What an instance is doing on a card that is still open, though it is working: it was given the card, can start it, has nothing in progress
- * and no other open card it could be on — so what it is doing now is probably this card, which it has not claimed. An INFERENCE like `runOf`'s
- * (an agent is one continuing session): `{ instance, state: "working", shared: 0, unclaimed: true }`, or null. A preview's agent worked for six
- * minutes on an assigned card without claiming it, and the board said nothing; the notice now asks it to claim first, and this says what it
- * cannot hide. `ctx`: { states, doing, ready } — `readyOpenBy` of the board; without `ready` (a caller from before) there is no such run.
+ * What an instance is doing on a card that is still open, though it is working: it was given the card (the board told it — `card.handedAt`),
+ * can start it, has nothing in progress and no other open card it could be on, and did not start working before it was handed the card — so what
+ * it is doing now is probably this card, which it has not claimed. An INFERENCE like `runOf`'s (an agent is one continuing session): `{ instance,
+ * state: "working", shared: 0, unclaimed: true }`, or null. A preview's agent worked for six minutes on an assigned card without claiming it, and
+ * the board said nothing; the notice now asks it to claim first, and this says what it cannot hide. Not an agent that is only chatting: a card the
+ * board never handed it (no `handedAt`) is not evidence, and neither is work this page saw begin before the hand-over (`workStartOf`).
+ * `ctx`: { states, doing, ready, workStart? } — `readyOpenBy` of the board; without `ready` (a caller from before) there is no such run;
+ * `workStart` (a Map by name) stands in for what this page observed.
  */
 export function runUnclaimed(card, ctx) {
   const name = card && card.assignee;
   if (!name || !ctx || card.status !== "open" || waitsOn(card)) return null;
   if (card.kind === "main" && card.progress && card.progress.total > 0) return null;
+  const handed = Date.parse(card.handedAt || "");
+  if (!Number.isFinite(handed)) return null;                                      // the board never handed it to this instance: not evidence
   if (!(ctx.states && ctx.states.get(name) === "working")) return null;
   if (((ctx.doing && ctx.doing.get(name)) || 0) > 0) return null;                // a card in progress is its work
   const mine = ctx.ready && ctx.ready.get(name);
   if (!mine || mine.length !== 1 || mine[0] !== card.id) return null;            // none, or several it could be on: nothing says which
+  const began = ctx.workStart ? ctx.workStart.get(name) : workStartOf(name);
+  if (began !== undefined && began < handed - HAND_SLACK_MS) return null;        // it was already at work before the card came: that work is something else
   return { instance: name, state: "working", shared: 0, unclaimed: true };
 }
 
