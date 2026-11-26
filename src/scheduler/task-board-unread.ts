@@ -10,7 +10,7 @@
  *   - `answer`  the first comment by an instance after a comment of P's that woke it (`task_entries.wakes`): the answer P was
  *               waiting for, which an agent writes without a `reply_to`, or
  *   - `review` / `blocked` the card is now P's to confirm or answer (waitsForPerson) and someone else put it there.
- * P's own words are never news to P, nor is a comment that was deleted.
+ * P's own words are never news to P, nor is a comment that was deleted, one older than UNREAD_WINDOW_DAYS, or one on a cancelled card.
  *
  * A fresh start does not make the whole history unread: the first time a person is asked, the newest comment and event numbers
  * are written as their floor (`task_reads_floor`), and only what comes after it can be unread.
@@ -36,6 +36,13 @@ export interface UnreadCard {
   /** Who did the newest. */
   by: string;
 }
+
+/**
+ * How far back a comment can still be news: older than this and nobody is reading for it any more, and a card nobody opens must not
+ * keep every unread query (one per open page per `tasks` ping) walking its whole history. A card that is cancelled has nobody waiting
+ * on it either. A finished card is not left out: an agent often answers as it finishes.
+ */
+export const UNREAD_WINDOW_DAYS = 30;
 
 export interface Unread {
   /** The cards with something new, newest first. */
@@ -69,9 +76,10 @@ export function unreadFor(db: Database.Database, person: string, waiting: readon
     FROM task_entries e
     LEFT JOIN task_card_reads r ON r.person = ? AND r.task_id = e.task_id
     WHERE e.kind = 'comment' AND e.deleted_at IS NULL AND e.id > ? AND e.id > COALESCE(r.seen_entry, 0)
+      AND e.at >= ?
       AND NOT (e.author = ? AND e.author_kind = 'person')
-      AND e.task_id IN (SELECT id FROM tasks)
-    ORDER BY e.id`).all(person, floor.entry, person) as Candidate[];
+      AND e.task_id IN (SELECT id FROM tasks WHERE status <> 'cancelled')
+    ORDER BY e.id`).all(person, floor.entry, new Date(Date.parse(now) - UNREAD_WINDOW_DAYS * 86_400_000).toISOString(), person) as Candidate[];
   const parentOf = db.prepare("SELECT author, author_kind FROM task_entries WHERE id = ?");
   const myEarlier = db.prepare("SELECT id, wakes FROM task_entries WHERE task_id = ? AND author = ? AND author_kind = 'person' AND id < ? AND deleted_at IS NULL AND wakes IS NOT NULL ORDER BY id DESC");
   const answeredAlready = db.prepare("SELECT 1 FROM task_entries WHERE task_id = ? AND author = ? AND author_kind = ? AND kind = 'comment' AND deleted_at IS NULL AND id > ? AND id < ? LIMIT 1");

@@ -22,6 +22,7 @@ import { tmpdir } from "node:os";
 import { SchedulerDb } from "../src/scheduler/db.js";
 import { DeliveryOutbox } from "../src/delivery-outbox.js";
 import { MAX_COMMENT_WAKES, type Actor, type EntryWake, type TaskBoard, type WakeSkip } from "../src/scheduler/task-board.js";
+import { UNREAD_WINDOW_DAYS } from "../src/scheduler/task-board-unread.js";
 import { TaskBoardWaker, cardsOfKey } from "../src/task-board-waker.js";
 import { wakeViews } from "../src/web-api.js";
 
@@ -443,6 +444,37 @@ describe("4. the person's unread", () => {
     expect(r.board.unreadFor("Ann").total).toBe(0);
     r.board.updateCard(DEV, c.code, { comment: "@Ann a new one" });
     expect(r.board.unreadFor("Ann").total).toBe(1);
+  });
+
+  it("only a recent comment is news (UNREAD_WINDOW_DAYS), so a card nobody opens does not keep every query walking its history", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const t0 = Date.parse("2026-10-01T09:00:00Z");
+    vi.setSystemTime(t0);
+    const { board, c } = asked();
+    board.updateCard(DEV, c.code, { comment: "going well" });
+    expect(board.unreadFor("Ann").total).toBe(1);
+    vi.setSystemTime(t0 + (UNREAD_WINDOW_DAYS - 1) * 86_400_000);
+    expect(board.unreadFor("Ann").total).toBe(1);                                  // still within the window
+    vi.setSystemTime(t0 + (UNREAD_WINDOW_DAYS + 1) * 86_400_000);
+    expect(board.unreadFor("Ann").total).toBe(0);                                  // too old to be news
+    board.updateCard(DEV_B, c.code, { comment: "@ann a fresh one" });
+    expect(board.unreadFor("Ann").total).toBe(1);                                  // a new comment on the same card is
+  });
+
+  it("a cancelled card is not looked at; a finished one still is (an agent often answers as it finishes)", () => {
+    const { board, c } = asked();
+    board.updateCard(DEV, c.code, { comment: "going well" });
+    board.moveCard(DEV, c.code, "claimed", {});
+    board.moveCard(DEV, c.code, "done", { result: "r" });
+    expect(board.unreadFor("Ann").cards.map((u) => u.id)).toEqual([c.code]);
+    const r = rig();
+    const k = card(r.board, LEAD, { assignee: "dev-a" });
+    r.board.unreadFor("Ann");
+    r.board.updateCard(ANN, k.code, { comment: "how is it going?" });
+    r.board.updateCard(DEV, k.code, { comment: "an answer" });
+    expect(r.board.unreadFor("Ann").total).toBe(1);
+    r.board.moveCard(ANN, k.code, "cancelled", { reason: "not needed" });
+    expect(r.board.unreadFor("Ann").total).toBe(0);
   });
 
   it("the entries to mark as new on the card's page are the comments that are", () => {

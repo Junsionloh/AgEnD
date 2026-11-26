@@ -199,6 +199,23 @@ describe("2. the person's unread", () => {
     expect(db.board.unreadFor(WEB.name).total).toBe(0);
   });
 
+  it("the first GET writes the person's floor, so comments that were already there are never unread — only what comes after is", async () => {
+    const db = scratchDb();
+    const c = seed(db);
+    // History written before anyone asked: a question the person's session woke dev-a with, its answer, and an @ to the person.
+    await call(db, "POST", `/ui/tasks/cards/${c.code}`, { comment: "how is it going?" }, local);
+    db.board.updateCard(DEV, c.code, { comment: "going well" });
+    db.board.updateCard(DEV, c.code, { comment: "@web-user also this" });
+    const raw = (db as unknown as { db: { prepare(sql: string): { get(): { n: number } } } }).db;
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM task_reads_floor").get().n).toBe(0);
+    const first = await call(db, "GET", "/ui/tasks/unread", undefined, local);
+    expect(first.body).toEqual({ enabled: true, total: 0, cards: {} });
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM task_reads_floor").get().n).toBe(1);          // the GET wrote the floor
+    expect((await call(db, "GET", "/ui/tasks/unread", undefined, local)).body.total).toBe(0);     // …and a second one reads the same
+    db.board.updateCard(DEV, c.code, { comment: "@web-user and now something new" });
+    expect((await call(db, "GET", "/ui/tasks/unread", undefined, local)).body).toMatchObject({ total: 1, cards: { [c.code]: { n: 1, reasons: ["mention"] } } });
+  });
+
   it("carries no comment text, only numbers, reasons and who", async () => {
     const db = scratchDb();
     const c = await asked(db);
