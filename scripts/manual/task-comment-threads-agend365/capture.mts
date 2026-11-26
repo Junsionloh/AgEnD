@@ -82,6 +82,9 @@ try {
       check(`${tag}: replies are drawn under their thread's first comment (the resolved thread's are folded away)`, (await page.locator(`.tl-thread .tl-reply`).count()) === 2, await page.locator(".tl-thread .tl-reply").count());
       check(`${tag}: a resolved thread is one line`, (await page.locator(".tl-resolved-btn").count()) === 1);
       check(`${tag}: a deleted comment is a line`, /deleted|已刪除/.test(await page.locator("#c" + gone).innerText()));
+      // The count is text in the page's font (the chip's own font is the emoji font, whose digits are grey pictures).
+      const n = await page.locator("#c" + p1 + " .tl-reacts .n").first().evaluate((el: Element) => getComputedStyle(el).fontFamily);
+      check(`${tag}: a reaction's count is drawn in the page's font, not the emoji font`, !/emoji/i.test(n.split(",")[0]!), n);
       check(`${tag}: the viewer's own reaction is pressed`, (await page.locator("#c" + p1 + " .tl-reacts button[aria-pressed=true]").count()) === 1);
       const chip = (await page.locator(".tp-activity > .tc-composer .tc-to").innerText()).replace(/\s+/g, " ");
       check(`${tag}: the box starts at the assignee: "${names[0]} · starts when sent"`, chip.includes(names[0]) && /starts when sent|送出後開始處理/.test(chip), chip);

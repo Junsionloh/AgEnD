@@ -428,7 +428,8 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tl-reacts { padding-left: 36px; margin-top: var(--s-2); }
 .tl-reacts .react-chip { gap: 4px; cursor: pointer; color: var(--text); }
 .tl-reacts span.react-chip { cursor: default; }
-.tl-reacts .react-chip .n { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; color: var(--text); }
+/* (`.tl` first: a Hub room's rules for the same chip, once its sheet is loaded, must not turn the count dim or accent-on-accent.) */
+.tl .tl-reacts .react-chip .n, .tl .tl-reacts .react-chip.mine .n { font-family: var(--font-ui, inherit); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; color: var(--text); }
 .tl-reacts .react-chip.mine { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); }
 .tl-reacts button.react-chip:hover { border-color: var(--accent); }
 .tl-reacts button.react-chip:focus-visible, .tl-pick .react-opt:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
