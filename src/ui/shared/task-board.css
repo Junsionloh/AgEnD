@@ -388,8 +388,15 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tc-mention-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Comment threads (fleet-task-thread.js): each comment's tools, replies, reactions, edit box, resolved and deleted lines ───── */
-/* In a comment's head the time pushes itself, "edited" and the tools to the right (`.tl-time` has the auto margin). */
-.tl-tools { display: inline-flex; align-items: center; gap: var(--s-1); }
+/* In a comment's head the time pushes itself, "edited" and the tools to the right (`.tl-time` has the auto margin). The head stays one
+   line: the name gives way (an ellipsis), the tag, the time and the tools do not. */
+.tl-tools { display: inline-flex; align-items: center; flex: none; gap: var(--s-1); }
+.tl-comment > .tl-head { flex-wrap: nowrap; }
+.tl-comment > .tl-head .tl-who-wrap { flex: 0 1 auto; min-width: 0; }
+.tl-comment > .tl-head .tl-who-btn { max-width: 100%; }
+.tl-comment > .tl-head .tb-person { min-width: 0; }
+.tl-comment > .tl-head .tb-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-comment > .tl-head .tb-tag, .tl-comment > .tl-head .tl-time, .tl-comment > .tl-head .tl-edited { flex: none; }
 .tl-tools .icon-btn { width: 28px; height: 28px; color: var(--text-3); }
 .tl-tools .icon-btn:hover, .tl-tools .icon-btn[aria-expanded="true"] { color: var(--text); background: var(--surface-2); }
 .tl-menu .menu-list { right: 0; left: auto; }
