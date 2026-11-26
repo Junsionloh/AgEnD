@@ -3581,7 +3581,9 @@ export class TaskBoard {
     const unknown = [...(editing ? [] : parsed.unknown.map((w) => `@${w}`)), ...unknownChosen.map((n) => `@${n}`)];
     if (unknown.length) {
       this.say("mention_unknown", [unknown.join(", ")], `${unknown.join(", ")}: no such instance, nobody was woken for it`);
-      for (const u of unknown) refuse(u.replace(/^@/, ""), "unknown");
+      // An agent that `@`-names a person (the usual way to tell them something) is not making a mistake: the note above is its own,
+      // and the comment carries no "no such instance" under it. A person's typo is the case the status line is for.
+      if (!agent) for (const u of unknown) refuse(u.replace(/^@/, ""), "unknown");
     }
     const run = agent && (mentions.length || asAssignee) ? this.agentCommentRun(card, names) : 0;
     if (run > AGENT_COMMENT_CHAIN) {

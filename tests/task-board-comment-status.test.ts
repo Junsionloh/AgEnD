@@ -110,6 +110,15 @@ describe("1. what the board keeps with a comment", () => {
     expect(skipsOf(board, c.code, lastEntry(board, c.code))).toEqual({ "dev-c": "unknown" });
   });
 
+  it("an agent that @-names a person (to tell them something) leaves no 'no such instance' under its comment — only a person's typo does", () => {
+    const { board } = rig();
+    const c = card(board, LEAD, { assignee: "dev-a" });
+    board.updateCard(DEV, c.code, { comment: "@Ann the report is ready" });
+    expect(board.entryWakes(c.code).size).toBe(0);
+    board.updateCard(ANN, c.code, { comment: "@dev-c where are you", to: [] });
+    expect(skipsOf(board, c.code, lastEntry(board, c.code))).toEqual({ "dev-c": "unknown" });
+  });
+
   it("an agent's words held by the contact rules are kept as contact_held", () => {
     const { board, contactHeld } = rig();
     const c = card(board, LEAD, { assignee: "dev-a" });
