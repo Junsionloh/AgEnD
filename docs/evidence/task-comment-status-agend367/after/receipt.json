@@ -1,0 +1,472 @@
+{
+  "phase": "after",
+  "sourceHead": "31dbaec500bd5639e059d3116aea7cdd0fa32e3c",
+  "dirty": [],
+  "checks": [
+    {
+      "name": "desk-light-en: the card's tile has a dot",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the strip names the card and says who answered",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the sidebar's Fleet row says 1",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the answered question says \"replied\"",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the comment to the working agent says it is working",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: …and that the agent with the board off was not woken",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the comment to the offline agent says it is offline",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: a comment just sent says it was sent",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the answer is tagged New",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: opening the card marked it read",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: …and the sidebar's number is gone",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the card's tile has a dot",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the strip names the card and says who answered",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the sidebar's Fleet row says 1",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the answered question says \"replied\"",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the comment to the working agent says it is working",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: …and that the agent with the board off was not woken",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the comment to the offline agent says it is offline",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: a comment just sent says it was sent",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the answer is tagged New",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: opening the card marked it read",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: …and the sidebar's number is gone",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the card's tile has a dot",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the strip names the card and says who answered",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the sidebar's Fleet row says 1",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the answered question says \"replied\"",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the comment to the working agent says it is working",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: …and that the agent with the board off was not woken",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the comment to the offline agent says it is offline",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: a comment just sent says it was sent",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the answer is tagged New",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: opening the card marked it read",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: …and the sidebar's number is gone",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the card's tile has a dot",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the strip names the card and says who answered",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the sidebar's Fleet row says 1",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the answered question says \"replied\"",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the comment to the working agent says it is working",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: …and that the agent with the board off was not woken",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the comment to the offline agent says it is offline",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: a comment just sent says it was sent",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the answer is tagged New",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: opening the card marked it read",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: …and the sidebar's number is gone",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the card's tile has a dot",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the strip names the card and says who answered",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: a phone's drawer has no count (M-3166)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the answered question says \"replied\"",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the comment to the working agent says it is working",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: …and that the agent with the board off was not woken",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the comment to the offline agent says it is offline",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: a comment just sent says it was sent",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the answer is tagged New",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: opening the card marked it read",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the card's tile has a dot",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the strip names the card and says who answered",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: a phone's drawer has no count (M-3166)",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the answered question says \"replied\"",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the comment to the working agent says it is working",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: …and that the agent with the board off was not woken",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the comment to the offline agent says it is offline",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: a comment just sent says it was sent",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the answer is tagged New",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: opening the card marked it read",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the card's tile has a dot",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the strip names the card and says who answered",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: a phone's drawer has no count (M-3166)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the answered question says \"replied\"",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the comment to the working agent says it is working",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: …and that the agent with the board off was not woken",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the comment to the offline agent says it is offline",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: a comment just sent says it was sent",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the answer is tagged New",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: opening the card marked it read",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the card's tile has a dot",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the strip names the card and says who answered",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: a phone's drawer has no count (M-3166)",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the answered question says \"replied\"",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the comment to the working agent says it is working",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: …and that the agent with the board off was not woken",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the comment to the offline agent says it is offline",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: a comment just sent says it was sent",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the answer is tagged New",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: opening the card marked it read",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: no page errors",
+      "ok": true
+    }
+  ],
+  "pictures": [
+    {
+      "path": "desk-light-en-1-board.png",
+      "sha256": "d4dc974591b765459ad3650042bb6f38d8ab56a3243d459f8cb914b88315a20e"
+    },
+    {
+      "path": "desk-light-en-2-card.png",
+      "sha256": "7c8991f1bb2fb283a55dc5c072e5d4afe6c433b56058fabe48b5a83e76af8730"
+    },
+    {
+      "path": "desk-light-zh-TW-1-board.png",
+      "sha256": "8c4daf32caf8579bc63f08f774e32008a08f1b89f433003c570acc17a455d2ed"
+    },
+    {
+      "path": "desk-light-zh-TW-2-card.png",
+      "sha256": "9748c52a7102ecef52a320bf4bd7633392514de6a76417b33f4add56a2d512cd"
+    },
+    {
+      "path": "desk-dark-en-1-board.png",
+      "sha256": "b8e6aeb4504fb5fb3bb9a09be71d69f2fac1584ecdd78561fe693f8e31acedc1"
+    },
+    {
+      "path": "desk-dark-en-2-card.png",
+      "sha256": "a7eaa89b89c746f1a10dd659cdf0711d6bf1492d2af86f25f9bfe1d66ccd21a5"
+    },
+    {
+      "path": "desk-dark-zh-TW-1-board.png",
+      "sha256": "362d96ba499f2c23a6405e633bf263d47ac3b9d31f1069b61dfad653c242c883"
+    },
+    {
+      "path": "desk-dark-zh-TW-2-card.png",
+      "sha256": "27712a736cb9644ac0f47d10227c5406ec490bca01880171700e994af2ef5f63"
+    },
+    {
+      "path": "phone-light-en-1-board.png",
+      "sha256": "fc93f8e285c0d2ba60079fa8f1c6b12b4484d7ac1874becabce2a28963c3bce9"
+    },
+    {
+      "path": "phone-light-en-2-card.png",
+      "sha256": "bfa10ad1f1e7cb6a1cd03d7688975e89b438110ca5501de385a6fa56b9df75e0"
+    },
+    {
+      "path": "phone-light-zh-TW-1-board.png",
+      "sha256": "690f4849b96a9e004443a068b262239183a5d534ae9bf436e82cd92327eca215"
+    },
+    {
+      "path": "phone-light-zh-TW-2-card.png",
+      "sha256": "bbc99449cc280772aa01d9ac54c3de3ab8012d3abb6f4ca51bee12e0bf0c3e7e"
+    },
+    {
+      "path": "phone-dark-en-1-board.png",
+      "sha256": "c856f7cc53d341777d0d91fcc1ff74dfc874fcc7dc363e90d633b0c7842a998b"
+    },
+    {
+      "path": "phone-dark-en-2-card.png",
+      "sha256": "f671c5964f0115ec9fd86310b5fcdf94cc4fe2b088e0857f0be3241df34680bf"
+    },
+    {
+      "path": "phone-dark-zh-TW-1-board.png",
+      "sha256": "94efa8131a1cd84c05716b2a3911f8325595485b4edc11e6890d89afcfadf482"
+    },
+    {
+      "path": "phone-dark-zh-TW-2-card.png",
+      "sha256": "20027df9a0dca1a3ec3cdcb4a94fd654641c7e0634d4f72e74fb8c0d77c168bc"
+    }
+  ],
+  "viewer": {
+    "name": "web-user"
+  },
+  "comments": [
+    {
+      "id": 1,
+      "by": "web-user",
+      "parentId": null
+    },
+    {
+      "id": 2,
+      "by": "general",
+      "parentId": null
+    },
+    {
+      "id": 3,
+      "by": "web-user",
+      "parentId": null
+    },
+    {
+      "id": 4,
+      "by": "web-user",
+      "parentId": null
+    },
+    {
+      "id": 5,
+      "by": "web-user",
+      "parentId": null
+    }
+  ],
+  "summary": "92/92"
+}
