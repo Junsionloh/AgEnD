@@ -634,3 +634,79 @@ describe("9. compatibility", () => {
     } finally { check.close(); }
   });
 });
+
+describe("10. an agent's side: the `task` tool", () => {
+  const tool = (db: SchedulerDb, instance: string, args: Record<string, unknown>) => boardToolAction(db, instance, args) as string;
+
+  it("get --detail shows each comment's number, an edit, and what it answers; a deleted one is not shown", () => {
+    const r = rig();
+    const c = card(r.board, ANN, { assignee: "dev-a" });
+    const root = say(r.board, c.code, ANN, "root words");
+    say(r.board, c.code, LEAD, "an answer", { replyTo: root.id });
+    const gone = say(r.board, c.code, ANN, "oops");
+    r.board.editComment(ANN, c.code, root.id, "root words, clearer");
+    r.board.deleteComment(ANN, c.code, gone.id);
+    const text = cardText(r.board, r.board.getCard(c.code));
+    expect(text).toMatch(new RegExp(`c${root.id} Ann \\S+ \\S+ \\(edited\\)`));
+    expect(text).toContain(`(reply to c${root.id})`);
+    expect(text).not.toContain("oops");
+    expect(text).toContain("root words, clearer");
+  });
+
+  it("update with reply_to answers a comment (c12, #12, 12 alike) and tells its author; a number that is none is refused by name", () => {
+    const r = rig();
+    const c = card(r.board, ANN, { assignee: "dev-a" });
+    r.take();
+    const asked = say(r.board, c.code, LEAD, "can you check the layout?");
+    r.take();
+    for (const ref of [`c${asked.id}`, `#${asked.id}`, String(asked.id), asked.id]) {
+      const out = tool(r.db, "dev-a", { action: "update", id: c.code, comment: `looked at it (${ref})`, reply_to: ref });
+      expect(out).toMatch(/^ok M-1/);
+      expect(woken(r.take())).toEqual(["lead:mention"]);
+    }
+    expect(r.board.detail(c.code).comments.filter((e) => e.parentId === asked.id)).toHaveLength(4);
+    for (const bad of ["abc", "c", "0", "-3", 1.5, {}]) {
+      expect(() => tool(r.db, "dev-a", { action: "update", id: c.code, comment: "x", reply_to: bad }), JSON.stringify(bad)).toThrow(/reply_to.*comment's number/);
+    }
+    expect(() => tool(r.db, "dev-a", { action: "update", id: c.code, comment: "x", reply_to: 9999 })).toThrow(/no comment c9999/);
+    expect(() => tool(r.db, "dev-a", { action: "update", id: c.code, reply_to: asked.id })).toThrow(/replyTo and to go with a comment/);
+  });
+
+  it("edit_comment changes the agent's own comment and no one else's; an @ it adds wakes that one", () => {
+    const r = rig();
+    const c = card(r.board, ANN, { assignee: "dev-a" });
+    const mine = say(r.board, c.code, DEV, "first draft");
+    const hers = say(r.board, c.code, ANN, "ann's");
+    r.take();
+    expect(tool(r.db, "dev-a", { action: "edit_comment", id: c.code, comment_id: `c${mine.id}`, comment: "second draft" })).toBe(`ok ${c.code} c${mine.id} edited`);
+    expect(woken(r.take())).toEqual([]);
+    expect(() => tool(r.db, "dev-a", { action: "edit_comment", id: c.code, comment_id: hers.id, comment: "mine now" })).toThrow(/only its author can edit/);
+    expect(() => tool(r.db, "dev-a", { action: "edit_comment", id: c.code, comment: "x" })).toThrow(/comment_id is the comment's number/);
+    expect(() => tool(r.db, "dev-a", { action: "edit_comment", id: c.code, comment_id: mine.id })).toThrow(/comment is required/);
+    tool(r.db, "dev-a", { action: "edit_comment", id: c.code, comment_id: mine.id, comment: "second draft, @lead please look" });
+    expect(woken(r.take())).toEqual(["lead:mention"]);
+    expect(tool(r.db, "dev-a", { action: "edit_comment", id: c.code, comment_id: mine.id, comment: "second draft, @lead please look" })).toContain("no change");
+    expect(r.board.detail(c.code).comments.map((e) => e.text)).toEqual(["second draft, @lead please look", "ann's"]);
+  });
+
+  it("the fields each action takes are enforced by name: edit_comment takes no status; update takes reply_to", async () => {
+    const { unsupportedFields } = await import("../src/task-board-tool.js");
+    expect(unsupportedFields({ action: "edit_comment", id: "M-1", comment_id: 1, comment: "x", status: "done" })).toMatch(/edit_comment does not take "status"/);
+    expect(unsupportedFields({ action: "edit_comment", id: "M-1", comment_id: 1, comment: "x" })).toBeNull();
+    expect(unsupportedFields({ action: "update", id: "M-1", comment: "x", reply_to: 3 })).toBeNull();
+    expect(unsupportedFields({ action: "move", id: "M-1", to: "done", reply_to: 3 })).toMatch(/move does not take "reply_to"/);
+  });
+
+  it("the notice a reply sends names the comment it answers, its author and its words", () => {
+    const r = rig();
+    const c = card(r.board, ANN, { assignee: "dev-b" });
+    r.take();
+    const asked = say(r.board, c.code, LEAD, "which colour for the buttons?");
+    r.take();
+    tool(r.db, "dev-a", { action: "update", id: c.code, comment: "blue", reply_to: asked.id });
+    const toLead = r.take().find((h) => h.to === "lead")!;
+    const text = wakeMessage([toLead.wake], () => r.board.getCard(c.code));
+    expect(text).toContain(`dev-a mentioned you in a comment: "blue" (replying to c${asked.id} (lead): "which colour for the buttons?")`);
+    expect(text).toContain("task update, with a comment and reply_to");
+  });
+});
