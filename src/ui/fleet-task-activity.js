@@ -18,9 +18,9 @@ import "/assets/chat-render.js";
 import "/assets/chat-strings.js";
 import { Icon } from "/assets/ui-icons.js";
 import { BoardOffNote, boardOffTargets, relTime } from "./fleet-task-common.js";
-import { AgentTag, instanceStates } from "./fleet-task-run.js";
+import { AgentTag, inProgressBy, instanceStates, readyOpenBy } from "./fleet-task-run.js";
 import { WakeStatus, wakeNames } from "./fleet-task-wake.js";
-import { BatonEntry, handoffNames, startedAfter } from "./fleet-task-flow.js";
+import { BatonEntry, batonRun, handoffNames, startedAfter } from "./fleet-task-flow.js";
 import { appStore } from "/assets/app-store.js";
 import { WhoCard } from "./fleet-task-owner.js";
 import { insertAtTrigger, triggerAt, withoutCode } from "./trigger-complete.js";
@@ -275,6 +275,9 @@ export function Timeline({ detail, describe, cards = [], lead = null, thread = n
   const wakeStates = thread && card ? instanceStates(appStore.get(), wakeNames(detail)) : null;
   // …and where a handoff stands: the same, for the instances it was made to (the page's own inference: offline, paused, working).
   const flowStates = card ? instanceStates(appStore.get(), handoffNames(detail)) : null;
+  // …and, for a hand-over whose card is still open but whose agent is running on it, the running line the sub task's row says (not claimed).
+  const board = { doing: inProgressBy(cards), ready: readyOpenBy(cards) };
+  const batonRunOf = (entry) => (entry.started || !card ? null : batonRun(entry.h, detail, board.doing, board.ready));
   const jump = (id) => { setFlash(id); setTimeout(() => setFlash((cur) => (cur === id ? null : cur)), 2400); };
   const ctx = thread && card ? {
     writable: !!thread.writable, viewer, picking: ui.picking, editing: ui.editing, flash, fresh: fresh.length ? new Set(fresh) : null,
@@ -329,7 +332,7 @@ export function Timeline({ detail, describe, cards = [], lead = null, thread = n
     if (part.day) rows.push(html`<li key=${`d${dayKey(part.day)}`} class="tl-day" role="presentation"><span>${dayLabel(part.day)}</span></li>`);
     for (const item of streamOf(part.entries, filter === "all")) {
       if (item.kind === "card") rows.push(item.entry.type === "comment" ? commentRow(item.entry)
-        : item.entry.type === "baton" ? html`<${BatonEntry} key=${item.entry.key} entry=${item.entry} states=${flowStates} />`
+        : item.entry.type === "baton" ? html`<${BatonEntry} key=${item.entry.key} entry=${item.entry} states=${flowStates} runFor=${batonRunOf} />`
         : html`<${Entry} key=${item.entry.key} entry=${item.entry} describe=${describe} who=${who} />`);
       else {
         const open = item.fold ? toggled[item.key] === true : true;

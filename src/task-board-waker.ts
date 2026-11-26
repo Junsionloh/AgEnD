@@ -121,13 +121,15 @@ function progressLine(w: Wake, card: Card | undefined): string {
 function say(w: Wake, r: WakeReason, card: Card | undefined, here = false): string {
   const by = w.by[r] ?? "someone";
   switch (r) {
-    case "assigned": return `assigned to you by ${by}`;
+    // AGEND-369: the board shows what an instance works on only once its card is `claimed`: an instance that started on an assigned card without
+    // claiming it (a preview's survivor-dev did, for six minutes) looked idle on the card. The notice says so, where the instance reads it.
+    case "assigned": return `assigned to you by ${by} — claim it first (task claim ${w.code}), then start`;
     case "start": return `${by} asks you to start it`;
     case "sent_back": return `sent back by ${by}${quote(w.texts.sent_back)}`;
     case "answered": return `${by} answered your blocked question${quote(w.texts.answered)} — it is in progress again`;
     // #2801 review: the answer waits on the card while the assignee finishes another (#2303); nothing else would say so.
     case "answer_kept": return `${by} answered your blocked question${quote(w.texts.answer_kept)} — kept on the card, which stays blocked while you finish your current card: resume it (move it to claimed) when you're free`;
-    case "ready": return "everything it waited for is done — you can start it";
+    case "ready": return `everything it waited for is done — you can start it: claim it first (task claim ${w.code}), then start`;
     case "decide": return here
       ? `you handed it out and it is blocked${card?.assignee ? ` (@${card.assignee})` : ""}${quote(w.texts.decide)} — answer it yourself if you can (move it back to claimed with the decision as the comment); otherwise the person has Answer for it in your channel`
       : `you handed it out and it is blocked${card?.assignee ? ` (@${card.assignee})` : ""}${quote(w.texts.decide)} — ask the person, then answer it: move it back to claimed with the decision as the comment`;
@@ -190,7 +192,7 @@ export function wakeMessage(wakes: Wake[], card: (uuid: string) => Card | undefi
     const what = [mains.length ? `${mains.length} main task${mains.length === 1 ? "" : "s"} (${idList(mains)})` : "", subs ? `${subs} sub task${subs === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ");
     const summary = `You were assigned ${what}.`;
     const rest = items.filter((w) => !assigned.includes(w));
-    const tail = "Read task mine for the order and work through them one at a time, by priority.";
+    const tail = "Read task mine for the order and work through them one at a time, by priority; claim a card (task claim ID) before you start on it.";
     return rest.length ? `[Task board] ${summary}\n${rest.map((w) => `- ${line(w)}`).join("\n")}\n${tail}` : `[Task board] ${summary} ${tail}`;
   }
   if (items.length === 1) return `[Task board] ${line(items[0]!)} Read it with: task get ${items[0]!.code}`;

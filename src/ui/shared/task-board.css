@@ -437,6 +437,7 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tl-wake.wk-ok, .tl-wake.wk-done { color: var(--ok); }
 .tl-wake.wk-busy { color: var(--accent); }
 .tl-wake.wk-bad { color: var(--danger); }
+.tl-wake.wk-warn { color: var(--warn); }
 .tl-wake.wk-muted { color: var(--text-3); }
 @media (prefers-reduced-motion: no-preference) { .wk-spin { animation: pulse 1.4s ease-in-out infinite; } }
 /* The comment the page was opened at (#c42): lit for a moment. */
@@ -634,6 +635,9 @@ button.tb-row-progress:hover { background: var(--surface-2); }
 .tr-state { padding: 2px var(--s-2); font-size: var(--fs-xs); }
 .tr-mark.s-working .tr-dot, .tr-state.s-working .tr-dot { animation: pulse 1.2s ease-in-out infinite; }
 .tr-mark.shared { background: var(--surface-2); color: var(--text-2); }
+/* Running on a card it was given but has not claimed (AGEND-369): the same mark with a dashed edge — it is an inference, and not what the board says yet. */
+.tr-mark.unclaimed { outline: 1px dashed color-mix(in srgb, currentColor 60%, transparent); outline-offset: -1px; }
+.tr-note.tr-unclaimed { color: var(--warn); }
 .tr-mark.s-needs, .tr-state.s-needs { background: var(--warn-bg); color: var(--warn); }
 .tr-mark.s-stuck, .tr-state.s-stuck { background: var(--danger-bg); color: var(--danger); }
 .tr-state.s-idle { background: var(--surface-2); color: var(--text-2); }

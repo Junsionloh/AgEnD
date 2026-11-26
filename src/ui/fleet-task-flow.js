@@ -20,7 +20,7 @@ import { Icon } from "/assets/ui-icons.js";
 import { activityDrawCtx, activityOffered, activityPrefs, activitySnapshot, observeActivity } from "./chat-activity.js";
 import { stepLine } from "./log-row.js";
 import { StatusPill, relTime, waitsList, waitsOn } from "./fleet-task-common.js";
-import { instanceStates, liveGroupOf, runOf } from "./fleet-task-run.js";
+import { instanceStates, liveGroupOf, runOf, runUnclaimed } from "./fleet-task-run.js";
 
 register("taskflow", {
   en: {
@@ -28,7 +28,9 @@ register("taskflow", {
     runningTip: "From {0}'s state: an agent is one continuing session, so it may be busy with something else",
     waitsFor: "Waits for {0}", readyNobody: "Ready to start — nobody is assigned", readyFor: "Ready — {0} has not started it yet", blocked: "Blocked", blockedOn: "Blocked: {0}",
     sending: "Handed to {0}", queued: "Waiting for {0} to take it", offline: "{0} is offline — it gets this when it is back", paused: "{0} is paused — it gets this when it is resumed",
-    delivered: "Delivered to {0} — waiting for it to start", read: "{0} read it — waiting for it to start", working: "{0} is working… (this card is not started yet)",
+    delivered: "Delivered to {0} — waiting for it to start", read: "{0} read it — waiting for it to start",
+    unclaimed: "not claimed yet", unclaimedLate: "still not claimed", unclaimedTip: "{0} is working and this is the card it was given, but it has not moved it to In progress (claimed it): what it is doing now is probably this card.",
+    unclaimedLateTip: "{0} has been working for a while without claiming this card. Ask it to claim it (task claim), or move the card to In progress yourself — the board never moves it for an agent.",
     failed: "Could not hand it to {0}", uncertain: "Not sure {0} got it", withdrawn: "The notice to {0} was withdrawn: the card changed again, and {0} hears its new state",
     "skip.board_off": "{0}'s task board is off, so it was not told", "skip.not_taken": "The notice to {0} could not be queued", "skip.lost": "The notice to {0} was lost (AgEnD restarted before it was sent)",
     "skip.other": "{0} was not told",
@@ -40,7 +42,9 @@ register("taskflow", {
     runningTip: "由 {0} 目前的狀態推論：Agent 只有一個連續的對話，可能在處理別的事",
     waitsFor: "等 {0}", readyNobody: "可以開始，但還沒有人負責", readyFor: "可以開始，等 {0} 接手", blocked: "卡住了", blockedOn: "卡住：{0}",
     sending: "已交給 {0}", queued: "等 {0} 接手", offline: "{0} 離線，上線後就會收到", paused: "{0} 已暫停，恢復後就會收到",
-    delivered: "已送達 {0}，等它開始", read: "{0} 已讀，等它開始", working: "{0} 處理中…（這張還沒開始）",
+    delivered: "已送達 {0}，等它開始", read: "{0} 已讀，等它開始",
+    unclaimed: "尚未認領", unclaimedLate: "還是沒有認領", unclaimedTip: "{0} 正在執行，而這是交給它的卡，但它還沒有把卡片移到進行中（沒有認領）：它現在做的很可能就是這張。",
+    unclaimedLateTip: "{0} 已經做了一陣子，卻還沒認領這張卡。請它認領（task claim），或你自己把卡片移到進行中——系統不會替 agent 改狀態。",
     failed: "沒有送達 {0}", uncertain: "無法確認 {0} 是否收到", withdrawn: "給 {0} 的通知已撤回：卡片又有變動，{0} 會從新的通知得知最新狀態",
     "skip.board_off": "{0} 的任務板是關閉的，沒有通知它", "skip.not_taken": "給 {0} 的通知沒能排入傳送", "skip.lost": "給 {0} 的通知遺失了（送出前 AgEnD 重新啟動）",
     "skip.other": "沒有通知 {0}",
@@ -65,6 +69,14 @@ export function latestHandoff(handoffs, card) {
   return found;
 }
 
+/** The notice has been taken (or nothing is known of it), so a working instance may be on the card; one still on its way, failed or held back has not got it. */
+export function handoffAllows(h) {
+  return !h || h.state === "delivered" || h.state === "read" || h.state === "unknown" || (h.state === "skipped" && h.skip === "not_waiting");
+}
+
+/** An instance that has been working this long on a card it has not claimed is flagged: asked to claim, or the person moves it. */
+export const UNCLAIMED_GRACE_MS = 90_000;
+
 /**
  * A handoff in words: `{ tone, text, tip? }`, or null when there is nothing to say (the card no longer waited on it, the delivery has no
  * record any more). `tone`: `wait` (on its way), `ok` (taken), `busy` (its instance is working), `bad` (not sent), `muted` (withdrawn).
@@ -81,9 +93,9 @@ export function handoffText(h, states) {
     case "withdrawn": return { tone: "muted", text: t("taskflow.withdrawn", to) };
     case "sending": return { tone: "wait", text: t("taskflow.sending", to) };
     case "queued": return { tone: "wait", text: t(state === "stopped" || state === "crashed" ? "taskflow.offline" : state === "paused" ? "taskflow.paused" : "taskflow.queued", to) };
-    case "delivered": case "read":
-      if (state === "working") return { tone: "busy", text: t("taskflow.working", to), tip: t("taskflow.runningTip", to) };
-      return { tone: "ok", text: t(h.state === "read" ? "taskflow.read" : "taskflow.delivered", to) };
+    // (An instance that is working is not "working on this card" here: when it probably is, the card says so as a running line — `subLine`,
+    // `runUnclaimed` — and when it cannot be known, the notice's own state is all that is said: never "working" beside "not started".)
+    case "delivered": case "read": return { tone: "ok", text: t(h.state === "read" ? "taskflow.read" : "taskflow.delivered", to) };
     default: return null;
   }
 }
@@ -107,7 +119,18 @@ export function subLine(card, ctx) {
   if (card.status !== "open") return null;
   if (waitsOn(card)) return { kind: "waiting", tone: "wait", who, text: t("taskflow.waitsFor", waitsList(card, ", ")) };
   if (!who) return { kind: "ready", tone: "wait", who, text: t("taskflow.readyNobody") };
-  const said = handoffText(latestHandoff(ctx.handoffs, card), ctx.states);
+  const latest = latestHandoff(ctx.handoffs, card);
+  // The card is still open, but its assignee is working and probably on it (it was given the card, can start, has nothing in progress): it did not
+  // claim it. A running line, with the step, marked "not claimed" — and flagged once it has gone on a while.
+  if (handoffAllows(latest) && runUnclaimed(card, ctx)) {
+    const doing = (ctx.live && ctx.live(who)) || "";
+    const since = Math.max(Date.parse(latest && latest.at) || 0, Date.parse(card.updatedAt) || 0);
+    const late = since > 0 && (ctx.now || Date.now()) - since > UNCLAIMED_GRACE_MS;
+    return { kind: "running", tone: late ? "warn" : "busy", who, spin: true, unclaimed: true, late,
+      text: `${who} · ${doing || t("taskflow.running")} (${t(late ? "taskflow.unclaimedLate" : "taskflow.unclaimed")})`,
+      tip: `${doing ? `${who} · ${doing}\n` : ""}${t(late ? "taskflow.unclaimedLateTip" : "taskflow.unclaimedTip", who)}` };
+  }
+  const said = handoffText(latest, ctx.states);
   return said ? { kind: "handed", who, ...said } : { kind: "ready", tone: "wait", who, text: t("taskflow.readyFor", who) };
 }
 
@@ -206,12 +229,12 @@ export function FeedWatch({ names }) {
 
 /**
  * The context the lines are drawn from: the sub tasks' `handoffs`, their instances' states (read now: the page draws again with the store), how
- * many cards each has in progress, and the step line of a running one (only when this viewer is offered steps).
+ * many cards each has in progress and which open cards it could start (`doing`, `ready`: the board's), and the step line of a running one (only when this viewer is offered steps).
  */
-export function flowContext(subs, handoffs, doing) {
+export function flowContext(subs, handoffs, doing, ready = null) {
   const names = [...new Set((subs || []).map((c) => c.assignee).filter(Boolean))];
   const offered = activityOffered() && activityPrefs.get().on;
-  return { handoffs: handoffs || [], states: instanceStates(appStore.get(), names), doing, live: offered ? liveLineOf : () => "" };
+  return { handoffs: handoffs || [], states: instanceStates(appStore.get(), names), doing, ready, live: offered ? liveLineOf : () => "", now: Date.now() };
 }
 
 /** The instances whose steps this page should hold: those running a sub task (and not shared with another card), when steps are offered. */
@@ -239,10 +262,10 @@ export function SubLine({ line }) {
  * The sub tasks list: a row each of status, number, title and who — and, under it, what is happening now (one line). While a sub task is
  * running and steps are offered, the page holds its instance's feed (`FeedWatch`). `children`: the card read's sub tasks; `handoffs`: the card read's.
  */
-export function SubRows({ children, handoffs, doing, onOpen }) {
+export function SubRows({ children, handoffs, doing, ready = null, onOpen }) {
   useStore(appStore);
   useStore(liveFeeds);
-  const ctx = flowContext(children, handoffs, doing);
+  const ctx = flowContext(children, handoffs, doing, ready);
   return html`<${FeedWatch} names=${watchedNames(children, ctx)} />
     <ul class="tc-children">${children.map((c) => html`<li key=${c.id}><button type="button" onClick=${() => onOpen(c.id)}>
       <${StatusPill} status=${c.status} card=${c} /><span class="tb-code">${c.id}</span><span class="tc-child-title">${c.title}</span><span class="tb-who">${c.assignee || ""}</span>
@@ -250,9 +273,9 @@ export function SubRows({ children, handoffs, doing, onOpen }) {
 }
 
 /** The main task's "Agent activity" lines: one per sub task that has something going on, the sub task's number opens it. */
-export function FlowLines({ subs, handoffs, doing, onOpen }) {
+export function FlowLines({ subs, handoffs, doing, ready = null, onOpen }) {
   useStore(liveFeeds);
-  const ctx = flowContext(subs, handoffs, doing);
+  const ctx = flowContext(subs, handoffs, doing, ready);
   const { lines, more } = mainLines(subs, ctx);
   if (!lines.length) return null;
   return html`<ul class="tf-lines" aria-label=${t("taskflow.linesLabel")}>${lines.map(({ card, line }) => html`<li key=${card.id} class=${`tf-item tf-${line.tone} tf-k-${line.kind}`} title=${line.tip || line.text}>
@@ -261,15 +284,32 @@ export function FlowLines({ subs, handoffs, doing, onOpen }) {
 }
 
 /** Whether the main task has lines to show, for its block to open (the block itself draws `FlowLines`). */
-export const hasFlow = (subs, handoffs, doing) => mainLines(subs, flowContext(subs, handoffs, doing)).lines.length > 0;
+export const hasFlow = (subs, handoffs, doing, ready = null) => mainLines(subs, flowContext(subs, handoffs, doing, ready)).lines.length > 0;
 
 /** A handoff in the activity stream: a row that is never folded away — the sentence, its time, and where it stands under it. */
-export function BatonEntry({ entry, states }) {
-  const { lead, status } = batonOf(entry.h, states, entry.started);
+export function BatonEntry({ entry, states, runFor = null }) {
+  useStore(liveFeeds);                           // the step line moves with the feed: only this row redraws, not the stream
+  const run = runFor ? runFor(entry) : null;
+  const { lead, status: handed } = batonOf(entry.h, states, entry.started);
+  // The card is still open but its agent is running on it (not claimed): the row says so, with the step, instead of where the notice stands.
+  const status = !entry.started && run ? { tone: run.tone, text: run.text, tip: run.tip, spin: true } : handed;
   return html`<li class="tl-item tl-baton" data-baton=${entry.h.card} aria-label=${t("taskflow.handoffLabel")}>
     <div class="tl-line"><span class="tl-mark" aria-hidden="true"><${Icon} name="forward" size=${14} /></span>
       <span class="tl-sentence">${lead}</span>
       <time class="muted tl-time" dateTime=${entry.at}>${relTime(entry.at)}</time></div>
-    ${status ? html`<ul class="tl-wakes tf-wakes"><li class=${`tl-wake wk-${status.tone}`} title=${status.tip || undefined}><${Icon} name=${ICON[status.tone] || "info"} size=${13} cls=${status.tone === "busy" ? "wk-spin" : ""} /><span>${status.text}</span></li></ul>` : null}
+    ${status ? html`<ul class="tl-wakes tf-wakes"><li class=${`tl-wake wk-${status.tone}`} title=${status.tip || undefined}>${status.spin ? html`<span class="out-spin tf-spin" aria-hidden="true"></span>` : html`<${Icon} name=${ICON[status.tone] || "info"} size=${13} cls=${status.tone === "busy" ? "wk-spin" : ""} />`}<span>${status.text}</span></li></ul>` : null}
   </li>`;
+}
+
+/**
+ * The running line of the card a handoff row is about, when that is its newest handoff to its current assignee and the assignee is running on it
+ * without having claimed it (`subLine`'s running, unclaimed) — else null. The card is the card read's own or one of its children.
+ */
+export function batonRun(h, detail, doing, ready) {
+  const card = detail && (detail.card && detail.card.id === h.card ? detail.card : ((detail.children || []).find((c) => c.id === h.card) || null));
+  if (!card || card.status !== "open") return null;
+  const latest = latestHandoff(detail.handoffs, card);
+  if (!latest || latest.id !== h.id) return null;
+  const line = subLine(card, flowContext([card], detail.handoffs, doing, ready));
+  return line && line.kind === "running" && line.unclaimed ? line : null;
 }

@@ -150,7 +150,8 @@ describe("1. what a line says", () => {
     expect(say("queued", { dev: "paused" })).toEqual(["wait", "dev is paused — it gets this when it is resumed"]);
     expect(say("delivered", { dev: "idle" })).toEqual(["ok", "Delivered to dev — waiting for it to start"]);
     expect(say("read", { dev: "idle" })).toEqual(["ok", "dev read it — waiting for it to start"]);
-    expect(say("read", { dev: "working" })).toEqual(["busy", "dev is working… (this card is not started yet)"]);
+    // A working instance is not "working" beside "not started": the notice's own state is what is said (the card says it is running, when it probably is).
+    expect(say("read", { dev: "working" })).toEqual(["ok", "dev read it — waiting for it to start"]);
     expect(say("failed")).toEqual(["bad", "Could not hand it to dev"]);
     expect(say("uncertain")).toEqual(["bad", "Not sure dev got it"]);
     expect(say("withdrawn")?.[0]).toBe("muted");
@@ -538,13 +539,204 @@ describe("4. live", () => {
   });
 });
 
+// ── 4b. The agent is working on the card it was given, but has not claimed it ─────────────────────────────────
+
+describe("4b. working on a card it has not claimed (the owner's survivor-dev: twelve tools, six minutes, S-11 still To do)", () => {
+  const states = (o: Record<string, string>) => new Map(Object.entries(o));
+  const sc = (id: string, status: string, assignee: string | null, extra: Record<string, unknown> = {}) => card({ kind: "sub", id, status, assignee, ...extra });
+  const ctx = (st: Record<string, string>, cards: any[], over: Record<string, unknown> = {}) => ({ handoffs: [], states: states(st), doing: run.inProgressBy(cards), ready: run.readyOpenBy(cards), live: () => "", now: NOW, ...over });
+
+  it("readyOpenBy: the open cards an instance could start, by name — not a claimed one, not one that waits (one it cannot see too), not a main task that follows its sub tasks", () => {
+    const cards = [sc("S-1", "open", "dev"), sc("S-2", "open", "dev", { unmetDeps: ["S-1"] }), sc("S-3", "open", "ops", { hiddenUnmet: 1 }), sc("S-4", "claimed", "ops"), sc("S-5", "open", null),
+      card({ id: "M-1", status: "open", assignee: "lead", progress: { total: 2, open: 2, claimed: 0, blocked: 0, review: 0, done: 0 } }), card({ id: "M-2", status: "open", assignee: "lead" })];
+    expect([...run.readyOpenBy(cards)]).toEqual([["dev", ["S-1"]], ["lead", ["M-2"]]]);
+    expect([...run.readyOpenBy(undefined)]).toEqual([]);
+  });
+
+  it("runUnclaimed: it is working, it was given this card, can start it, has nothing in progress and no other open card — so it is probably on this one", () => {
+    const cards = [sc("S-11", "open", "dev")];
+    expect(run.runUnclaimed(cards[0], ctx({ dev: "working" }, cards))).toEqual({ instance: "dev", state: "working", shared: 0, unclaimed: true });
+    expect(run.runUnclaimed(cards[0], ctx({ dev: "idle" }, cards)), "not working").toBeNull();
+    expect(run.runUnclaimed(cards[0], ctx({ dev: "needs" }, cards)), "waiting for the person is not running").toBeNull();
+    expect(run.runUnclaimed(cards[0], ctx({}, cards)), "an instance the viewer does not see").toBeNull();
+    const more = [...cards, sc("S-12", "open", "dev")];
+    expect(run.runUnclaimed(more[0], ctx({ dev: "working" }, more)), "two open cards: nothing says which").toBeNull();
+    const busy = [...cards, sc("S-13", "claimed", "dev")];
+    expect(run.runUnclaimed(busy[0], ctx({ dev: "working" }, busy)), "a card in progress is its work").toBeNull();
+    expect(run.runUnclaimed(sc("S-11", "open", "dev", { unmetDeps: ["S-10"] }), ctx({ dev: "working" }, [sc("S-11", "open", "dev", { unmetDeps: ["S-10"] })])), "it waits for another").toBeNull();
+    expect(run.runUnclaimed(cards[0], { states: states({ dev: "working" }), doing: new Map() }), "a caller from before has no `ready`: no such run").toBeNull();
+    expect(run.runUnclaimed(sc("S-11", "claimed", "dev"), ctx({ dev: "working" }, cards)), "a claimed card is runOf's").toBeNull();
+  });
+
+  it("runOf: an open card has the run; a claimed card's is as before; a main task takes its sub tasks' — a claimed one first, and while it is still open itself", () => {
+    const open = sc("S-2", "open", "dev"), mine = sc("S-3", "claimed", "qa");
+    const c = ctx({ dev: "working", qa: "working" }, [open, mine]);
+    expect(run.runOf(open, c)).toMatchObject({ instance: "dev", unclaimed: true });
+    expect(run.runOf(mine, c)).toEqual({ instance: "qa", state: "working", shared: 0 });
+    const main = card({ id: "M-2", status: "claimed", progress: { total: 2, open: 1, claimed: 1, blocked: 0, review: 0, done: 0 } });
+    expect(run.runOf(main, c, [open, mine])?.instance, "the claimed one is the stronger").toBe("qa");
+    expect(run.runOf({ ...main, status: "open" }, ctx({ dev: "working" }, [open]), [open])).toMatchObject({ instance: "dev", unclaimed: true });
+    expect(run.runOf({ ...main, status: "review" }, c, [open]), "a main task waiting for confirmation is not running").toBeNull();
+  });
+
+  it("subLine: a running line with the step and 'not claimed yet'; flagged once it has gone on; only while the notice reached it", () => {
+    const cards = [sc("S-11", "open", "dev", { updatedAt: ago(HOUR) })];
+    const line = (over: Record<string, unknown> = {}, st: Record<string, string> = { dev: "working" }) => { const l = flow.subLine(cards[0], ctx(st, cards, over)); return l ? [l.kind, l.tone, l.text, !!l.spin, !!l.unclaimed] : null; };
+    const read = (at: number, state = "read", extra: Record<string, unknown> = {}) => ({ handoffs: [{ id: 1, card: "S-11", to: "dev", state, at: ago(at), ...extra }] });
+    expect(line(read(10_000))).toEqual(["running", "busy", "dev · Running (not claimed yet)", true, true]);
+    expect(line({ ...read(10_000), live: () => "Run python3 survivor.html" })).toEqual(["running", "busy", "dev · Run python3 survivor.html (not claimed yet)", true, true]);
+    const late = flow.subLine(cards[0], ctx({ dev: "working" }, cards, read(5 * MIN)));
+    expect([late.tone, late.text, late.late]).toEqual(["warn", "dev · Running (still not claimed)", true]);
+    expect(late.tip).toContain("Ask it to claim it");
+    expect(line(read(10_000, "delivered"))[0], "delivered is enough").toBe("running");
+    expect(line({ handoffs: [] })![0], "a session with no record of the notice (read-only): the inference stands").toBe("running");
+    expect(line(read(10_000, "skipped", { skip: "not_waiting" }))![0]).toBe("running");
+    for (const state of ["sending", "queued", "failed", "uncertain", "withdrawn"]) expect([state, line(read(10_000, state))![0]], "the notice has not reached it: it is not on this card").toEqual([state, "handed"]);
+    expect(line(read(10_000), { dev: "idle" }), "it stopped: the notice's state again — no 'working' beside 'not started'").toEqual(["handed", "ok", "dev read it — waiting for it to start", false, false]);
+    expect(flow.subLine(sc("S-11", "claimed", "dev"), ctx({ dev: "working" }, cards))).toMatchObject({ kind: "running", text: "dev · Running" });
+    expect(flow.subLine(sc("S-11", "claimed", "dev"), ctx({ dev: "working" }, cards))!.unclaimed, "after the claim: the plain running line").toBeUndefined();
+  });
+
+  it("with several cards it could be on, or one in progress: the notice's state, and never a claim of 'working'", () => {
+    const two = [sc("S-11", "open", "dev"), sc("S-12", "open", "dev")];
+    expect(flow.subLine(two[0], ctx({ dev: "working" }, two, { handoffs: [{ id: 1, card: "S-11", to: "dev", state: "read", at: ago(MIN) }] }))).toMatchObject({ kind: "handed", text: "dev read it — waiting for it to start" });
+    const one = [sc("S-11", "open", "dev"), sc("S-13", "claimed", "dev")];
+    expect(flow.subLine(one[0], ctx({ dev: "working" }, one))).toMatchObject({ kind: "ready" });
+  });
+
+  const unclaimed = (over: Record<string, unknown> = {}, at = 10_000) => {
+    plan({ status: "open", unmetDeps: [], assignee: "game-dev", updatedAt: ago(HOUR), ...over }, { status: "open", unmetDeps: ["S-2"] });
+    setDetails({ main: { handoffs: [ho("S-2", "game-dev", "read", { at: ago(at) })], subEvents: [mv(1, "S-1", "game-designer", "claimed", "done", 10 * MIN)] } });
+  };
+
+  it("the page: the row, the block, the handoff row and the status all say it is running — with the ring, and 'not claimed yet'; never 'working' and 'not started' together", async () => {
+    unclaimed();
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await open();
+    expect(lineOf("S-2")).toBe("game-dev · Running (not claimed yet)");
+    expect(rowOf("S-2")!.querySelector(".tc-child-line .out-spin"), "a turning ring").toBeTruthy();
+    expect(text(block().querySelector(".tf-lines"))).toBe("game-dev · Running (not claimed yet) S-2");
+    expect(block().querySelector(".tf-lines .out-spin")).toBeTruthy();
+    expect(text(q(".tl-baton .tl-wake")), "the handoff row").toBe("game-dev · Running (not claimed yet)");
+    expect(q(".tl-baton .tl-wake .out-spin")).toBeTruthy();
+    expect(text(q(".tp-idrow .tr-mark")), "beside the status").toBe("Running · not claimed");
+    expect(q(".tp-idrow .tr-mark").className).toContain("unclaimed");
+    expect(text(q(".tp")), "the two sentences that contradicted each other").not.toMatch(/not started yet|is working…/);
+  });
+
+  it("the board's tile and row say it too — the main task is Running while the agent it handed a sub task to is working on it", async () => {
+    unclaimed();
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await open("M-2");
+    fire(q(".tp-back, .tp-bar .tp-back"), "click"); await settle(8);
+    expect(q('[data-tile="M-2"]').className).toContain("running");
+    expect(text(q('[data-tile="M-2"] .tr-mark'))).toBe("Running · not claimed");
+    await p.unmount();
+    (globalThis as any).localStorage.setItem("agend_tasks_display", JSON.stringify({ view: "list" }));
+    await p.mount(h(fleet.FleetPanel, { route: { panel: "fleet", tab: "tasks" }, navKey: `fleet:tasks|flow-${++mounts}|en` }));
+    await settle(8);
+    expect(q('[data-row="M-2"]').className, "the list's row").toContain("running");
+    expect(text(q('[data-row="M-2"] .tr-mark'))).toBe("Running · not claimed");
+  });
+
+  it("with steps offered (an admin, tool progress on) the line says what it is doing, everywhere; without them the state alone", async () => {
+    doc().body.dataset.chatActivity = "1";
+    steps = feedAnswer("game-dev");
+    unclaimed();
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await open();
+    await settle(14);
+    expect(lineOf("S-2")).toMatch(/^game-dev · .*game\.js.* \(not claimed yet\)$/);
+    expect(text(block().querySelector(".tf-lines"))).toMatch(/game\.js.*\(not claimed yet\) S-2$/);
+    expect(text(q(".tl-baton .tl-wake"))).toMatch(/game\.js.*\(not claimed yet\)$/);
+    act.forgetActivity();
+    steps = { enabled: true, instance: "game-dev", backend: "claude-code", supported: true, thinking: false, level: "off", steps: [], after: null, key: null, before: null, ev: 0 };
+    await open();
+    await settle(14);
+    expect(lineOf("S-2"), "tool progress off").toBe("game-dev · Running (not claimed yet)");
+    expect(JSON.stringify(calls.filter((c) => c.path.startsWith("/ui/steps")).slice(-1))).not.toContain("game.js");
+  });
+
+  it("not an admin (no steps offered): the state alone, and the steps' route is not asked", async () => {
+    steps = feedAnswer("game-dev");
+    unclaimed();
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await open();
+    await settle(10);
+    expect(lineOf("S-2")).toBe("game-dev · Running (not claimed yet)");
+    expect(calls.filter((c) => c.path.startsWith("/ui/steps"))).toEqual([]);
+  });
+
+  it("it has gone on for a while without claiming: the line is flagged, and says what to do (the board never moves the card itself)", async () => {
+    unclaimed({}, 6 * MIN);
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await open();
+    expect(lineOf("S-2")).toBe("game-dev · Running (still not claimed)");
+    expect(rowOf("S-2")!.querySelector(".tc-child-line").className).toContain("tf-warn");
+    expect(q(".tl-baton .tl-wake").className).toContain("wk-warn");
+    expect(rowOf("S-2")!.querySelector(".tc-child-line").getAttribute("title")).toContain("Ask it to claim it");
+    expect(calls.filter((c) => c.method === "POST"), "nothing moved the card").toEqual([]);
+  });
+
+  it("after it claims: the plain running line (no 'not claimed'), the same ring; when it stops: the notice's state, no contradiction", async () => {
+    unclaimed();
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await open();
+    expect(lineOf("S-2")).toMatch(/not claimed yet/);
+    plan({ status: "claimed", unmetDeps: [], assignee: "game-dev" }, { status: "open", unmetDeps: ["S-2"] });
+    setDetails({ main: { handoffs: [ho("S-2", "game-dev", "read", { at: ago(10_000) })], subEvents: [mv(1, "S-1", "game-designer", "claimed", "done", 10 * MIN), mv(2, "S-2", "game-dev", "open", "claimed", 1000)] } });
+    emit("tasks", { rev: 2, ids: ["M-2"] });
+    await open();
+    expect(lineOf("S-2")).toBe("game-dev · Running");
+    expect(rowOf("S-2")!.querySelector(".out-spin")).toBeTruthy();
+    expect(text(q(".tp-idrow .tr-mark"))).toBe("Running");
+    expect(text(q(".tl-baton .tl-wake")), "started: the handoff row says who started it").toBe("game-dev started S-2");
+    unclaimed();
+    fleetIs({ ...EVERYONE, "game-dev": "idle" });
+    await open();
+    expect(lineOf("S-2"), "it stopped without claiming: the notice's state").toBe("game-dev read it — waiting for it to start");
+    expect(q(".tp-idrow .tr-mark")).toBeNull();
+  });
+
+  it("it could be on more than one card: nothing is said of 'running', and the notice's state stands", async () => {
+    unclaimed();
+    CARDS = [...CARDS, sub("S-9", { status: "open", assignee: "game-dev", title: "Another", unmetDeps: [] })];
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await open();
+    expect(lineOf("S-2")).toBe("game-dev read it — waiting for it to start");
+    expect(q(".tp-idrow .tr-mark")).toBeNull();
+  });
+
+  it("the sub task's own page: Running, the way to its conversation, and a note that it has not claimed the card", async () => {
+    unclaimed();
+    setDetails({ main: { handoffs: [ho("S-2", "game-dev", "read", { at: ago(10_000) })], subEvents: [] }, sub: { "S-2": { handoffs: [ho("S-2", "game-dev", "read", { at: ago(10_000) })] } } });
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await open("M-2");
+    fire(rowOf("S-2")!.querySelector("button"), "click"); await settle(12);
+    expect(q('[data-card="S-2"]')).toBeTruthy();
+    expect(text(q(".tr-state"))).toBe("Running");
+    expect(text(q(".tr-unclaimed"))).toBe("game-dev is working and has this card, but has not claimed it — the board shows work only once a card is in progress.");
+    expect(text(q(".tp-idrow .tr-mark"))).toBe("Running · not claimed");
+    expect(q("a.tr-open").getAttribute("href")).toBe("/ui/chat/game-dev");
+  });
+
+  it("in Traditional Chinese", async () => {
+    i18n.setLang("zh-TW", { store: false });
+    unclaimed();
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await open();
+    expect(lineOf("S-2")).toBe("game-dev · 執行中 (尚未認領)");
+    expect(text(q(".tp-idrow .tr-mark"))).toBe("執行中・尚未認領");
+  });
+});
+
 // ── 5. Both languages ──────────────────────────────────────────────────────────────────────────────────────
 
 describe("5. both languages", () => {
   it("every string the lines use is in English and Traditional Chinese, with the same holes", () => {
     const keys = ["running", "needs", "stuck", "idle", "busyN", "busyTip", "runningTip", "waitsFor", "readyNobody", "readyFor", "blocked", "blockedOn", "sending", "queued", "offline", "paused", "delivered",
-      "read", "working", "failed", "uncertain", "withdrawn", "skip.board_off", "skip.not_taken", "skip.lost", "skip.other", "handedAfter", "handedReady", "handedAssigned", "started", "startedNeutral", "handoffLabel", "linesLabel", "openCard", "more"]
-      .map((k) => `taskflow.${k}`);
+      "read", "unclaimed", "unclaimedLate", "unclaimedTip", "unclaimedLateTip", "failed", "uncertain", "withdrawn", "skip.board_off", "skip.not_taken", "skip.lost", "skip.other", "handedAfter", "handedReady", "handedAssigned", "started", "startedNeutral", "handoffLabel", "linesLabel", "openCard", "more"]
+      .map((k) => `taskflow.${k}`).concat(["runningUnclaimed", "unclaimedTip", "unclaimedNote"].map((k) => `taskrun.${k}`));
     const holes = (s: string) => [...new Set(s.match(/\{\d\}/g) ?? [])].sort().join();
     for (const key of keys) {
       const en = i18n.tIn("en", key), zh = i18n.tIn("zh-TW", key);

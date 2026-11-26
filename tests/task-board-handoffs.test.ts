@@ -9,7 +9,9 @@
  *      carries a comment whose writer may not reach the instance still hands the card over.
  *   3. `subEvents`: the moves of a main task's sub tasks, in order, nothing else; the card's own detail carries them only on a main task.
  *   4. How far a handoff got is read like a comment's (`handoffViews`): sending, queued, delivered, read, failed, unconfirmed, withdrawn, lost.
- *   5. Compatibility: a database from before the table opens and grows it; the card's other reads are as they were; a pruned card takes its rows.
+ *   5. The source (AGEND-369): the notice that hands a card over, and the card an instance reads, say to claim it before starting on it — the board shows
+ *      work only once a card is claimed, and never moves the card for an agent.
+ *   6. Compatibility: a database from before the table opens and grows it; the card's other reads are as they were; a pruned card takes its rows.
  *
  * Isolation: temp databases; the waker's timers seam.
  */
@@ -20,7 +22,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SchedulerDb } from "../src/scheduler/db.js";
 import { type Actor, type TaskBoard, type WakeSkip } from "../src/scheduler/task-board.js";
-import { TaskBoardWaker } from "../src/task-board-waker.js";
+import { TaskBoardWaker, wakeMessage } from "../src/task-board-waker.js";
+import { cardText } from "../src/scheduler/task-board-text.js";
 import { handoffViews } from "../src/web-api.js";
 
 const ANN: Actor = { kind: "person", name: "Ann" };
@@ -291,7 +294,52 @@ describe("4. how far a handoff got", () => {
   });
 });
 
-describe("5. compatibility", () => {
+describe("5. the source: claim before you start", () => {
+  it("the notice that hands a card over says to claim it first — assigned, and ready (the second when everything it waited for is done)", () => {
+    const r = rig();
+    const { s1, s2 } = plan(r);
+    const w = wired(r);
+    r.board.createCards(ANN, { cards: [{ parent: r.board.findCard(s1.parent!)!.code, title: "Free step", assignee: "dev-a", needsReview: false }] });
+    finish(r, DEV_A, s1.code);
+    w.fire();
+    const toB = w.sent.find((m) => m.instance === "dev-b")!.message;
+    expect(toB).toContain(`everything it waited for is done — you can start it: claim it first (task claim ${s2.code}), then start`);
+    const toA = w.sent.find((m) => m.instance === "dev-a")!.message;
+    expect(toA).toMatch(/assigned to you by Ann — claim it first \(task claim S-\d+\), then start/);
+    // The notice never claims for it: nothing moved S-2 on its own.
+    expect(r.board.findCard(s2.uuid)!.status).toBe("open");
+  });
+
+  it("a whole plan assigned at once says to claim a card before starting on it", () => {
+    const r = rig();
+    const main = r.board.createCards(ANN, { project: "Game", cards: [{ title: "Plan", needsReview: false }] }).cards[0]!;
+    const w = wired(r);
+    for (let i = 0; i < 5; i++) r.board.createCards(ANN, { cards: [{ parent: main.code, title: `Step ${i}`, assignee: "dev-a", needsReview: false }] });
+    w.fire();
+    expect(w.sent.find((m) => m.instance === "dev-a")!.message).toContain("claim a card (task claim ID) before you start on it");
+  });
+
+  it("task get on a card that can start says how it starts; not on a claimed one, one that waits, or one nobody has", () => {
+    const r = rig();
+    const { s1, s2 } = plan(r);
+    const free = r.board.createCards(ANN, { cards: [{ parent: r.board.findCard(s1.parent!)!.code, title: "Nobody's", needsReview: false }] }).cards[0]!;
+    const text = (code: string) => cardText(r.board, r.board.getCard(code));
+    expect(text(s1.code)).toContain(`to start it: claim it first (task claim ${s1.code}), then work — the board shows dev-a on it only once it is in progress`);
+    expect(text(s2.code), "it waits for S-1").not.toContain("to start it");
+    expect(text(free.code), "nobody has it").not.toContain("to start it");
+    r.board.moveCard(DEV_A, s1.code, "claimed", {});
+    expect(text(s1.code), "claimed").not.toContain("to start it");
+    r.board.moveCard(DEV_A, s1.code, "done", { result: "ok" });
+    expect(text(s2.code), "ready now").toContain(`task claim ${s2.code}`);
+  });
+
+  it("wakeMessage is exact for one assigned card (the line the agent reads first)", () => {
+    const wake = { instance: "dev-a", uuid: "u1", code: "S-7", title: "Build it", parent: "M-1", reasons: ["assigned"], by: { assigned: "lead" }, texts: {} } as never;
+    expect(wakeMessage([wake])).toBe('[Task board] S-7 "Build it": assigned to you by lead — claim it first (task claim S-7), then start. Read it with: task get S-7');
+  });
+});
+
+describe("6. compatibility", () => {
   it("a database from before the table opens and grows it; nothing else on the card is different", () => {
     const r = rig();
     const { main, s1, s2 } = plan(r);

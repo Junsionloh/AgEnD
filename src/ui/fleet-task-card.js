@@ -191,9 +191,9 @@ const radioItems = (list, current, label, act) => list.map((v) => ({ key: String
  * `writable`: false over a read-only link (the card is shown, nothing on it changes). `place`: up and down in its column,
  * for touch and keyboard (null when it cannot move). `steps`: the previous and next card the page showed, and where this
  * one is among them (null: nowhere to step). `where`: the project's name for the breadcrumb (null: none). `back`: what
- * Back says. `onBack` returns to the board or list. `doing`: how many cards each instance has in progress (fleet-task-run.js).
+ * Back says. `onBack` returns to the board or list. `doing`: how many cards each instance has in progress, `ready`: the open cards it could start (fleet-task-run.js).
  */
-export function CardPage({ id, tick, projects, cards = [], boardOff = [], doing = new Map(), writable = true, place = null, steps = null, where = null, back, onBack, onOpen, onStep, reloadBoard }) {
+export function CardPage({ id, tick, projects, cards = [], boardOff = [], doing = new Map(), ready = new Map(), writable = true, place = null, steps = null, where = null, back, onBack, onOpen, onStep, reloadBoard }) {
   const { instances, taskUnread } = useStore(appStore);
   const [detail, setDetail] = useState(null);
   const [missing, setMissing] = useState(false);
@@ -417,7 +417,7 @@ export function CardPage({ id, tick, projects, cards = [], boardOff = [], doing 
     <h3>${t("taskcard.subs")}</h3>
     <div class="tc-field-body">
       ${prog ? html`<div class="tp-subs-head"><span class="tp-subs-count" title=${t("taskcard.subsDone", prog.done, prog.total)}>${prog.done} / ${prog.total}</span><${ProgressBar} progress=${prog} wide /></div>` : null}
-      ${children.length ? html`<${SubRows} children=${children} handoffs=${detail.handoffs} doing=${doing} onOpen=${onOpen} />` : null}
+      ${children.length ? html`<${SubRows} children=${children} handoffs=${detail.handoffs} doing=${doing} ready=${ready} onOpen=${onOpen} />` : null}
       ${finished || !can ? null : html`<${QuickAdd} placeholder=${t("taskcard.quickAdd")} limit=${LIMIT.title} onAdd=${(title) => run(() => boardApi.create({ parent: card.id, title }))} />`}
     </div>
   </section>` : null;
@@ -425,10 +425,10 @@ export function CardPage({ id, tick, projects, cards = [], boardOff = [], doing 
   // What the agents are doing on this card (fleet-task-flow.js): a card in progress whose assignee is working — or, for a main task, whose sub
   // task's is — is "Running" beside its status; a main task's "Agent activity" lists what each sub task is doing, and a sub task waiting to
   // start says where its hand-over stands.
-  const runNow = runOf(card, { states: instanceStates(appStore.get(), [card.assignee, ...children.map((c) => c.assignee)].filter(Boolean)), doing }, children);
-  const flowOn = derived && !finished && hasFlow(children, detail.handoffs, doing);
-  const flow = flowOn ? html`<${FlowLines} subs=${children} handoffs=${detail.handoffs} doing=${doing} onOpen=${onOpen} />` : null;
-  const batonLine = !isMain && card.status === "open" ? subLine(card, flowContext([card], detail.handoffs, doing)) : null;
+  const runNow = runOf(card, { states: instanceStates(appStore.get(), [card.assignee, ...children.map((c) => c.assignee)].filter(Boolean)), doing, ready }, children);
+  const flowOn = derived && !finished && hasFlow(children, detail.handoffs, doing, ready);
+  const flow = flowOn ? html`<${FlowLines} subs=${children} handoffs=${detail.handoffs} doing=${doing} ready=${ready} onOpen=${onOpen} />` : null;
+  const batonLine = !isMain && card.status === "open" ? subLine(card, flowContext([card], detail.handoffs, doing, ready)) : null;
   return html`<div class="tp" ref=${root} data-card=${card.id}>
     ${bar({ parent, actions: html`${copyBtn}${blockBtn}${more}` })}
     <div class="tp-grid">
@@ -453,7 +453,7 @@ export function CardPage({ id, tick, projects, cards = [], boardOff = [], doing 
           <${EditableText} readOnly=${!can} value=${card.blockedReason} limit=${LIMIT.blockedReason} version=${card.version} onSave=${(v, base) => save({ blockedReason: v }, base)} /></${Field}>` : null}
         ${spec.shown.length ? html`<div class="tp-spec">${spec.shown}</div>` : null}
         ${spec.adders.length ? html`<div class="tp-adders">${spec.adders}</div>` : null}
-        <${AgentRun} card=${card} detail=${detail} doing=${doing} derived=${derived} shown=${handoff.shown} adders=${handoff.adders} flow=${flow} flowOn=${flowOn} baton=${batonLine ? batonLine.text : ""} />
+        <${AgentRun} card=${card} detail=${detail} doing=${doing} ready=${ready} derived=${derived} shown=${handoff.shown} adders=${handoff.adders} flow=${flow} flowOn=${flowOn} baton=${batonLine ? batonLine.text : ""} />
         <${FilesField} files=${(detail && detail.attachments) || []} />
         ${subs}
       </div>
