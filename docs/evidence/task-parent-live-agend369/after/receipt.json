@@ -1,6 +1,6 @@
 {
   "phase": "after",
-  "sourceHead": "c2af4c082a03e42b89b019b87fd0eea36f6fc557",
+  "sourceHead": "c9716e20b113a63b7f5f556016ef32b49daed686",
   "dirty": [],
   "checks": [
     {
@@ -9,6 +9,14 @@
     },
     {
       "name": "S-2 of the other plan is queued for the offline instance",
+      "ok": true
+    },
+    {
+      "name": "S-2 assignment notice to game-art carries the outbox's key",
+      "ok": true
+    },
+    {
+      "name": "S-2 assignment notice to game-sound carries the outbox's key",
       "ok": true
     },
     {
@@ -53,6 +61,58 @@
     },
     {
       "name": "desk-light-en: the handoff row names who has the baton, and says it is offline",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the board's tile of M-3 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: S-8's row: the agent running, with the step and the ring, marked not claimed",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: no \"working\" beside \"not started\"",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the board's tile of M-4 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: S-11's row: the agent running, with the step and the ring, marked not claimed — and flagged",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the flagged line has the warning look",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: no \"working\" beside \"not started\"",
       "ok": true
     },
     {
@@ -104,6 +164,58 @@
       "ok": true
     },
     {
+      "name": "desk-light-zh-TW: the board's tile of M-3 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: S-8's row: the agent running, with the step and the ring, marked not claimed",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: no \"working\" beside \"not started\"",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the board's tile of M-4 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: S-11's row: the agent running, with the step and the ring, marked not claimed — and flagged",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the flagged line has the warning look",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: no \"working\" beside \"not started\"",
+      "ok": true
+    },
+    {
       "name": "desk-light-zh-TW: no page errors",
       "ok": true
     },
@@ -149,6 +261,58 @@
     },
     {
       "name": "desk-dark-en: the handoff row names who has the baton, and says it is offline",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the board's tile of M-3 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: S-8's row: the agent running, with the step and the ring, marked not claimed",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: no \"working\" beside \"not started\"",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the board's tile of M-4 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: S-11's row: the agent running, with the step and the ring, marked not claimed — and flagged",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the flagged line has the warning look",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: no \"working\" beside \"not started\"",
       "ok": true
     },
     {
@@ -200,6 +364,58 @@
       "ok": true
     },
     {
+      "name": "desk-dark-zh-TW: the board's tile of M-3 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: S-8's row: the agent running, with the step and the ring, marked not claimed",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: no \"working\" beside \"not started\"",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the board's tile of M-4 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: S-11's row: the agent running, with the step and the ring, marked not claimed — and flagged",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the flagged line has the warning look",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: no \"working\" beside \"not started\"",
+      "ok": true
+    },
+    {
       "name": "desk-dark-zh-TW: no page errors",
       "ok": true
     },
@@ -245,6 +461,58 @@
     },
     {
       "name": "phone-light-en: the handoff row names who has the baton, and says it is offline",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the board's tile of M-3 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: S-8's row: the agent running, with the step and the ring, marked not claimed",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: no \"working\" beside \"not started\"",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the board's tile of M-4 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: S-11's row: the agent running, with the step and the ring, marked not claimed — and flagged",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the flagged line has the warning look",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: no \"working\" beside \"not started\"",
       "ok": true
     },
     {
@@ -296,6 +564,58 @@
       "ok": true
     },
     {
+      "name": "phone-light-zh-TW: the board's tile of M-3 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: S-8's row: the agent running, with the step and the ring, marked not claimed",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: no \"working\" beside \"not started\"",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the board's tile of M-4 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: S-11's row: the agent running, with the step and the ring, marked not claimed — and flagged",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the flagged line has the warning look",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: no \"working\" beside \"not started\"",
+      "ok": true
+    },
+    {
       "name": "phone-light-zh-TW: no page errors",
       "ok": true
     },
@@ -341,6 +661,58 @@
     },
     {
       "name": "phone-dark-en: the handoff row names who has the baton, and says it is offline",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the board's tile of M-3 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: S-8's row: the agent running, with the step and the ring, marked not claimed",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: no \"working\" beside \"not started\"",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the board's tile of M-4 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: S-11's row: the agent running, with the step and the ring, marked not claimed — and flagged",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the flagged line has the warning look",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: no \"working\" beside \"not started\"",
       "ok": true
     },
     {
@@ -392,6 +764,58 @@
       "ok": true
     },
     {
+      "name": "phone-dark-zh-TW: the board's tile of M-3 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: S-8's row: the agent running, with the step and the ring, marked not claimed",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: no \"working\" beside \"not started\"",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the board's tile of M-4 lights up as Running · not claimed",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: S-11's row: the agent running, with the step and the ring, marked not claimed — and flagged",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the flagged line has the warning look",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the block, the handoff row and the status say it too",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: the handoff row has the running line with the ring",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: \"Running · not claimed\" beside the status",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: no \"working\" beside \"not started\"",
+      "ok": true
+    },
+    {
       "name": "phone-dark-zh-TW: no page errors",
       "ok": true
     }
@@ -399,100 +823,164 @@
   "pictures": [
     {
       "path": "desk-light-en-1-board.png",
-      "sha256": "8679465abd4888736ee71dda31c481949996f24f8c07dd69d1abcd9d7d499033"
+      "sha256": "fc7af23a4445e64a49e7e776fe056dd94d7ffc0e437611fb45c14b54b7065c10"
     },
     {
       "path": "desk-light-en-2-card-running.png",
-      "sha256": "520bb293ad7b539268b6993a7205d68d4357e69ee21e64301609c3fdd3d2f29c"
+      "sha256": "d4a6a8b8996096692d6bfc93c556aec49c7febfe8bc79606eaf001ae1c34f6d9"
     },
     {
       "path": "desk-light-en-3-card-handoff.png",
-      "sha256": "6954c58bda1b81a80b7d8180e26c891f7494ed7ac429205ffc162195fffec9ca"
+      "sha256": "714bc367175dd29ae54fe5b51d57b025fdd128d659e14ca51fa0167e5eb6c9da"
+    },
+    {
+      "path": "desk-light-en-4-card-unclaimed.png",
+      "sha256": "03033dfed61090cffb0fe6d8619b23d8dd7458f4651482810f080443ed4fa7f0"
+    },
+    {
+      "path": "desk-light-en-5-card-unclaimed-late.png",
+      "sha256": "b923df8e11eb98d62588e586965e213358d828292768309deeef3dc90f6ec349"
     },
     {
       "path": "desk-light-zh-TW-1-board.png",
-      "sha256": "87cea5f356778627abf4341a28d33c3607c9477680d4c2b21aa794f4bfa51a73"
+      "sha256": "806e78a3c80f78868cbfe44ffeee0cf6c34947c866378f7bcd14c2fbe69d202f"
     },
     {
       "path": "desk-light-zh-TW-2-card-running.png",
-      "sha256": "3b48fc50aee5cb497cc1fd306d7a87d9c14135a62196c403bbde45f5c58cc18a"
+      "sha256": "4de340827041e3c45141f116156195387c04b1c043daeed64c889540b4550890"
     },
     {
       "path": "desk-light-zh-TW-3-card-handoff.png",
-      "sha256": "98ce4bb8d6f20e9ee8130e6f7f304f1d2ce370f5ea844cf9425d7c8cb285571e"
+      "sha256": "26d46dff7988b87fe8c6e6e8bd316d1632dae8fa8bc1fcdd984e87f33b1ba686"
+    },
+    {
+      "path": "desk-light-zh-TW-4-card-unclaimed.png",
+      "sha256": "ab34c311df132540595f0a8ecd6f0635ecd02d41345ff96fcc230f47eebfdc52"
+    },
+    {
+      "path": "desk-light-zh-TW-5-card-unclaimed-late.png",
+      "sha256": "b297f10e63676c3d1c6ad4d49ea83a17db9ace3ecd62924175c8e2454f9b2b60"
     },
     {
       "path": "desk-dark-en-1-board.png",
-      "sha256": "d3666c1ee1c68f1974737fae1658036d966a44d4a3c42b788dfda9f898a0ae31"
+      "sha256": "dfb9060e6ae15abba46441ca5d55ea76a7dd1bfbb82d8784d69035998de105a8"
     },
     {
       "path": "desk-dark-en-2-card-running.png",
-      "sha256": "a8433bf30f6300f94fc62d7ba8f6483b5d8d72f1de333b17be2cef6e54f6e2fd"
+      "sha256": "66b1807c2fed4e3642204b614ffe7e6972a44530220a96181f29592fa6226f86"
     },
     {
       "path": "desk-dark-en-3-card-handoff.png",
-      "sha256": "fc3c0e69cdf635c2508f9ac5a90f9db381615e322052133d9f2790770037b176"
+      "sha256": "b3b6bb28a2707da7feb76fb6f8537fcbfd48809b9abe9614e54323192d324dfd"
+    },
+    {
+      "path": "desk-dark-en-4-card-unclaimed.png",
+      "sha256": "ff8ce761e94a6f770523f1623bb853af0a3c4b6cf8e306d26c7d741cf60e2e43"
+    },
+    {
+      "path": "desk-dark-en-5-card-unclaimed-late.png",
+      "sha256": "cf7c008d8202f9026a4b0380ef9e1b6b731701b2a852fc54ab17bedfe8669ed8"
     },
     {
       "path": "desk-dark-zh-TW-1-board.png",
-      "sha256": "6636b9b12e740240a47164ae8fe292851518ac2451543f3924207eed046dddfc"
+      "sha256": "990b87d5a9d2ff80e118c73fc34041daa80059ebcede2dab4ff6b8646c27221d"
     },
     {
       "path": "desk-dark-zh-TW-2-card-running.png",
-      "sha256": "e555508e4af9b922207754449cd1317d212522f8e206c0634a1e8cf01b870660"
+      "sha256": "4c07fce5c38ff0662a15fb2ea87bcf754cf3b9191977f8ffaf4b25e51cf6091f"
     },
     {
       "path": "desk-dark-zh-TW-3-card-handoff.png",
-      "sha256": "bec1628351432d855192af59652aa1e3a1ea55b98a60ac6ccf4f46f6f082597c"
+      "sha256": "f6ffba52d0379f1df94e8ff4f7e11d65fae3654bd15a5a5dd2b3724489d8e8d4"
+    },
+    {
+      "path": "desk-dark-zh-TW-4-card-unclaimed.png",
+      "sha256": "6b9aef70f604d89df635993496bf6faff04fba65d494657a7835536296d6dfad"
+    },
+    {
+      "path": "desk-dark-zh-TW-5-card-unclaimed-late.png",
+      "sha256": "00273c4178dba6705b0679d8df49204d30424ecd9e3849eb7d9c2b640fcf97dc"
     },
     {
       "path": "phone-light-en-1-board.png",
-      "sha256": "a49c6e38f9eb232e72c240a116f1b7d6bba6150a7810c030399ca0d6bf385c48"
+      "sha256": "3615ec1433bf67742d75a61008986ccbd0573053b6d0e873c5803f806e3fd874"
     },
     {
       "path": "phone-light-en-2-card-running.png",
-      "sha256": "36e66aa585f3a01574297fc8649a9c67256c1555a8e7ada8f5d9fa5f6e29f35d"
+      "sha256": "4b460133928959ad5ca1a29a13c8080b394e5fb75b6d5c0f0f2f83754c0727da"
     },
     {
       "path": "phone-light-en-3-card-handoff.png",
-      "sha256": "6515c76e48ab363d547fb3f6dd0b0f383f6d9d9390e40c03bdd3c48536385e12"
+      "sha256": "b1b48699312ce9221df47bca3a3983ae33eb86a8b5697545d4111fc7eebb2e86"
+    },
+    {
+      "path": "phone-light-en-4-card-unclaimed.png",
+      "sha256": "18a49ea07aebba8182a2765f0eb32d7c52f6c0f3d499f484dbb050872b92081a"
+    },
+    {
+      "path": "phone-light-en-5-card-unclaimed-late.png",
+      "sha256": "f03d70df4305b0fce5481ab8708c1df580fbbab9135dc5351e4f5383c26606b9"
     },
     {
       "path": "phone-light-zh-TW-1-board.png",
-      "sha256": "5918f56a47c3238444180e8f06cf541def98926ad9cec21a75e1ce073c58c4ef"
+      "sha256": "bc59f17291a80f8f8814a30285a6bcd3a5508725befc0ac3476a17d3d5aee02b"
     },
     {
       "path": "phone-light-zh-TW-2-card-running.png",
-      "sha256": "549daa20054fd0f905f481517d2b40935cbf99763c6dd85dfe90fa3cd5042f4a"
+      "sha256": "819457627b9938cb110a65be338a8150c12d319f809b0c8408acc4210ae2c46b"
     },
     {
       "path": "phone-light-zh-TW-3-card-handoff.png",
-      "sha256": "91f5df2dfc84ec3987ac70533d9861c34e13dda5bdeef54485fad87051fb04e8"
+      "sha256": "54f5847859e681a6d99a1343312462f6f3dd587f401ad25094b493c627da3d95"
+    },
+    {
+      "path": "phone-light-zh-TW-4-card-unclaimed.png",
+      "sha256": "03997f7f4b88f9ae9765439175d1f7822a455906571083a011e8212cd8704da3"
+    },
+    {
+      "path": "phone-light-zh-TW-5-card-unclaimed-late.png",
+      "sha256": "f11d6b59eb1447e852f4b1ada3848d3076c045f0dc58efdae2dddccf974b7050"
     },
     {
       "path": "phone-dark-en-1-board.png",
-      "sha256": "8cc013f6b23ebbd84e12f6b3f909420cd909b1d8fcad3f37f356ff6dab616cb3"
+      "sha256": "e36da27e7cb3212d2e6eaa1b463eef4b397eb3ab9c1845a34dd2d8cc70ff10e4"
     },
     {
       "path": "phone-dark-en-2-card-running.png",
-      "sha256": "e68ffd7db516bd6022200fbb59406413df2f179c44289d8eacdd5a77f3c2b602"
+      "sha256": "8536305b4a3510b02adbb9bfdc850d17feef7131fe1b68927c457df34e382c1e"
     },
     {
       "path": "phone-dark-en-3-card-handoff.png",
-      "sha256": "4ba32f781e90618ed94912ad214fb9d3fcde7f5a6c51ea83cfa8a1e215bf04bc"
+      "sha256": "23d6886ba98e5209f0e0e87fae3be19a821f3e8a9ca4ef09ac40786d246a3ef1"
+    },
+    {
+      "path": "phone-dark-en-4-card-unclaimed.png",
+      "sha256": "f9791865d6898a59cd0c20d2c81742efe62761f06b9d57a354e4f77c2f15e20c"
+    },
+    {
+      "path": "phone-dark-en-5-card-unclaimed-late.png",
+      "sha256": "8deefa2af4d73ea90e44705603c1299d9df93cc7a06512e348094a5d93fbcb38"
     },
     {
       "path": "phone-dark-zh-TW-1-board.png",
-      "sha256": "d031362cb4acde4165e14feda445aba789c6781580be108cd1b4fa5abe92dcfd"
+      "sha256": "73a2fb321a9d2c9843bb243c56aeee993bf25bd61ab5192978798cc748dac40b"
     },
     {
       "path": "phone-dark-zh-TW-2-card-running.png",
-      "sha256": "d391aaa72e2b5d68a775fa414c17c3b74b9868c732263eef55d4f2791dd7b37f"
+      "sha256": "b297090ef56dfdebd67525cda61cf5f19b4f0cf051d94f9e57a6ae2a3cce8808"
     },
     {
       "path": "phone-dark-zh-TW-3-card-handoff.png",
-      "sha256": "9a348e91f24702e7ad18422515a5f6f666d94e537cdcc839121f44d7f9caf5bb"
+      "sha256": "b64cd412bb4cc900fa4904cbb54af64499a8a12fd94f06570e5c5bc8b60c56f2"
+    },
+    {
+      "path": "phone-dark-zh-TW-4-card-unclaimed.png",
+      "sha256": "d24447c278698fc517860e063bf857ca27281356c6174cc452816bcf97515ac6"
+    },
+    {
+      "path": "phone-dark-zh-TW-5-card-unclaimed-late.png",
+      "sha256": "a3770d36c9c3e5819082199850df4efdb33883a0ca98ae6193ffa84987c13110"
     }
   ],
-  "summary": "98/98"
+  "summary": "204/204"
 }

@@ -12,6 +12,14 @@
       "ok": true
     },
     {
+      "name": "desk-light-en: M-3 before: the row says nothing, the handoff row has no running line",
+      "ok": true
+    },
+    {
+      "name": "desk-light-en: M-4 before: the row says nothing, the handoff row has no running line",
+      "ok": true
+    },
+    {
       "name": "desk-light-en: no page errors",
       "ok": true
     },
@@ -21,6 +29,14 @@
     },
     {
       "name": "desk-light-zh-TW: nothing under the sub tasks, the block is the one quiet line",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: M-3 before: the row says nothing, the handoff row has no running line",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: M-4 before: the row says nothing, the handoff row has no running line",
       "ok": true
     },
     {
@@ -36,6 +52,14 @@
       "ok": true
     },
     {
+      "name": "desk-dark-en: M-3 before: the row says nothing, the handoff row has no running line",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: M-4 before: the row says nothing, the handoff row has no running line",
+      "ok": true
+    },
+    {
       "name": "desk-dark-en: no page errors",
       "ok": true
     },
@@ -45,6 +69,14 @@
     },
     {
       "name": "desk-dark-zh-TW: nothing under the sub tasks, the block is the one quiet line",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: M-3 before: the row says nothing, the handoff row has no running line",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: M-4 before: the row says nothing, the handoff row has no running line",
       "ok": true
     },
     {
@@ -60,6 +92,14 @@
       "ok": true
     },
     {
+      "name": "phone-light-en: M-3 before: the row says nothing, the handoff row has no running line",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: M-4 before: the row says nothing, the handoff row has no running line",
+      "ok": true
+    },
+    {
       "name": "phone-light-en: no page errors",
       "ok": true
     },
@@ -69,6 +109,14 @@
     },
     {
       "name": "phone-light-zh-TW: nothing under the sub tasks, the block is the one quiet line",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: M-3 before: the row says nothing, the handoff row has no running line",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: M-4 before: the row says nothing, the handoff row has no running line",
       "ok": true
     },
     {
@@ -84,6 +132,14 @@
       "ok": true
     },
     {
+      "name": "phone-dark-en: M-3 before: the row says nothing, the handoff row has no running line",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: M-4 before: the row says nothing, the handoff row has no running line",
+      "ok": true
+    },
+    {
       "name": "phone-dark-en: no page errors",
       "ok": true
     },
@@ -96,6 +152,14 @@
       "ok": true
     },
     {
+      "name": "phone-dark-zh-TW: M-3 before: the row says nothing, the handoff row has no running line",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: M-4 before: the row says nothing, the handoff row has no running line",
+      "ok": true
+    },
+    {
       "name": "phone-dark-zh-TW: no page errors",
       "ok": true
     }
@@ -103,100 +167,164 @@
   "pictures": [
     {
       "path": "desk-light-en-1-board.png",
-      "sha256": "ac361695d3913af7e9a2241e92b02939785d24374181e2ea6024477ad7e10169"
+      "sha256": "e88228a62f3a0757e36e8e7c0aea4eaa8acb6c375a561ee7a32449166df54c66"
     },
     {
       "path": "desk-light-en-2-card-running.png",
-      "sha256": "ab73e09b4308d7d84ae9d0bd05a1e7989a871a23c13dfc0f66d4f92eda6a04a1"
+      "sha256": "a4f8ab714c772a9399931f070769578de552405b3e54ec232b1fbb8a77c47421"
     },
     {
       "path": "desk-light-en-3-card-handoff.png",
-      "sha256": "f6cdadbeee7e93562a52939cc82ebe0acffbdeb92e53adb1f3857ff5e361b95d"
+      "sha256": "d19b980854d8406c918de9107de6744a2284145af72ac1b048daf9c589e2c1df"
+    },
+    {
+      "path": "desk-light-en-4-card-unclaimed.png",
+      "sha256": "2222b06a7076cb10bb02ea6b4d037c4dccef3e65fc5844a8ad4e92ab12f01c91"
+    },
+    {
+      "path": "desk-light-en-5-card-unclaimed-late.png",
+      "sha256": "d0a51a838bb87ae966c9939e73741245d2937b94941d4d5f46635ea794050da1"
     },
     {
       "path": "desk-light-zh-TW-1-board.png",
-      "sha256": "87cea5f356778627abf4341a28d33c3607c9477680d4c2b21aa794f4bfa51a73"
+      "sha256": "d8655f407f23028f12c964c9b2c87aabac9bf46afb520ccfe0fd50cf4ba640c0"
     },
     {
       "path": "desk-light-zh-TW-2-card-running.png",
-      "sha256": "5d9b618cdd471b38f332e9dbabe1512aeeddc9f91f567c13b63160773a2713d9"
+      "sha256": "0310853535ecb0fa2b589204c1341a5a3662dc5983da899f4b12e590bf08f7e2"
     },
     {
       "path": "desk-light-zh-TW-3-card-handoff.png",
-      "sha256": "129e36df8ffc652ef13210ed44e36af9540f49bbd1d7f01ce453b3c7ad970a2b"
+      "sha256": "9c67949e6a4747c431339e0b06ed1fd62dcedc9542ad3bfa8ca7145a34a143f9"
+    },
+    {
+      "path": "desk-light-zh-TW-4-card-unclaimed.png",
+      "sha256": "1f445b17b8888ffc015316ea1b36da530b64d0ede1f55bad0052b24ca8184c66"
+    },
+    {
+      "path": "desk-light-zh-TW-5-card-unclaimed-late.png",
+      "sha256": "2ee641b03eddeed6285ad61d3e1401356ca4228ff1993b96c8603ac33b66e526"
     },
     {
       "path": "desk-dark-en-1-board.png",
-      "sha256": "97213e2648a55afcfdb1ff6d072ebbcaa1078e834971a5a110a80dfd64d23675"
+      "sha256": "c186fabcd60ca223ac62b6f64f3c906f37e9e62b05442e0f269fe7184785cd2e"
     },
     {
       "path": "desk-dark-en-2-card-running.png",
-      "sha256": "0bc72f2a9edcf6fb9701ba160d8393a708e3f9947665416357ad4acb04cbc85e"
+      "sha256": "e84a9bc5e20a5f97b25e61e226a061841c0336cf6b66ecbf51101ecccf2501e5"
     },
     {
       "path": "desk-dark-en-3-card-handoff.png",
-      "sha256": "31a186ea108b556f444c8ff270c09fa221636bdb198a94997d2b41fca391dcc9"
+      "sha256": "b41b4a860993a6a49d3cd9e226d705698cb799cd44fa1c177c5ac06714f8d2dd"
+    },
+    {
+      "path": "desk-dark-en-4-card-unclaimed.png",
+      "sha256": "b99703d57108b398ef698bca2f485bb78b054811152dace3acbdcff0d7b979ef"
+    },
+    {
+      "path": "desk-dark-en-5-card-unclaimed-late.png",
+      "sha256": "6eca0412c9de2affbbfe667016fbb84eb4652e0eae4b1cf7a11c5ffa6dd52ba1"
     },
     {
       "path": "desk-dark-zh-TW-1-board.png",
-      "sha256": "6636b9b12e740240a47164ae8fe292851518ac2451543f3924207eed046dddfc"
+      "sha256": "d543a0ed0d7c3b378efe2020001600af2656097d0a5aa24638bab472fabfeb47"
     },
     {
       "path": "desk-dark-zh-TW-2-card-running.png",
-      "sha256": "10b34f077a568ce9b413a75a7ab8b71d15e24f769616da34dbc79b4fb93c09b2"
+      "sha256": "25e280fec6e479f7e0762f5d182aba8f27ed3fb39add846c978c959ba2089ce7"
     },
     {
       "path": "desk-dark-zh-TW-3-card-handoff.png",
-      "sha256": "4034d8a64f352332607f67ea63c974468173d2355b51ad4eb06c1c0c4872fcd0"
+      "sha256": "59431f4d6d2e32a2e428d01c9d1ae0f9646c82de90c274281cbb3032c6078013"
+    },
+    {
+      "path": "desk-dark-zh-TW-4-card-unclaimed.png",
+      "sha256": "f1694e9587d879d1328d30c087f6daa41dd41db2c76af6f6369c94cef93f0419"
+    },
+    {
+      "path": "desk-dark-zh-TW-5-card-unclaimed-late.png",
+      "sha256": "1ec0cde2161484e720a7015a186d77d2065f3b31e5db0b3ad9d91b0a8ba99d1e"
     },
     {
       "path": "phone-light-en-1-board.png",
-      "sha256": "a49c6e38f9eb232e72c240a116f1b7d6bba6150a7810c030399ca0d6bf385c48"
+      "sha256": "bbb7575399f270dfef554ee71cab05f98d0da1eeccb8e48562d2401b617030f8"
     },
     {
       "path": "phone-light-en-2-card-running.png",
-      "sha256": "cc8a797210bbe94c37705bcd8b401d2d5a73fc6914bbc5c97cee21cbaf12cdbf"
+      "sha256": "3a572aef21570732aa98abcc141a54857f44dbb95f374bbdd9ba5ba2cfd63f01"
     },
     {
       "path": "phone-light-en-3-card-handoff.png",
-      "sha256": "580c09229b95cf8de3b5b6bbe408d408d81986943cf3d22e5248fa268f43ac0a"
+      "sha256": "1182b7288aefc688fd9aa64c6a86c4e2a3745aab7f8fbd37ca47bf4eb4a45e6e"
+    },
+    {
+      "path": "phone-light-en-4-card-unclaimed.png",
+      "sha256": "f4b171864af61e10ec069308d85d1281b5d3d85b10658bc8a5f0900cf48ff0b0"
+    },
+    {
+      "path": "phone-light-en-5-card-unclaimed-late.png",
+      "sha256": "6ab0c535582f4e97a735ae69db537e5ef982da5b03681f6b6ab5648f8e82c1ef"
     },
     {
       "path": "phone-light-zh-TW-1-board.png",
-      "sha256": "5918f56a47c3238444180e8f06cf541def98926ad9cec21a75e1ce073c58c4ef"
+      "sha256": "2151155f165fd3f56275022310ae1f00344aadd61d2310cea95eb80f051faef5"
     },
     {
       "path": "phone-light-zh-TW-2-card-running.png",
-      "sha256": "8d0c0b91bd004be61f43e92594c079ef014b4501eaeb21bcc8fddd88f7eb276b"
+      "sha256": "f5618dd34950e5ddcb79d9ac9dcb2eb63feb3e7055ec8c00d672f60f76322454"
     },
     {
       "path": "phone-light-zh-TW-3-card-handoff.png",
-      "sha256": "a5bbe3bf20c2fe717fc0a58eacf8b94e66a67ee8332995c46712268bd1412b20"
+      "sha256": "78c4c7b983e0e41d306e1c719fe75a35fedb920b7db4ea571369c37a470cef85"
+    },
+    {
+      "path": "phone-light-zh-TW-4-card-unclaimed.png",
+      "sha256": "8d051dbe2a2a41434534c7a5fd554eddd308cd6bfb76dc50c50f9c4378f11444"
+    },
+    {
+      "path": "phone-light-zh-TW-5-card-unclaimed-late.png",
+      "sha256": "c3b260b41422ba3086f4f1aa75899469d90722d64aab1824e33e1e7b4c9d9fc1"
     },
     {
       "path": "phone-dark-en-1-board.png",
-      "sha256": "8cc013f6b23ebbd84e12f6b3f909420cd909b1d8fcad3f37f356ff6dab616cb3"
+      "sha256": "eae771b58d391b5e1b04018a453cc9aff5ee7102dfbb4ab013343eeb8610c627"
     },
     {
       "path": "phone-dark-en-2-card-running.png",
-      "sha256": "789e6e01f8656c0df6bf4646b7c78ada98b5b308edf7f62eb92bdc574637bab6"
+      "sha256": "3aa50df90442a4c84af0ed27ae85972be897e75fbff98155b4450c1dccc64ecf"
     },
     {
       "path": "phone-dark-en-3-card-handoff.png",
-      "sha256": "626becddb082d6421981c14de8a1cd54b3d84d4b43162ded9f7813d4a6d60861"
+      "sha256": "6a99c049bc5fe77f249e4c0dccb95bc30c1254b9778c2f2c9e961c0a8a819620"
+    },
+    {
+      "path": "phone-dark-en-4-card-unclaimed.png",
+      "sha256": "319c5e4a72706c81f8cdd8712a4eff5d1dd9aa5bd6dbbfb91f3fde648229bd3c"
+    },
+    {
+      "path": "phone-dark-en-5-card-unclaimed-late.png",
+      "sha256": "1b951551afbc0e8370482ea9884c1f19836dce202a0679a89e9e7f69ff55bfa9"
     },
     {
       "path": "phone-dark-zh-TW-1-board.png",
-      "sha256": "d031362cb4acde4165e14feda445aba789c6781580be108cd1b4fa5abe92dcfd"
+      "sha256": "9ef84f12f00f547f70cc537663b88e3d965c7a50ea9d1041023cafd696c70906"
     },
     {
       "path": "phone-dark-zh-TW-2-card-running.png",
-      "sha256": "09ac5312548415490d40945e959ef01158955aece33821b98f3c85718817bb6c"
+      "sha256": "5f3acbe80e666278cee626c236bde2ae09b4745f9052c751927eb62f16c5ece7"
     },
     {
       "path": "phone-dark-zh-TW-3-card-handoff.png",
-      "sha256": "75f5ce3d66a6494547a71fe0f14324525b91e87ff6be851e97ff00c1c1bc8fe4"
+      "sha256": "0fbc4d0951521f8921d3301736edbd588c7f51116d0d04c285a1aff43134fee2"
+    },
+    {
+      "path": "phone-dark-zh-TW-4-card-unclaimed.png",
+      "sha256": "cfec2a387cf9c9339f52900b93281c70bf1094cceb8a23579dd079654d3160d9"
+    },
+    {
+      "path": "phone-dark-zh-TW-5-card-unclaimed-late.png",
+      "sha256": "860d2f03f869737c023132b147173e607c837022d80fd2841e35b7a358eb5726"
     }
   ],
-  "summary": "24/24"
+  "summary": "40/40"
 }

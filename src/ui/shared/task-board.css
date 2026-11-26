@@ -716,6 +716,10 @@ button.tb-owner-btn:hover { border-color: var(--border); background: var(--surfa
   .tp-subs .tc-children .tc-child-line { grid-column: 3; align-items: flex-start; }
   .tp-subs .tc-children .tc-child-line > svg, .tp-subs .tc-children .tc-child-line > .tf-spin { margin-top: 3px; }
   .tc-child-line .tf-text { white-space: normal; overflow-wrap: anywhere; }
+  .tf-item { align-items: flex-start; }
+  .tf-item > .tf-spin, .tf-item > svg { margin-top: 4px; }
+  .tf-item .tf-text { white-space: normal; overflow-wrap: anywhere; }
+  .tl-wake > .tf-spin { margin-top: 3px; }
   .tl-baton .tf-wakes { padding-left: calc(var(--s-3) + 20px + var(--s-2)); }
 }
 
