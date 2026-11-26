@@ -83,8 +83,11 @@ export function reactionView(reaction, viewer) {
   return { emoji: reaction.emoji, count: by.length, mine, label: t("taskthread.reactedWith", list, reaction.emoji) };
 }
 
-/** Whether the viewer wrote the comment (an edit is its author's: the same name and the same kind). */
-export const wroteComment = (entry, viewer) => !!viewer && entry.who === viewer.name && entry.by === viewer.kind;
+/**
+ * Whether the viewer wrote the comment (an edit is its author's). The host says (`mine`, from the writer's own key: two people who
+ * are both "web-user" are not each other); a host that does not say is read by the same name and the same kind.
+ */
+export const wroteComment = (entry, viewer) => !!viewer && (typeof entry.mine === "boolean" ? entry.mine : entry.who === viewer.name && entry.by === viewer.kind);
 
 /** A comment's address: the card's page, the comment's anchor (`#c42`, which scrolls to it and lights it). */
 export const commentHash = (id) => `#c${id}`;

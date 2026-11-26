@@ -193,6 +193,24 @@ describe("1. what is computed", () => {
   });
 });
 
+describe("1b. whose comment it is: the host says, the name is the fallback (AGEND-366)", () => {
+  const edit = (entry: any, viewer: any = ANN) => thread.commentMenuItems(entry, { writable: true, viewer, root: true, resolved: false }, () => {}).some((i: any) => i.key === "edit");
+  const base = () => activity.timelineOf({ comments: [c(11, "Ann", "person", "x")], logs: [], history: [] })[0];
+
+  it("`mine` from the host decides: another person with the same name is not offered Edit; the same person under another name is", () => {
+    expect(edit({ ...base(), mine: false })).toBe(false);
+    expect(edit({ ...base(), mine: true }, { name: "Alex", kind: "person" })).toBe(true);
+  });
+  it("a host that does not say reads by name and kind, as before", () => {
+    expect(edit(base())).toBe(true);
+    expect(edit(base(), { name: "Bob", kind: "person" })).toBe(false);
+  });
+  it("the timeline keeps what the host said", () => {
+    const tl = activity.timelineOf({ comments: [{ ...c(11, "Ann", "person", "x"), mine: true }, { ...c(12, "Ann", "person", "y"), mine: false }, c(13, "Ann", "person", "z")], logs: [], history: [] });
+    expect(tl.map((e: any) => e.mine)).toEqual([true, false, undefined]);
+  });
+});
+
 describe("2. the ⋯ menu on the page", () => {
   it("a thread is drawn under its first comment, indented; a comment of its own stays a card; tools sit in every head", async () => {
     await open();
@@ -209,6 +227,12 @@ describe("2. the ⋯ menu on the page", () => {
     expect(await menuOf(11)).toEqual(["Reply", "Add reaction", "Edit", "Resolve thread", "Copy", "Copy link", "Delete"]);
     fire(comment(11).querySelector(".tl-menu > button"), "click"); await settle(4);          // closes it again
     expect(await menuOf(14), "alpha's comment, Ann viewing: a thread's first comment may be resolved by anyone, but not edited").toEqual(["Reply", "Add reaction", "Resolve thread", "Copy", "Copy link", "Delete"]);
+  });
+
+  it("a comment the host says is not the viewer's has no Edit, though the name is the viewer's (two accounts both named alike)", async () => {
+    detail = detailOf({ comments: COMMENTS.map((e) => (e.id === 11 ? { ...e, mine: false } : e.id === 13 ? { ...e, mine: true } : e)) });
+    await open();
+    expect(await menuOf(11), "c11 is Ann's by name, not the viewer's").toEqual(["Reply", "Add reaction", "Resolve thread", "Copy", "Copy link", "Delete"]);
   });
 
   it("Edit opens the words in a box; Ctrl+Enter sends them, Esc drops the change", async () => {

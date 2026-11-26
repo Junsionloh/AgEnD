@@ -39,9 +39,10 @@ function scratchDb(): SchedulerDb {
 }
 
 /** One request as an admin or read-only session, on the local page or over the temporary public link. */
-function call(db: SchedulerDb, method: string, path: string, body?: unknown, opts: { local?: boolean; tier?: "admin" | "read" } = {}) {
+function call(db: SchedulerDb, method: string, path: string, body?: unknown, opts: { local?: boolean; tier?: "admin" | "read"; owner?: string } = {}) {
   const sessions = new WebSessionStore(), exposureId = "a".repeat(32), pub = "https://sample.trycloudflare.com", local = "http://127.0.0.1:19280";
-  const s = sessions.create({ tier: opts.tier ?? "admin", surface: opts.local ? "local" : "gateway", exposureId: opts.local ? undefined : exposureId, label: "t", tokenEpoch: tokenEpoch(TOKEN) } as never);
+  const s = sessions.create({ tier: opts.tier ?? "admin", surface: opts.local ? "local" : "gateway", exposureId: opts.local ? undefined : exposureId, label: "t", tokenEpoch: tokenEpoch(TOKEN),
+    ...(opts.owner ? { owner: { adapterId: "owner", userId: opts.owner } } : {}) } as never);
   const origin = opts.local ? local : pub;
   const headers: Record<string, string> = { host: new URL(origin).host, cookie: `${opts.local ? "" : "__Host-"}agend_session=${s.sessionId}`, origin, "sec-fetch-site": "same-origin",
     "x-agend-csrf": csrfTokenFor(s.sessionId), "content-type": "application/json" };
@@ -51,8 +52,10 @@ function call(db: SchedulerDb, method: string, path: string, body?: unknown, opt
     let status = 0;
     const res = Object.assign(new EventEmitter(), { headersSent: false, destroyed: false, setHeader() {}, writeHead: (c: number) => { status = c; },
       end: (t = "") => resolve({ status, body: t ? JSON.parse(String(t)) : null }) });
+    // People kept (`owner`): each signed-in account is someone, whatever its name — two that set none are both "web-user".
+    const webPerson = (owner?: { userId: string }) => ({ key: `acct:${owner?.userId ?? "operator"}`, bound: !!owner, userId: owner?.userId ?? "web-user", voterKey: `owner:${owner?.userId}`, name: "web-user", set: false });
     handleWebRequest(req as never, res as never, new URL(path, origin), { webToken: TOKEN, webSessions: sessions, scheduler: { db },
-      fleetConfig: FLEET, logger: { debug() {}, info() {}, warn() {}, error() {} },
+      fleetConfig: FLEET, logger: { debug() {}, info() {}, warn() {}, error() {} }, ...(opts.owner ? { webPerson } : {}),
       getUiStatus: () => ({ instances: [] }), listWebPrompts: () => [], needsYouItems: () => [] } as never);
     if (body !== undefined) { req.emit("data", Buffer.from(JSON.stringify(body))); req.emit("end"); } else { req.emit("end"); }
   });
@@ -99,6 +102,38 @@ describe("1. an admin session works a card's comments", () => {
     expect((await call(db, "GET", `/ui/tasks/cards/${c.code}`)).body.viewer).toEqual({ name: "web-user", kind: "person" });      // an admin session over the link
     expect((await call(db, "GET", `/ui/tasks/cards/${c.code}`, undefined, { tier: "read" })).body.viewer).toBeUndefined();
     expect((await call(db, "GET", `/ui/tasks/cards/${c.code}`, undefined, { tier: "read", local: true })).body.viewer).toBeUndefined();
+  });
+
+  it("each comment says whether it is the viewer's; two accounts that are both \"web-user\" are told apart by their key, not their name (AGEND-366)", async () => {
+    const db = scratchDb();
+    const c = seed(db);
+    // A comment written through the page by account A, one by account B (both named web-user), one by an instance.
+    const post = (owner: string, comment: string) => call(db, "POST", `/ui/tasks/cards/${c.code}`, { comment, to: [] }, { ...local, owner });
+    expect((await post("a", "from a")).status).toBe(200);
+    expect((await post("b", "from b")).status).toBe(200);
+    db.board.updateCard(DEV, c.code, { comment: "from dev" });
+    const ids = comments(db).map((e) => e.id);
+    const read = async (owner: string) => (await call(db, "GET", `/ui/tasks/cards/${c.code}`, undefined, { ...local, owner })).body;
+    expect((await read("a")).comments.map((e: any) => e.mine)).toEqual([true, false, false]);
+    expect((await read("b")).comments.map((e: any) => e.mine)).toEqual([false, true, false]);
+    // …and the board holds them to it: B cannot edit A's comment although the names are the same; A can edit their own.
+    const edit = (owner: string, id: number, text: string) => call(db, "POST", `/ui/tasks/cards/${c.code}/comments/${id}/edit`, { text }, { ...local, owner });
+    const refused = await edit("b", ids[0]!, "hijacked");
+    expect(refused.status).toBe(403);
+    expect(refused.body).toMatchObject({ code: "forbidden", key: "comment_not_yours" });
+    expect((await edit("a", ids[0]!, "from a, edited")).status).toBe(200);
+    expect(comments(db).map((e) => e.text)).toEqual(["from a, edited", "from b", "from dev"]);
+    // The key itself is the board's: no read returns it.
+    expect(JSON.stringify((await read("a")))).not.toContain("acct:a");
+  });
+
+  it("with no people kept (every session is the operator) the viewer's comments are every web-user comment, as before", async () => {
+    const db = scratchDb();
+    const c = seed(db);
+    db.board.updateCard(WEB, c.code, { comment: "from a page" });
+    db.board.updateCard(DEV, c.code, { comment: "from dev" });
+    expect((await call(db, "GET", `/ui/tasks/cards/${c.code}`, undefined, local)).body.comments.map((e: any) => e.mine)).toEqual([true, false]);
+    expect((await call(db, "GET", `/ui/tasks/cards/${c.code}`, undefined, { tier: "read", local: true })).body.comments.map((e: any) => e.mine)).toEqual([undefined, undefined]);
   });
 
   it("is on the public link's manifest for an admin session, and nowhere a read-only one writes", () => {

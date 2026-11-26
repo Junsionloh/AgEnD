@@ -46,7 +46,7 @@ export function timelineOf(detail) {
   // A comment also carries what the threads add (docs/design/task-board.md, "Comment threads"): its number, the comment it answers,
   // an edit, a deletion, a resolved thread and its reactions — each only when the board sent it (an older host sends none).
   for (const e of (detail && detail.comments) || []) out.push({ key: `c${e.id}`, type: "comment", id: e.id, at: e.at, who: e.author, by: e.authorKind || "", text: e.text, kind: e.kind, authorKind: e.authorKind, files: files.filter((f) => f.entryId === e.id),
-    ...(e.parentId !== undefined ? { parentId: e.parentId } : {}), ...(e.editedAt ? { editedAt: e.editedAt } : {}), ...(e.deleted ? { deleted: e.deleted } : {}), ...(e.resolved ? { resolved: e.resolved } : {}), ...(e.reactions ? { reactions: e.reactions } : {}) });
+    ...(e.parentId !== undefined ? { parentId: e.parentId } : {}), ...(e.editedAt ? { editedAt: e.editedAt } : {}), ...(e.deleted ? { deleted: e.deleted } : {}), ...(e.resolved ? { resolved: e.resolved } : {}), ...(e.reactions ? { reactions: e.reactions } : {}), ...(typeof e.mine === "boolean" ? { mine: e.mine } : {}) });
   for (const e of (detail && detail.logs) || []) out.push({ key: `l${e.id}`, type: "log", at: e.at, who: e.author, by: e.authorKind || "", text: e.text });
   for (const ev of (detail && detail.history) || []) {
     if (ev.type === "commented" || ev.type === "reordered") continue;

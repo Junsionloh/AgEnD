@@ -32,6 +32,12 @@ export type CardKind = "main" | "sub";
 export interface Actor {
   kind: "person" | "instance" | "script" | "system";
   name: string;
+  /**
+   * A person's stable key from the dashboard (never shown), kept with each comment they write: two people who are both "web-user"
+   * (neither set a name) are told apart by it, so one cannot edit the other's comment. Absent (an instance, a script, a caller that
+   * has none, a comment written before it was kept): the name and the kind say who wrote it.
+   */
+  key?: string;
 }
 export const SYSTEM_ACTOR: Actor = { kind: "system", name: "system" };
 
@@ -316,6 +322,8 @@ export interface Entry {
   /** A thread's first comment, resolved (folded away) by this name. */
   resolved?: { at: string; by: string };
   reactions?: Reaction[];
+  /** Set by the dashboard's card read for the one it is read for: whether they wrote this comment (an edit is its author's). */
+  mine?: boolean;
 }
 
 /**
@@ -909,7 +917,7 @@ export class TaskBoard {
     // Comment threads (docs/design/task-board.md, "Comment threads"): columns added to the comments in place, and a table of
     // reactions. A release without them neither reads nor writes these; they are NULL on every older row.
     const entryCols = new Set((this.db.prepare("PRAGMA table_info(task_entries)").all() as Array<{ name: string }>).map((c) => c.name));
-    for (const [name, decl] of [["parent_id", "INTEGER"], ["edited_at", "TEXT"], ["deleted_at", "TEXT"], ["deleted_by", "TEXT"], ["resolved_at", "TEXT"], ["resolved_by", "TEXT"], ["notify", "TEXT"]] as const) {
+    for (const [name, decl] of [["parent_id", "INTEGER"], ["edited_at", "TEXT"], ["deleted_at", "TEXT"], ["deleted_by", "TEXT"], ["resolved_at", "TEXT"], ["resolved_by", "TEXT"], ["notify", "TEXT"], ["author_key", "TEXT"]] as const) {
       if (entryCols.has(name)) continue;
       try { this.db.exec(`ALTER TABLE task_entries ADD COLUMN ${name} ${decl}`); } catch (err) { if (!/duplicate column/i.test(String(err))) throw err; }
     }
@@ -2025,9 +2033,22 @@ export class TaskBoard {
     return this.withReactions([this.toEntry(this.commentRow(card, id))])[0]!;
   }
 
-  /** Who wrote a comment: the same name and the same kind (a person, an instance or a script). */
+  /**
+   * Who wrote a comment: the same kind (a person, an instance or a script) and — when the comment kept its writer's key and the actor
+   * has one — the same key, whatever name each uses now (a person who renamed themselves is still the author; two people with one name
+   * are not each other); otherwise the same name.
+   */
   private wroteComment(row: Row, actor: Actor): boolean {
-    return row.author === actor.name && row.author_kind === actor.kind;
+    if (row.author_kind !== actor.kind) return false;
+    if (typeof row.author_key === "string" && row.author_key && actor.key) return row.author_key === actor.key;
+    return row.author === actor.name;
+  }
+
+  /** The numbers of the comments on a card that `actor` wrote (the dashboard marks them `mine`: those are theirs to edit). */
+  commentsWrittenBy(ref: string, actor: Actor): Set<number> {
+    const card = this.getCard(ref);
+    const rows = this.db.prepare("SELECT * FROM task_entries WHERE task_id = ? AND kind = 'comment' AND deleted_at IS NULL").all(card.uuid) as Row[];
+    return new Set(rows.filter((r) => this.wroteComment(r, actor)).map((r) => Number(r.id)));
   }
 
   /**
@@ -2062,7 +2083,11 @@ export class TaskBoard {
       const names = [...this.routing.instances()];
       const before = new Set(parseMentions(row.text as string, names).names);
       const added = parseMentions(text, names).names.filter((n) => !before.has(n));
-      this.db.prepare("UPDATE task_entries SET text = ?, edited_at = ? WHERE id = ?").run(text, this.nowIso(), id);
+      // What the comment named stays counted: the stored `@` names (those of its words as written, for a row from before they were
+      // stored) and, added, the names the new words bring — so taking an `@` out does not take its turn out of the loop guard.
+      const kept = this.storedNotify(row, names);
+      const notify = { ...kept, at: [...new Set([...kept.at, ...added])] };
+      this.db.prepare("UPDATE task_entries SET text = ?, edited_at = ?, notify = ? WHERE id = ?").run(text, this.nowIso(), JSON.stringify(notify), id);
       this.rewriteCommentEvents(card, row, text);
       this.signal(actor, card, "comment_edited", { entry: id, text }, added.length ? this.routeComment(actor, card, text, false, { only: added }) : undefined);
       return { card, ...this.spoken(), entry: this.commentOf(card, id) };
@@ -2126,6 +2151,14 @@ export class TaskBoard {
       this.signal(actor, card, "comment_resolved", { entry: id, resolved });
       return { card, notes: [], said: [], entry: this.commentOf(card, id) };
     });
+  }
+
+  /** A comment's stored recipients, `at` read from its words when the row has none stored (written before they were). */
+  private storedNotify(row: Row, names: readonly string[]): { to: string[]; assignee: boolean; at: string[] } {
+    const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+    let n: { to?: unknown; assignee?: unknown; at?: unknown } = {};
+    if (typeof row.notify === "string") { try { n = JSON.parse(row.notify) as typeof n; } catch { n = {}; } }
+    return { to: strs(n.to), assignee: n.assignee !== false, at: Array.isArray(n.at) ? strs(n.at) : parseMentions(String(row.text ?? ""), names).names };
   }
 
   /** A change to a comment the page and the revision hear of, with no history line of its own (SignalType). */
@@ -3192,7 +3225,9 @@ export class TaskBoard {
     const words = checkText("the comment", raw, CARD_LIMITS.comment);
     const text = words || (files.length ? checkText("the comment", `📎 ${files.map((f) => f.name).join(", ")}`, CARD_LIMITS.comment) : "");
     if (!text) return false;
-    const notify = this.notifyOf(actor, reply, opts.to);
+    // The `@` names are stored with the comment as it was written (the loop guard reads them back, not the words, which an edit or a
+    // deletion changes): so is whom it was addressed to.
+    const notify = this.notifyOf(actor, reply, opts.to, parseMentions(text, [...this.routing.instances()]).names);
     const entryId = this.entry(card, "comment", actor, text, { parentId: reply?.id ?? null, notify });
     this.linkFiles(card, actor, entryId, files);
     this.commented(actor, card, text, kept, files.length, { entry: entryId, reply, notify });
@@ -3209,18 +3244,19 @@ export class TaskBoard {
   }
 
   /**
-   * Whom a comment is for besides what its words say, as it is stored (`notify`, read back by the loop guard) and used to
-   * route it: the recipients its writer chose (`to`), else — a reply that chose none — the author of the comment it
-   * answers when that is an instance. `assignee: false` is a chosen recipient list: the card's assignee hears the comment
-   * only if it is on it. null is the old rule, which stores nothing (every older row reads that way).
+   * Whom a comment woke, or was meant to, as it is stored with it (`notify`, read back by the loop guard): `at`, the instances its
+   * words `@`-named when it was written, and `to`, the recipients its writer chose (else — a reply that chose none — the author of
+   * the comment it answers when that is an instance). `assignee: false` is a chosen recipient list: the card's assignee hears the
+   * comment only if it is on it. They are kept apart from the words because the words change: an edit that takes an `@` out, or a
+   * deletion, must not take its turn out of the agents' count. A row from before this (no `notify`, or one with no `at`) is read from
+   * its words, as it always was.
    */
-  private notifyOf(actor: Actor, reply: Entry | null, to: readonly string[] | undefined): { to: string[]; assignee: boolean } | null {
+  private notifyOf(actor: Actor, reply: Entry | null, to: readonly string[] | undefined, at: readonly string[]): { to: string[]; assignee: boolean; at: string[] } {
     const chosen = to !== undefined;
     const names = [...(to ?? [])];
     if (!chosen && reply && reply.authorKind === "instance") names.push(reply.author);
     const direct = [...new Set(names.map((n) => n.trim()).filter(Boolean))].filter((n) => isPerson(actor) || n !== actor.name);
-    if (!chosen && !direct.length) return null;
-    return { to: direct.slice(0, MAX_RECIPIENTS), assignee: !chosen };
+    return { to: direct.slice(0, MAX_RECIPIENTS), assignee: !chosen, at: [...at] };
   }
 
   /** The files `actor` staged, checked against this card's limits (nothing is moved yet). */
@@ -3297,9 +3333,9 @@ export class TaskBoard {
     card.seenEntryId = (this.db.prepare("SELECT COALESCE(MAX(id), 0) AS m FROM task_entries WHERE task_id = ?").get(card.uuid) as { m: number }).m;
   }
 
-  private entry(card: Card, kind: EntryKind, actor: Actor, text: string, extra: { parentId?: number | null; notify?: { to: string[]; assignee: boolean } | null } = {}): number {
-    const r = this.db.prepare("INSERT INTO task_entries (task_id, kind, author, author_kind, text, at, parent_id, notify) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(card.uuid, kind, actor.name, actor.kind, text, this.nowIso(), extra.parentId ?? null, extra.notify ? JSON.stringify(extra.notify) : null);
+  private entry(card: Card, kind: EntryKind, actor: Actor, text: string, extra: { parentId?: number | null; notify?: { to: string[]; assignee: boolean; at: string[] } | null } = {}): number {
+    const r = this.db.prepare("INSERT INTO task_entries (task_id, kind, author, author_kind, text, at, parent_id, notify, author_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(card.uuid, kind, actor.name, actor.kind, text, this.nowIso(), extra.parentId ?? null, extra.notify ? JSON.stringify(extra.notify) : null, actor.kind === "person" && actor.key ? actor.key : null);
     return Number(r.lastInsertRowid);
   }
 
@@ -3307,7 +3343,7 @@ export class TaskBoard {
    * A comment written (its entry is already on the card): the "commented" event, and whom the comment concerns, which
    * settleWakes reads when the write ends. `kept` is a dispatcher's answer a busy assignee finds on the card (#2303).
    */
-  private commented(actor: Actor, card: Card, text: string, kept = false, files = 0, more: { entry?: number; reply?: Entry | null; notify?: { to: string[]; assignee: boolean } | null } = {}): void {
+  private commented(actor: Actor, card: Card, text: string, kept = false, files = 0, more: { entry?: number; reply?: Entry | null; notify?: { to: string[]; assignee: boolean; at: string[] } | null } = {}): void {
     this.event(actor, card, "commented", { text, ...(more.entry !== undefined ? { entry: more.entry } : {}), ...(kept ? { kept: true } : {}), ...(files ? { files } : {}) });
     this.pending[this.pending.length - 1]!.audience = this.routeComment(actor, card, text, kept, { notify: more.notify ?? null, reply: more.reply ?? null });
   }
@@ -3321,7 +3357,7 @@ export class TaskBoard {
    * task) wakes nobody by a comment, as it wakes nobody by an assignment.
    */
   private routeComment(author: Actor, card: Card, text: string, kept: boolean,
-    opts: { notify?: { to: string[]; assignee: boolean } | null; reply?: Entry | null; only?: readonly string[] } = {}): CommentAudience {
+    opts: { notify?: { to: string[]; assignee: boolean; at?: string[] } | null; reply?: Entry | null; only?: readonly string[] } = {}): CommentAudience {
     const none: CommentAudience = { mentions: [], assignee: false };
     if (author.kind === "system" || !this.routing.enabled() || !this.isOnBoard(card)) return none;
     const names = [...this.routing.instances()];
@@ -3418,9 +3454,12 @@ export class TaskBoard {
     const assigneeHears = (by: string, at: string) => { const a = assigneeAt(at); return a !== null && a !== by && names.includes(a); };
     // A comment its writer addressed (the recipients stored with it, a reply's author among them) woke those instances without an
     // `@`: they count as the mentions do — and the assignee hears it only when the writer left that rule on (`assignee`).
-    const notified = (raw: string | null): { to: string[]; assignee: boolean } => {
-      if (!raw) return { to: [], assignee: true };
-      try { const n = JSON.parse(raw) as { to?: unknown; assignee?: unknown }; return { to: Array.isArray(n.to) ? n.to.filter((x): x is string => typeof x === "string") : [], assignee: n.assignee !== false }; } catch { return { to: [], assignee: true }; }
+    // `at`: the `@` names stored when it was written (null: a row from before they were stored — its words say). An edit or a deletion
+    // changes the words, never what was stored, so neither takes a turn out of the count.
+    const notified = (raw: string | null): { to: string[]; assignee: boolean; at: string[] | null } => {
+      const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+      if (!raw) return { to: [], assignee: true, at: null };
+      try { const n = JSON.parse(raw) as { to?: unknown; assignee?: unknown; at?: unknown }; return { to: strs(n.to), assignee: n.assignee !== false, at: Array.isArray(n.at) ? strs(n.at) : null }; } catch { return { to: [], assignee: true, at: null }; }
     };
     let turns = 0;
     let writer: string | null = null;
@@ -3429,7 +3468,8 @@ export class TaskBoard {
       if (r.kind !== "comment") continue;
       const n = notified(r.notify);
       // The assignee a writer addressed by `to` is among `to`, so it counts there; the old rule (`assignee`) counts it as it did.
-      if (!(parseMentions(r.text, names).names.some((m) => m !== r.author) || n.to.some((m) => m !== r.author && names.includes(m)) || (n.assignee && assigneeHears(r.author, r.at)))) continue;
+      const named = n.at ?? parseMentions(r.text, names).names;
+      if (!(named.some((m) => m !== r.author && names.includes(m)) || n.to.some((m) => m !== r.author && names.includes(m)) || (n.assignee && assigneeHears(r.author, r.at)))) continue;
       if (r.author !== writer) { turns++; writer = r.author; }
     }
     return turns;

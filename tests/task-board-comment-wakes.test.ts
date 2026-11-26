@@ -813,7 +813,7 @@ describe("6. compatibility", () => {
       const cols = (t: string) => (raw.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((x) => x.name);
       // The wake rule itself added nothing; the columns after `at` and the reactions table are the comment threads' (tests/task-board-comment-threads.test.ts).
       expect(cols("task_entries")).toEqual(["id", "task_id", "kind", "author", "author_kind", "text", "at",
-        "parent_id", "edited_at", "deleted_at", "deleted_by", "resolved_at", "resolved_by", "notify"]);
+        "parent_id", "edited_at", "deleted_at", "deleted_by", "resolved_at", "resolved_by", "notify", "author_key"]);
       const tables = (raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'task%' ORDER BY name").all() as Array<{ name: string }>).map((x) => x.name);
       // (task_attachments, an additive table for files on a card, was added later — nothing about comments or wakes changed.)
       expect(tables).toEqual(["task_attachments", "task_counters", "task_entries", "task_entry_reactions", "task_events", "task_liveness", "task_projects", "task_watchers", "tasks"]);

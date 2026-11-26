@@ -2147,7 +2147,7 @@ function webPersonOr401(req: IncomingMessage, res: ServerResponse, url: URL, ctx
  */
 function boardActor(req: IncomingMessage, url: URL, ctx: WebApiContext, p: WebPerson): BoardActor {
   const v = evaluateWebRequest(req as unknown as WebGateRequest, url, ctx.webToken ?? null, ctx.webSessions, { touch: false });
-  return v.kind === "allow" && v.via === "session" ? { kind: "person", name: p.name } : { kind: "script", name: "web-token" };
+  return v.kind === "allow" && v.via === "session" ? { kind: "person", name: p.name, key: p.key } : { kind: "script", name: "web-token" };
 }
 
 /**
@@ -4341,7 +4341,10 @@ export function handleWebRequest(
         // (and that it may react, resolve and delete); none for a read-only session, the CLI's token or a guest.
         const viewerPerson = adminAdmissionOf(req, url, ctx) ? webPersonOf(req, url, ctx) : null;
         const viewer = viewerPerson ? boardActor(req, url, ctx, viewerPerson) : null;
-        json(res, 200, { ...shown(board.detail(ref, scope, ctx.dispatcherGone)), ...(viewer && viewer.kind === "person" ? { viewer: { name: viewer.name, kind: viewer.kind } } : {}),
+        const read = shown(board.detail(ref, scope, ctx.dispatcherGone));
+        // Each comment says whether it is the viewer's (two people who are both "web-user" are told apart by their key, not their name).
+        const mine = viewer && viewer.kind === "person" ? board.commentsWrittenBy(ref, viewer) : null;
+        json(res, 200, { ...read, ...(mine ? { comments: read.comments.map((e) => ({ ...e, mine: mine.has(e.id) })), viewer: { name: viewer!.name, kind: viewer!.kind } } : {}),
           ...(board.isArchived(found, archiveDays) ? { archived: true, archiveAfterDays: archiveDays } : {}) });
         return true;
       }

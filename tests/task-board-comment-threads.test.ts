@@ -720,3 +720,163 @@ describe("10. an agent's side: the `task` tool", () => {
     expect(text).toContain("task update, with a comment and reply_to");
   });
 });
+
+describe("11. the loop guard counts what was stored when a comment was written, not its words today (AGEND-366)", () => {
+  /** Two agents `@` each other on a card nobody holds: each writes, then `evade` takes the comment's `@` away. */
+  function ping(r: Rig, evade: (by: Actor, code: string, id: number) => void): { woken: string[][]; held: boolean[] } {
+    const c = card(r.board, ANN);                          // no assignee: only the `@` can make a turn
+    r.take();
+    const out = { woken: [] as string[][], held: [] as boolean[] };
+    for (let i = 0; i < AGENT_COMMENT_CHAIN + 3; i++) {
+      const [by, to] = i % 2 === 0 ? [LEAD, "dev-b"] : [DEV_B, "lead"];
+      const wrote = r.board.updateCard(by, c.code, { comment: `@${to} ping ${i}` });
+      out.held.push(noteKeys(wrote).includes("comment_chain"));
+      out.woken.push(woken(r.take()));
+      evade(by, c.code, r.board.detail(c.code).comments.at(-1)!.id);
+    }
+    return out;
+  }
+  const turns = (o: ReturnType<typeof ping>) => o.held.map((h) => (h ? "held" : "woke"));
+  const BASELINE = ["woke", "woke", "woke", "woke", "held", "held", "held"];
+
+  it("without any evasion: four turns wake, then the guard holds (the control)", () => {
+    expect(turns(ping(rig(), () => {}))).toEqual(BASELINE);
+  });
+
+  it("deleting each comment right after it is written does not take its turn out of the count", () => {
+    const r = rig();
+    const o = ping(r, (by, code, id) => { r.board.deleteComment(by, code, id); });
+    expect(turns(o)).toEqual(BASELINE);
+    expect(o.woken[4]).toEqual([]);                        // the fifth wakes nobody
+  });
+
+  it("editing the `@` out of each comment right after it is written does not either", () => {
+    const r = rig();
+    const o = ping(r, (by, code, id) => { r.board.editComment(by, code, id, "no one named here"); });
+    expect(turns(o)).toEqual(BASELINE);
+  });
+
+  it("nor does an edit and then a deletion", () => {
+    const r = rig();
+    const o = ping(r, (by, code, id) => { r.board.editComment(by, code, id, "words"); r.board.deleteComment(by, code, id); });
+    expect(turns(o)).toEqual(BASELINE);
+  });
+
+  it("a comment written without an `@` and edited to name one counts from the edit, and then keeps counting when the `@` goes again", () => {
+    const r = rig();
+    const c = card(r.board, ANN);
+    r.take();
+    // five comments, each edited to name the other and written by alternating agents: the fifth edit is the fifth turn
+    const edits: boolean[] = [];
+    for (let i = 0; i < AGENT_COMMENT_CHAIN + 1; i++) {
+      const [by, to] = i % 2 === 0 ? [LEAD, "dev-b"] : [DEV_B, "lead"];
+      r.board.updateCard(by, c.code, { comment: `plain ${i}` });
+      const id = r.board.detail(c.code).comments.at(-1)!.id;
+      const edited = r.board.editComment(by, c.code, id, `@${to} now ${i}`);
+      edits.push(noteKeys(edited).includes("comment_chain"));
+      r.board.editComment(by, c.code, id, "and the name is gone again");
+      r.take();
+    }
+    expect(edits).toEqual([false, false, false, false, true]);
+  });
+
+  it("a row from before the names were stored is read from its words, as it always was — and an edit keeps what its words named", () => {
+    const r = rig();
+    const c = card(r.board, ANN);
+    const uuid = r.board.getCard(c.code).uuid;
+    const raw = (r.board as unknown as { db: { prepare(s: string): { run(...a: unknown[]): unknown } } }).db;
+    const old = (author: string, text: string, secondsAgo: number) => raw.prepare("INSERT INTO task_entries (task_id, kind, author, author_kind, text, at) VALUES (?, 'comment', ?, 'instance', ?, ?)")
+      .run(uuid, author, text, new Date(Date.now() - secondsAgo * 1000).toISOString());
+    old("lead", "@dev-b look", 50); old("dev-b", "@lead done", 40); old("lead", "no name in these words", 35); old("lead", "@dev-b again", 30); old("dev-b", "@lead ok", 20);
+    r.take();
+    // four of the five name someone (the third does not): the next one is the fifth turn... counted as turns of a change of writer:
+    // lead, dev-b, (skipped), lead, dev-b → four turns; the comment now written by lead is the fifth
+    const now = r.board.updateCard(LEAD, c.code, { comment: "@dev-b once more" });
+    expect(noteKeys(now)).toContain("comment_chain");
+    // an edit of such a row (no `at` stored) keeps the `@` its old words named
+    const id = r.board.detail(c.code).comments[3]!.id;      // lead's "@dev-b again"
+    const before = r.board.detail(c.code).comments.map((e) => e.text);
+    expect(before[3]).toBe("@dev-b again");
+    r.board.editComment(LEAD, c.code, id, "the name is gone");
+    const stored = JSON.parse(((r.board as unknown as { db: { prepare(s: string): { get(id: number): { notify: string } } } }).db.prepare("SELECT notify FROM task_entries WHERE id = ?").get(id)).notify) as { at: string[] };
+    expect(stored.at).toEqual(["dev-b"]);
+  });
+
+  it("a row from before them whose words have no `@` is not a turn (nothing changes for old data)", () => {
+    const r = rig();
+    const c = card(r.board, ANN);
+    const uuid = r.board.getCard(c.code).uuid;
+    const raw = (r.board as unknown as { db: { prepare(s: string): { run(...a: unknown[]): unknown } } }).db;
+    for (const [author, text] of [["lead", "a note"], ["dev-b", "another note"], ["lead", "more words"], ["dev-b", "still none"], ["lead", "nothing"]] as const) {
+      raw.prepare("INSERT INTO task_entries (task_id, kind, author, author_kind, text, at) VALUES (?, 'comment', ?, 'instance', ?, ?)").run(uuid, author, text, new Date().toISOString());
+    }
+    r.take();
+    expect(noteKeys(r.board.updateCard(LEAD, c.code, { comment: "@dev-b look" }))).not.toContain("comment_chain");
+  });
+
+  it("every comment stores what its words named: `at`, and with it `to` and whether the old assignee rule applies", () => {
+    const r = rig();
+    const c = card(r.board, ANN, { assignee: "dev-a" });
+    r.board.updateCard(ANN, c.code, { comment: "@lead and @dev-b, not @ghost", to: ["dev-a"] });
+    r.board.updateCard(ANN, c.code, { comment: "no names" });
+    const raw = (r.board as unknown as { db: { prepare(s: string): { all(): Array<{ notify: string }> } } }).db;
+    expect(raw.prepare("SELECT notify FROM task_entries ORDER BY id").all().map((x) => JSON.parse(x.notify))).toEqual([
+      { to: ["dev-a"], assignee: false, at: ["lead", "dev-b"] },
+      { to: [], assignee: true, at: [] },
+    ]);
+  });
+});
+
+describe("12. who wrote a comment: the writer's key, then the name (AGEND-366)", () => {
+  const SESSION_A: Actor = { kind: "person", name: "web-user", key: "acct:a" };
+  const SESSION_B: Actor = { kind: "person", name: "web-user", key: "acct:b" };
+
+  it("two people who are both \"web-user\" are not each other: one cannot edit the other's comment, each edits their own", () => {
+    const r = rig();
+    const c = card(r.board, ANN);
+    const byA = say(r.board, c.code, SESSION_A, "from a");
+    const byB = say(r.board, c.code, SESSION_B, "from b");
+    for (const [who, id] of [[SESSION_B, byA.id], [SESSION_A, byB.id]] as const) {
+      expect(errorOf(() => r.board.editComment(who, c.code, id, "hijacked"))).toMatchObject({ code: "forbidden", key: "comment_not_yours" });
+    }
+    expect(r.board.editComment(SESSION_A, c.code, byA.id, "a, edited").entry.text).toBe("a, edited");
+    expect(r.board.editComment(SESSION_B, c.code, byB.id, "b, edited").entry.text).toBe("b, edited");
+    expect([...r.board.commentsWrittenBy(c.code, SESSION_A)]).toEqual([byA.id]);
+    expect([...r.board.commentsWrittenBy(c.code, SESSION_B)]).toEqual([byB.id]);
+  });
+
+  it("the same key under another name is the same person (they renamed themselves); the kind must match too", () => {
+    const r = rig();
+    const c = card(r.board, ANN);
+    const mine = say(r.board, c.code, SESSION_A, "mine");
+    expect(r.board.editComment({ kind: "person", name: "Alex", key: "acct:a" }, c.code, mine.id, "still mine").entry.text).toBe("still mine");
+    expect(errorOf(() => r.board.editComment({ kind: "script", name: "web-user", key: "acct:a" }, c.code, mine.id, "x"))).toMatchObject({ key: "comment_not_yours" });
+  });
+
+  it("without a key on either side the name decides, as it did: a comment written before keys, or an actor with none", () => {
+    const r = rig();
+    const c = card(r.board, ANN);
+    const old = say(r.board, c.code, { kind: "person", name: "Ann" }, "no key kept");
+    expect(r.board.editComment({ kind: "person", name: "Ann", key: "acct:ann" }, c.code, old.id, "edited").entry.text).toBe("edited");   // the comment has no key: the name decides
+    expect(errorOf(() => r.board.editComment({ kind: "person", name: "Bob", key: "acct:bob" }, c.code, old.id, "x"))).toMatchObject({ key: "comment_not_yours" });
+    const keyed = say(r.board, c.code, SESSION_A, "keyed");
+    expect(r.board.editComment({ kind: "person", name: "web-user" }, c.code, keyed.id, "no key given").entry.text).toBe("no key given");   // the actor has no key: the name decides
+  });
+
+  it("the key is stored for a person's comment only, and is not in what a read returns", () => {
+    const r = rig();
+    const c = card(r.board, ANN, { assignee: "dev-a" });
+    say(r.board, c.code, SESSION_A, "a person's");
+    say(r.board, c.code, { ...DEV, key: "ignored" }, "an instance's");
+    const raw = (r.board as unknown as { db: { prepare(s: string): { all(): Array<{ author_key: string | null }> } } }).db;
+    expect(raw.prepare("SELECT author_key FROM task_entries ORDER BY id").all().map((x) => x.author_key)).toEqual(["acct:a", null]);
+    expect(JSON.stringify(r.board.detail(c.code))).not.toContain("acct:a");
+  });
+
+  it("deleting stays a person's: another \"web-user\" may delete (an administrator), an instance only its own", () => {
+    const r = rig();
+    const c = card(r.board, ANN);
+    const byA = say(r.board, c.code, SESSION_A, "from a");
+    expect(() => r.board.deleteComment(SESSION_B, c.code, byA.id)).not.toThrow();
+  });
+});
