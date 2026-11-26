@@ -379,7 +379,9 @@ export function Composer({ placeholder, names, assignee, onSend, recipients = nu
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); if (open) setHidden(true); else if (onCancel) onCancel(); else e.currentTarget.blur(); return; }
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send(); }
   }
-  return html`<${BoardOffNote} names=${boardOffTargets(names, recipients ? to : assignee, text)} textKey="tasks.boardOffCommentNote" />
+  // The card's assignee with the board off is named before anything is typed (that is why the chip starts at nobody) — until the person
+  // chooses someone else, or nobody; an @name in the words with the board off is named as it is typed.
+  return html`<${BoardOffNote} names=${boardOffTargets(names, chosen ? chosen.name : assignee, text)} textKey="tasks.boardOffCommentNote" />
   <div class=${`tc-composer${variant ? ` tc-${variant}` : ""}`}>
     <div class="tc-compose-box">
       ${open ? html`<ul class="tc-mentions" role="listbox" aria-label=${t("taskcard.mentionList")}>${found.map((n, i) => html`<li key=${n.name} role="option" aria-selected=${i === active ? "true" : "false"} class=${i === active ? "active" : ""}>
