@@ -588,7 +588,7 @@ describe("4b. working on a card it has not claimed (the owner's survivor-dev: tw
     const late = flow.subLine(cards[0], ctx({ dev: "working" }, cards, read(5 * MIN)));
     expect([late.tone, late.text, late.late]).toEqual(["warn", "dev · Running (still not claimed)", true]);
     expect(late.tip).toContain("Ask it to claim it");
-    expect(line(read(10_000, "delivered"))[0], "delivered is enough").toBe("running");
+    expect(line(read(10_000, "delivered"))![0], "delivered is enough").toBe("running");
     expect(line({ handoffs: [] })![0], "a session with no record of the notice (read-only): the inference stands").toBe("running");
     expect(line(read(10_000, "skipped", { skip: "not_waiting" }))![0]).toBe("running");
     for (const state of ["sending", "queued", "failed", "uncertain", "withdrawn"]) expect([state, line(read(10_000, state))![0]], "the notice has not reached it: it is not on this card").toEqual([state, "handed"]);
