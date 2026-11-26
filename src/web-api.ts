@@ -4337,7 +4337,12 @@ export function handleWebRequest(
       if (method === "GET" && card && !card[2]) {
         const found = board.getCard(ref);
         if (hidden(found)) { json(res, 404, { error: "no such card", code: "not_found" }); return true; }
-        json(res, 200, { ...shown(board.detail(ref, scope, ctx.dispatcherGone)), ...(board.isArchived(found, archiveDays) ? { archived: true, archiveAfterDays: archiveDays } : {}) });
+        // `viewer`: who this request writes as — an admin session's person — so the page knows which comments are theirs to edit
+        // (and that it may react, resolve and delete); none for a read-only session, the CLI's token or a guest.
+        const viewerPerson = adminAdmissionOf(req, url, ctx) ? webPersonOf(req, url, ctx) : null;
+        const viewer = viewerPerson ? boardActor(req, url, ctx, viewerPerson) : null;
+        json(res, 200, { ...shown(board.detail(ref, scope, ctx.dispatcherGone)), ...(viewer && viewer.kind === "person" ? { viewer: { name: viewer.name, kind: viewer.kind } } : {}),
+          ...(board.isArchived(found, archiveDays) ? { archived: true, archiveAfterDays: archiveDays } : {}) });
         return true;
       }
       if (method === "GET" && path === "/ui/tasks/archive") {

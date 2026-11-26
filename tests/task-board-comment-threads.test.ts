@@ -372,6 +372,22 @@ describe("7. who is woken", () => {
     expect(out.notes.join(" ")).toContain("lead (addressed)");
   });
 
+  it("`to` the assignee of a finished card, or one still waiting on what it depends on, is asked for by name: it goes as a mention (the old rule would tell nobody)", () => {
+    const r = rig();
+    const done = card(r.board, ANN, { assignee: "dev-a" });
+    r.board.moveCard(DEV, done.code, "claimed"); r.board.moveCard(DEV, done.code, "done", { result: "ok" });
+    r.take();
+    r.board.updateCard(ANN, done.code, { comment: "thanks — one more thing", to: ["dev-a"] });
+    expect(woken(r.take())).toEqual(["dev-a:mention"]);
+    r.board.updateCard(ANN, done.code, { comment: "thanks" });                            // no recipient chosen: the old rule, a finished card tells nobody
+    expect(woken(r.take())).toEqual([]);
+    const first = card(r.board, ANN, { assignee: "dev-b" });
+    const waiting = card(r.board, ANN, { assignee: "dev-a", dependsOn: [first.code] });
+    r.take();
+    r.board.updateCard(ANN, waiting.code, { comment: "heads up", to: ["dev-a"] });
+    expect(woken(r.take())).toEqual(["dev-a:mention"]);
+  });
+
   it("`to: []` notifies no agent; an `@name` in the words still does", () => {
     const r = rig();
     const c = assigned(r);
@@ -429,7 +445,7 @@ describe("7. who is woken", () => {
     expect(woken(r.take())).toEqual(["dev-b:mention"]);
   });
 
-  it("the notice says which comment a reply answers, and a mention of the assignee does not say the card is not theirs", () => {
+  it("the notice says which comment a reply answers", () => {
     const r = rig();
     const c = assigned(r);
     const asked = say(r.board, c.code, LEAD, "can you take a look at the layout and the colours before we ship?");
@@ -442,12 +458,6 @@ describe("7. who is woken", () => {
     expect(text).toContain(`replying to c${asked.id} (lead): "can you take a look`);
     const toAssignee = heard.find((h) => h.to === "dev-a")!;
     expect(wakeMessage([toAssignee.wake], () => r.board.getCard(c.code))).toContain("replying to");
-    // the assignee addressed by name: "sent you", not "mentioned you … the card is not yours"
-    r.board.updateCard(ANN, c.code, { comment: "@dev-a go" });
-    const m = r.take().find((h) => h.to === "dev-a")!;
-    const line = wakeMessage([m.wake], () => r.board.getCard(c.code));
-    expect(line).toContain("mentioned you in a comment");
-    expect(line).not.toContain("the card is not yours");
   });
 
   it("an edit wakes nobody — unless it adds an `@`, and then only the one it adds", () => {

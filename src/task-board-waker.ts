@@ -132,8 +132,7 @@ function say(w: Wake, r: WakeReason, card: Card | undefined, here = false): stri
     }
     // Comments wake (docs/design/task-board.md, "Comments and mentions"): the words are in the notice; the reply goes on the card.
     case "comment": return `new comment from ${by}${quote(w.texts.comment)}${replying(w, r)}${earlierWords(w)} — reply on the card (task update, with a comment${w.replies?.comment ? " and reply_to" : ""}) only if it asks or needs something from you${personReads(w, r)}`;
-    // Its own assignee, named: the card is theirs. Anyone else: it is not, unless the words say so.
-    case "mention": return `${by} mentioned you in a comment${quote(w.texts.mention)}${replying(w, r)}${earlierWords(w)} — reply on the card (task update, with a comment${w.replies?.mention ? " and reply_to" : ""}) if it asks something of you${card?.assignee === w.instance ? "" : "; the card is not yours unless it says so"}${personReads(w, r)}`;
+    case "mention": return `${by} mentioned you in a comment${quote(w.texts.mention)}${replying(w, r)}${earlierWords(w)} — reply on the card (task update, with a comment${w.replies?.mention ? " and reply_to" : ""}) if it asks something of you; the card is not yours unless it says so${personReads(w, r)}`;
     // A follower (docs/design/task-board.md, "Following a card"): how the card moved on, who did it, with the words that came with it.
     case "progress": return progressLine(w, card);
     case "cancelled": return `cancelled by ${by}${w.texts.cancelled?.startsWith("with its main task") ? ` ${oneLine(w.texts.cancelled, 160)}` : quote(w.texts.cancelled)} — stop working on it`;

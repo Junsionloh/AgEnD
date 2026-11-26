@@ -3335,11 +3335,15 @@ export class TaskBoard {
     const chosen = (notify?.to ?? []).filter((n) => names.includes(n));
     const unknownChosen = (notify?.to ?? []).filter((n) => !names.includes(n));
     const toAssignee = card.assignee !== null && chosen.includes(card.assignee);
-    const hearsAsAssignee = !editing && (notify === null || notify.assignee || toAssignee);
+    // A comment to the assignee is the old rule's comment (it is told only while it can act on it). One the writer chose it for
+    // is asked for by name, as an `@` is: on a finished card, or one still waiting on what it depends on, where the old rule
+    // tells nobody, it goes as a mention — what the recipient chip says is what happens.
+    const asMention = toAssignee && (isFinished(card) || (card.status === "open" && this.unmetDeps(card).length > 0));
+    const hearsAsAssignee = !editing && (notify === null || notify.assignee || (toAssignee && !asMention));
     const written = parsed.names.filter((n) => !editing || opts.only!.includes(n));
     // Only an instance (or a script) is itself: a person whose name is an instance's name is someone else, and a mention
     // of that instance is for it (the board's names are one string, but an `@name` always means the instance).
-    let mentions = [...new Set([...chosen.filter((n) => n !== card.assignee), ...written])].filter((n) => (agent ? n !== author.name : true));
+    let mentions = [...new Set([...chosen.filter((n) => n !== card.assignee || asMention), ...written])].filter((n) => (agent ? n !== author.name : true));
     for (const n of mentions.filter((m) => this.boardOff(m))) {
       this.say("mention_off", [n], `@${n} has the task board switched off, so it was not woken: it cannot read the card`);
     }

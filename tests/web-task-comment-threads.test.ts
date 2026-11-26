@@ -92,6 +92,15 @@ describe("1. an admin session works a card's comments", () => {
     expect((await call(db, "GET", `/ui/tasks/board`, undefined, local)).body.cards[0].commentCount).toBe(1);
   });
 
+  it("the card read says who the viewer writes as (an admin session's person), and nothing to a read-only session", async () => {
+    const db = scratchDb();
+    const c = seed(db);
+    expect((await call(db, "GET", `/ui/tasks/cards/${c.code}`, undefined, local)).body.viewer).toEqual({ name: "web-user", kind: "person" });
+    expect((await call(db, "GET", `/ui/tasks/cards/${c.code}`)).body.viewer).toEqual({ name: "web-user", kind: "person" });      // an admin session over the link
+    expect((await call(db, "GET", `/ui/tasks/cards/${c.code}`, undefined, { tier: "read" })).body.viewer).toBeUndefined();
+    expect((await call(db, "GET", `/ui/tasks/cards/${c.code}`, undefined, { tier: "read", local: true })).body.viewer).toBeUndefined();
+  });
+
   it("is on the public link's manifest for an admin session, and nowhere a read-only one writes", () => {
     for (const verb of ["edit", "react", "resolve", "delete"]) expect(isPublicWebRoute("POST", `/ui/tasks/cards/M-3/comments/12/${verb}`), verb).toBe(true);
     expect(isPublicWebRoute("GET", "/ui/tasks/cards/M-3/comments/12/edit")).toBe(false);
