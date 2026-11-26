@@ -1,0 +1,136 @@
+{
+  "phase": "before",
+  "sourceHead": "7318b906ecfb4999ebd836c77a655ccd33596a22",
+  "dirty": [],
+  "checks": [
+    {
+      "name": "desk-light-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-light-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "desk-dark-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-light-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-light-zh-TW: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-en: no page errors",
+      "ok": true
+    },
+    {
+      "name": "phone-dark-zh-TW: no page errors",
+      "ok": true
+    }
+  ],
+  "pictures": [
+    {
+      "path": "desk-light-en-1-board.png",
+      "sha256": "8edcd838747f7b5269cbfece78ff62da7aa9103f19edd3f1fb7b9c724a77a84a"
+    },
+    {
+      "path": "desk-light-en-2-card.png",
+      "sha256": "3fc7cbd49b857dccfd887405e4b2c2efca406f7643a20fc2a2410dea33459648"
+    },
+    {
+      "path": "desk-light-zh-TW-1-board.png",
+      "sha256": "08785ca71160b4dabdafd4b82d8b10bfa6ed963cb25586840a80a8367b18354b"
+    },
+    {
+      "path": "desk-light-zh-TW-2-card.png",
+      "sha256": "0d249e6576c92a6544f63d172dc1f3316b3f060fcd01937463a9aa1c2ac7ab04"
+    },
+    {
+      "path": "desk-dark-en-1-board.png",
+      "sha256": "6257c3ef25abe72438b858014be2bff352844f6d23392e90497ad4f2695543d8"
+    },
+    {
+      "path": "desk-dark-en-2-card.png",
+      "sha256": "8a97a23b914ff6bba6a38029eed3de4e513b56dd973f1fa5d6cceb43b7a22569"
+    },
+    {
+      "path": "desk-dark-zh-TW-1-board.png",
+      "sha256": "e9a26dfe36e7566ced6a478ecfd2da60ee87b78e22a6230ef8a3448c9ce56917"
+    },
+    {
+      "path": "desk-dark-zh-TW-2-card.png",
+      "sha256": "aefbb61cec190469577b135f7cc59e02853851dc95379a4245cdbb8c16f48a8e"
+    },
+    {
+      "path": "phone-light-en-1-board.png",
+      "sha256": "69b3a3dfeb654209150a95fb6d54af699e11d469a179c543e15319eaf351e7e5"
+    },
+    {
+      "path": "phone-light-en-2-card.png",
+      "sha256": "ece5f5c8d980cdb2ed461357735192976814151d135339219498641b5cb78648"
+    },
+    {
+      "path": "phone-light-zh-TW-1-board.png",
+      "sha256": "f4a78a3b1e1ee5e1100833d83a95325506670b05bb71852547d40d7b3d6facef"
+    },
+    {
+      "path": "phone-light-zh-TW-2-card.png",
+      "sha256": "2a9ac790a6af8abf4079b2cf0891e72fd5f6276760f5f00e704474546c33b840"
+    },
+    {
+      "path": "phone-dark-en-1-board.png",
+      "sha256": "c435960df311f7a377578a52596e1350c6e8a8568bcaaac424582b2ade643934"
+    },
+    {
+      "path": "phone-dark-en-2-card.png",
+      "sha256": "c2355e356e0f1242e9900da6382f9bbdc45a55441ba148ee3ba36fdca8b73821"
+    },
+    {
+      "path": "phone-dark-zh-TW-1-board.png",
+      "sha256": "1027a66e831f1895f42b5f956ca94714ea2e665455483274cec74e36a229d351"
+    },
+    {
+      "path": "phone-dark-zh-TW-2-card.png",
+      "sha256": "3dc50694569c29c214b73a56d3d2c242bd06d3c6218f444a85574d570e109f11"
+    }
+  ],
+  "viewer": {
+    "name": "web-user"
+  },
+  "comments": [
+    {
+      "id": 1,
+      "by": "web-user",
+      "parentId": null
+    },
+    {
+      "id": 2,
+      "by": "general",
+      "parentId": null
+    },
+    {
+      "id": 3,
+      "by": "web-user",
+      "parentId": null
+    },
+    {
+      "id": 4,
+      "by": "web-user",
+      "parentId": null
+    },
+    {
+      "id": 5,
+      "by": "web-user",
+      "parentId": null
+    }
+  ],
+  "summary": "8/8"
+}
