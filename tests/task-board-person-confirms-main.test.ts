@@ -7,7 +7,8 @@
  *      sub tasks are still handed out by the instance that opened them, and a main task the person opened is as it was.
  *   3. On: when its last sub task is done it goes to review and waits for the person (Waiting for you, the project's count),
  *      not for the instance that opened it: that one is not woken to confirm it, cannot finish it, and cannot clear the review.
- *      Its owner is still told to wrap it up (check, result, comment). The person finishes it.
+ *      Its owner is still told to wrap it up (check, result, comment) — until the person confirms it: a confirmed main task
+ *      was accepted as it is, so its owner is not woken to wrap it up afterwards. The person finishes it.
  *   4. Only the confirmation is the person's: a blocked sub task's question still goes to the instance that handed it out, and
  *      a blocked main task is not a question for the person.
  *   5. The switch is read as a card is opened: a card keeps what it was opened with when it is switched off.
@@ -24,7 +25,7 @@ import { SchedulerDb } from "../src/scheduler/db.js";
 import { personReviews, waitsForPerson, type Actor, type TaskBoard, type Wake } from "../src/scheduler/task-board.js";
 import { cardText } from "../src/scheduler/task-board-text.js";
 import { boardPersonConfirmsMain } from "../src/task-board-tool.js";
-import { wakeMessage } from "../src/task-board-waker.js";
+import { TaskBoardWaker, wakeMessage } from "../src/task-board-waker.js";
 import { validateFleetConfig } from "../src/config-validator.js";
 
 const ANN: Actor = { kind: "person", name: "Ann" };
@@ -195,6 +196,37 @@ describe("3. on: the last sub task sends it to the person, not to the instance t
     const text = wakeMessage([board.wakeHolds(wrap)!], (u) => board.findCard(u));
     expect(text).toContain("went to the person for confirmation by itself, but 2 definition-of-done items unchecked, no result");
     expect(text).toContain("wrap it up with update");
+  });
+
+  it("once the person confirms it — before the notice goes out, or while its owner is offline — its owner is not woken to wrap it up", () => {
+    const { board } = open();
+    const w = heard(board);
+    const sent: Array<{ instance: string; message: string }> = [];
+    const timers: Array<{ fn: () => void; live: boolean }> = [];
+    const waker = new TaskBoardWaker({
+      deliver: (instance, message) => { sent.push({ instance, message }); return true; },
+      isInstance: (n) => INSTANCES.includes(n),
+      holds: (x) => board.wakeHolds(x),
+      card: (uuid) => board.findCard(uuid),
+      log: () => {},
+      timers: { set: (fn) => { const t = { fn, live: true }; timers.push(t); return t; }, clear: (h) => { (h as { live: boolean }).live = false; } },
+    });
+    board.onChange((c) => waker.note(c.wakes));
+    const p = plan(board);
+    w.take();
+    finishBoth(board, p);
+    expect(board.getCard(p.main.code).status).toBe("review");
+    const wrap = w.take().find((x) => x.instance === "lead" && x.code === p.main.code && x.reasons.includes("wrap_up"))!;
+    expect(board.wakeHolds(wrap)?.reasons).toEqual(["wrap_up"]);
+    board.moveCard(ANN, p.main.code, "done");                            // the person accepts it as it is
+    const main = board.getCard(p.main.code);
+    expect(main).toMatchObject({ status: "done", needsReview: true, personReview: true });
+    expect(main.acceptance.every((a) => !a.done)).toBe(true);
+    expect(board.wakeHolds(wrap)).toBeNull();
+    for (const t of timers.splice(0)) if (t.live) t.fn();
+    const toLead = sent.filter((x) => x.instance === "lead").map((x) => x.message).join("\n");
+    expect(toLead).not.toContain("wrap it up with update");
+    expect(toLead).not.toContain(`${p.main.code} "Publish the report"`);
   });
 
   it("neither the instance that opened it nor another can finish it or clear the review; the person can", () => {
