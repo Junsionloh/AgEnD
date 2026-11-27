@@ -16,7 +16,7 @@
  */
 import type { Wake, WakeReason, WakeSkip } from "./scheduler/task-board.js";
 import { gapText, oneLine } from "./scheduler/task-board-text.js";
-import { confirmerOf, personConfirms, WORD_REASONS, wrapUpGap, type Card } from "./scheduler/task-board.js";
+import { confirmerOf, personReviews, WORD_REASONS, wrapUpGap, type Card } from "./scheduler/task-board.js";
 
 export interface TaskBoardWakerDeps {
   /**
@@ -168,7 +168,7 @@ function say(w: Wake, r: WakeReason, card: Card | undefined, here = false): stri
     case "wrap_up": {
       const gap = card ? wrapUpGap(card) : null;
       // Every sub task is done: the card is in review, or done (nobody had to confirm it, or it was confirmed meanwhile) — its owner still has to wrap it up.
-      const went = card?.status === "done" ? "is done" : `went ${card && !personConfirms(card) ? "to review" : "to the person for confirmation"} by itself`;
+      const went = card?.status === "done" ? "is done" : `went ${card && !personReviews(card) ? "to review" : "to the person for confirmation"} by itself`;
       return `it ${went}${gap ? `, but ${gapText(gap, true)}` : ""} — wrap it up with update: check the items that are met, result: a short summary of what was delivered and where to open it, and a comment on the card for the person`;
     }
   }

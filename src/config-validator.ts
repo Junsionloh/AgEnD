@@ -661,6 +661,10 @@ export function validateFleetConfig(config: unknown, opts: { rooms?: Iterable<st
       if (isObj(config.defaults.task_board) && config.defaults.task_board.progress_wakes !== undefined && typeof config.defaults.task_board.progress_wakes !== "boolean") {
         err("defaults.task_board.progress_wakes", "must be true or false");
       }
+      // Main tasks an agent opens wait for the person's confirmation: off unless true.
+      if (isObj(config.defaults.task_board) && config.defaults.task_board.person_confirms_main !== undefined && typeof config.defaults.task_board.person_confirms_main !== "boolean") {
+        err("defaults.task_board.person_confirms_main", "must be true or false");
+      }
       // M-3668: the dashboard's archive age.
       if (isObj(config.defaults.task_board) && config.defaults.task_board.archive_after_days !== undefined) {
         const days = config.defaults.task_board.archive_after_days;

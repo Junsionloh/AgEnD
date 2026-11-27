@@ -356,6 +356,12 @@ export interface FleetDefaults extends Partial<InstanceConfig> {
      * number; moving it to To do reopens it. A view rule only (nothing is deleted). Whole days 0–3650; 0 = never; default 3.
      */
     archive_after_days?: number;
+    /**
+     * The person confirms every main task an agent opens, as they do the ones they open themselves: when its last sub task is
+     * done it goes to review and waits for them (Tasks › Waiting for you) instead of finishing by itself. Off by default (an
+     * agent's main task needs nobody's confirmation); read when a main task is opened, so a change applies to the next one.
+     */
+    person_confirms_main?: boolean;
   };
   webhooks?: WebhookConfig[];
 }
