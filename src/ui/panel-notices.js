@@ -18,20 +18,20 @@ register("notices", {
   en: {
     title: "Notices", sub: "What General would have said", empty: "No notices yet",
     emptyHint: "This fleet has no Discord or Telegram connection, so what its General would say — errors, an agent that crashed or ran out of quota, a sign-in, an available update — is kept here.",
-    unread: "New", open: "Open chat",
-    kind_fleet: "Fleet", kind_instance: "Agent", kind_update: "Update", kind_schedule: "Schedule", kind_summary: "Daily summary",
+    unread: "New", open: "Open chat", openCard: "Open the card",
+    kind_fleet: "Fleet", kind_instance: "Agent", kind_update: "Update", kind_schedule: "Schedule", kind_summary: "Daily summary", kind_task: "Task",
     ageNow: "just now", ageMin: "{0} min ago", ageHour: "{0} h ago", ageDay: "{0} d ago",
   },
   "zh-TW": {
     title: "通知", sub: "原本會發到 General 的訊息", empty: "還沒有通知",
     emptyHint: "這個 fleet 沒有 Discord 或 Telegram 連線，所以原本會由 General 說的事——錯誤、agent 當掉或額度用完、登入、新版本——都會留在這裡。",
-    unread: "新", open: "開啟聊天",
-    kind_fleet: "Fleet", kind_instance: "Agent", kind_update: "更新", kind_schedule: "排程", kind_summary: "每日摘要",
+    unread: "新", open: "開啟聊天", openCard: "打開卡片",
+    kind_fleet: "Fleet", kind_instance: "Agent", kind_update: "更新", kind_schedule: "排程", kind_summary: "每日摘要", kind_task: "任務",
     ageNow: "剛剛", ageMin: "{0} 分鐘前", ageHour: "{0} 小時前", ageDay: "{0} 天前",
   },
 });
 const tn = (k, ...v) => t(`notices.${k}`, ...v);
-const ICON = { fleet: "alert", instance: "bot", update: "download", schedule: "clock", summary: "chart" };
+const ICON = { fleet: "alert", instance: "bot", update: "download", schedule: "clock", summary: "chart", task: "tasks" };
 
 /** "3 min ago": a notice's age, refreshed by a display timer. */
 export function noticeAge(at, nowMs) {
@@ -95,7 +95,9 @@ export function NoticesPanel({ navKey }) {
               ${n.id > seenAtOpen ? html`<span class="notice-new">${tn("unread")}</span>` : null}
               <span class="n-age" title=${dateTimeText(n.at)}>${noticeAge(n.at, nowMs)}</span></div>
             ${n.hubSharing ? html`<${HubSharingNotice} notice=${n} />` : n.hubUpdate ? html`<${HubUpdateNotice} notice=${n} actions=${hubActions} />` : html`<p class="n-detail notice-text">${n.text}</p>`}
-            ${n.instance && known.has(n.instance) ? html`<div class="n-actions"><a class="btn btn-sm btn-ghost" href=${chatPath(n.instance)}>${tn("open")}</a></div>` : null}
+            ${n.card || (n.instance && known.has(n.instance)) ? html`<div class="n-actions">
+              ${n.card ? html`<a class="btn btn-sm" href=${`/ui/fleet?card=${encodeURIComponent(n.card)}`}>${tn("openCard")}</a>` : null}
+              ${n.instance && known.has(n.instance) ? html`<a class="btn btn-sm btn-ghost" href=${chatPath(n.instance)}>${tn("open")}</a>` : null}</div>` : null}
           </div>
         </article>`)}
     </div></div>

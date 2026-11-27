@@ -167,11 +167,15 @@ describe("1. what is computed", () => {
     expect(unreadUi.markFor({ id: "M-1" }, [{ id: "S-2" }, { id: "S-3" }, { id: "S-9" }], unread)).toEqual({ n: 4, reasons: ["review", "reply", "answer", "mention"] });
     expect(unreadUi.markFor({ id: "M-7" }, [], unread)).toBeNull();
     expect(unreadUi.markFor({ id: "M-7" }, [], null)).toBeNull();
+    // A main task that finished by itself is the weakest news, and the tile says it was finished.
+    expect(unreadUi.markFor({ id: "M-4" }, [], { "M-4": { n: 1, reasons: ["finished"] } })).toEqual({ n: 1, reasons: ["finished"] });
+    expect(unreadUi.markFor({ id: "M-4" }, [{ id: "S-5" }], { "M-4": { n: 1, reasons: ["finished"] }, "S-5": { n: 1, reasons: ["answer"] } })).toEqual({ n: 2, reasons: ["answer", "finished"] });
   });
 
   it("the reasons are said with who did it", () => {
     expect(unreadUi.reasonText({ reasons: ["answer"], by: "dev" })).toBe("dev answered you");
     expect(unreadUi.reasonText({ reasons: ["review"], by: "dev" })).toBe("Waiting for your confirmation");
+    expect(unreadUi.reasonText({ reasons: ["finished"], by: "qa" })).toBe("Finished by itself, set off by qa");
   });
 });
 
