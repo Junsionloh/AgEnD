@@ -2521,6 +2521,17 @@ export class TaskBoard {
   }
 
   /**
+   * A card in review that waits for the person (their confirmation, whether they handed it out or the fleet asked them to confirm what its
+   * agent opened) is theirs to cancel as much as to confirm: an agent that opened it cancelling it would take it out of their queue, the
+   * confirmation it cannot give by any other move. Before it is in review (still being worked on), the opener may cancel it as ever.
+   */
+  private checkNotWaitingForPerson(card: Card): void {
+    if (card.status === "review" && card.needsReview && personReviews(card)) {
+      throw new TaskBoardError("forbidden", `${card.code} is waiting for the person's confirmation: only they cancel it`);
+    }
+  }
+
+  /**
    * Cards moved by hand: sub tasks, and main tasks that have no sub tasks. `comment` is the move's own comment (a
    * dispatcher's answer); `finishing`: a claim on the way to done (the `task` tool's done of an open card).
    */
@@ -2627,6 +2638,7 @@ export class TaskBoard {
       case "cancelled": {
         if (ai) {
           if (card.createdBy !== actor.name) throw new TaskBoardError("forbidden", "an instance can cancel only the cards it opened");
+          this.checkNotWaitingForPerson(card);
           if (!reason) throw new TaskBoardError("invalid", "cancelling needs a reason");
         }
         return;
@@ -2645,6 +2657,7 @@ export class TaskBoard {
     const notOwner = () => new TaskBoardError("forbidden", `${card.code} belongs to ${card.assignee ?? "nobody"}`);
     if (to === "cancelled") {
       if (ai && card.createdBy !== actor.name) throw new TaskBoardError("forbidden", "an instance can cancel only the main tasks it opened");
+      if (ai) this.checkNotWaitingForPerson(card);
       if (ai && !reason) throw new TaskBoardError("invalid", "cancelling needs a reason");
       return;
     }
