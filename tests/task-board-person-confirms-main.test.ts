@@ -212,6 +212,45 @@ describe("3. on: the last sub task sends it to the person, not to the instance t
     expect(board.waitingForPerson()).toEqual([]);
   });
 
+  it("an agent cannot cancel it while it waits in review — that would take it out of the person's queue — and the person can", () => {
+    const { board } = open();
+    const p = plan(board);
+    finishBoth(board, p);
+    expect(board.waitingForPerson().map((w) => w.card.code)).toEqual([p.main.code]);
+    expect(() => board.moveCard(LEAD, p.main.code, "cancelled", { reason: "no longer needed" })).toThrow(/waiting for the person's confirmation: only they cancel it/);
+    expect(() => board.moveCard(DEV, p.main.code, "cancelled", { reason: "no longer needed" })).toThrow();
+    expect(board.getCard(p.main.code).status).toBe("review");
+    expect(board.waitingForPerson().map((w) => w.card.code)).toEqual([p.main.code]);
+    board.moveCard(ANN, p.main.code, "cancelled", { reason: "not needed" });
+    expect(board.getCard(p.main.code).status).toBe("cancelled");
+    expect(board.waitingForPerson()).toEqual([]);
+  });
+
+  it("the same for a main task without sub tasks that its owner sent to review", () => {
+    const { board } = open();
+    const main = board.createCards(LEAD, { cards: [{ title: "Alone", assignee: "lead" }] }).cards[0]!;
+    board.moveCard(LEAD, main.code, "claimed");
+    board.updateCard(LEAD, main.code, { result: "ok" });
+    board.moveCard(LEAD, main.code, "review");
+    expect(() => board.moveCard(LEAD, main.code, "cancelled", { reason: "oops" })).toThrow(/only they cancel it/);
+    board.moveCard(ANN, main.code, "cancelled", { reason: "not needed" });
+    expect(board.getCard(main.code).status).toBe("cancelled");
+  });
+
+  it("before it is in review its opener may still cancel it, with a reason, as ever; and an agent's own review is not the person's", () => {
+    const { board } = open();
+    const p = plan(board);
+    expect(() => board.moveCard(LEAD, p.main.code, "cancelled")).toThrow(/needs a reason/);
+    board.moveCard(LEAD, p.main.code, "cancelled", { reason: "duplicate" });
+    expect(board.getCard(p.main.code).status).toBe("cancelled");
+    const off = open(false);
+    const q = plan(off.board, { needsReview: true });
+    finishBoth(off.board, q);
+    expect(off.board.getCard(q.main.code).status).toBe("review");
+    off.board.moveCard(LEAD, q.main.code, "cancelled", { reason: "its dispatcher's own business" });
+    expect(off.board.getCard(q.main.code).status).toBe("cancelled");
+  });
+
   it("the owner can still wrap it up while it waits, and the person sees what was filled in", () => {
     const { board } = open();
     const p = plan(board);
