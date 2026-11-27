@@ -46,21 +46,21 @@ function heard(board: TaskBoard) {
   return { take: () => wakes.splice(0) };
 }
 
-/** The preview's M-5: lead opens a main task for itself with a definition of done, and a sub task for dev-a and one for qa. */
+/** An agent opens a main task for itself with a definition of done, and a sub task for dev-a and one for qa. */
 function plan(board: TaskBoard, over: Record<string, unknown> = {}) {
-  const main = board.createCards(LEAD, { cards: [{ title: "Build the game", assignee: "lead", acceptance: ["one html file", "QA sign-off"], ...over }] }).cards[0]!;
-  const [build, test] = board.createCards(LEAD, { parent: main.code, cards: [{ title: "Build", assignee: "dev-a" }, { title: "QA", assignee: "qa" }] }).cards;
-  return { main, build: build!, test: test! };
+  const main = board.createCards(LEAD, { cards: [{ title: "Publish the report", assignee: "lead", acceptance: ["report attached", "reviewer sign-off"], ...over }] }).cards[0]!;
+  const [draft, review] = board.createCards(LEAD, { parent: main.code, cards: [{ title: "Draft", assignee: "dev-a" }, { title: "Review", assignee: "qa" }] }).cards;
+  return { main, draft: draft!, review: review! };
 }
 function finishBoth(board: TaskBoard, p: ReturnType<typeof plan>, last: Actor = QA) {
-  board.moveCard(DEV, p.build.code, "claimed");
-  board.moveCard(DEV, p.build.code, "done", { result: "built" });
-  board.moveCard(QA, p.test.code, "claimed");
-  return board.moveCard(last === QA ? QA : last, p.test.code, "done", { result: "no blocking bugs" });
+  board.moveCard(DEV, p.draft.code, "claimed");
+  board.moveCard(DEV, p.draft.code, "done", { result: "drafted" });
+  board.moveCard(QA, p.review.code, "claimed");
+  return board.moveCard(last === QA ? QA : last, p.review.code, "done", { result: "no blocking issues" });
 }
 
 describe("1. the owner of a main task that finished by itself is told to wrap it up", () => {
-  it("the preview's case: an agent's own main task goes straight to done, and its owner hears both news — the sub task, and the wrap-up", () => {
+  it("an agent's own main task goes straight to done when its last sub task does, and its owner hears both news — the sub task, and the wrap-up", () => {
     const board = open(), w = heard(board);
     const p = plan(board);
     w.take();
@@ -72,21 +72,22 @@ describe("1. the owner of a main task that finished by itself is told to wrap it
     const lead = w.take().filter((x) => x.instance === "lead").map((x) => ({ code: x.code, reasons: x.reasons }));
     expect(lead).toContainEqual({ code: p.main.code, reasons: ["wrap_up"] });
     // The sub task's own news (it handed it out) still comes, as before.
-    expect(lead).toContainEqual({ code: p.test.code, reasons: ["progress"] });
+    expect(lead).toContainEqual({ code: p.review.code, reasons: ["progress"] });
   });
 
-  it("the notice says it finished by itself, what is missing, and what a wrap-up is", () => {
+  it("the notice says what is missing and what a wrap-up is, without saying how the card got to done", () => {
     const board = open(), w = heard(board);
     const p = plan(board);
     finishBoth(board, p);
     const wrap = w.take().find((x) => x.instance === "lead" && x.code === p.main.code)!;
     const held = board.wakeHolds(wrap)!;
     const text = wakeMessage([held], (uuid) => board.findCard(uuid));
-    expect(text).toContain("is done by itself (every sub task is done)");
+    expect(text).toContain("it is done, but 2 definition-of-done items unchecked, no result");
     expect(text).toContain("2 definition-of-done items unchecked, no result");
     expect(text).toContain("wrap it up with update: check the items that are met, result: a short summary");
     expect(text).toContain("a comment on the card for the person");
     expect(text).not.toContain("went to review");
+    expect(text).not.toContain("by itself");
   });
 
   it("one message carries both: the finished sub task and the main task to wrap up", () => {
@@ -96,8 +97,8 @@ describe("1. the owner of a main task that finished by itself is told to wrap it
     const mine = w.take().filter((x) => x.instance === "lead").map((x) => board.wakeHolds(x)).filter((x): x is Wake => x !== null);
     const text = wakeMessage(mine, (uuid) => board.findCard(uuid));
     expect(text).toContain("3 things on your cards");
-    expect(text).toContain(`${p.test.code} "QA": finished by qa`);
-    expect(text).toContain(`${p.main.code} "Build the game": it is done by itself`);
+    expect(text).toContain(`${p.review.code} "Review": finished by qa`);
+    expect(text).toContain(`${p.main.code} "Publish the report": it is done, but 2 definition-of-done items unchecked, no result`);
   });
 
   it("not when nothing is missing: the definition of done is ticked and a result is written before the last sub task", () => {
@@ -117,7 +118,7 @@ describe("1. the owner of a main task that finished by itself is told to wrap it
     wa.take();
     finishBoth(a, pa);
     const noResult = wa.take().find((x) => x.code === pa.main.code && x.reasons.includes("wrap_up"))!;
-    expect(wakeMessage([a.wakeHolds(noResult)!], (u) => a.findCard(u))).toContain("done by itself (every sub task is done), but no result —");
+    expect(wakeMessage([a.wakeHolds(noResult)!], (u) => a.findCard(u))).toContain("it is done, but no result —");
 
     const b = open(), wb = heard(b);
     const pb = plan(b);
@@ -138,23 +139,23 @@ describe("1. the owner of a main task that finished by itself is told to wrap it
   it("the writer is not woken for its own write: it is told in the answer of the move instead", () => {
     const board = open(), w = heard(board);
     const p = plan(board, { assignee: "dev-a" });
-    board.moveCard(QA, p.test.code, "claimed");
-    board.moveCard(QA, p.test.code, "done", { result: "ok" });
+    board.moveCard(QA, p.review.code, "claimed");
+    board.moveCard(QA, p.review.code, "done", { result: "ok" });
     w.take();
-    board.moveCard(DEV, p.build.code, "claimed");
-    const done = board.moveCard(DEV, p.build.code, "done", { result: "built" });
+    board.moveCard(DEV, p.draft.code, "claimed");
+    const done = board.moveCard(DEV, p.draft.code, "done", { result: "drafted" });
     expect(board.getCard(p.main.code).status).toBe("done");
     expect(w.take().filter((x) => x.code === p.main.code && x.instance === "dev-a")).toEqual([]);
     const note = done.notes.find((n) => n.includes("every sub task is done, so it is done by itself"))!;
-    expect(note).toBe(`${p.main.code} "Build the game": every sub task is done, so it is done by itself, though 2 definition-of-done items unchecked, no result — fill that in with update (check the items that are met, result: a short summary), and tell the person on the card`);
-    expect(done.said.find((n) => n.key === "main_done")?.args).toEqual([p.main.code, "Build the game"]);
+    expect(note).toBe(`${p.main.code} "Publish the report": every sub task is done, so it is done by itself, though 2 definition-of-done items unchecked, no result — fill that in with update (check the items that are met, result: a short summary), and tell the person on the card`);
+    expect(done.said.find((n) => n.key === "main_done")?.args).toEqual([p.main.code, "Publish the report"]);
   });
 
   it("another instance's move is told that the owner is told", () => {
     const board = open();
     const p = plan(board);
     const done = finishBoth(board, p);
-    expect(done.notes).toContain(`${p.main.code} "Build the game": every sub task is done, so it is done by itself, though 2 definition-of-done items unchecked, no result — lead, its owner, is told to fill that in`);
+    expect(done.notes).toContain(`${p.main.code} "Publish the report": every sub task is done, so it is done by itself, though 2 definition-of-done items unchecked, no result — lead, its owner, is told to fill that in`);
   });
 
   it("no note when nothing is missing, and none for a main task that goes to review", () => {
@@ -239,7 +240,7 @@ describe("2. the notice holds while something is missing", () => {
     finishBoth(board, p);
     const before = cardText(board, board.getCard(p.main.code));
     expect(before).toContain("finished without a wrap-up: 2 definition-of-done items unchecked, no result (fill in with update: check the items that are met, result: a short summary; comment it for the person)");
-    expect(cardText(board, board.getCard(p.test.code))).not.toContain("finished without a wrap-up");
+    expect(cardText(board, board.getCard(p.review.code))).not.toContain("finished without a wrap-up");
     board.updateCard(LEAD, p.main.code, { check: [1, 2], result: "Delivered." });
     expect(cardText(board, board.getCard(p.main.code))).not.toContain("finished without a wrap-up");
   });
@@ -251,13 +252,13 @@ describe("3. the owner wraps a done main task up in one update", () => {
     const p = plan(board);
     finishBoth(board, p);
     w.take();
-    const out = board.updateCard(LEAD, p.main.code, { check: [1, 2], result: "survivor2.html is ready; open it in a browser.", comment: "Done: QA passed; the file is on S-14." });
+    const out = board.updateCard(LEAD, p.main.code, { check: [1, 2], result: "The report is ready; open the attached file.", comment: `Done: the review passed; the report is attached to ${p.draft.code}.` });
     const main = board.getCard(p.main.code);
     expect(main.status).toBe("done");
     expect(main.acceptance.map((a) => a.done)).toEqual([true, true]);
-    expect(main.result).toContain("survivor2.html");
+    expect(main.result).toContain("The report is ready");
     expect(out.card.version).toBeGreaterThan(p.main.version);
-    expect(board.entries(main.uuid, ["comment"]).some((e) => e.text.includes("QA passed"))).toBe(true);
+    expect(board.entries(main.uuid, ["comment"]).some((e) => e.text.includes("the review passed"))).toBe(true);
   });
 });
 
@@ -284,10 +285,10 @@ describe("4. through the fleet's waker", () => {
     };
     const open1 = run(false);
     expect(open1.sent).toHaveLength(1);
-    expect(open1.sent[0]!.message).toContain(`${open1.p.main.code} "Build the game": it is done by itself (every sub task is done), but 2 definition-of-done items unchecked, no result — wrap it up with update`);
+    expect(open1.sent[0]!.message).toContain(`${open1.p.main.code} "Publish the report": it is done, but 2 definition-of-done items unchecked, no result — wrap it up with update`);
     // The sub tasks' own news stays; only the wrap-up goes once the owner already did it.
     const filled = run(true);
-    expect(filled.sent.map((x) => x.message).join("\n")).not.toContain("done by itself");
+    expect(filled.sent.map((x) => x.message).join("\n")).not.toContain("wrap it up with update");
   });
 });
 
