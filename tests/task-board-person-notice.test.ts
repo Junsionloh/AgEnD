@@ -119,6 +119,19 @@ describe("1. what the board says the person is to be told", () => {
     expect(news.map((n) => [n.kind, n.code, n.by])).toEqual([["review", main.code, "lead"]]);
   });
 
+  it("a main task that waits for the person, is sent back and waits again is told each time it waits", () => {
+    const { board, news } = open();
+    const p = plan(board, ANN);
+    finishBoth(board, p);
+    expect(news.map((n) => n.kind)).toEqual(["review"]);
+    board.moveCard(ANN, p.main.code, "claimed", { reason: "one more thing" });
+    const extra = board.createCards(ANN, { parent: p.main.code, cards: [{ title: "One more", assignee: "dev-a" }] }).cards[0]!;
+    board.moveCard(DEV, extra.code, "claimed");
+    board.moveCard(DEV, extra.code, "done", { result: "ok" });
+    expect(board.getCard(p.main.code).status).toBe("review");
+    expect(news.map((n) => [n.kind, n.code])).toEqual([["review", p.main.code], ["review", p.main.code]]);
+  });
+
   it("a main task that went back and finished again is told again; one reopened in the meantime is not told twice for one move", () => {
     const { board, news } = open();
     const p = plan(board);
@@ -216,6 +229,17 @@ describe("2. a web-only fleet: a Notice about the card", () => {
     expect(f.notices()).toHaveLength(1);
     expect(f.notices()[0]!.text).not.toContain("is asked to fill that in");
     expect(f.notices()[0]!.instance).toBeUndefined();
+  });
+});
+
+describe("2b. a web-only fleet whose Needs you lists the waiting cards: not said twice", () => {
+  it("a card that waits for the person is left to Needs you; one that finished by itself is said either way", () => {
+    const f = fleet({ needs_you: { task_board: true } });
+    finishBoth(f.board, plan(f.board, ANN));
+    expect(f.notices()).toEqual([]);
+    const done = plan(f.board);
+    finishBoth(f.board, done);
+    expect(f.notices().map((n) => [n.kind, n.card, String(n.text).startsWith("✅")])).toEqual([["task", done.main.code, true]]);
   });
 });
 
