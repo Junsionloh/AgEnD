@@ -1,13 +1,14 @@
 // Who has the baton on a main task (Fleet › Tasks › a card; docs/design/task-board.md, "Live state and handoffs"). A main task follows its
 // sub tasks, so its own status says little: "In progress" is a status, not a sign that an agent is working. This page's pieces say what is
-// really happening, one line per sub task, in the person's words:
-//   · a sub task its assignee is working on: a turning ring and what it is doing now — "dev · Edit src/game.js" (the chat's own activity
-//     feed, `tool_progress`, an admin only) or, without steps, the state alone — "dev · Running";
+// really happening, one line per sub task, in the person's words (`subLine`: the whole sentence, and a short label for the sub tasks' rows):
+//   · a sub task its assignee is working on: what it is doing now — "dev · Edit src/game.js" (the chat's own activity feed, `tool_progress`,
+//     an admin only) or, without steps, the state alone — "dev · Running". In the sub tasks' list the row itself says it: its title shimmers
+//     (still with reduced motion) and the sentence is the row's tooltip; the steps are the main task's "Agent activity" block's to show;
 //   · one waiting for another: "Waits for S-1" — then, when S-1 is done, the baton: "Handed to dev" → "dev read it" → running;
 //   · one that cannot go on: blocked, the assignee waiting for the person, looking stuck, idle, offline or paused, or the hand-over that did
 //     not arrive (the task board is off, the notice was lost).
-// The same lines summarise the main task's "Agent activity" block, and a handoff is a row of the main task's activity ("S-1 done → handed to
-// dev to start S-2" and how far it got).
+// The same lines summarise the main task's "Agent activity" block (the whole sentence), the other states are a short label in the sub task's own
+// row (no second line), and a handoff is a row of the main task's activity ("S-1 done → handed to dev to start S-2" and how far it got).
 //
 // Nothing here is stored by the page. The state is the same inference as the card's "Running" (`runOf`, fleet-task-run.js — an agent is one
 // continuing session, so "working" says it is busy, not that it is on this very card); the hand-over's delivery is what the card read carries
@@ -36,6 +37,9 @@ register("taskflow", {
     "skip.other": "{0} was not told",
     handedAfter: "{0} done → handed to {1} to start {2}", handedReady: "{2} can start → handed to {1}", handedAssigned: "{2} handed to {1}", started: "{0} started {1}", startedNeutral: "{0} started",
     handoffLabel: "A sub task handed on", linesLabel: "What the sub tasks are doing", openCard: "Open {0}", more: "+{0} more", tipWorking: "{0} · {1}",
+    chipWaits: "Waits for {0}", chipReady: "Ready", chipBlocked: "Blocked", chipNeeds: "Waiting for you", chipStuck: "Looks stuck", chipIdle: "Idle", chipBusy: "Busy · {0} cards",
+    chipSending: "Handed to {0}", chipQueued: "Waiting", chipOffline: "{0} offline", chipPaused: "{0} paused", chipDelivered: "Delivered", chipRead: "Read",
+    chipFailed: "Not sent", chipUncertain: "Not sure it arrived", chipWithdrawn: "Withdrawn", chipNotTold: "Not told", chipUnclaimed: "Not claimed yet", chipUnclaimedLate: "Still not claimed",
   },
   "zh-TW": {
     running: "執行中", needs: "等你回應", stuck: "似乎卡住", idle: "閒置", busyN: "忙碌中（{0} 張卡）", busyTip: "{0} 同時有 {1} 張卡在進行中，目前的動作可能屬於其中另一張",
@@ -50,6 +54,9 @@ register("taskflow", {
     "skip.other": "沒有通知 {0}",
     handedAfter: "{0} 完成 → 已交給 {1} 開始 {2}", handedReady: "{2} 可以開始 → 已交給 {1}", handedAssigned: "已把 {2} 交給 {1}", started: "{0} 已開始 {1}", startedNeutral: "{0} 已開始",
     handoffLabel: "子任務的交接", linesLabel: "各子任務目前的狀況", openCard: "開啟 {0}", more: "還有 {0} 項", tipWorking: "{0} · {1}",
+    chipWaits: "等 {0}", chipReady: "可以開始", chipBlocked: "卡住了", chipNeeds: "等你回應", chipStuck: "似乎卡住", chipIdle: "閒置", chipBusy: "忙碌中（{0} 張）",
+    chipSending: "已交給 {0}", chipQueued: "等它接手", chipOffline: "{0} 離線", chipPaused: "{0} 已暫停", chipDelivered: "已送達", chipRead: "已讀",
+    chipFailed: "沒送達", chipUncertain: "不確定是否送達", chipWithdrawn: "已撤回", chipNotTold: "沒通知到", chipUnclaimed: "尚未認領", chipUnclaimedLate: "還是沒認領",
   },
 });
 
@@ -92,8 +99,8 @@ function useClock(on, ms = CLOCK_MS) {
 const turning = (line) => !!line && line.kind === "running" && !!line.unclaimed && !line.late;
 
 /**
- * A handoff in words: `{ tone, text, tip? }`, or null when there is nothing to say (the card no longer waited on it, the delivery has no
- * record any more). `tone`: `wait` (on its way), `ok` (taken), `busy` (its instance is working), `bad` (not sent), `muted` (withdrawn).
+ * A handoff in words: `{ tone, text, chip, tip? }`, or null when there is nothing to say (the card no longer waited on it, the delivery has no
+ * record any more). `chip`: the short label of the sub tasks' rows. `tone`: `wait` (on its way), `ok` (taken), `busy` (its instance is working), `bad` (not sent), `muted` (withdrawn).
  * `states`: the instances' dot states by name (`instanceStates`): offline and paused are the page's inference, as under a comment.
  */
 export function handoffText(h, states) {
@@ -101,38 +108,45 @@ export function handoffText(h, states) {
   const to = h.to;
   const state = states && states.get ? states.get(to) : undefined;
   switch (h.state) {
-    case "skipped": return h.skip === "not_waiting" ? null : { tone: "bad", text: t(`taskflow.skip.${SKIP_WORDS.has(h.skip) ? h.skip : "other"}`, to) };
-    case "failed": return { tone: "bad", text: t("taskflow.failed", to) };
-    case "uncertain": return { tone: "bad", text: t("taskflow.uncertain", to) };
-    case "withdrawn": return { tone: "muted", text: t("taskflow.withdrawn", to) };
-    case "sending": return { tone: "wait", text: t("taskflow.sending", to) };
-    case "queued": return { tone: "wait", text: t(state === "stopped" || state === "crashed" ? "taskflow.offline" : state === "paused" ? "taskflow.paused" : "taskflow.queued", to) };
+    case "skipped": return h.skip === "not_waiting" ? null : { tone: "bad", text: t(`taskflow.skip.${SKIP_WORDS.has(h.skip) ? h.skip : "other"}`, to), chip: t("taskflow.chipNotTold") };
+    case "failed": return { tone: "bad", text: t("taskflow.failed", to), chip: t("taskflow.chipFailed") };
+    case "uncertain": return { tone: "bad", text: t("taskflow.uncertain", to), chip: t("taskflow.chipUncertain") };
+    case "withdrawn": return { tone: "muted", text: t("taskflow.withdrawn", to), chip: t("taskflow.chipWithdrawn") };
+    case "sending": return { tone: "wait", text: t("taskflow.sending", to), chip: t("taskflow.chipSending", to) };
+    case "queued": {
+      const off = state === "stopped" || state === "crashed", paused = state === "paused";
+      return { tone: "wait", text: t(off ? "taskflow.offline" : paused ? "taskflow.paused" : "taskflow.queued", to), chip: off ? t("taskflow.chipOffline", to) : paused ? t("taskflow.chipPaused", to) : t("taskflow.chipQueued") };
+    }
     // (An instance that is working is not "working on this card" here: when it probably is, the card says so as a running line — `subLine`,
     // `runUnclaimed` — and when it cannot be known, the notice's own state is all that is said: never "working" beside "not started".)
-    case "delivered": case "read": return { tone: "ok", text: t(h.state === "read" ? "taskflow.read" : "taskflow.delivered", to) };
+    case "delivered": case "read": return { tone: "ok", text: t(h.state === "read" ? "taskflow.read" : "taskflow.delivered", to), chip: t(h.state === "read" ? "taskflow.chipRead" : "taskflow.chipDelivered") };
     default: return null;
   }
 }
 
-/** The one line under a sub task, or null: `{ kind, tone, text, tip?, spin?, who }` — see this file's head. `ctx`: { handoffs, states, doing, live(name) → the step line }. */
+/**
+ * What a sub task says, or null: `{ kind, tone, text, chip?, tip?, spin?, who }` — see this file's head. `text` is the whole sentence (the main task's block lists it, the
+ * row's tooltip starts with it); `chip` the short label of the row (none for a sub task that is running: its title shimmers); `tip` explains. `ctx`: { handoffs, states, doing, live(name) → the step line }.
+ */
 export function subLine(card, ctx) {
   const who = card.assignee || "";
   if (card.status === "claimed") {
     const run = who ? runOf(card, { states: ctx.states, doing: ctx.doing }) : null;
     if (!run) return null;
-    if (run.state === "working" && run.shared) return { kind: "busy", tone: "muted", who, text: `${who} · ${t("taskflow.busyN", run.shared)}`, tip: t("taskflow.busyTip", who, run.shared) };
+    if (run.state === "working" && run.shared) { const text = `${who} · ${t("taskflow.busyN", run.shared)}`; return { kind: "busy", tone: "muted", who, text, chip: t("taskflow.chipBusy", run.shared), tip: `${text}\n${t("taskflow.busyTip", who, run.shared)}` }; }
     if (run.state === "working") {
       const doing = (ctx.live && ctx.live(who)) || "";
-      return { kind: "running", tone: "busy", who, spin: true, text: `${who} · ${doing || t("taskflow.running")}`, tip: doing ? `${who} · ${doing}\n${t("taskflow.runningTip", who)}` : t("taskflow.runningTip", who) };
+      const text = `${who} · ${doing || t("taskflow.running")}`;
+      return { kind: "running", tone: "busy", who, spin: true, text, tip: `${text}\n${t("taskflow.runningTip", who)}` };
     }
-    if (run.state === "needs") return { kind: "needs", tone: "warn", who, text: `${who} · ${t("taskflow.needs")}` };
-    if (run.state === "stuck") return { kind: "stuck", tone: "bad", who, text: `${who} · ${t("taskflow.stuck")}` };
-    return { kind: "idle", tone: "muted", who, text: `${who} · ${t("taskflow.idle")}` };
+    if (run.state === "needs") return { kind: "needs", tone: "warn", who, text: `${who} · ${t("taskflow.needs")}`, chip: t("taskflow.chipNeeds") };
+    if (run.state === "stuck") return { kind: "stuck", tone: "bad", who, text: `${who} · ${t("taskflow.stuck")}`, chip: t("taskflow.chipStuck") };
+    return { kind: "idle", tone: "muted", who, text: `${who} · ${t("taskflow.idle")}`, chip: t("taskflow.chipIdle") };
   }
-  if (card.status === "blocked") return { kind: "blocked", tone: "bad", who, text: card.blockedReason ? t("taskflow.blockedOn", card.blockedReason) : t("taskflow.blocked") };
+  if (card.status === "blocked") return { kind: "blocked", tone: "bad", who, text: card.blockedReason ? t("taskflow.blockedOn", card.blockedReason) : t("taskflow.blocked"), chip: t("taskflow.chipBlocked") };
   if (card.status !== "open") return null;
-  if (waitsOn(card)) return { kind: "waiting", tone: "wait", who, text: t("taskflow.waitsFor", waitsList(card, ", ")) };
-  if (!who) return { kind: "ready", tone: "wait", who, text: t("taskflow.readyNobody") };
+  if (waitsOn(card)) { const list = waitsList(card, ", "); return { kind: "waiting", tone: "wait", who, text: t("taskflow.waitsFor", list), chip: t("taskflow.chipWaits", list) }; }
+  if (!who) return { kind: "ready", tone: "wait", who, text: t("taskflow.readyNobody"), chip: t("taskflow.chipReady") };
   const latest = latestHandoff(ctx.handoffs, card);
   // The card is still open, but its assignee is working and probably on it (it was given the card, can start, has nothing in progress): it did not
   // claim it. A running line, with the step, marked "not claimed" — and flagged once it has gone on a while.
@@ -140,12 +154,12 @@ export function subLine(card, ctx) {
     const doing = (ctx.live && ctx.live(who)) || "";
     const since = Math.max(Date.parse(latest && latest.at) || 0, Date.parse(card.handedAt) || 0, Date.parse(card.updatedAt) || 0);
     const late = since > 0 && (ctx.now || Date.now()) - since > UNCLAIMED_GRACE_MS;
-    return { kind: "running", tone: late ? "warn" : "busy", who, spin: true, unclaimed: true, late,
-      text: `${who} · ${doing || t("taskflow.running")} (${t(late ? "taskflow.unclaimedLate" : "taskflow.unclaimed")})`,
-      tip: `${doing ? `${who} · ${doing}\n` : ""}${t(late ? "taskflow.unclaimedLateTip" : "taskflow.unclaimedTip", who)}` };
+    const text = `${who} · ${doing || t("taskflow.running")} (${t(late ? "taskflow.unclaimedLate" : "taskflow.unclaimed")})`;
+    return { kind: "running", tone: late ? "warn" : "busy", who, spin: true, unclaimed: true, late, text, chip: t(late ? "taskflow.chipUnclaimedLate" : "taskflow.chipUnclaimed"),
+      tip: `${text}\n${t(late ? "taskflow.unclaimedLateTip" : "taskflow.unclaimedTip", who)}` };
   }
   const said = handoffText(latest, ctx.states);
-  return said ? { kind: "handed", who, ...said } : { kind: "ready", tone: "wait", who, text: t("taskflow.readyFor", who) };
+  return said ? { kind: "handed", who, ...said } : { kind: "ready", tone: "wait", who, text: t("taskflow.readyFor", who), chip: t("taskflow.chipReady") };
 }
 
 /** What the main task's block lists: a sub task someone is on, something that needs a person, a hand-over on its way or failed. A sub task that only waits, or is ready with no record of a hand-over, is the list's row, not the block's. */
@@ -188,7 +202,8 @@ export function startedAfter(h, detail) {
 export function batonOf(h, states, started) {
   const lead = h.why === "assigned" ? t("taskflow.handedAssigned", "", h.to, h.card)
     : h.after ? t("taskflow.handedAfter", h.after, h.to, h.card) : t("taskflow.handedReady", "", h.to, h.card);
-  const status = started ? { tone: "done", text: started.by === h.to ? t("taskflow.started", h.to, h.card) : t("taskflow.startedNeutral", h.card) } : handoffText(h, states);
+  const said = handoffText(h, states);            // (its short label is the sub tasks' rows': not here)
+  const status = started ? { tone: "done", text: started.by === h.to ? t("taskflow.started", h.to, h.card) : t("taskflow.startedNeutral", h.card) } : said && { tone: said.tone, text: said.text, ...(said.tip ? { tip: said.tip } : {}) };
   return { lead, status };
 }
 
@@ -263,18 +278,20 @@ const ICON = { wait: "clock", ok: "check", done: "check", busy: "clock", bad: "a
 
 /** One line's content: a turning ring while it is running, an icon otherwise, then the words (the whole text in the tooltip). */
 export function LineBody({ line }) {
-  return html`${line.spin ? html`<span class="out-spin tf-spin" aria-hidden="true"></span>` : html`<${Icon} name=${line.kind === "handed" ? "forward" : ICON[line.tone] || "info"} size=${13} />`}<span class="tf-text">${line.text}</span>`;
+  return html`${line.spin ? html`<span class="out-spin tf-spin" aria-hidden="true"></span>` : html`<${Icon} name=${line.kind === "handed" ? "forward" : ICON[line.tone] || "info"} size=${13} />`}<span class="tf-says">${line.text}</span>`;
 }
 
-/** The line under a sub task in the list (inside the row's button: the whole row opens the card). */
-export function SubLine({ line }) {
-  if (!line) return null;
-  return html`<span class=${`tc-child-line tf-${line.tone} tf-k-${line.kind}`} title=${line.tip || line.text} data-line=${line.kind}><${LineBody} line=${line} /></span>`;
+/** The short label beside a sub task's title (inside the row's button: the whole row opens the card); the whole sentence is the row's tooltip. */
+export function RowChip({ line }) {
+  if (!line || !line.chip) return null;
+  return html`<span class=${`tf-chip tf-${line.tone}`}>${line.chip}</span>`;
 }
 
 /**
- * The sub tasks list: a row each of status, number, title and who — and, under it, what is happening now (one line). While a sub task is
- * running and steps are offered, the page holds its instance's feed (`FeedWatch`). `children`: the card read's sub tasks; `handoffs`: the card read's.
+ * The sub tasks list: a row each of status, number, title and who. What is happening is in the row — no second line: a sub task its agent is running
+ * has its title shimmer (still with reduced motion; the row is tinted as a running board row is), any other state is a short label beside the title, and the
+ * whole sentence (with the step, for an admin whose agent has tool progress on) is the row's tooltip. While a sub task is running and steps are offered,
+ * the page holds its instance's feed (`FeedWatch`) — the main task's "Agent activity" block shows the steps. `children`: the card read's sub tasks; `handoffs`: the card read's.
  */
 export function SubRows({ children, handoffs, doing, ready = null, onOpen }) {
   useStore(appStore);
@@ -283,9 +300,12 @@ export function SubRows({ children, handoffs, doing, ready = null, onOpen }) {
   const lines = children.map((c) => subLine(c, ctx));
   useClock(lines.some(turning));
   return html`<${FeedWatch} names=${watchedNames(children, ctx)} />
-    <ul class="tc-children">${children.map((c, i) => html`<li key=${c.id}><button type="button" onClick=${() => onOpen(c.id)}>
-      <${StatusPill} status=${c.status} card=${c} /><span class="tb-code">${c.id}</span><span class="tc-child-title">${c.title}</span><span class="tb-who">${c.assignee || ""}</span>
-      <${SubLine} line=${lines[i]} /></button></li>`)}</ul>`;
+    <ul class="tc-children">${children.map((c, i) => {
+      const line = lines[i], running = !!line && line.kind === "running";
+      return html`<li key=${c.id}><button type="button" class=${running ? "is-running" : undefined} title=${line ? line.tip || line.text : undefined} data-line=${line ? line.kind : undefined} onClick=${() => onOpen(c.id)}>
+      <${StatusPill} status=${c.status} card=${c} /><span class="tb-code">${c.id}</span>
+      <span class="tc-child-title"><span class=${running ? "tf-shimmer" : undefined}>${c.title}</span><${RowChip} line=${line} /></span><span class="tb-who">${c.assignee || ""}</span></button></li>`;
+    })}</ul>`;
 }
 
 /** The main task's "Agent activity" lines: one per sub task that has something going on, the sub task's number opens it. */
@@ -297,7 +317,7 @@ export function FlowLines({ subs, handoffs, doing, ready = null, onOpen }) {
   if (!lines.length) return null;
   return html`<ul class="tf-lines" aria-label=${t("taskflow.linesLabel")}>${lines.map(({ card, line }) => html`<li key=${card.id} class=${`tf-item tf-${line.tone} tf-k-${line.kind}`} title=${line.tip || line.text}>
     <${LineBody} line=${line} /><button type="button" class="tb-link tb-code tf-card" title=${t("taskflow.openCard", card.id)} onClick=${() => onOpen(card.id)}>${card.id}</button></li>`)}
-    ${more ? html`<li class="tf-more muted">${t("taskflow.more", more)}</li>` : null}</ul>`;
+    ${more ? html`<li class="tf-extra muted">${t("taskflow.more", more)}</li>` : null}</ul>`;
 }
 
 /** Whether the main task has lines to show, for its block to open (the block itself draws `FlowLines`). */

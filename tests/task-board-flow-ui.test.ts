@@ -5,9 +5,9 @@
  *   1. What a line says (pure): a sub task being worked on, busy with several cards, waiting for the person, looking stuck, idle, blocked;
  *      waiting for another; ready and handed on — sending, taken, read, offline, paused, failed, not sent (and why); the summary the main task's
  *      block lists; a handoff as the activity stream says it; the step line of the chat's own feed.
- *   2. The main task's page: a turning ring and the current step on the sub task that runs (the state alone when steps are not offered,
- *      tool progress is off, or the viewer is not an admin), the same in the "Agent activity" block and as "Running" beside the status; the board's
- *      tile says it too. Waiting, handed on, read, offline, failed, blocked, idle — each its own line.
+ *   2. The main task's page: the title of the sub task that runs shimmers (its tooltip says what the agent is doing — the state alone when steps are
+ *      not offered, tool progress is off, or the viewer is not an admin), the "Agent activity" block lists the same with a turning ring, and "Running" sits
+ *      beside the status; the board's tile says it too. Waiting, handed on, read, offline, failed, blocked, idle — each a short label in its row.
  *   3. The activity: the sub tasks' moves, and each handoff as a row that is not folded away; none for a session that cannot write.
  *   4. Live: the stream's ping reads the card again, a notice on its way is read again by itself, steps move as the feed does.
  *   5. Both languages; the sub task's own page says where its hand-over stands.
@@ -18,6 +18,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { ClaudeStepParser, type LogStep } from "../src/log-steps.js";
 import { page, settle, h, type AppPage } from "./helpers/app-harness.js";
 import { fire } from "./helpers/mini-dom.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 let p: AppPage;
 let app: any, nav: any, fleet: any, flow: any, run: any, act: any, activity: any, i18n: any;
@@ -39,7 +41,8 @@ const fetchFake = async (path: string, o: any = {}) => {
   return { ok: status < 400, status, json: async () => out };
 };
 
-const NOW = Date.now();
+const REAL_NOW = Date.now();
+let NOW = REAL_NOW;
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
 const MIN = 60_000, HOUR = 3_600_000;
 const card = (over: Record<string, unknown>) => ({ id: "M-1", uuid: String(over.id ?? "M-1"), kind: "main", projectId: 1, parentId: null, title: "A card", status: "open",
@@ -62,11 +65,11 @@ function plan(s2: Record<string, unknown> = {}, s3: Record<string, unknown> = {}
   CARDS = [main, ...subs];
   setDetails();
 }
-const history = [{ id: 1, actor: "Ann", actorKind: "person", type: "created", data: {}, at: ago(3 * HOUR) }];
+const history = () => [{ id: 1, actor: "Ann", actorKind: "person", type: "created", data: {}, at: ago(3 * HOUR) }];
 function setDetails(extra: { main?: Record<string, unknown>; sub?: Record<string, Record<string, unknown>> } = {}) {
   DETAILS = {
-    "M-2": { card: main, parent: null, children: [S1, S2, S3], comments: [], logs: [], history, subEvents: [], viewer: ANN, watchers: [], inheritedWatchers: [], leader: null, ...extra.main },
-    ...Object.fromEntries([S1, S2, S3].map((c) => [c.id, { card: c, parent: { id: "M-2", title: main.title, status: main.status }, children: [], comments: [], logs: [], history, viewer: ANN, watchers: [], inheritedWatchers: [], leader: null, ...(extra.sub ?? {})[c.id] }])),
+    "M-2": { card: main, parent: null, children: [S1, S2, S3], comments: [], logs: [], history: history(), subEvents: [], viewer: ANN, watchers: [], inheritedWatchers: [], leader: null, ...extra.main },
+    ...Object.fromEntries([S1, S2, S3].map((c) => [c.id, { card: c, parent: { id: "M-2", title: main.title, status: main.status }, children: [], comments: [], logs: [], history: history(), viewer: ANN, watchers: [], inheritedWatchers: [], leader: null, ...(extra.sub ?? {})[c.id] }])),
   };
 }
 const ho = (card: string, to: string, state: string, extra: Record<string, unknown> = {}) => ({ id: Math.floor(Math.random() * 1e6), card, to, why: "ready", after: "S-1", at: ago(2 * MIN), state, ...extra });
@@ -133,7 +136,14 @@ async function open(card = "M-2", storage: Record<string, string> = { agend_task
   fire(q(`[data-tile="${card}"] .tb-tile-title`), "click"); await settle(12);
 }
 const rowOf = (id: string) => qa(".tp-subs .tc-children li").find((li) => text(li)!.includes(` ${id} `) || text(li)!.includes(` ${id}`) && text(li)!.split(" ").includes(id));
-const lineOf = (id: string) => { const row = rowOf(id); const el = row && row.querySelector(".tc-child-line"); return el ? text(el) : null; };
+const btnOf = (id: string) => rowOf(id)?.querySelector("button");
+/** What the row says in full: the first line of its tooltip (the rest explains it). Null when the row says nothing. */
+const lineOf = (id: string) => { const t = btnOf(id)?.getAttribute("title"); return t ? t.split("\n")[0]! : null; };
+/** The short label beside a row's title, or null. */
+const chipOf = (id: string) => { const el = rowOf(id)?.querySelector(".tf-chip"); return el ? text(el) : null; };
+const chipEl = (id: string) => rowOf(id)!.querySelector(".tf-chip");
+/** Whether the row's agent is running it: its title shimmers and the row is tinted. */
+const shimmers = (id: string) => !!rowOf(id)?.querySelector(".tf-shimmer") && btnOf(id)!.className.includes("is-running");
 const block = () => q(".tr-run");
 
 // ── 1. What a line says (pure) ─────────────────────────────────────────────────────────────────────────────
@@ -254,14 +264,17 @@ describe("1. what a line says", () => {
 // ── 2. The main task's page ────────────────────────────────────────────────────────────────────────────────
 
 describe("2. the main task's page: who is really working", () => {
-  it("a sub task whose agent is working: a turning ring and the state, in its row, in the block and beside the status; the others say where they stand", async () => {
+  it("a sub task whose agent is working: its title shimmers (the state is the row's tooltip), the block lists it with a turning ring and Running sits beside the status; the others say where they stand", async () => {
     fleetIs({ ...EVERYONE, "game-dev": "working" });
     await open();
     expect(lineOf("S-1"), "done: nothing").toBeNull();
     expect(lineOf("S-2")).toBe("game-dev · Running");
-    expect(rowOf("S-2")!.querySelector(".tc-child-line .out-spin"), "the shared turning ring").toBeTruthy();
+    expect(shimmers("S-2"), "the title shimmers").toBe(true);
+    expect(chipOf("S-2"), "a running row has no label: the shimmer says it").toBeNull();
     expect(lineOf("S-3")).toBe("Waits for S-2");
-    expect(rowOf("S-3")!.querySelector(".out-spin")).toBeNull();
+    expect(chipOf("S-3")).toBe("Waits for S-2");
+    expect(shimmers("S-3")).toBe(false);
+    expect(rowOf("S-2")!.querySelector(".tc-child-line, .out-spin"), "no second line, no ring in the row").toBeNull();
     expect(text(q(".tp-idrow .tr-mark")), "beside the status, as on the board").toBe("Running");
     expect(block().className).not.toContain("is-strip");
     expect(text(block().querySelector(".tf-lines"))).toBe("game-dev · Running S-2");
@@ -277,13 +290,15 @@ describe("2. the main task's page: who is really working", () => {
     expect(text(q('[data-tile="M-2"] .tr-mark'))).toBe("Running");
   });
 
-  it("with steps offered (an admin, tool progress on): the line says what the agent is doing, in the row and in the block — read once, for the instance that runs", async () => {
+  it("with steps offered (an admin, tool progress on): the step is the row's tooltip and the block's line, and not a second line under the row — read once, for the instance that runs", async () => {
     doc().body.dataset.chatActivity = "1";
     steps = feedAnswer("game-dev");
     fleetIs({ ...EVERYONE, "game-dev": "working" });
     await open();
     await settle(14);
     expect(lineOf("S-2")).toMatch(/^game-dev · .*game\.js/);
+    expect(text(rowOf("S-2")), "the row itself does not repeat the step: the block above lists it").not.toContain("game.js");
+    expect(shimmers("S-2")).toBe(true);
     expect(text(block().querySelector(".tf-lines"))).toMatch(/^game-dev · .*game\.js S-2$/);
     const reads = calls.filter((c) => c.path.startsWith("/ui/steps"));
     expect(reads.length).toBeGreaterThan(0);
@@ -329,23 +344,23 @@ describe("2. the main task's page: who is really working", () => {
     expect(q(".tp-idrow .tr-mark"), "idle is not running").toBeNull();
     fleetIs({ ...EVERYONE, "game-dev": "awaiting_input" }); await settle(8);
     expect(lineOf("S-2")).toBe("game-dev · waiting for you");
-    expect(rowOf("S-2")!.querySelector(".tc-child-line").className).toContain("tf-warn");
+    expect(chipEl("S-2")!.className).toContain("tf-warn");
     expect(text(q(".tp-idrow .tr-mark"))).toBe("Needs you");
     fleetIs({ ...EVERYONE, "game-dev": "stuck" }); await settle(8);
     expect(lineOf("S-2")).toBe("game-dev · looks stuck");
-    expect(rowOf("S-2")!.querySelector(".tc-child-line").className).toContain("tf-bad");
+    expect(chipEl("S-2")!.className).toContain("tf-bad");
     CARDS = [...CARDS, sub("S-9", { status: "claimed", assignee: "game-dev", title: "Another" })]; DETAILS["M-2"].children = [S1, S2, S3, CARDS.at(-1)];
     fleetIs({ ...EVERYONE, "game-dev": "working" });
     await open();
     expect(lineOf("S-2")).toBe("game-dev · busy with 2 cards");
-    expect(rowOf("S-2")!.querySelector(".out-spin"), "not called running: no ring").toBeNull();
+    expect(shimmers("S-2"), "not called running: no shimmer").toBe(false);
   });
 
   it("a blocked sub task says why, in the danger colour", async () => {
     plan({ status: "blocked", blockedReason: "needs the API key" });
     await open();
     expect(lineOf("S-2")).toBe("Blocked: needs the API key");
-    expect(rowOf("S-2")!.querySelector(".tc-child-line").className).toContain("tf-bad");
+    expect(chipEl("S-2")!.className).toContain("tf-bad");
     expect(text(block().querySelector(".tf-lines"))).toContain("Blocked: needs the API key");
   });
 
@@ -366,7 +381,7 @@ describe("2b. the baton: S-1 done, S-2 handed on", () => {
     handed("sending");
     await open();
     expect(lineOf("S-2")).toBe("Handed to game-dev");
-    expect(rowOf("S-2")!.querySelector(".tc-child-line").className).toContain("tf-k-handed");
+    expect(btnOf("S-2")!.getAttribute("data-line")).toBe("handed");
     expect(text(block().querySelector(".tf-lines"))).toBe("Handed to game-dev S-2");
     handed("read"); emit("task_wakes", { ids: ["M-2"] });
     await new Promise((r) => setTimeout(r, 400)); await settle(10);
@@ -385,7 +400,7 @@ describe("2b. the baton: S-1 done, S-2 handed on", () => {
       handed(state, skip ? { skip } : {});
       await open();
       expect([state, skip, lineOf("S-2")]).toEqual([state, skip, want]);
-      expect(rowOf("S-2")!.querySelector(".tc-child-line").className).toContain("tf-bad");
+      expect(chipEl("S-2")!.className).toContain("tf-bad");
     }
   });
 
@@ -412,6 +427,12 @@ describe("2b. the baton: S-1 done, S-2 handed on", () => {
 // ── 3. The activity ────────────────────────────────────────────────────────────────────────────────────────
 
 describe("3. the main task's activity", () => {
+  // The stream draws a day separator when its lines span two calendar days, and a run of history lines never crosses it. The tests run in
+  // UTC, so with "now" taken from the clock the card's "created 3 hours ago" line falls on yesterday between 00:00 and 03:00 and splits a run:
+  // pin the clock to the middle of a day.
+  beforeEach(() => { NOW = REAL_NOW - (REAL_NOW % (24 * HOUR)) + 12 * HOUR; vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(NOW); });
+  afterEach(() => { NOW = REAL_NOW; });
+
   const events = () => [mv(1, "S-1", "game-designer", "open", "claimed", 40 * MIN), mv(2, "S-1", "game-designer", "claimed", "done", 10 * MIN), mv(3, "S-2", "game-dev", "open", "claimed", 3 * MIN)];
 
   it("the sub tasks' moves are lines of the activity, with the sub task's number; a handoff is a row of its own that is not folded away", async () => {
@@ -486,7 +507,7 @@ describe("3. the main task's activity", () => {
     plan({ status: "open", unmetDeps: [], assignee: nasty }, { status: "open", unmetDeps: ["S-2"] });
     setDetails({ main: { handoffs: [ho("S-2", nasty, "read")], subEvents: [] } });
     await open();
-    expect(qa(".tl-baton img, .tc-child-line img, .tf-lines img")).toHaveLength(0);
+    expect(qa(".tl-baton img, .tc-children img, .tf-lines img")).toHaveLength(0);
     expect(text(q(".tl-baton .tl-sentence"))).toContain(nasty);
   });
 });
@@ -535,7 +556,7 @@ describe("4. live", () => {
     expect(lineOf("S-2")).toMatch(/npm test/);
     fleetIs({ ...EVERYONE, "game-dev": "idle" }); await settle(8);
     expect(lineOf("S-2")).toBe("game-dev · idle");
-    expect(rowOf("S-2")!.querySelector(".out-spin")).toBeNull();
+    expect(shimmers("S-2")).toBe(false);
   });
 });
 
@@ -675,7 +696,7 @@ describe("4b. working on a card it has not claimed (the owner's survivor-dev: tw
     fleetIs({ ...EVERYONE, "game-dev": "working" });
     await open();
     expect(lineOf("S-2")).toBe("game-dev · Running (not claimed yet)");
-    expect(rowOf("S-2")!.querySelector(".tc-child-line .out-spin"), "a turning ring").toBeTruthy();
+    expect(shimmers("S-2"), "the title shimmers").toBe(true);
     expect(text(block().querySelector(".tf-lines"))).toBe("game-dev · Running (not claimed yet) S-2");
     expect(block().querySelector(".tf-lines .out-spin")).toBeTruthy();
     expect(text(q(".tl-baton .tl-wake")), "the handoff row").toBe("game-dev · Running (not claimed yet)");
@@ -733,9 +754,9 @@ describe("4b. working on a card it has not claimed (the owner's survivor-dev: tw
     fleetIs({ ...EVERYONE, "game-dev": "working" });
     await open();
     expect(lineOf("S-2")).toBe("game-dev · Running (still not claimed)");
-    expect(rowOf("S-2")!.querySelector(".tc-child-line").className).toContain("tf-warn");
+    expect(chipEl("S-2")!.className).toContain("tf-warn");
     expect(q(".tl-baton .tl-wake").className).toContain("wk-warn");
-    expect(rowOf("S-2")!.querySelector(".tc-child-line").getAttribute("title")).toContain("Ask it to claim it");
+    expect(btnOf("S-2")!.getAttribute("title")).toContain("Ask it to claim it");
     expect(calls.filter((c) => c.method === "POST"), "nothing moved the card").toEqual([]);
   });
 
@@ -751,7 +772,7 @@ describe("4b. working on a card it has not claimed (the owner's survivor-dev: tw
     expect(lineOf("S-2"), "90 s on the dot: not past it yet").toBe("game-dev · Running (not claimed yet)");
     await vi.advanceTimersByTimeAsync(31_000); await settle(6);
     expect(lineOf("S-2"), "past 90 s: flagged on the next look, with no store change and no click").toBe("game-dev · Running (still not claimed)");
-    expect(rowOf("S-2")!.querySelector(".tc-child-line").className).toContain("tf-warn");
+    expect(chipEl("S-2")!.className).toContain("tf-warn");
     expect(q(".tl-baton .tl-wake").className).toContain("wk-warn");
     const flagged = vi.getTimerCount();
     expect(flagged, "flagged: nothing left to turn, the clocks are gone").toBeLessThan(withClock);
@@ -773,7 +794,7 @@ describe("4b. working on a card it has not claimed (the owner's survivor-dev: tw
     emit("tasks", { rev: 2, ids: ["M-2"] });
     await open();
     expect(lineOf("S-2")).toBe("game-dev · Running");
-    expect(rowOf("S-2")!.querySelector(".out-spin")).toBeTruthy();
+    expect(shimmers("S-2")).toBe(true);
     expect(text(q(".tp-idrow .tr-mark"))).toBe("Running");
     expect(text(q(".tl-baton .tl-wake")), "started: the handoff row says who started it").toBe("game-dev started S-2");
     unclaimed();
@@ -850,3 +871,102 @@ describe("5. both languages", () => {
 
 // keep the imports honest: the modules the page is made of
 void run; void activity;
+
+// ── 6. A sub task's row says it itself ─────────────────────────────────────────────────────────────────────
+
+describe("6. a sub task's row: a shimmering title or a short label — no second line, and the step is not drawn twice", () => {
+  const css = readFileSync(fileURLToPath(new URL("../src/ui/shared/task-board.css", import.meta.url)), "utf8");
+  const rule = (sel: string) => { const m = new RegExp(`(?:^|\\n)\\s*${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{([^}]*)\\}`).exec(css); return m ? m[1]!.replace(/\s+/g, " ").trim() : null; };
+
+  it("a row is the status, the number, the title (with its label) and who: nothing is added to it, whatever the state", async () => {
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await open();
+    for (const id of ["S-1", "S-2", "S-3"]) expect([...btnOf(id)!.children].map((c: any) => c.className.split(" ")[0]), id).toEqual(["tb-pill", "tb-code", "tc-child-title", "tb-who"]);
+    expect(qa(".tp-subs .tc-child-line, .tp-subs .tc-children .out-spin")).toHaveLength(0);
+  });
+
+  it("the labels: each state of a sub task has a short one, the sentence is the tooltip, and a running row has none", async () => {
+    const chips: Array<[string, () => Promise<void> | void, string | null, string]> = [
+      ["waiting", () => { fleetIs(EVERYONE); }, "Waits for S-2", "Waits for S-2"],
+      ["idle", () => { fleetIs(EVERYONE); }, "Idle", "game-dev · idle"],
+      ["needs you", () => { fleetIs({ ...EVERYONE, "game-dev": "awaiting_input" }); }, "Waiting for you", "game-dev · waiting for you"],
+      ["stuck", () => { fleetIs({ ...EVERYONE, "game-dev": "stuck" }); }, "Looks stuck", "game-dev · looks stuck"],
+      ["running", () => { fleetIs({ ...EVERYONE, "game-dev": "working" }); }, null, "game-dev · Running"],
+    ];
+    for (const [name, set, chip, sentence] of chips) {
+      plan({ status: "claimed" });
+      set();
+      await open();
+      const id = name === "waiting" ? "S-3" : "S-2";
+      expect([name, chipOf(id), lineOf(id)]).toEqual([name, chip, sentence]);
+    }
+    plan({ status: "blocked", blockedReason: "needs the API key" }); await open();
+    expect([chipOf("S-2"), lineOf("S-2")]).toEqual(["Blocked", "Blocked: needs the API key"]);
+    plan({ status: "open", unmetDeps: [], assignee: "game-dev" }, { status: "open", unmetDeps: ["S-2"] }); await open();
+    expect([chipOf("S-2"), lineOf("S-2")]).toEqual(["Ready", "Ready — game-dev has not started it yet"]);
+    plan({ status: "claimed" }); CARDS = [...CARDS, sub("S-9", { status: "claimed", assignee: "game-dev", title: "Another" })]; DETAILS["M-2"].children = [S1, S2, S3, CARDS.at(-1)];
+    fleetIs({ ...EVERYONE, "game-dev": "working" }); await open();
+    expect([chipOf("S-2"), lineOf("S-2"), shimmers("S-2")]).toEqual(["Busy · 2 cards", "game-dev · busy with 2 cards", false]);
+  });
+
+  it("the hand-over: its label says how far it got, and the sentence is the tooltip", async () => {
+    const handed = (state: string, extra: Record<string, unknown> = {}) => { plan({ status: "open", unmetDeps: [], assignee: "game-dev" }, { status: "open", unmetDeps: ["S-2"] }); setDetails({ main: { handoffs: [ho("S-2", "game-dev", state, extra)], subEvents: [] } }); };
+    const cases: Array<[string, Record<string, unknown>, string, string, string]> = [
+      ["sending", {}, "Handed to game-dev", "Handed to game-dev", "tf-wait"],
+      ["delivered", {}, "Delivered", "Delivered to game-dev — waiting for it to start", "tf-ok"],
+      ["read", {}, "Read", "game-dev read it — waiting for it to start", "tf-ok"],
+      ["failed", {}, "Not sent", "Could not hand it to game-dev", "tf-bad"],
+      ["uncertain", {}, "Not sure it arrived", "Not sure game-dev got it", "tf-bad"],
+      ["skipped", { skip: "board_off" }, "Not told", "game-dev's task board is off, so it was not told", "tf-bad"],
+      ["withdrawn", {}, "Withdrawn", "The notice to game-dev was withdrawn: the card changed again, and game-dev hears its new state", "tf-muted"],
+    ];
+    for (const [state, extra, chip, sentence, tone] of cases) {
+      handed(state, extra); fleetIs(EVERYONE); await open();
+      expect([state, chipOf("S-2"), lineOf("S-2")]).toEqual([state, chip, sentence]);
+      expect(chipEl("S-2")!.className, state).toContain(tone);
+    }
+    handed("queued"); fleetIs({ ...EVERYONE, "game-dev": "stopped" }); await open();
+    expect([chipOf("S-2"), lineOf("S-2")]).toEqual(["game-dev offline", "game-dev is offline — it gets this when it is back"]);
+    fleetIs({ ...EVERYONE, "game-dev": "paused" }); await settle(8);
+    expect(chipOf("S-2")).toBe("game-dev paused");
+    fleetIs(EVERYONE); await settle(8);
+    expect(chipOf("S-2")).toBe("Waiting");
+  });
+
+  it("an agent working on a card it has not claimed: the title shimmers and the label says so, and flags itself when it goes on", async () => {
+    fleetIs({ ...EVERYONE, "game-dev": "working" });
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    vi.setSystemTime(NOW);
+    plan({ status: "open", unmetDeps: [], assignee: "game-dev", updatedAt: ago(HOUR), handedAt: new Date(NOW - 60_000).toISOString() }, { status: "open", unmetDeps: ["S-2"] });
+    setDetails({ main: { handoffs: [ho("S-2", "game-dev", "read", { at: new Date(NOW - 60_000).toISOString() })], subEvents: [] } });
+    await open();
+    expect([shimmers("S-2"), chipOf("S-2")]).toEqual([true, "Not claimed yet"]);
+    expect(chipEl("S-2")!.className).toContain("tf-busy");
+    await vi.advanceTimersByTimeAsync(60_000); await settle(6);
+    expect([shimmers("S-2"), chipOf("S-2")]).toEqual([true, "Still not claimed"]);
+    expect(chipEl("S-2")!.className).toContain("tf-warn");
+  });
+
+  it("zh-TW: the labels and the tooltips are in the page's language", async () => {
+    i18n.setLang("zh-TW", { store: false });
+    plan({ status: "claimed" }); fleetIs({ ...EVERYONE, "game-dev": "working" });
+    await open();
+    expect([chipOf("S-2"), lineOf("S-2"), shimmers("S-2")]).toEqual([null, "game-dev · 執行中", true]);
+    expect([chipOf("S-3"), lineOf("S-3")]).toEqual(["等 S-2", "等 S-2"]);
+  });
+
+  it("the shimmer is in the page's own colours, moves only when motion is allowed, and the row is tinted either way", () => {
+    expect(css).toContain("@keyframes tf-shimmer");
+    const at = css.indexOf("@media (prefers-reduced-motion: no-preference) {\n  @supports");
+    expect(at, "the sweep is inside prefers-reduced-motion: no-preference").toBeGreaterThan(0);
+    const block = css.slice(at, css.indexOf("\n}\n", css.indexOf(".tf-shimmer", at)) + 3);
+    expect(block).toMatch(/animation: tf-shimmer/);
+    expect(block, "tokens only").not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/);
+    expect(block).toMatch(/var\(--text\)/);
+    expect(block).toMatch(/var\(--accent\)/);
+    expect(rule(".tp-subs .tc-children button.is-running"), "the tint is outside the media query: still with reduced motion").toMatch(/background: color-mix\(in srgb, var\(--accent\) 6%, transparent\)/);
+    expect(css.slice(0, at).includes(".tf-shimmer {"), "nothing animates outside the media query").toBe(false);
+    expect(rule(".tf-chip")).toMatch(/border-radius: var\(--r-full\)/);
+    expect(rule(".tf-chip"), "tokens only").not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/);
+  });
+});
