@@ -161,18 +161,19 @@ export function unreadFor(db: Database.Database, person: Reader, waiting: readon
     note(w.uuid, w.status, move.at, move.actor);
   }
 
-  // A main task that finished by itself since they last looked: its last move is the board's own (`auto`), to done, by someone else.
+  // A main task that finished by itself since they last looked: its last move is the board's own (`auto`), to done, by someone else
+  // (the person's mark and the window, as the comments above).
   const finished = db.prepare(`
     SELECT t.id AS uuid, e.id, e.at, e.actor, e.actor_kind, e.data
     FROM tasks t
     JOIN task_events e ON e.task_id = t.id AND e.id = (SELECT MAX(id) FROM task_events WHERE task_id = t.id AND type = 'moved')
     LEFT JOIN task_card_reads r ON r.person = ? AND r.task_id = t.id
     WHERE t.kind = 'main' AND t.status = 'done' AND e.id > ? AND e.id > COALESCE(r.seen_event, 0) AND e.at >= ?`)
-    .all(person, floor.event, new Date(Date.parse(now) - UNREAD_WINDOW_DAYS * 86_400_000).toISOString()) as Array<{ uuid: string; id: number; at: string; actor: string; actor_kind: string; data: string }>;
+    .all(mark, floor.event, since) as Array<{ uuid: string; id: number; at: string; actor: string; actor_kind: string; data: string }>;
   for (const e of finished) {
     let d: { to?: unknown; auto?: unknown };
     try { d = JSON.parse(e.data) as typeof d; } catch { continue; }
-    if (d.to !== "done" || d.auto !== true || e.actor_kind === "system" || isThem(person, e.actor, e.actor_kind)) continue;
+    if (d.to !== "done" || d.auto !== true || e.actor_kind === "system" || isThem(person, e.actor, e.actor_kind, null)) continue;
     note(e.uuid, "finished", e.at, e.actor);
   }
 
