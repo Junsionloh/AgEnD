@@ -26229,8 +26229,12 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       changedAt: (uuid) => db.board.lastChangeAt(uuid),
       // The comment status: what became of a card's news for an instance — handed to delivery (its key), or not sent — is kept with
       // the comments it carried, and the open card pages read it again (the card numbers only: never who or why).
-      settled: ({ uuid, instance, key, skip }) => {
-        const touched = key ? db.board.wakeHanded(uuid, instance, key) : skip ? db.board.wakeDropped(uuid, instance, skip) : [];
+      // A card's news that handed it to the instance to start is kept the same way (the handoffs under its main task's activity, "Handoffs").
+      settled: ({ uuid, instance, kind, key, skip }) => {
+        const board = db.board;
+        const touched = kind === "handoff"
+          ? (key ? board.handoffHanded(uuid, instance, key) : skip ? board.handoffDropped(uuid, instance, skip) : [])
+          : (key ? board.wakeHanded(uuid, instance, key) : skip ? board.wakeDropped(uuid, instance, skip) : []);
         this.emitTaskWakes(touched);
       },
       holds: (wake) => db.board.wakeHolds(wake),
@@ -26271,7 +26275,16 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     const key = outbox.get(deliveryId)?.sourceKey ?? "";
     const uuids = cardsOfKey(key);
     if (!uuids.length) return;
-    this.emitTaskWakes(uuids.map((u) => board.findCard(u)?.code).filter((c): c is string => !!c));
+    // The cards the notice names, and their main tasks: a main task's page lists the handoffs of its sub tasks.
+    const codes = new Set<string>();
+    for (const u of uuids) {
+      const card = board.findCard(u);
+      if (!card) continue;
+      codes.add(card.code);
+      const main = card.parent ? board.findCard(card.parent) : undefined;
+      if (main) codes.add(main.code);
+    }
+    this.emitTaskWakes([...codes]);
   }
 
   /** How far the notices carrying comments (the task board's) got in the delivery outbox, by their keys (the card page's comment status). */
