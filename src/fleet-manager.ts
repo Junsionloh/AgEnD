@@ -27864,14 +27864,16 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
   /**
    * What the person is told of a main task (docs/design/task-board.md, "The person is told"): it finished by itself because nobody had to
    * confirm it, or it went to review for them. On a web-only fleet that is a Notice (`task`, with the card to open); on a chat fleet it
-   * is said in General, as the daily summary is. A card that waits for them is left to Needs you where the fleet asked for it there
-   * (needs_you.task_board), which lists it with its buttons.
+   * is said in General, as the daily summary is. A card that waits for them is left to Needs you wherever the fleet asked for it there
+   * (needs_you.task_board, web-only or chat: the web Needs you page lists it as well), which lists it with its buttons: it is not said
+   * twice. Not throttled (notifyFleetError's `throttle: false`): each notice is its own card's, and a main task is one per many sub tasks,
+   * so many finishing at once is not a flood.
    */
   private tellPersonTaskNews(news: readonly PersonNews[]): void {
     const web = !!this.webOnlyPromptPlace();
     for (const n of news) {
       try {
-        if (n.kind === "review" && !web && this.fleetConfig?.needs_you?.task_board === true) continue;
+        if (n.kind === "review" && this.fleetConfig?.needs_you?.task_board === true) continue;
         const text = this.taskNewsText(n);
         if (web) this.recordWebNotice("task", text, n.assignee ?? undefined, n.code);
         else this.notifyFleetError(`${text}${t("tasks.news_sep")}${t("tasks.news_open")}`, { throttle: false });
