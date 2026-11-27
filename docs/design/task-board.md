@@ -65,9 +65,10 @@ or the board itself.
   the confirmation: the card keeps an instance dispatcher (or none), so its sub tasks are still handed out, blocked
   questions answered and confirmed by the instance that opened them, a blocked main task is still no question for the person, and
   nobody is woken to confirm it (`to_confirm`, `confirm_own`) — its owner still gets the wrap-up notice. An agent cannot clear its
-  review (`personReviews`, like `personConfirms` for one the person handed out), nor take the mark off; the person can turn the
+  review (`personReviews`, like `personConfirms` for one the person handed out), nor take the mark off, and cannot cancel it while it waits in
+  review (`checkNotWaitingForPerson`: that would take it out of the person's queue; before review its opener may cancel it as ever); the person can turn the
   review off on the card (it then finishes by itself) and on again. A card keeps what it was opened with when the switch is
-  turned off, and one opened before it is not touched. A main task the person opens, a sub task and the task tool's plain
+  turned off, and one opened before it is turned on is never touched (the switch is not retroactive). A main task the person opens, a sub task and the task tool's plain
   tasks are not marked.
 - **Main tasks follow their sub tasks.** With sub tasks (not cancelled), a main task is `open` until one starts,
   `claimed` while they run, and `review` (or `done`, when it skips review) when all are done. An instance moves the
