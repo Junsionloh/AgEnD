@@ -43,12 +43,16 @@ export function interopState(host: WslHost): "on" | "off" | "unknown" {
 /** Where Windows keeps its PowerShell, under a mounted drive. WSL's own PATH spells the folder `windows`; drvfs ignores case, a case-sensitive mount does not. */
 const SYSTEM_POWERSHELL_DIRS = ["Windows", "windows", "WINDOWS"].map(dir => `${dir}/System32/WindowsPowerShell/v1.0/powershell.exe`);
 
-/** Windows PowerShell: on PATH (interop appends Windows' PATH), else where Windows keeps it on a mounted drive. */
-export function findPowershell(host: WslHost): string | null {
+/**
+ * Windows PowerShell: on PATH (interop appends Windows' PATH), else where Windows keeps it on a mounted drive. `drives`:
+ * which `/mnt/<drive>` to look under — `agend shortcuts` (a one-off CLI) tries c, d and e; the daemon's bridge only c, since
+ * a stat on an offline network drive can hold the event loop for seconds (a drive mounted elsewhere is `wslpath`'s job).
+ */
+export function findPowershell(host: WslHost, drives: readonly string[] = ["c", "d", "e"]): string | null {
   for (const dir of (host.env.PATH ?? "").split(delimiter)) {
     if (dir && host.exists(join(dir, "powershell.exe"))) return join(dir, "powershell.exe");
   }
-  for (const drive of ["c", "d", "e"]) {
+  for (const drive of drives) {
     for (const rel of SYSTEM_POWERSHELL_DIRS) {
       const path = `/mnt/${drive}/${rel}`;
       if (host.exists(path)) return path;
@@ -60,6 +64,8 @@ export function findPowershell(host: WslHost): string | null {
 /**
  * A container (Docker, Podman). Docker Desktop's containers run on WSL2's own kernel, so `osrelease` says Microsoft in them
  * too — but they have no WSL_DISTRO_NAME, no /mnt/c and no interop, and "turn interop on" would be the wrong advice there.
+ * Only a hint for the wording: a WSL distro made by `docker export | wsl --import` carries a /.dockerenv too, and a daemon
+ * started by systemd, ssh or a schedule often has no WSL_DISTRO_NAME — so it never decides alone (see windowsReach).
  */
 export function inContainer(host: WslHost): boolean {
   return host.exists("/.dockerenv") || host.exists("/run/.containerenv");
@@ -70,12 +76,17 @@ export type WindowsReachProblem = "not-wsl" | "interop-off" | "powershell-missin
 
 /**
  * Whether this Linux can start Windows PowerShell, decided before anything is spawned. `powershell` is the path found
- * (PATH, then a mounted drive; `viaWslpath` is a path that `wslpath` gave for a drive mounted elsewhere), or null.
+ * (PATH, then /mnt/c; `viaWslpath` is a path that `wslpath` gave for a drive mounted elsewhere), or null.
+ *
+ * Interop that is not off (on, or unreadable) plus a PowerShell found is always a go. A container is named only when
+ * neither holds — interop not seen on AND no PowerShell — where "not WSL" is the truer advice than "turn interop on".
  */
 export function windowsReach(host: WslHost, viaWslpath: string | null = null): { ok: true; powershell: string } | { ok: false; problem: WindowsReachProblem } {
   const { wsl, distro } = detectWsl(host);
-  if (!wsl || (!distro && inContainer(host))) return { ok: false, problem: "not-wsl" };
-  if (interopState(host) === "off") return { ok: false, problem: "interop-off" };
-  const powershell = findPowershell(host) ?? (viaWslpath && host.exists(viaWslpath) ? viaWslpath : null);
-  return powershell ? { ok: true, powershell } : { ok: false, problem: "powershell-missing" };
+  if (!wsl) return { ok: false, problem: "not-wsl" };
+  const interop = interopState(host);
+  const powershell = findPowershell(host, ["c"]) ?? (viaWslpath && host.exists(viaWslpath) ? viaWslpath : null);
+  if (interop !== "off" && powershell) return { ok: true, powershell };
+  if (interop !== "on" && !powershell && !distro && inContainer(host)) return { ok: false, problem: "not-wsl" };
+  return { ok: false, problem: interop === "off" ? "interop-off" : "powershell-missing" };
 }

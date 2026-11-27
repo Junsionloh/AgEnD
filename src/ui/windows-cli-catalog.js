@@ -79,7 +79,7 @@ register("windetect", {
   en: { loading:"Detecting Windows CLIs…", refreshing:"Updating Windows CLIs…", hint:"Checking installed CLIs, versions and sign-ins. Results are reused so reopening does not repeat the wait.", elapsed:"Still checking after {0} seconds.", failed:"Windows CLI detection failed", previous:"Refresh failed. Showing the last successful inventory.", retry:"Retry detection", refresh:"Detect again", cached:"Loaded the recent inventory", never:"Windows CLIs have not been detected yet. Detection starts each installed CLI once to read its version and sign-in; after that, only when you press Detect again.", detect:"Detect Windows CLIs" },
 });
 // AGEND-381: why this AgEnD cannot reach Windows (the server sends a code, see WINDOWS_BRIDGE_MESSAGES in src/windows-cli.ts), and what to do about it.
-const BRIDGE_ERRORS = { "not-wsl":"errNotWsl", "interop-off":"errInteropOff", "powershell-missing":"errPowershellMissing", "powershell-failed":"errPowershellFailed", "node-missing":"errNodeMissing" };
+const BRIDGE_ERRORS = { "not-wsl":"errNotWsl", "interop-off":"errInteropOff", "powershell-missing":"errPowershellMissing", "powershell-failed":"errPowershellFailed", "node-missing":"errNodeMissing", "wslpath-failed":"errWslpathFailed" };
 register("windetect", {
   en: {
     errNotWsl:"This AgEnD is not running on Windows or in WSL (for example in a container or on a plain Linux server), so it has no local Windows CLIs to detect. Run AgEnD on Windows or in WSL, or open Settings → Runtime → Connect a computer to pair a Windows computer.",
@@ -87,6 +87,7 @@ register("windetect", {
     errPowershellMissing:"Windows PowerShell (powershell.exe) was not found from this WSL. Check that the Windows drive is mounted at /mnt/c (ls /mnt/c/Windows) and that appendWindowsPath is not turned off in /etc/wsl.conf, then detect again.",
     errPowershellFailed:"Windows PowerShell was found but could not be started. Run powershell.exe -NoProfile -Command echo ok in this WSL to see why, then detect again.",
     errNodeMissing:"Windows Node.js was not found. Install Node.js for Windows and put node.exe on the Windows PATH, then detect again.",
+    errWslpathFailed:"WSL could not translate the path of Windows Node.js or of AgEnD's Windows worker (wslpath failed). Run wslpath -w ~ in this WSL to see why, then detect again.",
   },
   "zh-TW": {
     errNotWsl:"這個 AgEnD 不是跑在 Windows 或 WSL 上（例如 Docker 容器或一般 Linux 主機），沒有本機 Windows CLI 可偵測。請改在 Windows 或 WSL 執行 AgEnD，或到「設定 → Runtime」按「連接電腦」配對一台 Windows 電腦。",
@@ -94,6 +95,7 @@ register("windetect", {
     errPowershellMissing:"在這個 WSL 找不到 Windows PowerShell（powershell.exe）。請確認 Windows 磁碟已掛載在 /mnt/c（執行 ls /mnt/c/Windows），且 /etc/wsl.conf 沒有關閉 appendWindowsPath，再重新偵測。",
     errPowershellFailed:"找到 Windows PowerShell，但無法啟動。請在這個 WSL 執行 powershell.exe -NoProfile -Command echo ok 查看原因，再重新偵測。",
     errNodeMissing:"找不到 Windows 的 Node.js。請安裝 Windows 版 Node.js，並把 node.exe 放進 Windows 的 PATH，再重新偵測。",
+    errWslpathFailed:"WSL 無法轉換 Windows Node.js 或 AgEnD Windows worker 的路徑（wslpath 失敗）。請在這個 WSL 執行 wslpath -w ~ 查看原因，再重新偵測。",
   },
 });
 register("windetect", {

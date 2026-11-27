@@ -2,7 +2,7 @@ import {nativeExecInputRequestDigest,validateNativeExecInputClaim,validateNative
 /** Opt-in, single-task Windows CLI bridge. The existing Linux fleet remains unchanged. */
 import { localWindowsCliEnabled, remoteRuntimeEnabled } from "./runtime-switches.js";
 import { spawn, execFile } from "./child-process.js";
-import { realHost, windowsReach, type WindowsReachProblem, type WslHost } from "./wsl-host.js";
+import { detectWsl, realHost, windowsReach, type WindowsReachProblem, type WslHost } from "./wsl-host.js";
 import type { ChildProcess } from "node:child_process";
 import { promisify } from "node:util";
 import { readFileSync } from "node:fs";
@@ -66,7 +66,8 @@ export interface WindowsCliExecutor {
   idleForRequestContext?():boolean;
   retireForRequestContext?():void;
 }
-export interface WindowsTransport { executable: string; args: string[] }
+/** `cwd`: set only when this process's own working directory is gone (AGEND-381): every Windows process then starts from it. */
+export interface WindowsTransport { executable: string; args: string[]; cwd?: string }
 export type WindowsLauncher = () => Promise<WindowsTransport>;
 const MAX_TASKS = 20;
 const TEXT_LIMIT = 64 * 1024;
@@ -95,7 +96,7 @@ export function admitLocalWindowsCli(): void { if (!localWindowsCliEnabled()) th
  * AGEND-381: why this host can't start Windows programs. `code` is for the dashboard, which says what to do about it in
  * the person's language; `message` stays the English sentence for a log or a CLI. Never a raw `spawn … ENOENT`.
  */
-export type WindowsBridgeProblem = WindowsReachProblem | "powershell-failed" | "node-missing";
+export type WindowsBridgeProblem = WindowsReachProblem | "powershell-failed" | "node-missing" | "wslpath-failed";
 export class WindowsBridgeUnavailableError extends Error {
   constructor(readonly code: WindowsBridgeProblem, message: string, options?: { cause?: unknown; detail?: string }) { super(message, options?.cause === undefined ? undefined : { cause: options.cause }); this.name = "WindowsBridgeUnavailableError"; if (options?.detail) this.detail = options.detail; }
   /** One short fact about what failed (an exit code, a timeout): never a command line or a path. */
@@ -107,6 +108,7 @@ export const WINDOWS_BRIDGE_MESSAGES: Record<WindowsBridgeProblem, string> = {
   "powershell-missing": "Windows PowerShell (powershell.exe) was not found from this WSL. Check that the Windows drive is mounted at /mnt/c (`ls /mnt/c/Windows`) and that Windows' PATH is not turned off (`appendWindowsPath` in /etc/wsl.conf), then detect again.",
   "powershell-failed": "Windows PowerShell was found but could not be started. Run `powershell.exe -NoProfile -Command echo ok` in this WSL to see why, then detect again.",
   "node-missing": "Install Windows Node.js and put node.exe on Windows PATH, then detect again.",
+  "wslpath-failed": "WSL could not translate the path of Windows Node.js or of AgEnD's Windows worker (wslpath failed). Run `wslpath -w ~` in this WSL to see why, then detect again.",
 };
 const windowsBridgeError = (code: WindowsBridgeProblem, cause?: unknown) => new WindowsBridgeUnavailableError(code, WINDOWS_BRIDGE_MESSAGES[code], cause === undefined ? undefined : { cause, ...(execFailure(cause) ? { detail: execFailure(cause) } : {}) });
 /** `execFile`'s failure as a few words: it timed out, was killed, could not start (errno name), or exited with a code. */
@@ -125,14 +127,14 @@ export interface WindowsTransportDeps {
   /** This process's working directory, or null when it no longer exists. */
   cwd: () => string | null;
   /** Windows PowerShell's path as WSL names it, from `wslpath -u`, or null. Only asked when the usual places have none. */
-  wslpath: (windowsPath: string) => Promise<string | null>;
+  wslpath: (windowsPath: string, options: { cwd?: string }) => Promise<string | null>;
   run: (file: string, args: string[], options: { timeout: number; maxBuffer: number; encoding: "utf8"; cwd?: string }) => Promise<{ stdout: string | Buffer; stderr?: string | Buffer }>;
 }
 const SYSTEM_POWERSHELL_WINDOWS_PATH = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
 const realTransportDeps = (): WindowsTransportDeps => ({
   platform: process.platform, host: realHost,
   cwd: () => { try { return process.cwd(); } catch { return null; } },
-  wslpath: async windowsPath => { try { return String((await exec("wslpath", ["-u", windowsPath], { timeout: 5000, maxBuffer: 8192, encoding: "utf8" })).stdout).trim() || null; } catch { return null; } },
+  wslpath: async (windowsPath, options) => { try { return String((await exec("wslpath", ["-u", windowsPath], { timeout: 5000, maxBuffer: 8192, encoding: "utf8", ...options })).stdout).trim() || null; } catch { return null; } },
   run: (file, args, options) => exec(file, args, options),
 });
 export async function nativeWindowsTransport(deps: WindowsTransportDeps = realTransportDeps()): Promise<WindowsTransport> {
@@ -141,13 +143,14 @@ export async function nativeWindowsTransport(deps: WindowsTransportDeps = realTr
   if (deps.platform !== "linux") throw windowsBridgeError("not-wsl");
   // Linux is not always WSL: a container or a plain server has no /mnt/c, and spawn then says only `ENOENT` for the path.
   const host = deps.host();
+  // A daemon whose own working directory was deleted (a removed checkout it was started from) cannot start a .exe, nor
+  // `wslpath`: WSL cannot turn the cwd into a Windows path, and PowerShell / cmd exit 1 saying nothing. `/` always exists.
+  // Every process from here on — PowerShell, both wslpath calls, and the worker itself (the transport carries it) — uses it.
+  const cwd: { cwd?: string } = deps.cwd() === null ? { cwd: "/" } : {};
   let reach = windowsReach(host);
-  if (!reach.ok && reach.problem === "powershell-missing") reach = windowsReach(host, await deps.wslpath(SYSTEM_POWERSHELL_WINDOWS_PATH));
+  if (!reach.ok && reach.problem !== "interop-off" && detectWsl(host).wsl) reach = windowsReach(host, await deps.wslpath(SYSTEM_POWERSHELL_WINDOWS_PATH, cwd));
   if (!reach.ok) throw windowsBridgeError(reach.problem);
   const script = '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $n = Get-Command node.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1; [Console]::Write($n.Source)';
-  // A daemon whose own working directory was deleted (a removed checkout it was started from) cannot start a .exe: WSL
-  // cannot turn the cwd into a Windows path, and PowerShell exits 1 saying nothing. `/` always exists.
-  const cwd = deps.cwd() === null ? { cwd: "/" } : {};
   let r: Awaited<ReturnType<WindowsTransportDeps["run"]>>;
   try {
     r = await deps.run(reach.powershell, ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { timeout: 8000, maxBuffer: 8192, encoding: "utf8", ...cwd });
@@ -158,8 +161,15 @@ export async function nativeWindowsTransport(deps: WindowsTransportDeps = realTr
   }
   const node = String(r.stdout).trim();
   if (!/^[a-z]:\\.*\\node\.exe$/i.test(node) || /[\r\n\0]/.test(node)) throw windowsBridgeError("node-missing");
-  const [nodePath, workerPath] = await Promise.all([node, worker].map(p => deps.run("wslpath", [p === node ? "-u" : "-w", p], { timeout: 5000, maxBuffer: 8192, encoding: "utf8" })));
-  return { executable: String(nodePath.stdout).trim(), args: [String(workerPath.stdout).trim()] };
+  let nodePath: string, workerPath: string;
+  try {
+    [nodePath, workerPath] = (await Promise.all([node, worker].map(p => deps.run("wslpath", [p === node ? "-u" : "-w", p], { timeout: 5000, maxBuffer: 8192, encoding: "utf8", ...cwd })))).map(out => String(out.stdout).trim()) as [string, string];
+  } catch (error) {
+    // Never `Command failed: wslpath -w /home/…`: that is a command line and a local path.
+    throw windowsBridgeError("wslpath-failed", error);
+  }
+  if (!nodePath || !workerPath) throw windowsBridgeError("wslpath-failed");
+  return { executable: nodePath, args: [workerPath], ...cwd };
 }
 
 export class WindowsCliBridge {
@@ -252,7 +262,7 @@ export class WindowsCliBridge {
     if (!authorized()) throw new Error("Authorization expired before the Windows operation started");
     this.admit?.();                                  // no await between this and spawn
     return new Promise((resolve, reject) => {
-      const child = spawn(transport.executable, transport.args, { stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn(transport.executable, transport.args, { stdio: ["pipe", "pipe", "pipe"], ...(transport.cwd ? { cwd: transport.cwd } : {}) });
       this.physicalWorkers.add(child); child.once("close", () => this.physicalWorkers.delete(child));
       let text = "", settled = false;
       const timer = setTimeout(() => { child.kill(); finish(new Error(`Windows CLI ${request.op} timed out`)); }, timeoutMs);
@@ -347,7 +357,7 @@ export class WindowsCliBridge {
       if (!authorized()) throw new Error("Web authorization expired before the Windows task started");
       this.admit?.();                                // no await between this and spawn (the executor runs at once)
       await new Promise<void>((resolve) => {
-        const child = this.child = spawn(transport.executable, transport.args, { stdio: ["pipe", "pipe", "pipe"] });
+        const child = this.child = spawn(transport.executable, transport.args, { stdio: ["pipe", "pipe", "pipe"], ...(transport.cwd ? { cwd: transport.cwd } : {}) });
         this.physicalWorkers.add(child); child.once("close", () => this.physicalWorkers.delete(child));
         let wire = "", provider = "", stderr = "", received = 0, finished = false, turnCompleted = false, mainStarted = false;
         const fail = (message: string): void => { if (options.personal) delete task.answer; task.error = message.slice(0,8192); if (task.status !== "cancelling") task.status = "failed"; };

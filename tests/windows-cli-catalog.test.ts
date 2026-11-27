@@ -165,6 +165,7 @@ describe("page-lived Windows CLI inventory",()=>{
     ["powershell-missing","powershell.exe) was not found","/mnt/c"],
     ["powershell-failed","could not be started","powershell.exe -NoProfile"],
     ["node-missing","Windows Node.js was not found","PATH"],
+    ["wslpath-failed","wslpath failed","wslpath -w ~"],
   ])("AGEND-381: the code %s is said in words with what to do, instead of the raw server text",async(code,words,action)=>{
     await p.mount(h(DiscoveryStatus,{state:failed({data:{clis:[],home:"",probedAt:null},error:`raw server text for ${code}`,errorCode:code,errorDetail:code==="powershell-failed"?"exit code 1":""})}));
     await settle(4);

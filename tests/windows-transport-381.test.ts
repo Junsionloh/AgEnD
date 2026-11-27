@@ -63,7 +63,7 @@ describe("nativeWindowsTransport on Linux: where Windows PowerShell can't be rea
     const d = deps({ host: () => host({ files: [], env: { WSL_DISTRO_NAME: "Ubuntu", PATH: "/usr/bin" } }), wslpath });
     const error = await failure(d);
     expect(error.code).toBe("powershell-missing");
-    expect(wslpath).toHaveBeenCalledWith("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+    expect(wslpath).toHaveBeenCalledWith("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", {});
     expect(error.message).toContain("/mnt/c");
     expect(d.run).not.toHaveBeenCalled();
   });
@@ -94,15 +94,31 @@ describe("nativeWindowsTransport on Linux: a PowerShell that is there", () => {
     await nativeWindowsTransport(d);
     expect(d.run.mock.calls[0]![0]).toBe(onPath);
   });
-  it("keeps the process's own working directory when it exists", async () => {
-    const d = deps();
-    await nativeWindowsTransport(d);
-    expect(d.run.mock.calls[0]![2]).not.toHaveProperty("cwd");
+  it("keeps the process's own working directory when it exists — no call and no worker gets a cwd", async () => {
+    const wslpath = vi.fn(async () => null);
+    const d = deps({ host: () => host({ files: [PS], env: { WSL_DISTRO_NAME: "Ubuntu", PATH: "/usr/bin" } }), wslpath });
+    const transport = await nativeWindowsTransport(d);
+    expect(d.run).toHaveBeenCalledTimes(3);   // PowerShell, wslpath -u node.exe, wslpath -w worker
+    for (const call of d.run.mock.calls) expect(call[2]).not.toHaveProperty("cwd");
+    expect(transport).not.toHaveProperty("cwd");
   });
-  it("a working directory that was deleted (the daemon started from a removed checkout) is replaced by `/` — PowerShell would exit 1 saying nothing", async () => {
-    const d = deps({ cwd: () => null });
-    await nativeWindowsTransport(d);
-    expect(d.run.mock.calls[0]![2]).toMatchObject({ cwd: "/" });
+  it("a working directory that was deleted (the daemon started from a removed checkout) is `/` for EVERY process: PowerShell, both wslpath, the system-PowerShell lookup and the worker", async () => {
+    const custom = "/win/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe";
+    const wslpath = vi.fn(async () => custom);
+    const d = deps({ cwd: () => null, host: () => host({ files: [custom] }), wslpath });
+    const transport = await nativeWindowsTransport(d);
+    expect(wslpath).toHaveBeenCalledWith(expect.any(String), { cwd: "/" });
+    expect(d.run.mock.calls.map(call => [call[0], call[2].cwd])).toEqual([[custom, "/"], ["wslpath", "/"], ["wslpath", "/"]]);
+    expect(transport.cwd).toBe("/");
+  });
+  it.each([
+    ["fails", async () => { throw Object.assign(new Error("Command failed: wslpath -w /home/someone/agend/dist/windows-cli-worker.js"), { code: 1, stderr: "wslpath: No such file or directory" }); }],
+    ["answers nothing", async () => ({ stdout: "" })],
+  ])("`wslpath` that %s is `wslpath-failed` — never its command line or a local path", async (_name, wslpathRun) => {
+    const error = await failure(deps({}, async (file, args, options) => file === "wslpath" ? wslpathRun() : { stdout: NODE }));
+    expect(error).toBeInstanceOf(WindowsBridgeUnavailableError);
+    expect(error.code).toBe("wslpath-failed");
+    expect(`${error.message} ${error.detail ?? ""}`).not.toMatch(/Command failed|\/home\/|windows-cli-worker/);
   });
   it.each([
     ["exits non-zero without saying why", Object.assign(new Error("Command failed: powershell.exe -EncodedCommand AAAA"), { code: 1, stderr: "" }), "exit code 1"],
@@ -126,7 +142,45 @@ describe("nativeWindowsTransport on Linux: a PowerShell that is there", () => {
   });
 });
 
+describe("AGEND-382 review P2-2: a container marker never decides alone", () => {
+  const PATH_PS = "/mnt/c/windows/System32/WindowsPowerShell/v1.0/powershell.exe";
+  /** A WSL distro made by `docker export | wsl --import` (it carries /.dockerenv), run by systemd / ssh (no WSL_DISTRO_NAME). */
+  const importedDistro = (over: Partial<WslHost> = {}) => host({ env: { PATH: "/usr/bin:/mnt/c/windows/System32/WindowsPowerShell/v1.0" }, files: [PATH_PS, "/.dockerenv"], ...over });
+  it("no WSL_DISTRO_NAME + /.dockerenv + WSLInterop + powershell on PATH → it runs", async () => {
+    expect(windowsReach(importedDistro())).toEqual({ ok: true, powershell: PATH_PS });
+    const d = deps({ host: () => importedDistro() });
+    await nativeWindowsTransport(d);
+    expect(d.run.mock.calls[0]![0]).toBe(PATH_PS);
+  });
+  it("…with binfmt_misc unreadable (interop unknown) and PowerShell found, too", () => {
+    expect(windowsReach(importedDistro({ binfmt: null }))).toEqual({ ok: true, powershell: PATH_PS });
+  });
+  it("…with interop on but no PowerShell, it is told PowerShell is missing (and `wslpath` is asked), not that it is no WSL", async () => {
+    const wslpath = vi.fn(async () => null);
+    const d = deps({ host: () => importedDistro({ files: ["/.dockerenv"] }), wslpath });
+    expect((await failure(d)).code).toBe("powershell-missing");
+    expect(wslpath).toHaveBeenCalledOnce();
+  });
+  it("…with interop off and PowerShell on disk, it is told to turn interop on", () => {
+    expect(windowsReach(importedDistro({ binfmt: [] }))).toEqual({ ok: false, problem: "interop-off" });
+  });
+  it("only no interop AND no PowerShell in a container is `not-wsl` (the Docker preview), and `wslpath` is still asked first", async () => {
+    const wslpath = vi.fn(async () => null);
+    const d = deps({ host: dockerDesktopContainer, wslpath });
+    expect((await failure(d)).code).toBe("not-wsl");
+    expect(wslpath).toHaveBeenCalledOnce();
+    expect(d.run).not.toHaveBeenCalled();
+  });
+});
+
 describe("the host facts (shared with `agend shortcuts`)", () => {
+  it("the bridge looks under /mnt/c only (a stat on an offline d:/e: network drive would hold the daemon); `agend shortcuts` still tries d: and e:", () => {
+    const onE = "/mnt/e/Windows/System32/WindowsPowerShell/v1.0/powershell.exe";
+    const exists = vi.fn((p: string) => p === onE);
+    expect(windowsReach({ ...host(), exists })).toEqual({ ok: false, problem: "powershell-missing" });
+    expect(exists.mock.calls.map(c => c[0]).filter(p => /^\/mnt\/[de]\//.test(p))).toEqual([]);
+    expect(findPowershell(host({ files: [onE] }))).toBe(onE);
+  });
   it("findPowershell takes PATH first, then c: d: e: under either spelling of the Windows folder", () => {
     expect(findPowershell(host({ files: ["/mnt/c/windows/System32/WindowsPowerShell/v1.0/powershell.exe"] }))).toBe("/mnt/c/windows/System32/WindowsPowerShell/v1.0/powershell.exe");
     expect(findPowershell(host({ files: ["/mnt/e/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"] }))).toBe("/mnt/e/Windows/System32/WindowsPowerShell/v1.0/powershell.exe");
@@ -139,6 +193,8 @@ describe("the host facts (shared with `agend shortcuts`)", () => {
     expect(windowsReach(host({ binfmt: [], files: [] }))).toEqual({ ok: false, problem: "interop-off" });
     expect(windowsReach(host({ files: [] }))).toEqual({ ok: false, problem: "powershell-missing" });
     expect(windowsReach(host({ binfmt: null }))).toEqual({ ok: true, powershell: PS });
+    expect(windowsReach(host({ binfmt: [], files: [PS] }))).toEqual({ ok: false, problem: "interop-off" });   // interop off is never spawned, PowerShell or not
+    expect(windowsReach(host({ files: [], env: { PATH: "/usr/bin" }, binfmt: null }))).toEqual({ ok: false, problem: "powershell-missing" });   // no container: not named
     expect(windowsReach(host())).toEqual({ ok: true, powershell: PS });
   });
 });
