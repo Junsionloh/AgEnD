@@ -236,7 +236,7 @@ import { createLogger, rotateLogIfNeeded, type Logger } from "./logger.js";
 import { processAttachments } from "./channel/attachment-handler.js";
 import { routeToolCall } from "./channel/tool-router.js";
 import { Scheduler } from "./scheduler/index.js";
-import { boardActivity, boardCardLimit, boardCommentWakesOn, boardLeader, boardProgressWakesOn, boardToolAction } from "./task-board-tool.js";
+import { boardActivity, boardCardLimit, boardCommentWakesOn, boardLeader, boardPersonConfirmsMain, boardProgressWakesOn, boardToolAction } from "./task-board-tool.js";
 import { TaskBoardWaker, cardsOfKey } from "./task-board-waker.js";
 import { DispatcherLiveness, LIVENESS_STARTUP_GRACE_MS, livenessSettings, questionNotices, turnQuestion, type AssigneeFacts, type LivenessCard } from "./dispatcher-liveness.js";
 import { TaskBoardError, waitsForPerson, wrapUpGap, type Actor, type Wake } from "./scheduler/task-board.js";
@@ -27800,6 +27800,8 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
     db.board.setCardLimit((name) => boardCardLimit(this.fleetConfig, name));
     // An instance with the task board switched off is handed no cards and sent no notices (read at each write and wake).
     db.board.setBoardOff((name) => taskBoardOffIn(this.fleetConfig, name));
+    // The person confirms the main tasks an agent opens, when the fleet says so (read as each main task is opened).
+    db.board.setPersonConfirmsMain(() => boardPersonConfirmsMain(this.fleetConfig));
     // Comments and @mentions wake (docs/design/task-board.md): the fleet's instance names, and its switch, read at each comment.
     db.board.setCommentRouting({
       instances: () => Object.keys(this.fleetConfig?.instances ?? {}),

@@ -1107,6 +1107,9 @@ function taskBoardDefaults(d, f) {
   // M-3668: the archive age is kept as saved unless changed (nothing saved stays absent: the form shows the default).
   const days = f ? f.archiveDays : archiveForm(d).archiveDays;
   if (Number(days) !== Number(archiveForm(d).archiveDays)) out.archive_after_days = Number(days);
+  // The person confirms the main tasks an agent opens: kept as saved unless changed (off is the default: the key goes).
+  const confirm = f ? f.confirmMain : confirmForm(d).confirmMain;
+  if (confirm !== confirmForm(d).confirmMain) { if (confirm) out.person_confirms_main = true; else delete out.person_confirms_main; }
   return out;
 }
 /**
@@ -1122,6 +1125,10 @@ const ARCHIVE_DAYS_DEFAULT = 3;
 function archiveForm(d) {
   const v = (d.task_board || {}).archive_after_days;
   return { archiveDays: String(Number.isInteger(v) && v >= 0 && v <= 3650 ? v : ARCHIVE_DAYS_DEFAULT) };
+}
+/** `defaults.task_board.person_confirms_main` as the form holds it: only an explicit true is on. */
+function confirmForm(d) {
+  return { confirmMain: (d.task_board || {}).person_confirms_main === true };
 }
 const daysInRange = (v) => { const n = Number(v); return String(v).trim() !== "" && Number.isInteger(n) && n >= 0 && n <= 3650 ? "" : "archiveRange"; };
 const minutesInRange = (v) => { const n = Number(v); return String(v).trim() !== "" && Number.isFinite(n) && n >= 1 && n <= 1440 ? "" : "livenessRange"; };
@@ -1143,6 +1150,8 @@ function generalForm(d, c, fleet = {}, schema = {}) {
     ...wakesForm(d),
     // M-3668: when a finished card leaves the board.
     ...archiveForm(d),
+    // Whether the person confirms the main tasks an agent opens.
+    ...confirmForm(d),
     // #2347 §10 review: unset startup concurrency is automatic (deriveSpawnConcurrency: 2–10 by free memory and cores),
     // not 10 — an empty field, and a save that leaves it unset (the defaults merge replaces `startup` whole).
     concurrency: startup.concurrency == null ? "" : String(startup.concurrency), stagger: String(startup.stagger_delay_ms ?? 500),
@@ -1264,6 +1273,7 @@ function General({ ctx, part = "all" }) {
     // Each wake switch nobody set is the built-in default (on; no leader).
     wakeComment: !hasOwn(d.task_board || {}, "comment_wakes"), wakeProgress: !hasOwn(d.task_board || {}, "progress_wakes"), wakeLeader: !hasOwn(d.task_board || {}, "leader"),
     archiveDays: !hasOwn(d.task_board || {}, "archive_after_days"),
+    confirmMain: !hasOwn(d.task_board || {}, "person_confirms_main"),
   };
   const fromDefaults = (k, value, target) => ({ text: valueText(value, k), builtin: !hasOwn(d, k), from: inAgentDefaults(target) });
   const L = (text, field, id) => html`<${Label} text=${text} schema=${schema} field=${field} htmlFor=${id} />`;

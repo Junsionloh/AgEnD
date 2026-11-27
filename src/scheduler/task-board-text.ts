@@ -3,13 +3,13 @@
  * line per card in lists, a card in a dozen short lines — what an instance needs to pick up work after a reset,
  * without JSON keys or empty fields eating its context.
  */
-import { confirmerOf, gapText, personConfirms, wrapUpGap, type Card, type CardStatus, type MyWork, type Project, type ProjectStats, type TaskBoard } from "./task-board.js";
+import { confirmerOf, gapText, personReviews, wrapUpGap, type Card, type CardStatus, type MyWork, type Project, type ProjectStats, type TaskBoard } from "./task-board.js";
 
 export const STATUS_WORD: Record<CardStatus, string> = {
   open: "to do", claimed: "in progress", blocked: "blocked", review: "waiting for the person", done: "done", cancelled: "cancelled",
 };
 /** A card's status in words: an agent's card in review waits for its dispatcher, not the person (#2434). */
-const statusOf = (card: Pick<Card, "status" | "dispatcher">) => (card.status === "review" && !personConfirms(card) ? "waiting for confirmation" : STATUS_WORD[card.status]);
+const statusOf = (card: Pick<Card, "status" | "dispatcher" | "personReview">) => (card.status === "review" && !personReviews(card) ? "waiting for confirmation" : STATUS_WORD[card.status]);
 
 /** A file's size as a person reads it: "812 B", "12 KB", "1.4 MB". */
 export function sizeText(bytes: number): string {
@@ -115,8 +115,8 @@ export function myWorkText(board: TaskBoard, name: string, work: MyWork): string
     : ` ⚠ ${over.count} cards in progress: at most ${over.limit} at a time — finish one (or block it with a reason) before the next`);
   section("blocked", work.blocked.map((c) => `${c.code} ${c.title} — on: ${oneLine(c.blockedReason, 120)}`));
   const waiting = (c: Card) => { const gap = wrapUpGap(c); return `${c.code} ${c.title}${gap ? ` — fill in before they confirm: ${gapText(gap, c.kind === "main")}` : ""}`; };
-  section("waiting for the person's confirmation", work.review.filter(personConfirms).map(waiting));
-  section("waiting for confirmation", work.review.filter((c) => !personConfirms(c)).map((c) => `${waiting(c)} — ${confirmerOf(c) === name ? "yours to confirm: move it to done" : `by ${confirmerOf(c)}`}`));
+  section("waiting for the person's confirmation", work.review.filter(personReviews).map(waiting));
+  section("waiting for confirmation", work.review.filter((c) => !personReviews(c)).map((c) => `${waiting(c)} — ${confirmerOf(c) === name ? "yours to confirm: move it to done" : `by ${confirmerOf(c)}`}`));
   // #2434: the cards it handed out that wait for its own confirmation (finish them: move to done, or back with a reason).
   section("for you to confirm", board.toConfirm(name).map((c) => `${c.code} ${c.title}${c.assignee ? ` @${c.assignee}` : ""} — move it to done, or back to claimed with what is missing`));
   section("ready to start", work.ready.map((c) => `${c.code} ${c.title}${parentOf(c)}${c.assignee ? "" : " (unassigned)"}`));
