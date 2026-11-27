@@ -239,7 +239,7 @@ import { Scheduler } from "./scheduler/index.js";
 import { boardActivity, boardCardLimit, boardCommentWakesOn, boardLeader, boardProgressWakesOn, boardToolAction } from "./task-board-tool.js";
 import { TaskBoardWaker, cardsOfKey } from "./task-board-waker.js";
 import { DispatcherLiveness, LIVENESS_STARTUP_GRACE_MS, livenessSettings, questionNotices, turnQuestion, type AssigneeFacts, type LivenessCard } from "./dispatcher-liveness.js";
-import { TaskBoardError, waitsForPerson, wrapUpGap, type Actor, type Wake } from "./scheduler/task-board.js";
+import { TaskBoardError, waitsForPerson, wrapUpGap, type Actor, type PersonNews, type Wake } from "./scheduler/task-board.js";
 import type { SchedulerDb } from "./scheduler/db.js";
 import type { Schedule, ScheduleRetry, ScheduleRetryDrop, SchedulerConfig } from "./scheduler/index.js";
 import { escapeTelegramHtml, scheduleClock, scheduleRetryLabel } from "./scheduler/retry-label.js";
@@ -21702,12 +21702,12 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
    * #2910 D2: on a web-only fleet (no chat connection at all), keep what General or an agent's topic would have been
    * told as a Notice, and push it to the dashboard. False on any other fleet (its chat says it; nothing is kept).
    */
-  private recordWebNotice(kind: NoticeKind, text: string, instance?: string): boolean {
+  private recordWebNotice(kind: NoticeKind, text: string, instance?: string, card?: string): boolean {
     if (!this.webOnlyPromptPlace()) return false;
     const store = this.webNoticeStore();
     if (!store) return false;
     const known = instance !== undefined && Object.hasOwn(this.fleetConfig?.instances ?? {}, instance) ? instance : undefined;
-    const notice = store.add({ kind, text: stripPlaceRefs(text), ...(known ? { instance: known } : {}) });
+    const notice = store.add({ kind, text: stripPlaceRefs(text), ...(known ? { instance: known } : {}), ...(card ? { card } : {}) });
     this.emitSseEvent("notice", { notice, unread: store.unread() });
     return true;
   }
@@ -27849,7 +27849,7 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       },
       log: (level, message, extra) => this.logger[level](extra ?? {}, message),
     });
-    db.board.onChange(({ rev, ids, projects, wakes, changed, recalled }) => {
+    db.board.onChange(({ rev, ids, projects, wakes, changed, recalled, news }) => {
       // Refresh both old and new owners on reassignment; wakes are not an ownership index.
       if (ids.length) for (const name of this.daemons.keys()) this.observeWorkingState(name, "tasks");
       this.emitSseEvent("tasks", { rev, ids, projects });
@@ -27857,9 +27857,42 @@ export class FleetManager implements FleetContext, LifecycleContext, ArchiverCon
       // A comment edited or deleted: a notice still waiting that quotes it is withdrawn and told anew with what stands (the waker).
       if (recalled?.length) waker.recalled(recalled);
       waker.note(this.withWriterOrigins(wakes));
+      // A main task that finished by itself, or waits for the person: they are told (Notices, or General on a chat fleet).
+      if (news.length) this.tellPersonTaskNews(news);
       // step 3: cards waiting for the person are Needs you items; #2355 review: a project's lead routes them too.
       if (ids.length || projects) this.needsYou?.poke();
     });
+  }
+
+  /**
+   * What the person is told of a main task (docs/design/task-board.md, "The person is told"): it finished by itself because nobody had to
+   * confirm it, or it went to review for them. On a web-only fleet that is a Notice (`task`, with the card to open); on a chat fleet it
+   * is said in General, as the daily summary is. A card that waits for them is left to Needs you where the fleet asked for it there
+   * (needs_you.task_board), which lists it with its buttons.
+   */
+  private tellPersonTaskNews(news: readonly PersonNews[]): void {
+    const web = !!this.webOnlyPromptPlace();
+    for (const n of news) {
+      try {
+        if (n.kind === "review" && !web && this.fleetConfig?.needs_you?.task_board === true) continue;
+        const text = this.taskNewsText(n);
+        if (web) this.recordWebNotice("task", text, n.assignee ?? undefined, n.code);
+        else this.notifyFleetError(`${text}${t("tasks.news_sep")}${t("tasks.news_open")}`, { throttle: false });
+      } catch (err) {
+        this.logger.warn({ err: (err as Error)?.message, card: n.code }, "A main task's news for the person was not delivered");
+      }
+    }
+  }
+
+  /** One notice's words: the card, what happened, and what is still missing and who is asked to fill it in. */
+  private taskNewsText(n: PersonNews): string {
+    const title = n.title.length > 80 ? `${n.title.slice(0, 79)}…` : n.title;
+    const head = t(n.kind === "done" ? "tasks.news_done" : "tasks.news_review", n.code, title);
+    if (!n.gap) return head;
+    const missing = [n.gap.unchecked ? t("tasks.news_checked", n.checked, n.total) : "", n.gap.noResult ? t("tasks.news_no_result") : ""].filter(Boolean).join(t("tasks.news_join"));
+    const sep = t("tasks.news_sep");
+    const owner = n.assignee && Object.hasOwn(this.fleetConfig?.instances ?? {}, n.assignee) ? `${sep}${t("tasks.news_owner", n.assignee)}` : "";
+    return `${head}${sep}${t("tasks.news_gap", missing)}${owner}`;
   }
 
   /** A card page showing a comment's status reads it again: the card numbers whose comments moved (the page asks for the rest). */

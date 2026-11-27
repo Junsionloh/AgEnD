@@ -422,11 +422,11 @@ describe("9. change notifications and search", () => {
     expect(() => board.moveCard(DEV, s.code, "done")).toThrow();
     board.createProject(ANN, { name: "Other" });
     expect(heard).toEqual([
-      { rev: 2, ids: ["M-1"], actors: ["dev-a"], projects: false, wakes: [], changed: [] },
-      { rev: 3, ids: ["S-1"], actors: ["dev-a"], projects: false, wakes: [], changed: [] },
+      { rev: 2, ids: ["M-1"], actors: ["dev-a"], projects: false, wakes: [], changed: [], news: [] },
+      { rev: 3, ids: ["S-1"], actors: ["dev-a"], projects: false, wakes: [], changed: [], news: [] },
       // #2801: the cards whose status (or assignee) the write changed — a sub task's start starts its main task.
-      { rev: 4, ids: ["S-1", "M-1"], actors: ["dev-a"], projects: false, wakes: [], changed: [s.uuid, m.uuid] },
-      { rev: 5, ids: [], actors: [], projects: true, wakes: [], changed: [] },
+      { rev: 4, ids: ["S-1", "M-1"], actors: ["dev-a"], projects: false, wakes: [], changed: [s.uuid, m.uuid], news: [] },
+      { rev: 5, ids: [], actors: [], projects: true, wakes: [], changed: [], news: [] },
     ]);
   });
 
