@@ -89,11 +89,13 @@ export const FIELDS = Object.freeze({
   taskWakes: { keys: ["wakeComment", "wakeProgress", "wakeLeader"], path: "defaults.task_board" },
   // M-3668: how many days after it finished a main task leaves the board (fleet-level; read at every board read).
   taskArchive: { keys: ["archiveDays"], path: "defaults.task_board" },
+  // Whether the person confirms the main tasks an agent opens (fleet-level; read as each main task is opened).
+  taskConfirm: { keys: ["confirmMain"], path: "defaults.task_board" },
   concurrency: { keys: ["concurrency"], path: "fleet.spawn_concurrency" },
   stagger: { keys: ["stagger"], path: "fleet.spawn_stagger_ms" },
 });
 /** How many fields the Advanced drawer holds (the title says so). */
-export const ADVANCED_COUNT = 13;
+export const ADVANCED_COUNT = 14;
 
 /** The parts of a field that agents override one by one (one part: the field itself). */
 const partsOf = (spec) => spec.parts || [{ keys: spec.keys, own: spec.own, owns: spec.owns }];
@@ -388,6 +390,9 @@ export function SharedAgentSettings({ ctx, form }) {
     <div id="g-archive" class=${fc("field", "archiveDays")}>${head("taskArchive", "g-archive-days", tn("archiveTitle"), null, { mark: mark("archiveDays") })}
       <div class="s-hang-row"><input id="g-archive-days" type="number" min="0" max="3650" step="1" class=${errors.archiveDays ? "invalid" : ""} value=${f.archiveDays} onInput=${(e) => set("archiveDays")(e.target.value)} />
         <span class="s-unit">${tn("archiveUnit")}</span></div><${Feedback} error=${errors.archiveDays} /><${Info}>${tn("archiveHint")}</${Info}>${note("taskArchive")}</div>
+    <div id="g-confirm" class=${fc("field", "confirmMain")}>${head("taskConfirm", "g-confirm-main", tn("confirmMainTitle"), null, { mark: mark("confirmMain"), bare: true })}
+      <div class="s-hang-row"><${Switch} id="g-confirm-main" name=${tn("confirmMainTitle")} checked=${f.confirmMain} onChange=${set("confirmMain")} /><span>${tn("confirmMainTitle")}</span></div>
+      <${Info}>${tn("confirmMainHint")}</${Info}>${note("taskConfirm")}</div>
     <div class=${fc("field", "concurrency")}>${head("concurrency", "g-conc", tn("concurrency"), tn("tipConcurrency"), { mark: mark("concurrency") })}
       <input id="g-conc" type="number" min="1" max="20" step="1" class=${errors.concurrency ? "invalid" : ""} value=${f.concurrency} onInput=${(e) => set("concurrency")(e.target.value)} />
       <${Feedback} error=${errors.concurrency} warning=${warnings.concurrency} />${f.concurrency.trim() === "" ? html`<${InEffect} text=${tn("concurrencyAuto")} tip=${defaultTip} />` : null}${note("concurrency")}</div>
