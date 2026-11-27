@@ -55,6 +55,20 @@ or the board itself.
   `update status=done`) on such a card is `review`, unless the caller is the one who confirms it. Only a person
   reopens finished work — including by adding a sub task to a done main task. A card opened on the board carries
   `on_board` (#2434): before, a main task's default review marked it as the board's rather than a plain `task`.
+- **Main tasks the person confirms (`person_confirms_main`).** The rule above leaves a person who only *asked* an agent
+  for the work out: the agent opens the main task with its own tool, so it has no dispatcher of the person's (an agent
+  cannot name them one) and finishes by itself, however much the person was waiting for it. `defaults.task_board.person_confirms_main:
+  true` (Settings › Advanced, off by default, read as each main task is opened) says that every main task an
+  *instance* opens is the person's to confirm: the card is opened with `person_review = 1` and `needs_review = 1`, the
+  agent is told so in the answer that opened it (`main_person_confirms`), and when its last sub task is done it goes to
+  `review` and waits under Waiting for you, project counts and unread, as one the person handed out does. It is only
+  the confirmation: the card keeps an instance dispatcher (or none), so its sub tasks are still handed out, blocked
+  questions answered and confirmed by the instance that opened them, a blocked main task is still no question for the person, and
+  nobody is woken to confirm it (`to_confirm`, `confirm_own`) — its owner still gets the wrap-up notice. An agent cannot clear its
+  review (`personReviews`, like `personConfirms` for one the person handed out), nor take the mark off; the person can turn the
+  review off on the card (it then finishes by itself) and on again. A card keeps what it was opened with when the switch is
+  turned off, and one opened before it is not touched. A main task the person opens, a sub task and the task tool's plain
+  tasks are not marked.
 - **Main tasks follow their sub tasks.** With sub tasks (not cancelled), a main task is `open` until one starts,
   `claimed` while they run, and `review` (or `done`, when it skips review) when all are done. An instance moves the
   sub tasks, not the main task: it may block it, resubmit it after a send-back with a result, or cancel one it opened.
@@ -145,6 +159,10 @@ A release without the board reads and writes the same rows and ignores the new c
 not know. Its prune knows no projects: after a rollback it deletes finished board cards past `retention_days`, leaving
 their entries and events. Before rolling back, raise `retention_days`; the next prune here clears what an old one left.
 `scripts/data-downgrade-phase.mjs` runs 2.1.12 against board data (docs/downgrade-compatibility.md).
+
+`tasks.person_review` (INTEGER, default 0; "Main tasks the person confirms") is one more additive column: a release without it neither reads nor
+writes it, its `UPDATE` leaves it as it is, and a card it opens has 0. Rolled back, such a main task reads as an agent's own that needs review
+(its owner or dispatcher confirms it, and a person may); back on this release it is the person's again.
 
 Comment status and unread add one column, two tables and an index: `task_entries.wakes`, `task_card_reads`, `task_reads_floor` and `idx_task_entries_at` ("Comment status", "Unread"); handoffs add one more table, `task_handoffs` ("Handoffs"). A release without them neither reads nor writes them; its prune leaves the marks of a pruned card behind and the next prune here sweeps them.
 
