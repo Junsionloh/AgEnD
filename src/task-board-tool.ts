@@ -475,6 +475,15 @@ export function boardProgressWakesOn(fleet: { defaults?: { task_board?: { progre
   return fleet?.defaults?.task_board?.progress_wakes !== false;
 }
 
+/**
+ * `defaults.task_board.person_confirms_main` (default off): whether every main task an instance opens waits for the person's
+ * confirmation when its sub tasks are done (docs/design/task-board.md, "Main tasks the person confirms"). Only an explicit
+ * `true` turns it on; the board reads it as each main task is opened.
+ */
+export function boardPersonConfirmsMain(fleet: { defaults?: { task_board?: { person_confirms_main?: unknown } } } | null | undefined): boolean {
+  return fleet?.defaults?.task_board?.person_confirms_main === true;
+}
+
 /** `defaults.task_board.leader`: the board's leader instance, or null when none is set. */
 export function boardLeader(fleet: { defaults?: { task_board?: { leader?: unknown } } } | null | undefined): string | null {
   const leader = fleet?.defaults?.task_board?.leader;

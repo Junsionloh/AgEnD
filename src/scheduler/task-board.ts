@@ -265,6 +265,12 @@ export interface Card {
   size: CardSize | null;
   needsReview: boolean;
   /**
+   * The person confirms this card in review, though an instance opened it (the fleet's `defaults.task_board.person_confirms_main`,
+   * read when a main task is opened): a card the person handed out has their dispatcher, one the person only asked an agent for has
+   * this. It changes who confirms and nothing else: its sub tasks are still handed out by the instance that opened them.
+   */
+  personReview: boolean;
+  /**
    * #2434: opened on the board (createCards), not the `task` tool's own plain task. Before #2434 a main task's default
    * "needs review" marked it; an agent's main task no longer waits for review, so the board says so on its own.
    */
@@ -737,15 +743,21 @@ const isDispatcher = (card: Card, actor: Actor) => card.dispatcher?.kind === "in
  * handed out its assignee (or the instance that opened it). A person may still confirm any card.
  */
 export const personConfirms = (card: Pick<Card, "dispatcher">) => card.dispatcher?.kind === "person";
+/**
+ * Whether the person confirms `card` in review: the cards they handed out (personConfirms), and a main task an agent opened
+ * that the fleet asked them to confirm (`person_review`). Only the confirmation: a blocked card's question is the dispatcher's
+ * either way (waitsForPerson), and an agent's main task keeps its instance dispatcher for its sub tasks.
+ */
+export const personReviews = (card: Pick<Card, "dispatcher" | "personReview">) => personConfirms(card) || card.personReview;
 function confirms(card: Card, actor: Actor): boolean {
   if (isPerson(actor)) return true;
-  if (personConfirms(card)) return false;
+  if (personReviews(card)) return false;
   if (card.dispatcher?.kind === "instance") return card.dispatcher.name === actor.name;
   return card.assignee === actor.name || (card.assignee === null && card.createdBy === actor.name);
 }
 /** Who that is, in words (an error, the card's text). */
-export function confirmerOf(card: Pick<Card, "dispatcher" | "assignee">): string {
-  if (card.dispatcher?.kind === "person") return "the person";
+export function confirmerOf(card: Pick<Card, "dispatcher" | "assignee" | "personReview">): string {
+  if (personReviews(card)) return "the person";
   if (card.dispatcher?.kind === "instance") return card.dispatcher.name;
   return card.assignee ?? "its assignee";
 }
@@ -753,8 +765,8 @@ export function confirmerOf(card: Pick<Card, "dispatcher" | "assignee">): string
  * #2080: the instance that confirms a card in review (`confirms`' rule), or null when it is the person's — handed out by
  * them, or by an instance deleted since (`gone`), or nobody's at all.
  */
-export function confirmingInstance(card: Pick<Card, "dispatcher" | "assignee" | "createdBy">, gone?: GoneDispatcher): string | null {
-  if (personConfirms(card) || orphaned(card, gone)) return null;
+export function confirmingInstance(card: Pick<Card, "dispatcher" | "assignee" | "createdBy" | "personReview">, gone?: GoneDispatcher): string | null {
+  if (personReviews(card) || orphaned(card, gone)) return null;
   if (card.dispatcher?.kind === "instance") return card.dispatcher.name;
   return card.assignee ?? (card.createdBy || null);
 }
@@ -785,8 +797,9 @@ const orphaned = (card: Pick<Card, "dispatcher">, gone?: GoneDispatcher) => !!go
  * instance that handed it out was deleted since (`gone`: nobody else is left to answer it). The one rule for
  * waitingForPerson's query, Needs you and a button's route.
  */
-export function waitsForPerson(card: Pick<Card, "status" | "needsReview" | "dispatcher">, gone?: GoneDispatcher): boolean {
-  return (personConfirms(card) || orphaned(card, gone)) && ((card.status === "review" && card.needsReview) || card.status === "blocked");
+export function waitsForPerson(card: Pick<Card, "status" | "needsReview" | "dispatcher" | "personReview">, gone?: GoneDispatcher): boolean {
+  if (card.status === "review") return card.needsReview && (personReviews(card) || orphaned(card, gone));
+  return card.status === "blocked" && (personConfirms(card) || orphaned(card, gone));
 }
 
 export function requiresReview(card: Pick<Card, "needsReview">): boolean {
@@ -853,6 +866,7 @@ function toCard(r: Row): Card {
     priority: (r.priority as CardPriority) ?? "normal",
     size: (r.size as CardSize | null) ?? null,
     needsReview: Number(r.needs_review) === 1,
+    personReview: Number(r.person_review) === 1,
     onBoard: Number(r.on_board) === 1,
     deps: parseJsonArray<string>(r.depends_on, []).filter((d): d is string => typeof d === "string"),
     goal: (r.description as string | null) ?? "",
@@ -902,6 +916,7 @@ export class TaskBoard {
   private listeners: Array<(change: BoardChange) => void> = [];
   private cardLimit: (name: string) => number = () => 1;
   private boardOff: (name: string) => boolean = () => false;
+  private personConfirmsMain: () => boolean = () => false;
   private routing: CommentRouting = { instances: () => [], enabled: () => true };
   private following: ProgressRouting = { enabled: () => true, leader: () => null };
   private contactGate: (source: string, target: string) => boolean = () => true;
@@ -971,6 +986,7 @@ export class TaskBoard {
     add("dispatcher", "TEXT");
     add("dispatcher_kind", "TEXT");
     add("on_board", "INTEGER NOT NULL DEFAULT 0");                      // #2434; a row before it: its needs_review says so
+    add("person_review", "INTEGER NOT NULL DEFAULT 0");                 // the person confirms an agent's main task (person_confirms_main); a row before it: 0
     this.db.exec(`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_code ON tasks(code);
       CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
@@ -1323,7 +1339,7 @@ export class TaskBoard {
    * count nowhere, as the board read leaves them out.
    */
   projectStats(gone?: GoneDispatcher, archiveDays = 0, leaveOut: readonly string[] = []): Record<string, ProjectStats> {
-    const all = this.db.prepare("SELECT id, kind, status, project_id, parent_id, updated_at, done_at, needs_review, dispatcher, dispatcher_kind, assignee, created_by FROM tasks").all() as Row[];
+    const all = this.db.prepare("SELECT id, kind, status, project_id, parent_id, updated_at, done_at, needs_review, person_review, dispatcher, dispatcher_kind, assignee, created_by FROM tasks").all() as Row[];
     const unseenNames = new Set(leaveOut);
     const names = (r: Row) => [r.assignee, r.created_by, r.dispatcher].some((n) => typeof n === "string" && unseenNames.has(n));
     const hiddenMains = unseenNames.size ? new Set(all.filter((r) => r.kind === "main" && names(r)).map((r) => r.id as string)) : new Set<string>();
@@ -1351,7 +1367,7 @@ export class TaskBoard {
       if (archivedMains.has(r.id as string)) { st.archived++; continue; }
       if (r.kind === "sub" && archivedMains.has(r.parent_id as string)) continue;
       if (status === "cancelled") continue;
-      if (status === "review" && waitsForPerson({ status, needsReview: Number(r.needs_review) === 1,
+      if (status === "review" && waitsForPerson({ status, needsReview: Number(r.needs_review) === 1, personReview: Number(r.person_review) === 1,
         dispatcher: r.dispatcher ? { kind: r.dispatcher_kind === "person" ? "person" : "instance", name: r.dispatcher as string } : null }, gone)) st.waiting++;
       if (status === "blocked") st.blocked++;
       if (r.kind === "sub") continue;
@@ -1769,7 +1785,7 @@ export class TaskBoard {
 
   /** #2434: the cards an instance handed out that wait in review for its confirmation (its `task mine`). */
   toConfirm(name: string): Card[] {
-    return (this.db.prepare("SELECT * FROM tasks WHERE status = 'review' AND needs_review = 1 AND (dispatcher_kind IS NULL OR dispatcher_kind != 'person') AND dispatcher = ? AND (assignee IS NULL OR assignee != ?) ORDER BY updated_at")
+    return (this.db.prepare("SELECT * FROM tasks WHERE status = 'review' AND needs_review = 1 AND person_review = 0 AND (dispatcher_kind IS NULL OR dispatcher_kind != 'person') AND dispatcher = ? AND (assignee IS NULL OR assignee != ?) ORDER BY updated_at")
       .all(name, name) as Row[]).map(toCard);
   }
 
@@ -1789,7 +1805,7 @@ export class TaskBoard {
   waitingForPerson(gone?: GoneDispatcher): Array<{ card: Card; since: string }> {
     const waiting = "((status = 'review' AND needs_review = 1) OR status = 'blocked')";
     const rows = [
-      ...(this.db.prepare(`SELECT * FROM tasks WHERE dispatcher_kind = 'person' AND ${waiting}`).all() as Row[]).map(toCard),
+      ...(this.db.prepare(`SELECT * FROM tasks WHERE (dispatcher_kind = 'person' AND ${waiting}) OR (person_review = 1 AND status = 'review' AND needs_review = 1)`).all() as Row[]).map(toCard),
       ...(gone ? (this.db.prepare(`SELECT * FROM tasks WHERE dispatcher IS NOT NULL AND (dispatcher_kind IS NULL OR dispatcher_kind != 'person') AND ${waiting}`).all() as Row[])
         .map(toCard).filter((card) => orphaned(card, gone)) : []),
     ];
@@ -1946,7 +1962,10 @@ export class TaskBoard {
           const dispatcher = spec.dispatcher !== undefined ? toDispatcher(spec.dispatcher, actor) : (parent?.dispatcher ?? opener);
           // #2434: a main task waits for the person's confirmation when the person handed it out; an agent's needs none
           // unless it asks for one (its dispatcher then confirms it).
-          const needsReview = spec.needsReview ?? (kind === "main" && dispatcher?.kind === "person");
+          // The fleet may ask the person to confirm a main task an agent opened for them as well (person_confirms_main): the board cannot
+          // tell whose request it is, so every main task an instance opens waits for them. That one is not the agent's to turn off.
+          const personReview = kind === "main" && actor.kind === "instance" && this.personConfirmsMain();
+          const needsReview = personReview || (spec.needsReview ?? (kind === "main" && dispatcher?.kind === "person"));
           const card: Card = {
             uuid: randomUUID(),
             code: this.nextCode(kind === "main" ? "M" : "S"),
@@ -1960,6 +1979,7 @@ export class TaskBoard {
             priority: spec.priority ?? "normal",
             size: spec.size ?? null,
             needsReview,
+            personReview,
             onBoard: true,
             deps: this.checkDeps({ uuid: null, kind, parent: parent?.uuid ?? null }, (spec.dependsOn ?? []).map((d) => this.resolveRef(d, created))),
             goal: checkText("the goal", spec.goal ?? "", CARD_LIMITS.goal),
@@ -1984,6 +2004,7 @@ export class TaskBoard {
           this.event(actor, card, "created", { kind, project: projectId, parent: parent?.code ?? null, title, assignee: card.assignee, ...(card.dispatcher ? { dispatcher: card.dispatcher.name } : {}) });
           created.push(card);
           if (card.parent) mains.add(card.parent);
+          if (card.personReview) this.say("main_person_confirms", [card.code], `${card.code} is a main task the person confirms (the fleet asks it of every main task): when its sub tasks are done it goes to review and waits for them, it does not finish by itself. Wrap it up on the card as usual (check, result, comment) and tell them what to look at`);
         } catch (err) {
           if (err instanceof TaskBoardError) throw new TaskBoardError(err.code, `${which}${err.message}`, err.key, err.args);
           throw err;
@@ -2051,7 +2072,7 @@ export class TaskBoard {
       }
       if (patch.needsReview !== undefined) {
         if (ai && card.needsReview && !patch.needsReview && !confirms(card, actor)) {
-          throw new TaskBoardError("forbidden", personConfirms(card) ? "only a person can clear \"needs review\"" : `only ${confirmerOf(card)} can clear "needs review" on ${card.code}`);
+          throw new TaskBoardError("forbidden", personReviews(card) ? "only a person can clear \"needs review\"" : `only ${confirmerOf(card)} can clear "needs review" on ${card.code}`);
         }
         set("needsReview", patch.needsReview);
       }
@@ -2380,7 +2401,7 @@ export class TaskBoard {
       const now = this.nowIso();
       const card: Card = {
         uuid: randomUUID(), code: this.nextCode("M"), kind: "main", projectId: null, parent: null, title: params.title, status: "open",
-        assignee: params.assignee ?? null, priority: params.priority ?? "normal", size: null, needsReview: false, onBoard: false,
+        assignee: params.assignee ?? null, priority: params.priority ?? "normal", size: null, needsReview: false, personReview: false, onBoard: false,
         // Opened for another instance: the opener handed it out (its blocked question goes to it).
         dispatcher: actor.kind === "instance" && params.assignee && params.assignee !== actor.name ? { kind: "instance", name: actor.name } : null,
         deps: this.checkDeps({ uuid: null, kind: "main", parent: null }, params.depends_on ?? []),
@@ -2540,6 +2561,17 @@ export class TaskBoard {
   }
 
   /**
+   * A card in review that waits for the person (their confirmation, whether they handed it out or the fleet asked them to confirm what its
+   * agent opened) is theirs to cancel as much as to confirm: an agent that opened it cancelling it would take it out of their queue, the
+   * confirmation it cannot give by any other move. Before it is in review (still being worked on), the opener may cancel it as ever.
+   */
+  private checkNotWaitingForPerson(card: Card): void {
+    if (card.status === "review" && card.needsReview && personReviews(card)) {
+      throw new TaskBoardError("forbidden", `${card.code} is waiting for the person's confirmation: only they cancel it`);
+    }
+  }
+
+  /**
    * Cards moved by hand: sub tasks, and main tasks that have no sub tasks. `comment` is the move's own comment (a
    * dispatcher's answer); `finishing`: a claim on the way to done (the `task` tool's done of an open card).
    */
@@ -2613,7 +2645,7 @@ export class TaskBoard {
         if (ai) {
           if (from === "review") {
             if (!confirms(card, actor)) {
-              throw new TaskBoardError("forbidden", personConfirms(card) ? `${card.code} is waiting for the person's confirmation: only they finish it`
+              throw new TaskBoardError("forbidden", personReviews(card) ? `${card.code} is waiting for the person's confirmation: only they finish it`
                 : `${card.code} is waiting for ${confirmerOf(card)}'s confirmation: only they finish it`);
             }
             if (reason) this.entry(card, "approve", actor, reason);
@@ -2621,7 +2653,7 @@ export class TaskBoard {
             if (from !== "claimed") throw new TaskBoardError("invalid", `only a card in progress can be done (${card.code} is ${from})`);
             if (!own) throw notOwner();
             if (requiresReview(card) && !confirms(card, actor)) {
-              throw new TaskBoardError("needs_review", personConfirms(card) ? `${card.code} needs the person's confirmation; move it to review`
+              throw new TaskBoardError("needs_review", personReviews(card) ? `${card.code} needs the person's confirmation; move it to review`
                 : `${card.code} needs ${confirmerOf(card)}'s confirmation; move it to review`);
             }
           }
@@ -2646,6 +2678,7 @@ export class TaskBoard {
       case "cancelled": {
         if (ai) {
           if (card.createdBy !== actor.name) throw new TaskBoardError("forbidden", "an instance can cancel only the cards it opened");
+          this.checkNotWaitingForPerson(card);
           if (!reason) throw new TaskBoardError("invalid", "cancelling needs a reason");
         }
         return;
@@ -2664,6 +2697,7 @@ export class TaskBoard {
     const notOwner = () => new TaskBoardError("forbidden", `${card.code} belongs to ${card.assignee ?? "nobody"}`);
     if (to === "cancelled") {
       if (ai && card.createdBy !== actor.name) throw new TaskBoardError("forbidden", "an instance can cancel only the main tasks it opened");
+      if (ai) this.checkNotWaitingForPerson(card);
       if (ai && !reason) throw new TaskBoardError("invalid", "cancelling needs a reason");
       return;
     }
@@ -2772,6 +2806,15 @@ export class TaskBoard {
   /** How many handed-out cards each instance may have in progress (the fleet reads its config; default 1). */
   setCardLimit(limit: (name: string) => number): void {
     this.cardLimit = limit;
+  }
+
+  /**
+   * Whether the fleet asks the person to confirm every main task an instance opens (`defaults.task_board.person_confirms_main`),
+   * read as each main task is opened (a settings change applies to the next one; the ones already open keep what they were opened with).
+   * Unset: no — an agent's main task needs nobody's confirmation unless it asks for one.
+   */
+  setPersonConfirmsMain(on: () => boolean): void {
+    this.personConfirmsMain = on;
   }
 
   /**
@@ -3159,7 +3202,7 @@ export class TaskBoard {
         }
         // An agent's card waits for its instance dispatcher to confirm it (#2434: its own to confirm, nobody to ask). A
         // person's card has no instance dispatcher, so no notice: the person has it in Needs you.
-        const toConfirm = d.to === "review" && !isPerson(e.actor) && requiresReview(card) ? dispatcherOf() : null;
+        const toConfirm = d.to === "review" && !isPerson(e.actor) && requiresReview(card) && !card.personReview ? dispatcherOf() : null;
         if (toConfirm) add(card, toConfirm, "to_confirm", e.actor);
         // #2080: a card its own assignee confirms, in review by itself (its sub tasks done) or by someone else's move:
         // nobody else will confirm it, so its assignee is told it is theirs.
@@ -3388,7 +3431,7 @@ export class TaskBoard {
       if (isFinished(card)) return false;
       if (r === "decide") return handedOut && card.status === "blocked";
       // #2341 review: and still waiting for the person — its confirmation not switched off during the gather.
-      if (r === "to_confirm") return handedOut && card.status === "review" && requiresReview(card);
+      if (r === "to_confirm") return handedOut && card.status === "review" && requiresReview(card) && !card.personReview;
       if (!own) return false;
       // A card still waiting on what it depends on is read when it can start (as for an assignment, "assigned" above);
       // and a comment its assignee has already read — its own write since — is not told to it.
@@ -3943,13 +3986,13 @@ export class TaskBoard {
   private insert(card: Card): void {
     this.db.prepare(
       `INSERT INTO tasks (id, code, kind, project_id, parent_id, title, description, status, priority, assignee, dispatcher, dispatcher_kind, created_by, depends_on, result,
-        scope, acceptance, context, state, blocked_reason, size, needs_review, version, sort, created_at, updated_at, started_at, submitted_at, done_at, seen_entry_id, on_board)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        scope, acceptance, context, state, blocked_reason, size, needs_review, version, sort, created_at, updated_at, started_at, submitted_at, done_at, seen_entry_id, on_board, person_review)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       card.uuid, card.code, card.kind, card.projectId, card.parent, card.title, card.goal === "" ? null : card.goal, card.status, card.priority,
       card.assignee, card.dispatcher?.name ?? null, card.dispatcher?.kind ?? null, card.createdBy, card.deps.length ? JSON.stringify(card.deps) : null, card.result === "" ? null : card.result,
       card.scope, JSON.stringify(card.acceptance), card.context, card.state, card.blockedReason, card.size, card.needsReview ? 1 : 0,
-      card.version, card.sort, card.createdAt, card.updatedAt, card.startedAt, card.submittedAt, card.doneAt, card.seenEntryId, card.onBoard ? 1 : 0,
+      card.version, card.sort, card.createdAt, card.updatedAt, card.startedAt, card.submittedAt, card.doneAt, card.seenEntryId, card.onBoard ? 1 : 0, card.personReview ? 1 : 0,
     );
   }
 
@@ -3958,14 +4001,14 @@ export class TaskBoard {
     this.db.prepare(
       `UPDATE tasks SET project_id = ?, title = ?, description = ?, status = ?, priority = ?, assignee = ?, dispatcher = ?, dispatcher_kind = ?,
         depends_on = ?, result = ?, scope = ?, acceptance = ?, context = ?, state = ?, blocked_reason = ?, size = ?, needs_review = ?, version = ?,
-        sort = ?, updated_at = ?, started_at = ?, submitted_at = ?, done_at = ?, seen_entry_id = ?
+        sort = ?, updated_at = ?, started_at = ?, submitted_at = ?, done_at = ?, seen_entry_id = ?, person_review = ?
        WHERE id = ?`,
     ).run(
       card.projectId, card.title, card.goal === "" ? null : card.goal, card.status, card.priority, card.assignee,
       card.dispatcher?.name ?? null, card.dispatcher?.kind ?? null,
       card.deps.length ? JSON.stringify(card.deps) : null, card.result === "" ? null : card.result,
       card.scope, JSON.stringify(card.acceptance), card.context, card.state, card.blockedReason, card.size, card.needsReview ? 1 : 0,
-      card.version, card.sort, card.updatedAt, card.startedAt, card.submittedAt, card.doneAt, card.seenEntryId, card.uuid,
+      card.version, card.sort, card.updatedAt, card.startedAt, card.submittedAt, card.doneAt, card.seenEntryId, card.personReview ? 1 : 0, card.uuid,
     );
   }
 }
