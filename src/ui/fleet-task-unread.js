@@ -15,14 +15,14 @@ register("taskunread", {
   en: {
     title: "{0} task cards with new replies", titleOne: "1 task card has new replies", mark: "{0} new", markTip: "New for you: {0}",
     "reason.answer": "{0} answered you", "reason.reply": "{0} replied to your comment", "reason.mention": "{0} mentioned you",
-    "reason.review": "Waiting for your confirmation", "reason.blocked": "Waiting for your answer", more: "+{0} more", seeMore: "{0} more cards", showFewer: "Show fewer",
-    short_answer: "Answered", short_reply: "Replied", short_mention: "Mentioned", short_review: "To confirm", short_blocked: "To answer",
+    "reason.review": "Waiting for your confirmation", "reason.blocked": "Waiting for your answer", "reason.finished": "Finished by itself, set off by {0}", more: "+{0} more", seeMore: "{0} more cards", showFewer: "Show fewer",
+    short_answer: "Answered", short_reply: "Replied", short_mention: "Mentioned", short_review: "To confirm", short_blocked: "To answer", short_finished: "Finished",
   },
   "zh-TW": {
     title: "{0} 張任務卡有新回覆", titleOne: "1 張任務卡有新回覆", mark: "{0} 則新動態", markTip: "給你的新動態：{0}",
     "reason.answer": "{0} 回覆了你", "reason.reply": "{0} 回覆了你的留言", "reason.mention": "{0} 提到了你",
-    "reason.review": "等你確認", "reason.blocked": "等你回答", more: "另外 {0} 則", seeMore: "還有 {0} 張卡", showFewer: "收合",
-    short_answer: "已回覆", short_reply: "回覆你", short_mention: "提到你", short_review: "待確認", short_blocked: "待回答",
+    "reason.review": "等你確認", "reason.blocked": "等你回答", "reason.finished": "已自動完成（由 {0} 完成最後一步）", more: "另外 {0} 則", seeMore: "還有 {0} 張卡", showFewer: "收合",
+    short_answer: "已回覆", short_reply: "回覆你", short_mention: "提到你", short_review: "待確認", short_blocked: "待回答", short_finished: "已完成",
   },
 });
 
@@ -53,7 +53,7 @@ export function markFor(card, subs, unread) {
   const own = unread && unread[card.id];
   const list = [own, ...(subs || []).map((s) => unread && unread[s.id])].filter(Boolean);
   if (!list.length) return null;
-  const order = ["review", "blocked", "reply", "answer", "mention"];
+  const order = ["review", "blocked", "reply", "answer", "mention", "finished"];
   const reasons = order.filter((r) => list.some((u) => (u.reasons || []).includes(r)));
   return { n: list.reduce((a, u) => a + (u.n || 0), 0), reasons };
 }

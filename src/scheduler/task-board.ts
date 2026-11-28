@@ -532,6 +532,27 @@ export interface BoardChange {
   changed: string[];
   /** The comments this write edited or deleted: a notice still waiting that quotes one no longer says what it says. */
   recalled?: Array<{ uuid: string; entry: number; deleted: boolean }>;
+  /** What the person is told of this write: a main task that finished by itself, or that waits for them (settlePersonNews). */
+  news: PersonNews[];
+}
+
+/**
+ * What the person is told about a main task, as the write that did it ends (docs/design/task-board.md, "The person is told"): it
+ * finished by itself because nobody had to confirm it (`done`), or it went to review and waits for them (`review`). Only a main
+ * task, and only what an instance or a script did: the person who moved a card knows. `gap` is what the card still lacked when
+ * it happened (unticked definition-of-done items, no result): its owner is asked to fill that in.
+ */
+export interface PersonNews {
+  kind: "done" | "review";
+  uuid: string;
+  code: string;
+  title: string;
+  assignee: string | null;
+  by: string;
+  gap: { unchecked: number; noResult: boolean } | null;
+  /** Definition-of-done items ticked, and in all. */
+  checked: number;
+  total: number;
 }
 
 export interface CardDetail {
@@ -3204,6 +3225,31 @@ export class TaskBoard {
   }
 
   /**
+   * What this write tells the person: a main task that finished by itself (nobody had to confirm it) or went to review for them. Read
+   * once the write is done, so it says what stands: a card moved on again, reopened or confirmed by the person in the same write is
+   * not told. A person's own move is not told back to them, nor the board's own catch-up of a main task read behind its sub tasks.
+   */
+  private settlePersonNews(events: TaskBoard["pending"]): PersonNews[] {
+    const out = new Map<string, PersonNews>();
+    for (const e of events) {
+      if (e.type !== "moved" || isPerson(e.actor) || e.actor.kind === "system") continue;
+      const to = (e.data as { to?: CardStatus }).to;
+      if (to !== "done" && to !== "review") continue;
+      const card = this.byUuid(e.uuid);
+      if (!card || card.kind !== "main" || !this.isOnBoard(card)) continue;
+      // Done is told only when it was the board that did it (the last sub task): a main task nobody has sub tasks for is moved by hand.
+      if (to === "done" && !(e.data as { auto?: boolean }).auto) continue;
+      const kind = to;
+      out.set(card.uuid, { kind, uuid: card.uuid, code: card.code, title: card.title, assignee: card.assignee, by: e.actor.name, gap: wrapUpGap(card),
+        checked: card.acceptance.filter((a) => a.done).length, total: card.acceptance.length });
+    }
+    return [...out.values()].filter((n) => {
+      const card = this.byUuid(n.uuid);
+      return !!card && (n.kind === "done" ? card.status === "done" && !requiresReview(card) : waitsForPerson(card));
+    });
+  }
+
+  /**
    * Keeps that a card was handed to an instance (docs/design/task-board.md, "Handoffs"): each wake of this write that tells an instance its
    * card can be started — everything it waited for is done (`ready`), or it was given to it while it could start (`assigned`) — is one
    * row of `task_handoffs`, with the card whose finishing readied it. The fleet's waker settles it when the notice goes out (`handoffHanded`
@@ -3448,11 +3494,13 @@ export class TaskBoard {
     this.undo = [];
     try {
       let wakes: Wake[] = [];
+      let news: PersonNews[] = [];
       const result = this.db.transaction(() => {
         const r = fn();
         if (this.pending.length || this.projectsChanged) this.db.prepare("UPDATE task_counters SET next = next + 1 WHERE prefix = 'R'").run();
         const spokenBefore = this.notes.length;
         wakes = this.settleWakes(this.pending);
+        news = this.settlePersonNews(this.pending);
         // What settling the wakes said (who is told, a loop guard) reaches the writer's answer like the notes of the write itself.
         const late = this.notes.slice(spokenBefore);
         const answer = r as { notes?: unknown; said?: unknown } | null;
@@ -3471,7 +3519,7 @@ export class TaskBoard {
         const changed = [...new Set(touched.filter((e) => e.type === "moved" || e.type === "assigned").map((e) => e.uuid))];
         const recalled = touched.filter((e) => (e.type === "comment_edited" || e.type === "comment_deleted") && typeof e.data.entry === "number")
           .map((e) => ({ uuid: e.uuid, entry: e.data.entry as number, deleted: e.type === "comment_deleted" }));
-        const change: BoardChange = { rev: this.revision(), ids: [...new Set(touched.map((e) => e.code))], actors: [...new Set(touched.map((e) => e.actor.name))], projects, wakes, changed, ...(recalled.length ? { recalled } : {}) };
+        const change: BoardChange = { rev: this.revision(), ids: [...new Set(touched.map((e) => e.code))], actors: [...new Set(touched.map((e) => e.actor.name))], projects, wakes, changed, news, ...(recalled.length ? { recalled } : {}) };
         for (const listener of this.listeners) {
           try { listener(change); } catch { /* a listener must not break a write that already committed */ }
         }

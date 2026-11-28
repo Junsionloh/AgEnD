@@ -17,8 +17,10 @@ export const NOTICES_MAX = 500;
 export const NOTICE_TEXT_MAX = 4000;
 
 /** Where a notice came from — the page labels it, nothing else depends on it. */
-export type NoticeKind = "fleet" | "instance" | "update" | "schedule" | "summary";
-const KINDS: readonly string[] = ["fleet", "instance", "update", "schedule", "summary"];
+export type NoticeKind = "fleet" | "instance" | "update" | "schedule" | "summary" | "task";
+const KINDS: readonly string[] = ["fleet", "instance", "update", "schedule", "summary", "task"];
+/** A card's number as a notice names it (M-12, S-3). */
+const CARD_CODE = /^[MS]-\d{1,9}$/;
 
 export interface WebNotice {
   readonly hubSharingChatAttempted?: boolean;
@@ -31,6 +33,8 @@ export interface WebNotice {
   readonly kind: NoticeKind;
   /** The agent it is about, when it is about one (its topic would have been where it was said). */
   readonly instance?: string;
+  /** A `task` notice: the card it is about (its number), which the page opens. */
+  readonly card?: string;
   readonly text: string;
 }
 
@@ -58,7 +62,8 @@ function valid(v: unknown): v is WebNotice {
     && (n.hubSharingChatAttempted === undefined || typeof n.hubSharingChatAttempted === "boolean")
     && (n.hubSharing === undefined || hubSharingNoticeSchema.safeParse(n.hubSharing).success)
     && (n.hubUpdate === undefined || validHubUpdate(n.hubUpdate))
-    && (n.instance === undefined || (typeof n.instance === "string" && n.instance.length > 0));
+    && (n.instance === undefined || (typeof n.instance === "string" && n.instance.length > 0))
+    && (n.card === undefined || (typeof n.card === "string" && CARD_CODE.test(n.card)));
 }
 
 export class WebNotices {
@@ -90,9 +95,9 @@ export class WebNotices {
   }
 
   /** Keep one notice; the oldest beyond NOTICES_MAX goes. Returns it (kept in memory even when the file cannot be written). */
-  add(input: { kind: NoticeKind; text: string; instance?: string; hubUpdate?: WebNotice["hubUpdate"] }): WebNotice {
+  add(input: { kind: NoticeKind; text: string; instance?: string; card?: string; hubUpdate?: WebNotice["hubUpdate"] }): WebNotice {
     const notice: WebNotice = Object.freeze({ id: this.next++, at: this.now(), kind: input.kind, text: input.text.slice(0, NOTICE_TEXT_MAX),
-      ...(input.instance ? { instance: input.instance } : {}), ...(input.hubUpdate && validHubUpdate(input.hubUpdate) ? { hubUpdate: Object.freeze({ ...input.hubUpdate }) } : {}) });
+      ...(input.instance ? { instance: input.instance } : {}), ...(input.card && CARD_CODE.test(input.card) ? { card: input.card } : {}), ...(input.hubUpdate && validHubUpdate(input.hubUpdate) ? { hubUpdate: Object.freeze({ ...input.hubUpdate }) } : {}) });
     this.items.push(notice);
     this.items = this.trim(this.items);
     this.flush();

@@ -9,7 +9,9 @@
  *   - `mention` a comment by someone else whose words `@`-name P, or
  *   - `answer`  the first comment by an instance after a comment of P's that woke it (`task_entries.wakes`): the answer P was
  *               waiting for, which an agent writes without a `reply_to`, or
- *   - `review` / `blocked` the card is now P's to confirm or answer (waitsForPerson) and someone else put it there.
+ *   - `review` / `blocked` the card is now P's to confirm or answer (waitsForPerson) and someone else put it there, or
+ *   - `finished` a main task that finished by itself (nobody had to confirm it: the board did it when its last sub task was done, whoever
+ *               moved that one but P) since P last looked at it.
  * P's own words are never news to P, nor is a comment that was deleted, one older than UNREAD_WINDOW_DAYS, or one on a cancelled card.
  *
  * A fresh start does not make the whole history unread: the first time a person is asked, the newest comment and event numbers
@@ -23,9 +25,9 @@
 import type Database from "better-sqlite3";
 import { parseMentions } from "./task-board-mentions.js";
 
-export type UnreadReason = "reply" | "mention" | "answer" | "review" | "blocked";
+export type UnreadReason = "reply" | "mention" | "answer" | "review" | "blocked" | "finished";
 /** The reasons, strongest first (a card says the first one it has). */
-export const UNREAD_REASONS: readonly UnreadReason[] = ["review", "blocked", "reply", "answer", "mention"];
+export const UNREAD_REASONS: readonly UnreadReason[] = ["review", "blocked", "reply", "answer", "mention", "finished"];
 
 export interface UnreadCard {
   /** The card's number (M-12). */
@@ -180,6 +182,22 @@ export function unreadFor(db: Database.Database, person: Reader, waiting: readon
     // (a move's actor kept no key: the person's own move is the name's, as it is for a comment from before keys)
     if (to !== w.status || move.id <= floor.event || move.id <= beenSeen || isThem(person, move.actor, move.actor_kind, null)) continue;
     note(w.uuid, w.status, move.at, move.actor);
+  }
+
+  // A main task that finished by itself since they last looked: its last move is the board's own (`auto`), to done, by someone else
+  // (the person's mark and the window, as the comments above).
+  const finished = db.prepare(`
+    SELECT t.id AS uuid, e.id, e.at, e.actor, e.actor_kind, e.data
+    FROM tasks t
+    JOIN task_events e ON e.task_id = t.id AND e.id = (SELECT MAX(id) FROM task_events WHERE task_id = t.id AND type = 'moved')
+    LEFT JOIN task_card_reads r ON r.person = ? AND r.task_id = t.id
+    WHERE t.kind = 'main' AND t.status = 'done' AND e.id > ? AND e.id > COALESCE(r.seen_event, 0) AND e.at >= ?`)
+    .all(mark, floor.event, since) as Array<{ uuid: string; id: number; at: string; actor: string; actor_kind: string; data: string }>;
+  for (const e of finished) {
+    let d: { to?: unknown; auto?: unknown };
+    try { d = JSON.parse(e.data) as typeof d; } catch { continue; }
+    if (d.to !== "done" || d.auto !== true || e.actor_kind === "system" || isThem(person, e.actor, e.actor_kind, null)) continue;
+    note(e.uuid, "finished", e.at, e.actor);
   }
 
   const out = [...cards.values()].map(({ uuid: _uuid, ...c }) => ({ ...c, reasons: UNREAD_REASONS.filter((r) => c.reasons.includes(r)) }))
