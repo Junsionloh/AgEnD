@@ -803,12 +803,6 @@ export function wrapUpGap(card: Pick<Card, "acceptance" | "result">): { unchecke
   return unchecked || noResult ? { unchecked, noResult } : null;
 }
 
-/** "3 definition-of-done items unchecked, no result": what {@link wrapUpGap} found, as an agent is told it. */
-export function gapText(gap: { unchecked: number; noResult: boolean }, main: boolean): string {
-  const items = gap.unchecked ? `${gap.unchecked} ${main ? "definition-of-done" : "acceptance"} item${gap.unchecked === 1 ? "" : "s"} unchecked` : "";
-  return [items, gap.noResult ? "no result" : ""].filter(Boolean).join(", ");
-}
-
 /** A comment's `wakes` as stored: only well-formed rows (an older release never wrote the column; a hand-edit cannot break a page). */
 function parseWakes(raw: unknown): EntryWake[] {
   return parseJsonArray<Record<string, unknown>>(raw, []).flatMap((w): EntryWake[] => {
@@ -817,6 +811,12 @@ function parseWakes(raw: unknown): EntryWake[] {
     const skip = typeof w.skip === "string" && (WAKE_SKIPS as readonly string[]).includes(w.skip) ? (w.skip as WakeSkip) : undefined;
     return [{ to: w.to, why, at: w.at, ...(typeof w.key === "string" && w.key ? { key: w.key } : {}), ...(skip ? { skip } : {}) }];
   });
+}
+
+/** "3 definition-of-done items unchecked, no result": what {@link wrapUpGap} found, as an agent is told it. */
+export function gapText(gap: { unchecked: number; noResult: boolean }, main: boolean): string {
+  const items = gap.unchecked ? `${gap.unchecked} ${main ? "definition-of-done" : "acceptance"} item${gap.unchecked === 1 ? "" : "s"} unchecked` : "";
+  return [items, gap.noResult ? "no result" : ""].filter(Boolean).join(", ");
 }
 
 function parseJsonArray<T>(raw: unknown, fallback: T[]): T[] {
