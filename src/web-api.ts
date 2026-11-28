@@ -2237,6 +2237,8 @@ export interface WakeView {
   why: EntryWake["why"];
   state: "sending" | "queued" | "delivered" | "read" | "failed" | "uncertain" | "withdrawn" | "skipped" | "unknown";
   skip?: WakeSkip;
+  /** M-3908: why a `failed` notice failed (the outbox's category, never its recorded text). */
+  failure?: import("./delivery-outbox.js").NoticeFailure;
   /** When the comment was routed. */
   at: string;
   /** When the instance took it up (read). */
@@ -2256,7 +2258,8 @@ function unreadBody(board: TaskBoard, person: { name: string; key?: string }, go
 /** A card's comments with the status of those written for instances (`wakeViews`); a comment nobody was meant to hear is as it was. */
 function withWakeViews<E extends { id: number; deleted?: unknown }>(comments: E[], stored: ReadonlyMap<number, EntryWake[]>, ctx: WebApiContext, hiddenName: (n: string) => boolean): Array<E & { wakes?: WakeView[] }> {
   if (!stored.size) return comments;
-  const keys = [...stored.values()].flat().flatMap((w) => (w.key ? [w.key] : []));
+  // Each notice once (a gathered window of comments shares one), and none whose comment shows a skip (wakeViews reads no key for it).
+  const keys = [...new Set([...stored.values()].flat().flatMap((w) => (w.key && !w.skip ? [w.key] : [])))];
   const progress = keys.length ? ctx.taskWakeProgress?.(keys) ?? new Map() : new Map();
   const now = Date.now();
   return comments.map((e) => {
@@ -2268,14 +2271,14 @@ function withWakeViews<E extends { id: number; deleted?: unknown }>(comments: E[
 }
 
 /** How far one notice got, from what the board kept (`key` / `skip`, when it was routed) and what the delivery outbox says of it. */
-function noticeState(w: { at: string; key?: string; skip?: WakeSkip }, progress: ReadonlyMap<string, import("./delivery-outbox.js").NoticeProgress>, now: number): Pick<WakeView, "state" | "skip" | "readAt"> {
+function noticeState(w: { at: string; key?: string; skip?: WakeSkip }, progress: ReadonlyMap<string, import("./delivery-outbox.js").NoticeProgress>, now: number): Pick<WakeView, "state" | "skip" | "readAt" | "failure"> {
   if (w.skip) return { state: "skipped", skip: w.skip };
   if (!w.key) return now - Date.parse(w.at) > WAKE_LOST_MS ? { state: "skipped", skip: "lost" } : { state: "sending" };
   const p = progress.get(w.key);
   if (!p) return { state: "unknown" };
   switch (p.state) {
     case "delivered": return p.consumedAt ? { state: "read", readAt: p.consumedAt } : { state: "delivered" };
-    case "failed": return { state: "failed" };
+    case "failed": return { state: "failed", ...(p.failure ? { failure: p.failure } : {}) };
     case "uncertain": return { state: "uncertain" };
     case "cancelled": return { state: "withdrawn" };
     default: return { state: "queued" };
@@ -2300,7 +2303,11 @@ export interface HandoffView extends Pick<WakeView, "state" | "skip" | "readAt" 
 }
 
 export function handoffViews(list: ReadonlyArray<Handoff>, progress: ReadonlyMap<string, import("./delivery-outbox.js").NoticeProgress>, now: number): HandoffView[] {
-  return list.map((h): HandoffView => ({ id: h.id, card: h.card, to: h.to, why: h.why, after: h.after, at: h.at, ...noticeState(h, progress, now) }));
+  return list.map((h): HandoffView => {
+    // (M-3908's `failure` is the comment status's: a hand-over says only that it failed.)
+    const { failure: _failure, ...state } = noticeState(h, progress, now);
+    return { id: h.id, card: h.card, to: h.to, why: h.why, after: h.after, at: h.at, ...state };
+  });
 }
 
 /**
@@ -2308,11 +2315,14 @@ export function handoffViews(list: ReadonlyArray<Handoff>, progress: ReadonlyMap
  * instance kept out of sight; the card whose finishing readied one (`after`) is numbered only if the viewer may see it (`hiddenCode`: a card kept out of
  * sight reads as none, and the page says "S-2 can start" instead of "S-1 done").
  */
-export function withHandoffViews(board: TaskBoard, ref: string, children: ReadonlyArray<{ id: string }>, ctx: WebApiContext, hiddenName: (n: string) => boolean, hiddenCode: (code: string) => boolean = () => false): HandoffView[] {
-  const uuids = [ref, ...children.map((c) => c.id)].flatMap((r) => { const c = board.findCard(r); return c ? [c.uuid] : []; });
+export function withHandoffViews(board: TaskBoard, ref: string, children: ReadonlyArray<{ uuid: string }>, ctx: WebApiContext, hiddenName: (n: string) => boolean, hiddenCode: (code: string) => boolean = () => false): HandoffView[] {
+  // The card read already has its sub tasks (with their uuids): only the card itself is looked up.
+  const own = board.findCard(ref);
+  const uuids = [...(own ? [own.uuid] : []), ...children.map((c) => c.uuid)];
   const list = board.handoffsOf(uuids).filter((h) => !hiddenName(h.to)).map((h) => (h.after && hiddenCode(h.after) ? { ...h, after: null } : h));
   if (!list.length) return [];
-  const keys = list.flatMap((h) => (h.key ? [h.key] : []));
+  // Each notice once (one notice can carry several hand-overs), and none whose hand-over shows a skip (handoffViews reads no key for it), as withWakeViews.
+  const keys = [...new Set(list.flatMap((h) => (h.key && !h.skip ? [h.key] : [])))];
   const progress = keys.length ? ctx.taskWakeProgress?.(keys) ?? new Map() : new Map();
   return handoffViews(list, progress, Date.now());
 }
